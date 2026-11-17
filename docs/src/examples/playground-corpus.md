@@ -82,7 +82,7 @@ use pouch::{ Vec };
 
 use ink::{ Logger };
 
-fn swap(mut xs: Vec<i32>, a: i32, b: i32) {
+fn swap(xs: Vec<i32>, a: i32, b: i32) {
     let t = xs[a];
     xs[a] = xs[b];
     xs[b] = t;
@@ -90,8 +90,8 @@ fn swap(mut xs: Vec<i32>, a: i32, b: i32) {
 
 fn partition(xs: Vec<i32>, lo: i32, hi: i32) -> i32 {
     let pivot = xs[hi];
-    let mut i = lo - 1;
-    for (let mut j = lo; j < hi; j += 1) {
+    let i = lo - 1;
+    for (let j = lo; j < hi; j += 1) {
         if (xs[j] <= pivot) {
             i += 1;
             swap(xs, i, j);
@@ -113,8 +113,8 @@ entry fn main() {
     let xs = Vec<i32>::from([5, 2, 9, 1, 7, 3, 8, 2]);   // fixed -> growable
     quicksort(xs, 0, xs.len() - 1);
 
-    let mut out = "";
-    for (let mut i = 0; i < xs.len(); i += 1) {
+    let out = "";
+    for (let i = 0; i < xs.len(); i += 1) {
         out = f"{out}{xs[i]} ";      // `mut`: rebinding; the f-string form builds in place
     }
     log.info(f"sorted: {out}");

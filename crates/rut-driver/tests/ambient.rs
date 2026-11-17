@@ -118,7 +118,7 @@ fn the_ambient_prelude_binds_beyond_the_gated_names() {
     // WOULD gate (see the_gated_names_require_the_import below).
     let v = run_main(
         "fn total(v: [i32]) -> i32 {\n\
-             let mut t = 0;\n\
+             let t = 0;\n\
              for (let x of v) { t += x; }\n\
              return t;\n\
          }\n\
@@ -179,12 +179,12 @@ fn the_gated_names_require_the_import() {
          impl CountUp { fn new(n: i32) -> Self { return Self { n: n }; } }\n\
          impl CountUp {\n\
              [iterable] fn iterate(self, emit: fn(i32) -> bool) {\n\
-                 for (let mut i = 1; i <= self.n; i += 1) { if (!emit(i)) { return; } }\n\
+                 for (let i = 1; i <= self.n; i += 1) { if (!emit(i)) { return; } }\n\
              }\n\
          }\n\
          class Acc { total: i32 = 0; }\n\
          entry fn main() -> i32 {\n\
-             let mut acc: ?Acc = Acc { };\n\
+             let acc: ?Acc = Acc { };\n\
              for (let v of CountUp::new(4)) { acc.total = acc.total + v; }\n\
              return acc.total;\n\
          }\n",

@@ -129,12 +129,12 @@ impl Greeting {
         return Self { to: to, lines: Vec::new() };
     }
 
-    pub fn add(mut self, line: str) {
+    pub fn add(self, line: str) {
         self.lines.push(line);
     }
 
     pub fn render(self) -> str {
-        let mut out = f"dear {self.to},";
+        let out = f"dear {self.to},";
         for (let line of self.lines) {
             out = f"{out} {line}";
         }
@@ -178,7 +178,7 @@ use ink::{ Logger };
 
 entry fn main() {
     let log = Logger("app");
-    let mut g = Greeting::new("rut");
+    let g = Greeting::new("rut");
     g.add("hello");
     g.add("from a package");
     log.info(g.render());

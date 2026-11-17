@@ -241,7 +241,7 @@ fn signature_parts(src: &str, params: &[String], is_method: bool) -> Option<(Str
     }
     if is_method {
         let first = pieces.first()?;
-        if first != "self" && first != "mut self" {
+        if first != "self" {
             return None; // the recorded params exclude self — a mismatch is degenerate
         }
         pieces.remove(0);

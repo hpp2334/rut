@@ -208,7 +208,7 @@ use ink_host::{ create_logger, logger_log };
 use futures::{ launch_future, sleep };
 
 async fn tick(log: opaque) -> nil {
-    for (let mut i = 0; i < 3; i += 1) {
+    for (let i = 0; i < 3; i += 1) {
         logger_log(log, 2, f"tick{i}");
         await sleep(10);
     }
@@ -325,7 +325,7 @@ impl DropLog {
     fn new(log: opaque) -> Self { return Self { log: log }; }
 }
 impl DropLog {
-    [disposal] fn dispose_log(mut self, cx: DisposalContext) {
+    [disposal] fn dispose_log(self, cx: DisposalContext) {
         logger_log(self.log, 2, "dropped:buf");
     }
 }
@@ -335,7 +335,7 @@ impl DropTag {
     fn new(log: opaque, tag: str) -> Self { return Self { log: log, tag: tag }; }
 }
 impl DropTag {
-    [disposal] fn dispose_tag(mut self, cx: DisposalContext) {
+    [disposal] fn dispose_tag(self, cx: DisposalContext) {
         logger_log(self.log, 2, self.tag);
     }
 }
@@ -588,7 +588,7 @@ use futures::{ launch_future, sleep };
 struct Box2 { v: i32 }
 
 async fn work(log: opaque, seed: i32) -> nil {
-    let mut r = Box2 { v: seed };
+    let r = Box2 { v: seed };
     let touch = fn() -> bool { r = Box2 { v: 5 }; return true; };
     await sleep(2);
     touch();

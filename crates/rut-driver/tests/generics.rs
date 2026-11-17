@@ -192,24 +192,24 @@ fn vec_over_pointer_array_compiles() {
              fn new() -> Self { return Vec::with_capacity(0); }\n\
              fn with_capacity(cap: i32) -> Self { return Self { buf: [nil; cap], len: 0 }; }\n\
              fn len(self) -> i32 { return self.len; }\n\
-             fn push(mut self, v: T) -> nil {\n\
+             fn push(self, v: T) -> nil {\n\
                  if (self.len == self.buf.len()) {\n\
-                     let mut cap = self.buf.len() * 2;\n\
+                     let cap = self.buf.len() * 2;\n\
                      if (cap == 0) { cap = 4; }\n\
-                     let mut next: [?T] = [nil; cap];\n\
-                     for (let mut i = 0; i < self.len; i += 1) { next[i] = self.buf[i]; }\n\
+                     let next: [?T] = [nil; cap];\n\
+                     for (let i = 0; i < self.len; i += 1) { next[i] = self.buf[i]; }\n\
                      self.buf = next;\n\
                  }\n\
                  self.buf[self.len] = v;\n\
                  self.len += 1;\n\
              }\n\
-             fn pop(mut self) -> T {\n\
+             fn pop(self) -> T {\n\
                  self.len -= 1;\n\
                  return self.buf[self.len];\n\
              }\n\
          }\n\
          entry fn main() -> i32 {\n\
-             let mut v: Vec<i32> = Vec::new();\n\
+             let v: Vec<i32> = Vec::new();\n\
              v.push(1);\n\
              v.push(2);\n\
              return v.len();\n\

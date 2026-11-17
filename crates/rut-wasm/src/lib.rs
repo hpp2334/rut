@@ -739,7 +739,7 @@ use ink::{Logger};
 
 entry fn main() {
     let log = Logger::new("case");
-    let mut i = 0;
+    let i = 0;
     while (true) {
         i += 1;
         if (i % 1000000 == 0) {
@@ -983,7 +983,7 @@ entry fn main() {
         let shown: i64 = v.get();
         log.info(f"n={shown}");
     }
-    let mut b = StringBuilder::new();
+    let b = StringBuilder::new();
     b.append("count: ");
     b.append(f"up to 42");
     log.info(b.build());
@@ -1011,7 +1011,7 @@ use futures::{ launch_future, sleep };
 use ink::{ Logger };
 
 async fn countdown(log: Logger, n: u32) {
-    let mut i = n;
+    let i = n;
     while (i > 0) {
         log.info(f"t-{i}");
         await sleep(500);

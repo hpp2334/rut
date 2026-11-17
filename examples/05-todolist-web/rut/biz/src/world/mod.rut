@@ -50,7 +50,7 @@ pub class World {
 /// the ctx), the machine's mutations. `boot_line` seeds the note (the
 /// app's boot turn; the DOM-free suite passes "").
 pub fn world_boot(boot_line: str) -> World {
-    let mut store = Store::new();
+    let store = Store::new();
     let items$ = store.source<Vec<domain::Todo>>(Vec::new());
     let reqs$ = store.source<Vec<domain::Req>>(Vec::new());
     let draft$ = store.source_str("");
@@ -68,7 +68,7 @@ pub fn world_boot(boot_line: str) -> World {
     let counts$ = store.derive(fn (ctx) -> str {
         let items = ctx.get<Vec<domain::Todo>, Source<Vec<domain::Todo>>>(items$);
         let reqs = ctx.get<Vec<domain::Req>, Source<Vec<domain::Req>>>(reqs$);
-        let mut open = 0;
+        let open = 0;
         for (let t of items) {
             if (t.done == false) {
                 open += 1;
@@ -176,10 +176,10 @@ pub fn world_boot(boot_line: str) -> World {
                 ctx.set<str, str, Source<str>>(last$, line);
                 return ("", line);
             }
-            let mut its = ctx.get<Vec<domain::Todo>, Source<Vec<domain::Todo>>>(items$);
+            let its = ctx.get<Vec<domain::Todo>, Source<Vec<domain::Todo>>>(items$);
             its[at2].done = its[at2].done == false;
             ctx.set<Vec<domain::Todo>, Vec<domain::Todo>, Source<Vec<domain::Todo>>>(items$, its); // the write point: store + mark
-            let mut to = "open";
+            let to = "open";
             if (its[at2].done) {
                 to = "done";
             }
@@ -302,7 +302,7 @@ pub fn world_boot(boot_line: str) -> World {
     let list_tree$ = store.derive(fn (ctx) -> Widget {
         let items = ctx.get<Vec<domain::Todo>, Source<Vec<domain::Todo>>>(items$);
         let rs = ctx.get<Vec<domain::Req>, Source<Vec<domain::Req>>>(reqs$);
-        let mut list = card().pad(12).gap(8).hook("list");
+        let list = card().pad(12).gap(8).hook("list");
         for (let t of items) {
             list.w(app::todo_row(t, domain::has_pending_for(rs, t.id), toggle_row, remove_row));
         }

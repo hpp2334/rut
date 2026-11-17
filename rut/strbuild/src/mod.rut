@@ -31,7 +31,7 @@
 // alias are visible through the original; copies happen at exactly
 // two engineered points (build's materialization, growth's prefix
 // move). Methods live in an `impl` block; mutating members take the
-// `mut self` receiver (the checker's license to mutate through the
+// `self` receiver (the checker's license to mutate through the
 // shared handle, never a copy trigger).
 //
 // For the common accumulator shape — `out = f"{out}{t}"` — no builder
@@ -62,12 +62,12 @@ impl StringBuilder {
     }
 
     // append a str's octets IN PLACE through the shared box
-    pub fn append(mut self, value: str) {
+    pub fn append(self, value: str) {
         sb_push(self.out, value);
     }
 
     // append one codepoint — the host fn's U+FFFD rule for invalid scalars
-    pub fn append_code(mut self, cp: u32) {
+    pub fn append_code(self, cp: u32) {
         sb_push_code(self.out, cp);
     }
 

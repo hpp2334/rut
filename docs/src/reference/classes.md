@@ -178,7 +178,7 @@ class JsonI64(i64);              // the wrapper family — one per wrapped
 class JsonI32(i32);              // type, each with its own body
 class JsonF64(f64);
 impl JsonI64 {
-    pub fn encode(mut self, w: JsonWriter) -> nil { w.int(self.inner); }
+    pub fn encode(self, w: JsonWriter) -> nil { w.int(self.inner); }
 }
 
 dump(JsonI64(64));               // manufacture at the boundary

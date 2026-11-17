@@ -1276,13 +1276,13 @@ fn the_todolist_shape_private_impl_methods_are_errors() {
     let imp = String::from(
         "pub class TodoList { _id: u64 }\n\
          impl TodoList {\n\
-         \x20   fn toggle_task(mut self, id: u64) { self._id += id; }\n\
-         \x20   fn append_task(mut self, t: str) { self._id += 1; }\n\
+         \x20   fn toggle_task(self, id: u64) { self._id += id; }\n\
+         \x20   fn append_task(self, t: str) { self._id += 1; }\n\
          }\n\
          pub fn mk() -> TodoList { return TodoList { _id: 0 }; }\n",
     );
     let main_src = "mod imp;\nentry fn main() -> i32 {\n\
-                    \x20   let mut list = imp::mk();\n\
+                    \x20   let list = imp::mk();\n\
                     \x20   list.toggle_task(1);\n\
                     \x20   list.append_task(\"Shutdown\");\n\
                     \x20   return 0;\n\
@@ -1329,7 +1329,7 @@ fn for_of_gates_the_iterable_member() {
              impl Count {{\n\
              \x20   fn new(n: i32) -> Self {{ return Self {{ n: n }}; }}\n\
              \x20   [iterable] {dial}fn iterate(self, emit: fn(i32) -> bool) {{\n\
-             \x20       let mut i = 1;\n\
+             \x20       let i = 1;\n\
              \x20       while (i <= self.n) {{\n\
              \x20           if (!emit(i)) {{ return; }}\n\
              \x20           i += 1;\n\
@@ -1339,7 +1339,7 @@ fn for_of_gates_the_iterable_member() {
              pub fn mk(n: i32) -> Count {{ return Count::new(n); }}\n\
              pub fn new_acc() -> Acc {{ return Acc {{ }}; }}\n\
              pub fn sum_to(n: i32) -> i32 {{\n\
-             \x20   let mut acc: ?Acc = Acc {{ }};\n\
+             \x20   let acc: ?Acc = Acc {{ }};\n\
              \x20   let c = Count::new(n);\n\
              \x20   for (let v of c) {{ acc.hits += 1; }}\n\
              \x20   return acc.hits;\n\
@@ -1347,7 +1347,7 @@ fn for_of_gates_the_iterable_member() {
         )
     };
     let root_loop = "mod a;\nentry fn main() -> i32 {\n\
-                     \x20   let mut acc = a::new_acc();\n\
+                     \x20   let acc = a::new_acc();\n\
                      \x20   let c = a::mk(3);\n\
                      \x20   for (let v of c) { acc.hits += 1; }\n\
                      \x20   return acc.hits;\n\
@@ -1408,7 +1408,7 @@ fn box_mod(vis: &str) -> String {
          impl Box {{ pub fn get(self) -> i32 {{ return self.v; }} }}\n\
          pub fn mk(n: i32) -> Box {{ return Box {{ v: n }}; }}\n\
          pub fn inside_read() -> i32 {{ let b = mk(41); return b.v; }}\n\
-         pub fn inside_write() -> i32 {{ let mut b = mk(41); b.v = 42; return b.v; }}\n\
+         pub fn inside_write() -> i32 {{ let b = mk(41); b.v = 42; return b.v; }}\n\
          pub fn inside_lit() -> i32 {{ let b = Box {{ v: 41 }}; return b.get(); }}\n\
          pub fn inside_colon() -> i32 {{ let b = mk(41); return b::v; }}\n"
     )
@@ -1425,7 +1425,7 @@ fn box_site(pfx: &str, tag: &str) -> String {
     format!(
         "use {pfx}::{{ Box }};\n\
          pub fn {tag}_read() -> i32 {{ let b = {pfx}::mk(41); return b.v; }}\n\
-         pub fn {tag}_write() -> i32 {{ let mut b = {pfx}::mk(41); b.v = 42; return b.get(); }}\n\
+         pub fn {tag}_write() -> i32 {{ let b = {pfx}::mk(41); b.v = 42; return b.get(); }}\n\
          pub fn {tag}_lit() -> i32 {{ let b = Box {{ v: 41 }}; return b.get(); }}\n\
          pub fn {tag}_go() -> i32 {{ return {tag}_read() + {tag}_write() + {tag}_lit(); }}\n"
     )
@@ -1459,7 +1459,7 @@ fn member_visibility_fields_matrix() {
             "pkg",
             "use a::{ Box };\nmod a;\n\
              fn r() -> i32 { let b = a::mk(41); return b.v; }\n\
-             fn w() -> i32 { let mut b = a::mk(41); b.v = 42; return b.get(); }\n\
+             fn w() -> i32 { let b = a::mk(41); b.v = 42; return b.get(); }\n\
              fn l() -> i32 { let b = Box { v: 41 }; return b.get(); }\n\
              entry fn main() -> i32 { return r() + w() + l(); }\n",
             vec![("a", Vis::Self_, box_mod("").as_str())],
@@ -1569,7 +1569,7 @@ fn member_visibility_fields_matrix() {
             "pkg",
             "use a::c::{ Box };\nmod a;\n\
              fn r() -> i32 { let b = a::c::mk(41); return b.v; }\n\
-             fn w() -> i32 { let mut b = a::c::mk(41); b.v = 42; return b.get(); }\n\
+             fn w() -> i32 { let b = a::c::mk(41); b.v = 42; return b.get(); }\n\
              fn l() -> i32 { let b = Box { v: 41 }; return b.get(); }\n\
              entry fn main() -> i32 { return r() + w() + l(); }\n",
             vec![
@@ -1598,7 +1598,7 @@ fn member_visibility_fields_matrix() {
             "pkg",
             "mod a;\n\
              fn r() -> i32 { let b = a::mk(41); return b::v; }\n\
-             fn w() -> i32 { let mut b = a::mk(41); b::v = 42; return b.get(); }\n\
+             fn w() -> i32 { let b = a::mk(41); b::v = 42; return b.get(); }\n\
              entry fn main() -> i32 { return r() + w(); }\n",
             vec![("a", Vis::Self_, box_mod("").as_str())],
         ),
@@ -1626,7 +1626,7 @@ fn struct_fields_stay_public_cross_module() {
         modpkg(
             "pkg",
             "use a::{ Point };\nmod a;\nentry fn main() -> i32 {\n\
-             \x20   let mut p = a::mk(40);\n\
+             \x20   let p = a::mk(40);\n\
              \x20   p.y = 2;\n\
              \x20   let q = Point { x: 40, y: 2 };\n\
              \x20   return p.x + p.y + q.x + q.y;\n\
@@ -1643,8 +1643,8 @@ fn todolist_mod(pubf: &str, pubfld: &str) -> String {
     format!(
         "pub class TodoList {{ {pubfld}_id: i32; {pubfld}tasks: str }}\n\
          impl TodoList {{\n\
-         \x20   {pubf}fn toggle_task(mut self, id: i32) {{ self._id += id; }}\n\
-         \x20   {pubf}fn append_task(mut self, t: str) {{ self.tasks = t; }}\n\
+         \x20   {pubf}fn toggle_task(self, id: i32) {{ self._id += id; }}\n\
+         \x20   {pubf}fn append_task(self, t: str) {{ self.tasks = t; }}\n\
          }}\n\
          pub fn mk() -> TodoList {{ return TodoList {{ _id: 0, tasks: \"\" }}; }}\n"
     )
@@ -1689,7 +1689,7 @@ fn the_todolist_shape_private_fields_are_errors() {
     let main_src = "use imp::{ TodoList };\nmod imp;\n\
                     fn peek(list: TodoList) -> i32 { return list.tasks.len(); }\n\
                     entry fn main() -> i32 {\n\
-                    \x20   let mut list = TodoList { _id: 5, tasks: \"\" };\n\
+                    \x20   let list = TodoList { _id: 5, tasks: \"\" };\n\
                     \x20   list.append_task(\"Shutdown\");\n\
                     \x20   list.toggle_task(3);\n\
                     \x20   return peek(list) + list._id;\n\
@@ -1741,7 +1741,7 @@ fn the_todolist_shape_private_members_full_two_file_shape() {
     let pub_imp = todolist_mod("pub ", "pub ");
     let main_src = "use imp::{ TodoList };\nmod imp;\n\
                     entry fn main() -> i32 {\n\
-                    \x20   let mut list = TodoList { _id: 5, tasks: \"\" };\n\
+                    \x20   let list = TodoList { _id: 5, tasks: \"\" };\n\
                     \x20   list.append_task(\"Shutdown\");\n\
                     \x20   list.toggle_task(3);\n\
                     \x20   return list.tasks.len() + list._id;\n\

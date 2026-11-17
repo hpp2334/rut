@@ -25,7 +25,7 @@ class Widget {
 impl Widget {
     pub fn new() -> Self { return Self { w: 0, g: 0, spare: 0, plain: 0 }; }
     pub fn size(self) -> f32 { return self.w * self.g; }
-    pub(super) fn reset(mut self) -> nil { self.plain = 0; }
+    pub(super) fn reset(self) -> nil { self.plain = 0; }
     pub(pkg) fn tint(self) -> i32 { return self.spare; }
     fn secret(self) -> i32 { return self.plain; }
 }
@@ -123,7 +123,7 @@ fn member_modifiers_are_spanned_nodes_and_the_span_starts_at_the_first() {
     // order (the marker's span covers its brackets; the flags a
     // checker asks for are the node's own derived accessors)
     let src = "class C { pub static ready: bool; }\n\
-               impl C {\n    [disposal] pub async fn drop_it(mut self) { }\n}\n";
+               impl C {\n    [disposal] pub async fn drop_it(self) { }\n}\n";
     let (ast, diags) = parse(src, Mode::Impl);
     assert!(diags.is_empty(), "expected a clean parse: {diags:?}");
     let items = ast.root().items(&ast);

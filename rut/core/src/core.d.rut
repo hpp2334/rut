@@ -301,12 +301,12 @@ prelude builtin impl u64 {
 // `[disposal]`; the engine calls it when a value of the type reaches
 // refcount zero (weak boxes null first, fields release after it
 // returns) at the next call boundary. The contract's shape: `fn
-// <free>(mut self, cx: DisposalContext)` — the NAME IS FREE
-// (designation by bracket, never by spelling), `mut self` first, the
+// <free>(self, cx: DisposalContext)` — the NAME IS FREE
+// (designation by bracket, never by spelling), `self` first, the
 // engine-minted context second, nil answered.
 //
 //   impl Db {
-//       [disposal] fn dispose_db(mut self, cx: DisposalContext) { .. }
+//       [disposal] fn dispose_db(self, cx: DisposalContext) { .. }
 //   }
 
 // The async protocol, the Future-only vocabulary — TWO CLOSED builtin

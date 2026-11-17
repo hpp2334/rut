@@ -58,14 +58,14 @@ export interface AstError extends Base { kind: "Error"; diag?: string } // one d
 // ---- members & statements ----
 export interface AstFieldDecl extends Base { kind: "FieldDecl"; vis?: VisTag; static?: true; name: string; ty: AstNode; init?: AstNode }
 export interface AstMethodDecl extends Base { kind: "MethodDecl"; vis?: VisTag; async?: true; marker?: string; name: string; generics?: string[]; params: AstNode[]; ret?: AstNode; bounds?: AstBound[]; body?: AstNode }
-export interface AstParam extends Base { kind: "Param"; mut?: true; name: string; ty?: AstNode }
-export interface AstSelfParam extends Base { kind: "SelfParam"; mut?: true }
+export interface AstParam extends Base { kind: "Param"; name: string; ty?: AstNode }
+export interface AstSelfParam extends Base { kind: "SelfParam" }
 export interface AstBlock extends Base { kind: "Block"; stmts: AstNode[]; tail?: AstNode }
-export interface AstLetStmt extends Base { kind: "LetStmt"; mut?: true; name: string; destructure?: string; ty?: AstNode; init: AstNode }
+export interface AstLetStmt extends Base { kind: "LetStmt"; const?: true; name: string; destructure?: string; ty?: AstNode; init: AstNode }
 export interface AstIf extends Base { kind: "If"; cond: AstNode; then: AstNode; els?: AstNode }
 export interface AstWhile extends Base { kind: "While"; cond: AstNode; body: AstNode }
-export interface AstForOf extends Base { kind: "ForOf"; mut?: true; var: string; iter: AstNode; body: AstNode }
-export interface AstForC extends Base { kind: "ForC"; mut?: true; var: string; init: AstNode; cond: AstNode; update: AstNode; body: AstNode }
+export interface AstForOf extends Base { kind: "ForOf"; const?: true; var: string; iter: AstNode; body: AstNode }
+export interface AstForC extends Base { kind: "ForC"; var: string; init: AstNode; cond: AstNode; update: AstNode; body: AstNode }
 export interface AstReturn extends Base { kind: "Return"; value?: AstNode }
 export interface AstBreak extends Base { kind: "Break" }
 export interface AstContinue extends Base { kind: "Continue" }

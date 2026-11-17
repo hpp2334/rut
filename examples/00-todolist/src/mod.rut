@@ -33,7 +33,7 @@ impl TodoList {
 
     // ---- CREATE ----
 
-    pub fn add(mut self, title: str) -> i32 {
+    pub fn add(self, title: str) -> i32 {
         let id = self.next_id;
         self.items.push(Todo { id: id, title: title });
         self.next_id += 1;
@@ -66,7 +66,7 @@ impl TodoList {
 
     /// The boxed listing the embedder prints.
     pub fn render(self) -> str {
-        let mut out = f"TodoList[{self.len()}]";
+        let out = f"TodoList[{self.len()}]";
         for (let t of self.items) {
             let mark = when (t.done) { true -> "x", else -> " " };
             out = f"{out}\n  #{t.id} [{mark}] {t.title}";
@@ -76,8 +76,8 @@ impl TodoList {
 
     // ---- UPDATE ----
 
-    pub fn set_done(mut self, id: i32, done: bool) -> bool {
-        for (let mut i = 0; i < self.items.len(); i += 1) {
+    pub fn set_done(self, id: i32, done: bool) -> bool {
+        for (let i = 0; i < self.items.len(); i += 1) {
             if (self.items[i].id == id) {
                 self.items[i].done = done;
                 return true;
@@ -88,9 +88,9 @@ impl TodoList {
 
     // ---- DELETE ----
 
-    pub fn remove(mut self, id: i32) -> bool {
+    pub fn remove(self, id: i32) -> bool {
         let kept: Vec<Todo> = Vec::new();
-        let mut removed = false;
+        let removed = false;
         for (let t of self.items) {
             when (t.id == id) {
                 true -> { removed = true; },   // drop the row

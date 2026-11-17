@@ -24,11 +24,11 @@ pub(crate) enum SurfaceKind {
 
 /// One interface member's requirement, as the satisfaction checker
 /// reads it: the descriptor's shape (receiver excluded), plus — when
-/// the interface's AST is local — the receiver form and asyncness the
-/// member must match.
+/// the interface's AST is local — the asyncness the member must
+/// match. (Receiver mutability forms died with `mut` — a receiver is
+/// a receiver.)
 pub(crate) struct MemberReq {
     pub name: IdentId,
-    pub self_form: Option<bool>,
     pub is_async: Option<bool>,
     pub ptys: Vec<TypeId>,
     pub ret: TypeId,
@@ -233,7 +233,6 @@ impl<'a> Ctx<'a> {
                     .unwrap_or(TY_NIL);
                 out.push(MemberReq {
                     name: md.name,
-                    self_form: md.params.first().and_then(|p| self.self_param_mut(*p)),
                     is_async: Some(md.is_async()),
                     ptys,
                     ret,
@@ -248,7 +247,6 @@ impl<'a> Ctx<'a> {
             .iter()
             .map(|m| MemberReq {
                 name: m.name,
-                self_form: None,
                 is_async: None,
                 ptys: m.params.clone(),
                 ret: m.ret,
@@ -362,8 +360,8 @@ impl<'a> Ctx<'a> {
     /// Does the found member's signature ACCEPT the requirement's —
     /// the interface's declared `Self` (this interface's object type,
     /// at any structural depth) accepts the concrete spelling at the
-    /// leaf; everything else matches structurally. Receiver form and
-    /// asyncness compare only when both sides spell them (local AST).
+    /// leaf; everything else matches structurally. Asyncness compares
+    /// only when both sides spell it (local AST).
     fn member_sig_matches(
         &mut self,
         concrete: TypeId,
@@ -371,7 +369,7 @@ impl<'a> Ctx<'a> {
         req: &MemberReq,
         iface_id: u32,
     ) -> bool {
-        let (self_form, is_async, got_ptys, got_ret) = match got {
+        let (is_async, got_ptys, got_ret) = match got {
             MemberSrc::Local { node, env, .. } => {
                 let md = node.get(self.ast);
                 let mut ptys = Vec::new();
@@ -393,8 +391,7 @@ impl<'a> Ctx<'a> {
                     .ret
                     .map(|r| self.resolve_sig_ty(r, env, Some(concrete)))
                     .unwrap_or(TY_NIL);
-                let sf = md.params.first().and_then(|p| self.self_param_mut(*p));
-                (sf, Some(md.is_async()), ptys, ret)
+                (Some(md.is_async()), ptys, ret)
             }
             MemberSrc::Extern { row, subst, .. } => {
                 // placeholder-spelled rows substitute per instantiation;
@@ -404,14 +401,9 @@ impl<'a> Ctx<'a> {
                     .iter()
                     .map(|&t| self.subst_placeholder(t, subst))
                     .collect();
-                (None, None, ptys, self.subst_placeholder(row.ret, subst))
+                (None, ptys, self.subst_placeholder(row.ret, subst))
             }
         };
-        if let (Some(want), Some(got)) = (req.self_form, self_form) {
-            if want != got {
-                return false;
-            }
-        }
         if let (Some(want), Some(got)) = (req.is_async, is_async) {
             if want != got {
                 return false;

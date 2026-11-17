@@ -143,8 +143,8 @@ enum Light { Green, Yellow, Red }
 
 impl Light {
     [iterable] fn iterate(self, emit: fn(Light) -> bool) {
-        let mut cur = self;
-        for (let mut i = 0; i < 3; i += 1) {
+        let cur = self;
+        for (let i = 0; i < 3; i += 1) {
             if (!emit(cur)) { return; }
             cur = when (cur) {
                 Light::Green  -> Light::Yellow,

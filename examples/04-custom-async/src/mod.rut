@@ -41,29 +41,29 @@ impl AuditLog {
         return Self { launches: 0, yields: 0, cancels: 0, checkpoints: 0, finished: 0 };
     }
 
-    fn note_launch(mut self) {
+    fn note_launch(self) {
         self.launches += 1;
     }
 
     /// One resumption driven; `at` is the ledger position it ran at.
-    fn note_yield(mut self, at: u32) {
+    fn note_yield(self, at: u32) {
         self.yields += 1;
         if (at > self.checkpoints) {
             self.checkpoints = at;      // the ledger's high-water mark
         }
     }
 
-    fn note_cancel(mut self) {
+    fn note_cancel(self) {
         self.cancels += 1;
     }
 
-    fn note_finish(mut self) {
+    fn note_finish(self) {
         self.finished += 1;
     }
 
     /// The one-line audit the embedder prints after a run.
     fn summary(self) -> str {
-        let mut out = f"audit: {self.launches} launches, {self.yields} yields";
+        let out = f"audit: {self.launches} launches, {self.yields} yields";
         out = f"{out}, {self.cancels} cancels, peak ckpt {self.checkpoints}";
         return out;
     }
@@ -91,7 +91,7 @@ use futures::{ sleep };
 /// frame's own ledger (`cx.checkpoint()`).
 fn staged(steps: u32, log: ?AuditLog) -> Future<nil> {
     return async {
-        let mut i = 0;
+        let i = 0;
         while (i < steps) {
             await sleep(10);
             i += 1;
@@ -148,7 +148,7 @@ impl CustomLaunched {
     /// The cancellation edge: flag the task, let the loop's re-drive
     /// run the probe. `alive` flips off locally so the audit never
     /// counts a second cancel on one receipt.
-    fn cancel(mut self) -> bool {
+    fn cancel(self) -> bool {
         if (!self.alive) {
             return false;
         }

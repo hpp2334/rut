@@ -154,41 +154,41 @@ use nmapset::{ HashMap };
 fn key(i: i32) -> i32 { return i.wrapping_mul(-1640531535); }
 
 fn churn_col(n: i32) -> i64 {
-    let mut m: HashMap<i32, i64> = HashMap::new();
-    let mut added: i64 = 0;
-    for (let mut i = 0; i < n; i += 1) {
+    let m: HashMap<i32, i64> = HashMap::new();
+    let added: i64 = 0;
+    for (let i = 0; i < n; i += 1) {
         if (m.put(key(i), i as i64)) { added += 1; }
     }
-    let mut replaced: i64 = 0;
-    for (let mut i = 0; i < n; i += 1) {
+    let replaced: i64 = 0;
+    for (let i = 0; i < n; i += 1) {
         if (m.put(key(i), i as i64 + 7) == false) { replaced += 1; }
     }
-    let mut sum: i64 = 0;
-    let mut hits: i64 = 0;
-    for (let mut i = 0; i < n; i += 1) {
+    let sum: i64 = 0;
+    let hits: i64 = 0;
+    for (let i = 0; i < n; i += 1) {
         let p = m.get(key(i));
         if (p != nil) {
             hits += 1;
             sum = sum.wrapping_add(p);
         }
     }
-    let mut misses: i64 = 0;
-    for (let mut i = 0; i < n; i += 1) {
+    let misses: i64 = 0;
+    for (let i = 0; i < n; i += 1) {
         if (m.get(key(i + n)) == nil) { misses += 1; }
     }
-    let mut removed: i64 = 0;
-    for (let mut i = 0; i < n; i += 2) {
+    let removed: i64 = 0;
+    for (let i = 0; i < n; i += 2) {
         if (m.remove(key(i))) { removed += 1; }
     }
-    let mut present: i64 = 0;
-    for (let mut i = 0; i < n; i += 1) {
+    let present: i64 = 0;
+    for (let i = 0; i < n; i += 1) {
         if (m.has(key(i))) { present += 1; }
     }
-    let mut added2: i64 = 0;
-    for (let mut i = 0; i < n; i += 2) {
+    let added2: i64 = 0;
+    for (let i = 0; i < n; i += 2) {
         if (m.put(key(i), 0i64 - i as i64)) { added2 += 1; }
     }
-    let mut c: i64 = sum;
+    let c: i64 = sum;
     c = c.wrapping_add(added.wrapping_mul(31));
     c = c.wrapping_add(replaced.wrapping_mul(37));
     c = c.wrapping_add(hits.wrapping_mul(41));
@@ -201,41 +201,41 @@ fn churn_col(n: i32) -> i64 {
 }
 
 fn churn_sidecar(n: i32) -> i64 {
-    let mut m: HashMap<i32, i64> = HashMap::new();
-    let mut added: i64 = 0;
-    for (let mut i = 0; i < n; i += 1) {
+    let m: HashMap<i32, i64> = HashMap::new();
+    let added: i64 = 0;
+    for (let i = 0; i < n; i += 1) {
         if (m.put(key(i), i as i64)) { added += 1; }
     }
-    let mut replaced: i64 = 0;
-    for (let mut i = 0; i < n; i += 1) {
+    let replaced: i64 = 0;
+    for (let i = 0; i < n; i += 1) {
         if (m.put(key(i), i as i64 + 7) == false) { replaced += 1; }
     }
-    let mut sum: i64 = 0;
-    let mut hits: i64 = 0;
-    for (let mut i = 0; i < n; i += 1) {
+    let sum: i64 = 0;
+    let hits: i64 = 0;
+    for (let i = 0; i < n; i += 1) {
         let p = m.get(key(i));
         if (p != nil) {
             hits += 1;
             sum = sum.wrapping_add(p);
         }
     }
-    let mut misses: i64 = 0;
-    for (let mut i = 0; i < n; i += 1) {
+    let misses: i64 = 0;
+    for (let i = 0; i < n; i += 1) {
         if (m.get(key(i + n)) == nil) { misses += 1; }
     }
-    let mut removed: i64 = 0;
-    for (let mut i = 0; i < n; i += 2) {
+    let removed: i64 = 0;
+    for (let i = 0; i < n; i += 2) {
         if (m.remove(key(i))) { removed += 1; }
     }
-    let mut present: i64 = 0;
-    for (let mut i = 0; i < n; i += 1) {
+    let present: i64 = 0;
+    for (let i = 0; i < n; i += 1) {
         if (m.has(key(i))) { present += 1; }
     }
-    let mut added2: i64 = 0;
-    for (let mut i = 0; i < n; i += 2) {
+    let added2: i64 = 0;
+    for (let i = 0; i < n; i += 2) {
         if (m.put(key(i), 0i64 - i as i64)) { added2 += 1; }
     }
-    let mut c: i64 = sum;
+    let c: i64 = sum;
     c = c.wrapping_add(added.wrapping_mul(31));
     c = c.wrapping_add(replaced.wrapping_mul(37));
     c = c.wrapping_add(hits.wrapping_mul(41));
@@ -276,8 +276,8 @@ const GET_SEMANTICS_SRC: &str = r#"
 use nmapset::{ HashMap };
 
 fn law_col() -> i64 {
-    let mut m: HashMap<i32, i64> = HashMap::new();
-    let mut fails: i64 = 0;
+    let m: HashMap<i32, i64> = HashMap::new();
+    let fails: i64 = 0;
     if (!m.put(1, 10)) { fails += 1; }
     let p1 = m.get(1);
     if (p1 != 10i64) { fails += 2; }
@@ -319,24 +319,24 @@ const GROW_SRC: &str = r#"
 use nmapset::{ HashMap };
 
 entry fn main() -> i64 {
-    let mut m: HashMap<i32, i64> = HashMap::with_capacity(4);
-    let mut fails: i64 = 0;
+    let m: HashMap<i32, i64> = HashMap::with_capacity(4);
+    let fails: i64 = 0;
     let n = 500;
     // 500 keys from cap 4: the load law (count + 1)·10 >= cap·7 fires
     // at counts 2/5/11/22/44/89/179/358 — eight sentinel grows — and
     // the wrapper runs NO drain (there is nothing left to drain)
-    for (let mut i = 0; i < n; i += 1) {
+    for (let i = 0; i < n; i += 1) {
         if (!m.put(i * 37, i as i64 * 7 + 1)) { fails += 1; }
     }
     // churn the tombstone / DEAD-slot-reuse paths
-    for (let mut i = 0; i < n; i += 3) {
+    for (let i = 0; i < n; i += 3) {
         if (!m.remove(i * 37)) { fails += 2; }
     }
-    for (let mut i = 0; i < n; i += 3) {
+    for (let i = 0; i < n; i += 3) {
         if (!m.put(i * 37, i as i64 * 7 + 1)) { fails += 4; }
     }
     // every surviving key's val is exact
-    for (let mut i = 0; i < n; i += 1) {
+    for (let i = 0; i < n; i += 1) {
         let p = m.get(i * 37);
         if (p == nil) { fails += 8; }
         if (p != i as i64 * 7 + 1) { fails += 16; }
@@ -365,8 +365,8 @@ const U64_SRC: &str = r#"
 use nmapset::{ HashMap };
 
 entry fn main() -> i64 {
-    let mut m: HashMap<i32, u64> = HashMap::new();
-    let mut fails: i64 = 0;
+    let m: HashMap<i32, u64> = HashMap::new();
+    let fails: i64 = 0;
     let big: u64 = 9223372036854775808u64;      // 2^63
     let max: u64 = 18446744073709551615u64;     // 2^64 - 1
     if (!m.put(1, big)) { fails += 1; }
@@ -404,8 +404,8 @@ const F64_SRC: &str = r#"
 use nmapset::{ HashMap };
 
 entry fn main() -> i64 {
-    let mut m: HashMap<i32, f64> = HashMap::new();
-    let mut fails: i64 = 0;
+    let m: HashMap<i32, f64> = HashMap::new();
+    let fails: i64 = 0;
     if (!m.put(1, 1.5f64)) { fails += 1; }
     if (!m.put(2, -2.25f64)) { fails += 2; }
     if (!m.put(3, 0.0f64)) { fails += 4; }
@@ -450,7 +450,7 @@ fn primmap_k_admission_names_the_union() {
         "use nmapset::{ HashMap };\n\
          struct Pt { x: i32; y: i32 }\n\
          entry fn main() -> i32 {\n\
-         \x20   let mut pm: HashMap<Pt, i64> = HashMap::new();\n\
+         \x20   let pm: HashMap<Pt, i64> = HashMap::new();\n\
          \x20   return 0;\n\
          }\n",
     );
@@ -468,16 +468,16 @@ fn primmap_coexists_with_hashmap_and_hashset() {
     let checksum = run_main(
         "use nmapset::{ HashMap, HashSet };\n\
          entry fn main() -> i64 {\n\
-         \x20   let mut pm: HashMap<str, i64> = HashMap::new();\n\
-         \x20   let mut acc: i64 = 0;\n\
-         \x20   for (let mut i = 0; i < 24; i += 1) {\n\
+         \x20   let pm: HashMap<str, i64> = HashMap::new();\n\
+         \x20   let acc: i64 = 0;\n\
+         \x20   for (let i = 0; i < 24; i += 1) {\n\
          \x20       if (pm.put(f\"k{i}\", i as i64 * 3)) { acc += 1; }\n\
          \x20   }\n\
          \x20   acc += pm.get(\"k7\");\n\
-         \x20   let mut hm: HashMap<i32, str> = HashMap::new();\n\
+         \x20   let hm: HashMap<i32, str> = HashMap::new();\n\
          \x20   hm.put(1, \"one\");\n\
          \x20   if (hm.get(1) == \"one\") { acc += 1; }\n\
-         \x20   let mut hs: HashSet<i64> = HashSet::new();\n\
+         \x20   let hs: HashSet<i64> = HashSet::new();\n\
          \x20   hs.put(5i64);\n\
          \x20   if (hs.has(5i64)) { acc += 1; }\n\
          \x20   return acc + pm.len() as i64;\n\

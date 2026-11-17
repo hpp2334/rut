@@ -843,7 +843,7 @@ impl<T> Slot<T> {
     pub fn empty() -> Self {
         return Self { buf: [nil; 4], n: 0 };
     }
-    pub fn put(mut self, v: T) -> nil {
+    pub fn put(self, v: T) -> nil {
         self.buf[self.n] = v;
         self.n += 1;
     }
@@ -856,7 +856,7 @@ impl<T> Slot<T> {
 }
 
 pub fn stash<T>(v: T) -> Slot<T> {
-    let mut s: Slot<T> = Slot::empty();
+    let s: Slot<T> = Slot::empty();
     s.put(v);
     s.put(v);
     return s;
@@ -884,7 +884,7 @@ impl<T> Slot<T> {
     pub fn empty() -> Self {
         return Self { buf: [nil; 4], n: 0 };
     }
-    pub fn put(mut self, v: T) -> nil {
+    pub fn put(self, v: T) -> nil {
         self.buf[self.n] = v;
         self.n += 1;
     }
@@ -897,7 +897,7 @@ impl<T> Slot<T> {
 }
 
 pub fn stash<T>(v: T) -> Slot<T> {
-    let mut s: Slot<T> = Slot::empty();
+    let s: Slot<T> = Slot::empty();
     s.put(v);
     s.put(v);
     return s;
@@ -925,7 +925,7 @@ impl<T> Slot<T> {
     pub fn empty() -> Self {
         return Self { buf: [nil; 4], n: 0 };
     }
-    pub fn put(mut self, v: T) -> nil {
+    pub fn put(self, v: T) -> nil {
         self.buf[self.n] = v;
         self.n += 1;
     }
@@ -938,7 +938,7 @@ impl<T> Slot<T> {
 }
 
 pub fn stash<T>(v: T) -> Slot<T> {
-    let mut s: Slot<T> = Slot::empty();
+    let s: Slot<T> = Slot::empty();
     s.put(v);
     s.put(v);
     return s;

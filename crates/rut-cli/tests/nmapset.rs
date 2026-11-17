@@ -88,12 +88,12 @@ struct F { n: i32 = 0; sum: i64 = 0; neg: i8 = 0; hi: bool = false; got: i32 = 0
 
 // the keys walk: birth order, values through get (the stored-cell law)
 entry fn map_walk() -> i64 {
-    let mut m = HashMap<str, i32>::new();
+    let m = HashMap<str, i32>::new();
     m.put("ada", 36);
     m.put("linus", 55);
     m.put("grace", 45);
-    let mut fails: i64 = 0;
-    let mut w: ?W = W { order: [0, 0, 0] };
+    let fails: i64 = 0;
+    let w: ?W = W { order: [0, 0, 0] };
     for (let k of m) {
         w.total += m.get(k);
         if (k == "ada") { w.order[w.n] = 1; }
@@ -109,10 +109,10 @@ entry fn map_walk() -> i64 {
 
 // break: emit false stops the walk; the map itself is untouched
 entry fn map_break() -> i64 {
-    let mut m = HashMap<i32, i32>::new();
-    let mut i = 0;
+    let m = HashMap<i32, i32>::new();
+    let i = 0;
     while (i < 100) { m.put(i, i); i += 1; }
-    let mut w: ?W = W { order: [0, 0, 0] };
+    let w: ?W = W { order: [0, 0, 0] };
     for (let k of m) {
         w.n += 1;
         if (k == 2) { break; }
@@ -125,10 +125,10 @@ entry fn map_break() -> i64 {
 // THE SNAPSHOT LAW: the walk is the keys taken when the loop starts —
 // removes and fresh inserts inside the body never touch it
 entry fn snapshot_walk() -> i64 {
-    let mut m = HashMap<i32, i32>::new();
-    let mut i = 0;
+    let m = HashMap<i32, i32>::new();
+    let i = 0;
     while (i < 5) { m.put(i, i * 10); i += 1; }
-    let mut w: ?W = W { order: [0, 0, 0] };
+    let w: ?W = W { order: [0, 0, 0] };
     for (let k of m) {
         m.remove(k);
         m.put(100 + k, k);
@@ -141,12 +141,12 @@ entry fn snapshot_walk() -> i64 {
 
 // a set walks its elements; the first birth answers first
 entry fn set_walk() -> i64 {
-    let mut s = HashSet<str>::new();
+    let s = HashSet<str>::new();
     s.put("x");
     s.put("y");
     s.put("x");
-    let mut fails: i64 = 0;
-    let mut w: ?S = S { };
+    let fails: i64 = 0;
+    let w: ?S = S { };
     for (let e of s) {
         if (w.n == 0) { w.first = e; }
         w.n += 1;
@@ -159,18 +159,18 @@ entry fn set_walk() -> i64 {
 // the widths are the mint's law: an i8 key reads -5, a u64 key keeps
 // its high bit, a bytes key compares by content
 entry fn key_widths() -> i64 {
-    let mut fails: i64 = 0;
-    let mut m8 = HashMap<i8, i32>::new();
+    let fails: i64 = 0;
+    let m8 = HashMap<i8, i32>::new();
     m8.put(-5, 1);
     m8.put(7, 2);
-    let mut w: ?F = F { };
+    let w: ?F = F { };
     for (let k of m8) {
         if (k < 0) { w.neg = k; }
         w.n += 1;
     }
     if (w.n != 2 || w.neg != -5) { fails += 1; }
     let big: u64 = 18446744073709551615u64;
-    let mut mu = HashMap<u64, bool>::new();
+    let mu = HashMap<u64, bool>::new();
     mu.put(big, true);
     mu.put(0, false);
     for (let k of mu) {
@@ -178,7 +178,7 @@ entry fn key_widths() -> i64 {
         w.sum += 1;
     }
     if (!w.hi || w.sum != 2) { fails += 2; }
-    let mut mb = HashSet<bytes>::new();
+    let mb = HashSet<bytes>::new();
     mb.put(bytes::from([1, 2, 3]));
     for (let k of mb) {
         if (k == bytes::from([1, 2, 3])) { w.got += 1; }
@@ -190,7 +190,7 @@ entry fn key_widths() -> i64 {
 // empty tables walk zero times, both classes
 entry fn empty_walk() -> i64 {
     let m = HashMap<str, i32>::new();
-    let mut n = 0;
+    let n = 0;
     for (let k of m) { n += 1; }
     if (n != 0) { return 1; }
     let s = HashSet<i32>::new();
@@ -201,14 +201,14 @@ entry fn empty_walk() -> i64 {
 
 // remove-then-reinsert: a NEW birth walks last
 entry fn reinsert_order() -> i64 {
-    let mut m = HashMap<i32, i32>::new();
+    let m = HashMap<i32, i32>::new();
     m.put(1, 1);
     m.put(2, 2);
     m.put(3, 3);
     m.remove(2);
     m.put(2, 22);
-    let mut fails: i64 = 0;
-    let mut w: ?W = W { order: [0, 0, 0] };
+    let fails: i64 = 0;
+    let w: ?W = W { order: [0, 0, 0] };
     for (let k of m) {
         w.order[w.n] = k;
         w.n += 1;
@@ -218,12 +218,12 @@ entry fn reinsert_order() -> i64 {
     return fails;
 }
 
-// the mut binding form: the body assigns the loop variable
-entry fn mut_binding() -> i64 {
-    let mut s = HashSet<i32>::new();
+// the mutable-default form: the body reassigns the loop variable
+entry fn loop_var_reassign() -> i64 {
+    let s = HashSet<i32>::new();
     s.put(5);
-    let mut w: ?S = S { };
-    for (let mut x of s) {
+    let w: ?S = S { };
+    for (let x of s) {
         x = 9;
         w.n += 1;
     }
@@ -235,11 +235,11 @@ entry fn mut_binding() -> i64 {
 // loop lands in the map's STORED cell
 struct P { v: i32 }
 entry fn get_aliasing() -> i64 {
-    let mut m = HashMap<str, P>::new();
-    let mut p = P { v: 1 };
+    let m = HashMap<str, P>::new();
+    let p = P { v: 1 };
     m.put("k", p);
     for (let k of m) {
-        let mut g = m.get(k);
+        let g = m.get(k);
         g.v = 42;
     }
     return m.get("k").v as i64;
@@ -249,26 +249,26 @@ entry fn get_aliasing() -> i64 {
 // the closure counts through a record cell)
 struct C { n: i32 }
 entry fn probe_member_map() -> i64 {
-    let mut m = HashMap<i32, i32>::new();
+    let m = HashMap<i32, i32>::new();
     m.put(7, 1);
     m.put(8, 2);
-    let mut c = C { n: 0 };
+    let c = C { n: 0 };
     m.iterate(fn (k: i32) -> bool { c.n += 1; return true; });
     return c.n as i64;
 }
 entry fn probe_member_set() -> i64 {
-    let mut s = HashSet<i32>::new();
+    let s = HashSet<i32>::new();
     s.put(7);
     s.put(8);
-    let mut c = C { n: 0 };
+    let c = C { n: 0 };
     s.iterate(fn (k: i32) -> bool { c.n += 1; return true; });
     return c.n as i64;
 }
 entry fn probe_forof_map_count() -> i64 {
-    let mut m = HashMap<i32, i32>::new();
+    let m = HashMap<i32, i32>::new();
     m.put(7, 1);
     m.put(8, 2);
-    let mut c = C { n: 0 };
+    let c = C { n: 0 };
     for (let k of m) { c.n += 1; }
     return c.n as i64;
 }
@@ -328,9 +328,9 @@ fn reinsert_moves_the_key_to_the_walks_end() {
 }
 
 #[test]
-fn the_mut_binding_form_compiles() {
+fn the_loop_var_reassign_form_compiles() {
     let mut vm = setup(SRC);
-    assert_eq!(vm.call::<_, i64>("mut_binding", ()).unwrap(), 0);
+    assert_eq!(vm.call::<_, i64>("loop_var_reassign", ()).unwrap(), 0);
 }
 
 #[test]

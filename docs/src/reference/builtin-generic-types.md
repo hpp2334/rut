@@ -174,12 +174,12 @@ struct Sum { total: i32 = 0; }
 
 entry fn main() {
     let log = Logger("ages");
-    let mut ages = HashMap<str, i32>::new();
+    let ages = HashMap<str, i32>::new();
     ages.put("ada", 36);
     ages.put("grace", 45);
     // the loop body IS the emit closure — scalars copy in, so the
     // accumulator is a shared record cell
-    let mut acc: ?Sum = Sum { };
+    let acc: ?Sum = Sum { };
     for (let name of ages) {
         acc.total += ages.get(name);
     }

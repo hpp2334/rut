@@ -396,31 +396,40 @@ fn statement_if_trailing_semicolon_normalizes_away() {
     assert_eq!(fmt(&once), once, "idempotent");
 }
 
-// ---- loop headers: `mut` ----
+// ---- loop headers + the const head ----
 
 #[test]
-fn loop_header_mut_survives_parse_fmt_parse() {
-    // the flag prints right after `let`, in both header forms
-    // (the field-write target prints parenthesized — the printer's
-    // standing assignment-target law)
-    let of_once = fmt("fn f(xs: Vec<i32>) -> nil { for (let mut t of xs) { t.x = 1; } }");
+fn loop_header_const_survives_parse_fmt_parse() {
+    // the const head prints verbatim: `for (const t of xs)` (the
+    // per-iteration opt-out) and `const x = ..;` (the binding head) —
+    // the field-write target prints parenthesized (the printer's
+    // standing assignment-target law), and a write through a const
+    // binding prints untouched (shallow by law)
+    let of_once = fmt("fn f(xs: Vec<i32>) -> nil { for (const t of xs) { t.x = 1; } }");
     assert_eq!(
         of_once,
-        "fn f(xs: Vec<i32>) -> nil {\n    for (let mut t of xs) {\n        (t.x) = 1;\n    }\n}\n"
+        "fn f(xs: Vec<i32>) -> nil {\n    for (const t of xs) {\n        (t.x) = 1;\n    }\n}\n"
     );
     assert_eq!(fmt(&of_once), of_once, "idempotent");
 
-    let c_once = fmt("fn f(n: i32) -> nil { for (let mut i = 0; i < n; i += 1) { } }");
+    let head_once = fmt("fn f() -> nil { const x: i32 = 1; x; }");
+    assert_eq!(
+        head_once,
+        "fn f() -> nil {\n    const x: i32 = 1;\n    x;\n}\n"
+    );
+    assert_eq!(fmt(&head_once), head_once, "idempotent");
+
+    let c_once = fmt("fn f(n: i32) -> nil { for (let i = 0; i < n; i += 1) { } }");
     assert_eq!(
         c_once,
-        "fn f(n: i32) -> nil {\n    for (let mut i = 0; i < n; i += 1) {\n    }\n}\n"
+        "fn f(n: i32) -> nil {\n    for (let i = 0; i < n; i += 1) {\n    }\n}\n"
     );
     assert_eq!(fmt(&c_once), c_once, "idempotent");
 }
 
 #[test]
-fn loop_header_without_mut_prints_exactly_as_before() {
-    // the mut-less spellings are byte-identical to the pre-`mut` printer
+fn plain_headers_print_exactly_as_before() {
+    // the unflagged spellings are byte-identical to the pre-`const` printer
     assert_eq!(
         fmt("fn f(xs: Vec<i32>) -> nil { for (let t of xs) { } }"),
         "fn f(xs: Vec<i32>) -> nil {\n    for (let t of xs) {\n    }\n}\n"
@@ -428,6 +437,10 @@ fn loop_header_without_mut_prints_exactly_as_before() {
     assert_eq!(
         fmt("fn f(n: i32) -> nil { for (let i = 0; i < n; i += 1) { } }"),
         "fn f(n: i32) -> nil {\n    for (let i = 0; i < n; i += 1) {\n    }\n}\n"
+    );
+    assert_eq!(
+        fmt("fn f() -> nil { let x = 1; x; }"),
+        "fn f() -> nil {\n    let x = 1;\n    x;\n}\n"
     );
 }
 

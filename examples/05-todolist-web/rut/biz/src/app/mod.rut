@@ -55,7 +55,7 @@ fn take_app(c: opaque) -> AppRoot {
     if (root == nil) {
         panic("app: the event container is not an AppRoot — host drift");
     }
-    let mut r: AppRoot = root;
+    let r: AppRoot = root;
     return r;
 }
 
@@ -66,7 +66,7 @@ fn take_app(c: opaque) -> AppRoot {
 /// current value when the element IS an input, "" otherwise (clicks
 /// carry nothing). The answer is the booking box: opaque(Req) — book
 /// the timer — or opaque(nil), nothing to book.
-fn dom_event(mut r: AppRoot, id: str, detail: str) -> (?opaque, str) {
+fn dom_event(r: AppRoot, id: str, detail: str) -> (?opaque, str) {
     let booked = t1_event(r.t1, id, detail);
     let req = opaque::downcast<domain::Req>(booked);
     if (req != nil) {
@@ -78,13 +78,13 @@ fn dom_event(mut r: AppRoot, id: str, detail: str) -> (?opaque, str) {
 
 /// The user clicked a widget (button, check, quiet del).
 entry fn on_click(c: opaque, id: str, detail: str) -> (?opaque, str) {
-    let mut r: AppRoot = take_app(c);
+    let r: AppRoot = take_app(c);
     return dom_event(r, id, detail);
 }
 
 /// The user typed into the field — the value travels as `value`.
 entry fn on_input(c: opaque, id: str, value: str) -> (?opaque, str) {
-    let mut r: AppRoot = take_app(c);
+    let r: AppRoot = take_app(c);
     return dom_event(r, id, value);
 }
 
@@ -94,7 +94,7 @@ entry fn on_input(c: opaque, id: str, value: str) -> (?opaque, str) {
 /// title, a lost id) is DATA: the status line tells the user, and the
 /// err channel tells the host.
 entry fn on_timer(c: opaque, tag: str) -> (?opaque, str) {
-    let mut r: AppRoot = take_app(c);
+    let r: AppRoot = take_app(c);
     let ans = r.world.answer_ev.run(tag);
     if (ans.1 != "") {
         paint(r);
@@ -112,7 +112,7 @@ entry fn on_timer(c: opaque, tag: str) -> (?opaque, str) {
 // reversal); the render itself stays unconditional, once per turn.
 fn paint(r: AppRoot) -> nil {
     let tree = view(r);
-    let mut root: T1Root = r.t1;
+    let root: T1Root = r.t1;
     t1_render(root, tree);
 }
 
@@ -122,12 +122,12 @@ fn paint(r: AppRoot) -> nil {
 // a derived subtree. The view READS NOTHING and writes nothing
 // (survey §4.2 kept, completed: the pulls moved to the render door);
 // the events ride the widgets' own mutations (on_click/on_input).
-fn view(mut r: AppRoot) -> Widget {
-    let mut world: world::World = r.world;
+fn view(r: AppRoot) -> Widget {
+    let world: world::World = r.world;
 
-    let mut tree = col().gap(12).pad(16).hook("root");
+    let tree = col().gap(12).pad(16).hook("root");
 
-    let mut head = row().gap(8).hook("head");
+    let head = row().gap(8).hook("head");
     head.w(field().placeholder("What needs doing?").value_of(world.draft_view$).on_input(world.draft_ev).hook("new-todo"));
     head.w(btn("Add").on_click(world.add_ev).hook("add-btn"));
     tree.w(head);
@@ -153,9 +153,9 @@ fn view(mut r: AppRoot) -> Widget {
 // runtime closure).
 
 pub(pkg) fn todo_row(t: domain::Todo, flying: bool, toggle_row: Mutation<i64, opaque>, remove_row: Mutation<i64, opaque>) -> Widget {
-    let mut row_w = row().gap(8).key(f"row-{t.id}").hook(f"row-{t.id}");
+    let row_w = row().gap(8).key(f"row-{t.id}").hook(f"row-{t.id}");
     row_w.w(check(t.done).on_row(toggle_row, t.id).hook(f"mark-{t.id}"));
-    let mut lbl = text(t.title);
+    let lbl = text(t.title);
     if (flying) {
         lbl = pending(f"... {t.title}");
     } else {

@@ -63,8 +63,8 @@ circle=3.14159
 
 Rules worth knowing:
 
-- **Signatures must match** — receiver form (`self` vs `mut self` vs
-  none), parameter types, return type, and `async` spelling, exactly.
+- **Signatures must match** — receiver presence (spelled or not),
+  parameter types, return type, and `async` spelling, exactly.
   A member that is almost right is not right: the diagnostic names the
   first mismatching member.
 - **Members live on the type's own inherent impl**, in the type's
@@ -236,10 +236,10 @@ impl Square {
 
 entry fn main() {
     let log = Logger("interfaces");
-    let mut shapes: Vec<Shape> = Vec::new();   // each push checks
+    let shapes: Vec<Shape> = Vec::new();   // each push checks
     shapes.push(Circle { r: 1.0 });
     shapes.push(Square { side: 3.0 });
-    let mut total: f64 = 0.0;
+    let total: f64 = 0.0;
     for (let s of shapes) {
         total += s.area();       // dispatches per element
     }
@@ -321,7 +321,7 @@ impl Square {
 
 entry fn main() {
     let log = Logger("interfaces");
-    let mut shapes: Vec<Shape> = Vec::new();
+    let shapes: Vec<Shape> = Vec::new();
     shapes.push(Circle { r: 1.0 });
     shapes.push(Square { side: 2.0 });
     let sq = Square { side: 2.0 };
@@ -364,7 +364,7 @@ class CountUp { n: i32; }
 
 impl CountUp {
     [iterable] pub fn iterate(self, emit: fn(i32) -> bool) {
-        for (let mut i = 1; i <= self.n; i += 1) {
+        for (let i = 1; i <= self.n; i += 1) {
             if (!emit(i)) { return; }   // false = stop
         }
     }
@@ -434,10 +434,10 @@ entry fn main() {
     let sq = Square { side: 2.0 };
     log.info(f"is shape: {sq is Shape}");
 
-    let mut shapes: Vec<Shape> = Vec::new();   // heterogeneous storage
+    let shapes: Vec<Shape> = Vec::new();   // heterogeneous storage
     shapes.push(Circle { r: 1.0 });
     shapes.push(Square { side: 3.0 });
-    let mut total: f64 = 0.0;
+    let total: f64 = 0.0;
     for (let s of shapes) {
         total += s.area();                    // itable per element
     }

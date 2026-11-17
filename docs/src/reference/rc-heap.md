@@ -53,7 +53,7 @@ use ink::{ Logger };
 struct Audit { log: Logger; n: i32; }
 
 impl Audit {
-    [disposal] fn release(mut self, cx: DisposalContext) {
+    [disposal] fn release(self, cx: DisposalContext) {
         self.log.info(f"released {self.n} octets");
     }
 }

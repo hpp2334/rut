@@ -661,7 +661,7 @@ fn decl_face(prog: &rut_core::binary::Program) -> String {
             for m in &ih.methods {
                 let mut ps: Vec<String> = Vec::with_capacity(m.params.len() + 1);
                 if m.has_self {
-                    ps.push("mut self".to_string());
+                    ps.push("self".to_string());
                 }
                 for &p in m.params.iter() {
                     ps.push(format!("_: {}", ty(p)));

@@ -138,9 +138,9 @@ fn destructured_checked_pair_elides() {
         }
         entry fn main() -> i64 {
             let b: i64 = 9223372036854774807i64;
-            let mut s: i64 = 0;
-            let mut bad: i64 = 0;
-            for (let mut i = 0; i < 4000; i += 1) {
+            let s: i64 = 0;
+            let bad: i64 = 0;
+            for (let i = 0; i < 4000; i += 1) {
                 let a: i64 = ((i % 2048) - 1024) as i64;
                 let (v, ok) = pair(a, b);
                 s = s.wrapping_add(v);
@@ -203,7 +203,7 @@ fn bound_pair_destructured_elides() {
 fn ref_component_pair_elides_to_one_retain_per_read() {
     let src = r#"
         fn tag(n: i64) -> (i64, str) {
-            let mut name: str = "neg";
+            let name: str = "neg";
             if (n > 0) {
                 name = "pos";
             }
@@ -362,7 +362,7 @@ fn boxed_opt_mint_unchanged() {
     let src = r#"
         entry fn main() -> i64 {
             let x: ?i64 = 5;
-            let mut s: i64 = 0;
+            let s: i64 = 0;
             if (x != nil) {
                 s = s.wrapping_add(x);
             }
@@ -398,7 +398,7 @@ fn disposal_record_keeps_its_mint_plain_class_still_elides() {
     let disposal_src = r#"
         use core::{ DisposalContext };
         class A { pub n: i32 = 0; }
-        impl A { [disposal] fn dispose_a(mut self, cx: DisposalContext) { } }
+        impl A { [disposal] fn dispose_a(self, cx: DisposalContext) { } }
         entry fn main() -> i32 {
             let a = A { n: 1 };
             let x = a.n;

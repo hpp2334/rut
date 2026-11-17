@@ -187,7 +187,7 @@ pub struct InstRequest {
 }
 
 /// One capture of a lambda or a desugared `for..of` emit closure:
-/// the binding's `(name, value type, is_mut)`, plus the capture law's
+/// the binding's `(name, value type, is_const)`, plus the capture law's
 /// by-cell marker — `cell` is `Some(record type)` for a PROMOTED
 /// binding, in which case the closure's parameter carries the shared
 /// one-field cell's handle and the body reads/writes through it; the
@@ -202,7 +202,7 @@ pub struct InstRequest {
 pub struct Capture {
     pub name: IdentId,
     pub ty: TypeId,
-    pub is_mut: bool,
+    pub is_const: bool,
     pub cell: Option<TypeId>,
     pub origins: Vec<TypeId>,
 }
@@ -1543,13 +1543,10 @@ impl<'a> Ctx<'a> {
         }
     }
 
-    /// A param slot's `self`-ness — `Some(is_mut)` for a
-    /// `self`/`mut self` receiver, `None` for anything else.
-    pub(crate) fn self_param_mut(&self, p: ParamRef) -> Option<bool> {
-        match p {
-            ParamRef::SelfParam(h) => Some(h.get(self.ast).is_mut),
-            _ => None,
-        }
+    /// A param slot's `self`-ness — `true` for a `self` receiver,
+    /// `false` for anything else.
+    pub(crate) fn is_self_param(&self, p: ParamRef) -> bool {
+        matches!(p, ParamRef::SelfParam(_))
     }
 
     /// A type's display name — synthesized instantiation names resolve

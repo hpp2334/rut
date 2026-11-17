@@ -37,7 +37,7 @@ use ink::{ Logger };
 
 entry fn main() {
     let log = Logger("ladder");
-    let mut v: u8 = 250;
+    let v: u8 = 250;
     v = v.wrapping_add(10);            // 4 — two's-complement wrap
     let over = 200u8.checked_add(100); // (44, false) — .1 false = escaped
     let sat = 200u8.saturating_add(100); // 255 — clamp at the bounds
@@ -142,15 +142,15 @@ use ink::{ Logger };
 
 entry fn main() {
     let log = Logger("pouch");
-    let mut xs: Vec<i32> = Vec::new();         // or Vec::with_capacity(64)
+    let xs: Vec<i32> = Vec::new();         // or Vec::with_capacity(64)
     xs.push(10);                              // amortized O(1)
     let v = Vec<f32>::filled(0.0, 1024);       // n slots of one value
     let w = Vec<i32>::from([1, 2, 3]);         // from a fixed array (copies)
     let x = xs[0];                            // indexing
-    xs[0] = 42;                               // needs a `mut` binding
+    xs[0] = 42;                               // a write through the binding
     let last = xs.pop();                      // removes + returns; traps if empty
     let n = xs.len();
-    let mut total = 0;
+    let total = 0;
     for (let e of w) {                        // iteration
         total += e;
     }
@@ -175,16 +175,16 @@ use ink::{ Logger };
 
 entry fn main() {
     let log = Logger("nmapset");
-    let mut counts: HashMap<str, i32> = HashMap();
+    let counts: HashMap<str, i32> = HashMap();
     let fresh = counts.put("rut", 1);          // answers true when the key was NEWLY added
-    let mut n = 0;
+    let n = 0;
     let hit = counts.get("rut");   // ?i32 — nil means absent
     if (hit != nil) { n = hit + 1; }
     let there = counts.has("rut");             // membership
     let gone = counts.remove("runs");         // answers whether it was there
     let size = counts.len();
 
-    let mut seen: HashSet<str> = HashSet();
+    let seen: HashSet<str> = HashSet();
     let first = seen.put("x");     // true — newly added
     let again = seen.put("x");     // false
     log.info(f"fresh={fresh} n={n} has={there} removed={gone} len={size}");
@@ -234,7 +234,7 @@ entry fn main() -> nil {
     let total: i32 = picked.fold(0, fn(acc: i32, x: i32) -> i32 { return acc + x; });
 
     // a fresh chain re-drives the same source
-    let mut joined: Vec<str> = Vec::new();
+    let joined: Vec<str> = Vec::new();
     src.into_flow().skip(1).for_each(fn(x: i32) -> nil {
         joined.push(f"{x}");                    // a shared cell survives the closure
     });
@@ -280,7 +280,7 @@ use ink::{ Logger };
 entry fn main() {
     let log = Logger("strbuild");
     let n = 3;
-    let mut b = StringBuilder();     // or StringBuilder::with_cap(1024)
+    let b = StringBuilder();     // or StringBuilder::with_cap(1024)
     b.append("count: ");
     b.append_code(33);                   // one codepoint
     b.append(f" up to {n}");             // appends are amortized O(1)
@@ -420,7 +420,7 @@ entry fn main() {
     let log = Logger("std");
 
     // Vec: build, pop, read
-    let mut v: Vec<i32> = Vec::new();
+    let v: Vec<i32> = Vec::new();
     v.push(10);
     v.push(20);
     v.push(30);
@@ -432,7 +432,7 @@ entry fn main() {
     log.info(f"joined={string_join(parts.as_array())}");
 
     // StringBuilder: amortized appends, one materialization
-    let mut b = StringBuilder();
+    let b = StringBuilder();
     b.append("count: ");
     b.append_code(33);
     b.append(f" up to {v.len()}");

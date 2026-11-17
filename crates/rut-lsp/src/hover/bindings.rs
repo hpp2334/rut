@@ -64,9 +64,9 @@ pub struct Binding {
     /// cursor typing at the EOF stays inside its block's scope.
     pub scope_span: Span,
     pub kind: BindKind,
-    /// the header spelled `mut` — the mut-binding law's flag, carried so
-    /// the hover renders the binding as it binds (`let mut x`)
-    pub is_mut: bool,
+    /// the head spelled `const` — the shallow-const law's flag, carried
+    /// so the hover renders the binding as it binds (`const x`)
+    pub is_const: bool,
     /// display text of the declared or inferred type (`Circle`,
     /// `?Circle`, `Vec<i32>`, `f64`); `None` when nothing derives
     pub ty: Option<String>,
@@ -138,7 +138,7 @@ impl Cx<'_> {
         decl: Span,
         scope: Span,
         kind: BindKind,
-        is_mut: bool,
+        is_const: bool,
         ty: Option<String>,
         inferred: bool,
     ) {
@@ -147,7 +147,7 @@ impl Cx<'_> {
             decl_ident_span: decl,
             scope_span: scope,
             kind,
-            is_mut,
+            is_const,
             ty,
             inferred,
         });
@@ -215,7 +215,7 @@ impl Cx<'_> {
                 continue;
             };
             let ty = d.ty.map(|t| ty_src(self.ast, t));
-            self.push(&name, decl, scope, BindKind::Param, d.is_mut, ty, false);
+            self.push(&name, decl, scope, BindKind::Param, false, ty, false);
         }
     }
 
@@ -261,7 +261,7 @@ impl Cx<'_> {
                         decl,
                         Span::new(decl.lo, body_span.hi),
                         BindKind::IterVar,
-                        d.is_mut,
+                        d.is_const,
                         raw,
                         inferred,
                     );
@@ -285,7 +285,7 @@ impl Cx<'_> {
                         decl,
                         Span::new(decl.lo, scope.hi),
                         BindKind::IterVar,
-                        d.is_mut,
+                        false,
                         raw,
                         inferred,
                     );
@@ -378,7 +378,7 @@ impl Cx<'_> {
                 decl,
                 Span::new(decl.lo, block.hi),
                 BindKind::Let,
-                d.is_mut,
+                d.is_const,
                 ty_text,
                 inferred,
             );

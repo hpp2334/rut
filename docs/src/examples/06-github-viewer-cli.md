@@ -118,7 +118,7 @@ tail into a fresh download:
 
 ```rut
     let stream = resp.byte_stream();
-    let mut total: i32 = 0;
+    let total: i32 = 0;
     while (true) {
         let c = await stream.next();
         if (c == nil) {

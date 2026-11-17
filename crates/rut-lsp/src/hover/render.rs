@@ -133,22 +133,23 @@ pub(crate) fn render_candidates(many: &[(&DefIndex, &FnDef)]) -> String {
 }
 
 /// the identifier hover — the binding pass's record rendered: the
-/// binding as it binds (`let c: ?Circle`, `p: Point`), then the kind;
-/// an inferred type says so (the display-side scoping ruling: declared
-/// annotations render as written, inference is labeled)
+/// binding as it binds (`const c: ?Circle`, `let x`, `p: Point`), then
+/// the kind; an inferred type says so (the display-side scoping
+/// ruling: declared annotations render as written, inference is
+/// labeled)
 pub(crate) fn binding_markdown(b: &Binding) -> String {
-    // the binding as it binds — `mut` rides along when the header
-    // spelled it (a `let mut`, a `mut` param, a `for (let mut …)` loop var)
-    let mut_ = if b.is_mut { "mut " } else { "" };
+    // the binding as it binds — the head keyword rides along (`const`
+    // vs `let`) for a let-form binding and a const loop var; a param
+    // renders bare (params are mutable by default)
+    let kw = match (b.kind, b.is_const) {
+        (super::bindings::BindKind::Let, true) => "const ",
+        (super::bindings::BindKind::Let, false) => "let ",
+        (super::bindings::BindKind::IterVar, true) => "const ",
+        _ => "",
+    };
     let head = match &b.ty {
-        Some(t) => match b.kind {
-            super::bindings::BindKind::Let => format!("let {mut_}{}: {t}", b.name),
-            _ => format!("{mut_}{}: {t}", b.name),
-        },
-        None => match b.kind {
-            super::bindings::BindKind::Let => format!("let {mut_}{}", b.name),
-            _ => format!("{mut_}{}", b.name),
-        },
+        Some(t) => format!("{kw}{}: {t}", b.name),
+        None => format!("{kw}{}", b.name),
     };
     let mut out = code_block(&head);
     out.push_str(&format!("\n{}", b.kind.label()));

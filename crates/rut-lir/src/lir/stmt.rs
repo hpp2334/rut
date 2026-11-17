@@ -586,7 +586,7 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
         match node {
             StmtRef::Let(h) => {
                 let LetStmtNode {
-                    is_mut,
+                    is_const,
                     name,
                     destructure,
                     ty,
@@ -640,7 +640,7 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                         // the sharing law: the binding takes the
                         // initializer's cell handle — a share, never a copy
                         let reg = self.last_reg;
-                        self.bind_local(name, reg, ty, is_mut, false, false, origins, sp.lo);
+                        self.bind_local(name, reg, ty, is_const, origins, sp.lo);
                         // union provenance (native-fastpath
                         // phase 1): an annotation spelling a union-bounded
                         // generic carries it; a copy takes its
@@ -702,7 +702,7 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                                 },
                                 sp.lo,
                             );
-                            self.bind_local(*n, reg, fty, is_mut, false, false, Vec::new(), sp.lo);
+                            self.bind_local(*n, reg, fty, is_const, Vec::new(), sp.lo);
                             // a fresh binding from a tuple field carries no
                             // union provenance
                             self.union_syms.remove(n);
@@ -804,7 +804,7 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
             StmtRef::ForOf(h) => {
                 let ForOfNode {
                     var,
-                    is_mut,
+                    is_const,
                     iter,
                     body,
                     ..
@@ -812,14 +812,13 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                 // loops never terminate (see `While`)
                 let saved = self.terminated;
                 self.terminated = false;
-                let r = self.compile_for_of(var, is_mut, iter, body, sp);
+                let r = self.compile_for_of(var, is_const, iter, body, sp);
                 self.terminated = saved;
                 r
             }
             StmtRef::ForC(h) => {
                 let ForCNode {
                     var,
-                    is_mut,
                     init,
                     cond,
                     update,
@@ -835,7 +834,7 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                 // update/body assignment to the var is an error
                 let t = self.compile_expr(init, None)?;
                 let reg = self.last_reg;
-                self.bind_local(var, reg, t, is_mut, true, true, Vec::new(), sp.lo);
+                self.bind_local(var, reg, t, false, Vec::new(), sp.lo);
                 let l_head = self.new_label();
                 let l_body = self.new_label();
                 let l_end = self.new_label();
@@ -1160,7 +1159,7 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
     pub(crate) fn compile_for_of(
         &mut self,
         var: IdentId,
-        is_mut: bool,
+        is_const: bool,
         iter: ExprRef,
         body: Handle<BlockNode>,
         sp: rut_lexer::span::Span,
@@ -1183,7 +1182,7 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                         );
                     }
                     return self
-                        .compile_for_of_iterate(var, iter_reg, src, elem_ty, is_mut, body, sp);
+                        .compile_for_of_iterate(var, iter_reg, src, elem_ty, is_const, body, sp);
                 }
                 // the marked member exists but refused the crossing —
                 // already diagnosed, no "needs a sequence" tail
@@ -1298,9 +1297,7 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                     name: var,
                     reg: cell_reg,
                     ty: elem_ty,
-                    is_mut,
-                    loop_var: true,
-                    loop_for_c: false,
+                    is_const,
                     origins: Vec::new(),
                     field: NO_FIELD,
                     cell: Some(cty),
@@ -1311,9 +1308,7 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                     name: var,
                     reg: var_reg,
                     ty: elem_ty,
-                    is_mut,
-                    loop_var: true,
-                    loop_for_c: false,
+                    is_const,
                     origins: Vec::new(),
                     field: NO_FIELD,
                     cell: None,
@@ -1541,13 +1536,12 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
         rreg: u16,
         src: IterSource,
         elem_ty: TypeId,
-        is_mut: bool,
+        is_const: bool,
         body: Handle<BlockNode>,
         sp: rut_lexer::span::Span,
     ) -> TcResult<()> {
         // captures: the body's enclosing locals; the capture inherits
-        // the binding's mutability (writes through a captured `let mut`
-        // stay legal)
+        // the binding's const flag (the capture law's bookkeeping)
         let mut referenced = Vec::new();
         self.scan_names_expr(ExprRef::Block(body), &mut referenced);
         let mut caps: Vec<Capture> = Vec::new();
@@ -1563,7 +1557,7 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                     caps.push(Capture {
                         name: n,
                         ty: l.ty,
-                        is_mut: l.is_mut,
+                        is_const: l.is_const,
                         cell: l.cell,
                         origins: l.origins.clone(),
                     });
@@ -1576,7 +1570,7 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                     caps.push(Capture {
                         name: n,
                         ty: l.ty,
-                        is_mut: l.is_mut,
+                        is_const: l.is_const,
                         cell: None,
                         origins: l.origins.clone(),
                     });
@@ -1635,7 +1629,7 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
         // reseeded multi-seed shape), each with its own element typing
         self.ctx
             .for_of_sigs
-            .insert(fid, (elem_ty, caps.clone(), var_cell, is_mut));
+            .insert(fid, (elem_ty, caps.clone(), var_cell, is_const));
         // the surface fn type spells the element parameter only — the
         // capture tail (and a promoted loop var's cell) is ABI
         let fty = self.ctx.mk_fn_ty(vec![elem_ty], TY_BOOL);

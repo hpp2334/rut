@@ -299,8 +299,7 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
         // registers, so the parameter registers stay contiguous here
         for (i, p) in params.iter().enumerate() {
             match *p {
-                ParamRef::SelfParam(sh) => {
-                    let is_mut = sh.get(c.ctx.ast).is_mut;
+                ParamRef::SelfParam(_) => {
                     let reg = c.new_reg(param_tys[i]);
                     // bind `self` (well-known symbol): the local is only ever
                     // FOUND where the body spells `self`, so binding it
@@ -309,18 +308,16 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                         name: sym::SELF,
                         reg,
                         ty: param_tys[i],
-                        is_mut,
-                        loop_var: false,
-                        loop_for_c: false,
+                        is_const: false,
                         origins: Vec::new(),
                         field: NO_FIELD,
                         cell: None,
                     });
                 }
                 ParamRef::Param(ph) => {
-                    let (name, is_mut, ty_node) = {
+                    let (name, ty_node) = {
                         let n = ph.get(c.ctx.ast);
-                        (n.name, n.is_mut, n.ty)
+                        (n.name, n.ty)
                     };
                     let reg = c.new_reg(param_tys[i]);
                     // trait-typed parameters: the Inst carries this call's
@@ -346,9 +343,8 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                         name,
                         reg,
                         ty: param_tys[i],
-                        is_mut,
-                        loop_var: false,
-                        loop_for_c: false,
+                        // params are mutable by default — no const params
+                        is_const: false,
                         origins,
                         field: NO_FIELD,
                         cell: None,
@@ -519,18 +515,14 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
         // bind params then captures
         for (i, p) in params.iter().enumerate() {
             if let ParamRef::Param(ph) = *p {
-                let (name, is_mut) = {
-                    let n = ph.get(c.ctx.ast);
-                    (n.name, n.is_mut)
-                };
+                let name = ph.get(c.ctx.ast).name;
                 let reg = c.new_reg(param_tys[i]);
                 c.locals.push(Local {
                     name,
                     reg,
                     ty: param_tys[i],
-                    is_mut,
-                    loop_var: false,
-                    loop_for_c: false,
+                    // params are mutable by default — no const params
+                    is_const: false,
                     origins: Vec::new(),
                     field: NO_FIELD,
                     cell: None,
@@ -541,7 +533,7 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
             let Capture {
                 name: n,
                 ty: t,
-                is_mut: m,
+                is_const: m,
                 cell: by_cell,
                 origins: cap_origins,
             } = cap;
@@ -553,9 +545,7 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                 name: *n,
                 reg,
                 ty: *t,
-                is_mut: *m,
-                loop_var: false,
-                loop_for_c: false,
+                is_const: *m,
                 origins: cap_origins.clone(),
                 field: NO_FIELD,
                 cell: *by_cell,
@@ -649,7 +639,7 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
         body: Handle<BlockNode>,
         var: IdentId,
     ) -> TcResult<()> {
-        let Some((elem_ty, caps, var_cell, is_mut)) = ctx.for_of_sigs.get(&fid).cloned() else {
+        let Some((elem_ty, caps, var_cell, is_const)) = ctx.for_of_sigs.get(&fid).cloned() else {
             return Ok(()); // creation site already diagnosed
         };
         let mut c = FnCompiler {
@@ -693,16 +683,14 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
         if let Some(cty) = var_cell {
             // the loop var, cell-backed on the SHARED cell (argv[1]);
             // frame entry stores the element into it. The header's
-            // `mut` rides the sig: the body's writes through the
-            // binding obey the same law in this frame as in the outer one
+            // `const` rides the sig: the body's reassignments obey the
+            // same law in this frame as in the outer one
             let crec = c.new_reg(cty);
             c.locals.push(Local {
                 name: var,
                 reg: crec,
                 ty: elem_ty,
-                is_mut,
-                loop_var: true,
-                loop_for_c: false,
+                is_const,
                 origins: Vec::new(),
                 field: NO_FIELD,
                 cell: Some(cty),
@@ -721,14 +709,12 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
             // the loop variable: the closure's parameter — a fresh binding
             // per iteration by construction (each emit call is a fresh frame);
             // loop-owned, so the capture law pools it when captured. The
-            // header's `mut` alone gates the body's writes through it
+            // header's `const` alone gates the body's reassignment of it
             c.locals.push(Local {
                 name: var,
                 reg: preg,
                 ty: elem_ty,
-                is_mut,
-                loop_var: true,
-                loop_for_c: false,
+                is_const,
                 origins: Vec::new(),
                 field: NO_FIELD,
                 cell: None,
@@ -738,7 +724,7 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
             let Capture {
                 name: n,
                 ty: t,
-                is_mut: m,
+                is_const: m,
                 cell: by_cell,
                 origins: cap_origins,
             } = cap;
@@ -747,9 +733,7 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                 name: *n,
                 reg,
                 ty: *t,
-                is_mut: *m,
-                loop_var: false,
-                loop_for_c: false,
+                is_const: *m,
                 origins: cap_origins.clone(),
                 field: NO_FIELD,
                 cell: *by_cell,

@@ -194,12 +194,11 @@ function rowsOf(n: AstNode, src: string): Row[] {
       ];
     case "Param":
       return [
-        ...(n.mut ? [{ label: "mut", text: "true" }] : []),
         { label: "name", text: n.name },
         ...(n.ty ? [{ label: "ty", node: n.ty }] : []),
       ];
     case "SelfParam":
-      return n.mut ? [{ label: "mut", text: "true" }] : [];
+      return [];
     case "Block":
       return [
         { label: "stmts", list: n.stmts },
@@ -207,7 +206,7 @@ function rowsOf(n: AstNode, src: string): Row[] {
       ];
     case "LetStmt":
       return [
-        ...(n.mut ? [{ label: "mut", text: "true" }] : []),
+        ...(n.const ? [{ label: "const", text: "true" }] : []),
         { label: "name", text: n.name },
         ...(n.destructure ? [{ label: "destructure", text: n.destructure }] : []),
         ...(n.ty ? [{ label: "ty", node: n.ty }] : []),
@@ -226,14 +225,13 @@ function rowsOf(n: AstNode, src: string): Row[] {
       ];
     case "ForOf":
       return [
-        ...(n.mut ? [{ label: "mut", text: "true" }] : []),
+        ...(n.const ? [{ label: "const", text: "true" }] : []),
         { label: "var", text: n.var },
         { label: "iter", node: n.iter },
         { label: "body", node: n.body },
       ];
     case "ForC":
       return [
-        ...(n.mut ? [{ label: "mut", text: "true" }] : []),
         { label: "var", text: n.var },
         { label: "init", node: n.init },
         { label: "cond", node: n.cond },

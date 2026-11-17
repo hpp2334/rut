@@ -292,7 +292,7 @@ class Box2(i32);
 impl Box2 { pub fn get(self) -> i32 { return self.inner; } }
 
 entry fn main() -> i32 {
-    let mut b = Box2(1);
+    let b = Box2(1);
     let f = fn () -> i32 { b.get() };
     b = Box2(2);
     f()
@@ -355,7 +355,7 @@ class Cell { total: i32 = 0; }
 
 entry fn main() -> i32 {
     let c = Cell { };
-    let mut total = 0;
+    let total = 0;
     when (true) {
         true -> { total = total + 9; },
         else -> { total = total + 0; },

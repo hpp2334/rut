@@ -81,9 +81,9 @@ fn a_record_recovery_shares_the_source_cell() {
     let src = "\
 struct Point { x: i32; y: i32; }
 entry fn main() -> i32 {
-    let mut p = Point { x: 1, y: 2 };
+    let p = Point { x: 1, y: 2 };
     let b = opaque(p);
-    let mut back: Point = unopaque<Point>(b);
+    let back: Point = unopaque<Point>(b);
     back.x = 99;
     return p.x;
 }

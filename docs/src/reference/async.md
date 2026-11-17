@@ -34,7 +34,7 @@ use futures::{ launch_future, sleep };
 
 async fn countdown(n: u32) -> u32 {
     let log = Logger("count");
-    let mut i = n;
+    let i = n;
     while (i > 0) {
         await sleep(1000);            // the ONLY suspension point
         i -= 1;

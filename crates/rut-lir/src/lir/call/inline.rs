@@ -41,12 +41,7 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
             None => vec![],
         };
         let md = mnode.get(self.ctx.ast).clone();
-        let mut_self = md
-            .params
-            .first()
-            .is_some_and(|p| self.ctx.self_param_mut(*p) == Some(true));
         let (params, ret, mname) = (md.params, md.ret, md.name);
-        let _ = mut_self;
         // the method's own generics: explicit site arguments first
         let decl_generics: Vec<IdentId> = md.generics.clone();
         if generics.len() > decl_generics.len() {
@@ -253,7 +248,7 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
         // frame per call is the cost of the design; inlining removes it
         // (generic methods never inline — the generic-method gate inside)
         if self.try_inline_method(
-            dname, &subst, self_ty, mnode, mname, mut_self, rreg, &aregs, &ptys, ret_ty, sp,
+            dname, &subst, self_ty, mnode, mname, rreg, &aregs, &ptys, ret_ty, sp,
         ) {
             return Ok(ret_ty);
         }
@@ -307,7 +302,6 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
         self_ty: TypeId,
         mnode: Handle<MethodDeclNode>,
         mname: IdentId,
-        mut_self: bool,
         recv: u16,
         aregs: &[u16],
         ptys: &[TypeId],
@@ -320,7 +314,6 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
             self_ty,
             mnode,
             mname,
-            mut_self,
             recv,
             aregs,
             ptys,
@@ -394,17 +387,16 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
             let ParamRef::Param(ph) = *p else {
                 continue;
             };
-            let (pname, is_mut, ty) = {
+            let (pname, ty) = {
                 let n = ph.get(self.ctx.ast);
-                (n.name, n.is_mut, n.ty)
+                (n.name, n.ty)
             };
             self.locals.push(Local {
                 name: pname,
                 reg: aregs[ai],
                 ty: ptys[ai],
-                is_mut,
-                loop_var: false,
-                loop_for_c: false,
+                // params are mutable by default — no const params
+                is_const: false,
                 origins: Vec::new(),
                 field: NO_FIELD,
                 cell: None,

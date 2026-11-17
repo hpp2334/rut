@@ -387,7 +387,7 @@ pub class SourceF64 {
 impl SourceF64 {
   [constructor] pub fn of(v: f64) -> Self { return Self { v: v, atom: 7 }; }
   pub fn get(self) -> f64 { return self.v; }
-  pub fn put(mut self, v: f64) -> nil { self.v = v; }
+  pub fn put(self, v: f64) -> nil { self.v = v; }
   pub fn atom_id(self) -> u64 { return self.atom; }
 }
 pub class SourceStr {
@@ -397,7 +397,7 @@ pub class SourceStr {
 impl SourceStr {
   [constructor] pub fn of(v: str) -> Self { return Self { v: v, atom: 8 }; }
   pub fn get(self) -> str { return self.v; }
-  pub fn put(mut self, v: str) -> nil { self.v = v; }
+  pub fn put(self, v: str) -> nil { self.v = v; }
   pub fn atom_id(self) -> u64 { return self.atom; }
 }
 pub class SourceBool {
@@ -407,7 +407,7 @@ pub class SourceBool {
 impl SourceBool {
   [constructor] pub fn of(v: bool) -> Self { return Self { v: v, atom: 9 }; }
   pub fn get(self) -> bool { return self.v; }
-  pub fn put(mut self, v: bool) -> nil { self.v = v; }
+  pub fn put(self, v: bool) -> nil { self.v = v; }
   pub fn atom_id(self) -> u64 { return self.atom; }
 }
 // the read-only lane: satisfies Readable only — the write face refuses it

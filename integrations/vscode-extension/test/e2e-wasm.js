@@ -617,10 +617,10 @@ async function main() {
         if (labels.includes('fn'))
             bad.push(`EOF member completion leaked the keyword table (got ${labels.join(', ')})`);
 
-        // the locals shape at EOF: `che⏐` after `let mut checked …` — the
+        // the locals shape at EOF: `che⏐` after `let checked …` — the
         // binding completes ahead of the keywords, riding LSP kind 6
         // (VARIABLE; the extension maps kind - 1, unchanged)
-        const lsrc = 'fn go() -> nil {\n    let mut checked: str = " ";\n    che';
+        const lsrc = 'fn go() -> nil {\n    let checked: str = " ";\n    che';
         const luri = 'file:///ws/e2e-eof-locals.rut';
         const litems = await rut.complete(
             luri,
@@ -1098,15 +1098,15 @@ async function main() {
             'digest call ret let',
         );
         // for-c counter → i32 — GT: RFC 0007 §1 (the suffixless literal
-        // default; the same law the file's `let mut i = 0;` hints ride)
-        // (std-v10 era: the mut-law sweep spells the header `let mut i`)
+        // default; the same law the file's `let i = 0;` hints ride)
+        // (the drop-mut change spells the header plain `let i`)
         hintAt(
             digestSrc,
-            /for \(let mut i = 0; i < n; i \+= 3\) \{/,
+            /for \(let i = 0; i < n; i \+= 3\) \{/,
             'i',
             ': i32',
             1,
-            /^ {4}let mut i = 0;/m,
+            /^ {4}let i = 0;/m,
             'digest for-c counter',
         );
         // PARAMETER hint at the free call: `hex_val(f"{c}")` → `c:` —
@@ -1121,10 +1121,10 @@ async function main() {
             'digest free-call param',
         );
         // PARAMETER hint through the CROSS-FILE method: `d.push(f"{c}")` →
-        // `v:` — GT: the TRUE stdlib decl `pub fn push(mut self, v: T)`
+        // `v:` — GT: the TRUE stdlib decl `pub fn push(self, v: T)`
         const pouchSrc = fs.readFileSync(path.join(REPO, 'rut', 'pouch', 'src', 'mod.rut'), 'utf8');
         hintAt(digestSrc, /d\.push\(f"\{c\}"\);/, 'f', 'v:', 2, null, 'digest push param');
-        if (!/pub fn push\(mut self, v: T\) -> nil/.test(pouchSrc)) {
+        if (!/pub fn push\(self, v: T\) -> nil/.test(pouchSrc)) {
             bad.push('digest push param: ground-truth push decl missing from pouch src/mod.rut');
         }
         // the hover-consistency law, gated through the artifact: the
@@ -1188,9 +1188,9 @@ async function main() {
         // `for (let x of xs)` → i32 — GT: the iterable's own annotation
         // `fn sum(xs: Vec<i32>)`: the element of Vec<i32> IS i32
         hintAt(/for \(let x of xs\) \{/, 'x', ': i32', 'for-of elem');
-        // `let mut total = 0;` → i32 — the RFC 0007 literal default, GT:
+        // `let total = 0;` → i32 — the RFC 0007 literal default, GT:
         // the file's annotated `a: i32` closure params
-        hintAt(/let mut total = 0;/, 'total', ': i32', 'literal default');
+        hintAt(/let total = 0;/, 'total', ': i32', 'literal default');
         if (!/fn sum\(xs: Vec<i32>\) -> i32 \{/.test(cgSrc)) {
             bad.push('for-of elem: ground-truth Vec<i32> annotation missing');
         }
@@ -1921,7 +1921,7 @@ async function main() {
             const chkAppSrc = [
                 'use chkdep::{ Task };',
                 'fn main() -> nil {',
-                '    let mut checked: str = " ";',
+                '    let checked: str = " ";',
                 '    checked = true;',
                 '    let t = Task { title: "x", completed: false };',
                 '}',

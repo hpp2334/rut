@@ -116,7 +116,7 @@ pub(pkg) fn lower(w: widget::Widget) -> Lowered {
     // the kind token: an `==` chain (see the token tables above —
     // `when` patterns stay same-module)
     let k = w.kind;
-    let mut cls = "t1-text";
+    let cls = "t1-text";
     if (k == widget::WKind::Column) { cls = "t1-col"; }
     if (k == widget::WKind::Row) { cls = "t1-row"; }
     if (k == widget::WKind::Spacer) { cls = "t1-spacer"; }
@@ -125,7 +125,7 @@ pub(pkg) fn lower(w: widget::Widget) -> Lowered {
     if (k == widget::WKind::Button) { cls = "t1-btn"; }
     if (k == widget::WKind::Checkbox) { cls = "t1-check"; }
     if (k == widget::WKind::Field) { cls = "t1-field"; }
-    let mut listens = "";
+    let listens = "";
 
     if (widget::is_text(w)) {
         if (w.tvar == nil) {

@@ -25,29 +25,32 @@ iterates as one-codepoint `str`s, and codepoints read as `u32`
 (`s.code()`, `s.code_at(i)`) — see
 [string slicing and views](../reference/string-views.md).
 
-## Variables: `let` and `let mut`
+## Variables: `let` and `const`
 
 ```rut
 use ink::{ Logger };
 
 entry fn main() {
     let log = Logger("vars");
-    let a = 10;          // an immutable binding
-    let mut b = 10;      // a mutable binding
-    b = 20;              // OK — b may be reassigned
-    // a = 30;           // ERROR: a is not `mut`
+    let a = 10;          // a mutable binding — the default
+    a = 30;              // OK — `let` may reassign
+    const b = 10;        // a const binding — the opt-out
+    // b = 20;           // ERROR: a `const` binding is not reassignable
+    b;
     log.info(f"a={a} b={b}");
 }
 ```
 
 ```text
-a=10 b=20
+a=30 b=10
 ```
 
-`mut` is permission to write *through that name*: reassigning the
-binding, assigning to a field (`p.x = 3`), or assigning to an element
-(`xs[0] = 7`). Sharing is not gated by `mut` — two bindings can name
-the same value, and what `mut` controls is only who may write.
+Mutability is the default: a `let` binding may be reassigned, written
+through (`p.x = 3`), and indexed into (`xs[0] = 7`). `const` is the
+opt-OUT, and it is shallow: it refuses only the binding's own
+reassignment (`b = 20`), while writes through the value (`p.x = 3` on
+a `const p`) stay legal. Sharing is not gated at all — two bindings
+can name the same value, and either may write.
 
 Every type has a zero value: `0` for numbers, `false` for `bool`, the
 empty string, `nil` for nullables. But nothing fills a struct literal's
@@ -101,8 +104,8 @@ cast=44
 Arithmetic has two sharp edges:
 
 - **Mixed widths do not mix.** Both operands must have the same width —
-  convert one side first. `let mut total = 0.0;` makes an `f32`, and
-  adding an `f64` to it is a type error; annotate `let mut total: f64 = 0.0;`
+  convert one side first. `let total = 0.0;` makes an `f32`, and
+  adding an `f64` to it is a type error; annotate `let total: f64 = 0.0;`
   when you mean double precision.
 - **Overflow, division by zero, and out-of-bounds indexing trap.** For
   the explicit non-trapping ladder (`wrapping_add`, `saturating_mul`,
@@ -249,7 +252,7 @@ struct Point { x: i32; y: i32 }
 
 entry fn main() {
     let log = Logger("sharing");
-    let mut p = Point { x: 1, y: 2 };
+    let p = Point { x: 1, y: 2 };
     let q = p;          // q and p name ONE cell
     p.x = 4;            // q.x is 4 now
     log.info(f"q.x={q.x} same cell: {q == p}");
@@ -344,10 +347,10 @@ fn literals(name: str) {
     let raw = r"C:\temp\log.txt";    // raw literal: NO escape processing
     let t = f"hi {name}!";           // format literal
     let ch = "h";                    // a 1-codepoint str
-    let mut arr = [1, 2, 3];         // [i32] — fixed array
-    let mut zero: Vec<f32> = Vec<f32>::filled(0.0, 1024);  // growable, flat
+    let arr = [1, 2, 3];         // [i32] — fixed array
+    let zero: Vec<f32> = Vec<f32>::filled(0.0, 1024);  // growable, flat
     let grow = Vec<i32>::from([1, 2, 3]);  // array -> growable
-    arr[0] = 7;                      // element write needs `mut`
+    arr[0] = 7;                      // a write through the binding
     zero[0] = 9.0f32;
     let bin = bytes(64);             // 64 zeroed octets
     let p = Point { x: 1, y: 2 };    // struct literal: no `new`

@@ -501,7 +501,7 @@ pub class Wrap {
 
 impl Wrap {
     pub fn make(v: i64) -> Self {
-        let mut inner = Cell<i64>::make(v);
+        let inner = Cell<i64>::make(v);
         return Self { c: inner };
     }
 
@@ -599,7 +599,7 @@ pub class Wrap {
 
 impl Wrap {
     pub fn make(v: i64) -> Self {
-        let mut inner = Cell<i64>::make(v);
+        let inner = Cell<i64>::make(v);
         return Self { c: inner };
     }
 
@@ -632,7 +632,7 @@ pub class Held {
 
 impl Held {
     pub fn make(v: i64) -> Self {
-        let mut inner = Boxx<i64>::make(v);
+        let inner = Boxx<i64>::make(v);
         return Self { b: inner };
     }
 

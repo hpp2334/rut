@@ -76,7 +76,7 @@ fn arr_lit_element_in_late_closure() {
           let f = fn (x: i64) -> i64 {
             return a[x as i32].v;
           };
-          let mut churn = Box { v: 0 };
+          let churn = Box { v: 0 };
           churn = Box { v: 1 };
           return (f(0) + f(1)) as i32;
         }

@@ -124,7 +124,6 @@ impl ExprFrame {
                     let id = p.ast.intern(&name);
                     let param = ParamNode {
                         span: sp,
-                        is_mut: false,
                         name: id,
                         name_span: sp,
                         ty: None,

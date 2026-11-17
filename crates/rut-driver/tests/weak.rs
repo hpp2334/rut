@@ -229,7 +229,7 @@ fn death_answers_nil_forever() {
         r#"{TILE}
 use core::{{ Weak }};
 entry fn main() -> i32 {{
-    let mut t = Tile::new(7);
+    let t = Tile::new(7);
     let w = Weak::new(t);
     t = Tile::new(99);       // the old cell loses its last strong handle: it dies NOW
     let a = w.upgrade();
@@ -257,8 +257,8 @@ fn alive_n(w: Weak<Tile>) -> i32 {{
 }}
 entry fn main() -> i32 {{
     let a = Tile::new(10);
-    let mut retired = Tile::new(20);
-    let mut fresh = Tile::new(30);
+    let retired = Tile::new(20);
+    let fresh = Tile::new(30);
     let wa = Weak::new(a);
     let wd = Weak::new(retired);
     let wf = Weak::new(fresh);
@@ -292,7 +292,7 @@ class Node {
 }
 impl Node {
     fn new(name: str) -> Self { return Self { name: name, other: nil, back: nil }; }
-    [disposal] fn dispose_node(mut self, cx: DisposalContext) {
+    [disposal] fn dispose_node(self, cx: DisposalContext) {
         if (self.back != nil) {
             let b = self.back.upgrade();   // INSIDE dispose: the parent's box died first —
             if (b != nil) { panic("cycle resurrected"); }   // the nulling preceded user code
@@ -301,8 +301,8 @@ impl Node {
     }
 }
 fn build() -> ?Node {
-    let mut p: ?Node = Node::new("p");
-    let mut c: ?Node = Node::new("c");
+    let p: ?Node = Node::new("p");
+    let c: ?Node = Node::new("c");
     let oc: ?Node = c;
     p.other = oc;                  // the STRONG edge
     let wp: ?Weak<?Node> = Weak::new(p);
@@ -310,7 +310,7 @@ fn build() -> ?Node {
     return p;                      // the parent handle crosses; the child rides p.other
 }
 entry fn main() -> nil {
-    let mut parent = build();      // fused: parent is the ONLY reference
+    let parent = build();      // fused: parent is the ONLY reference
     parent = nil;                  // sever: the whole shape must free, in order
 }
 "#;
@@ -358,7 +358,7 @@ fn probe_ot(w: Weak<?Tile>) -> ??Tile {{
     return w.upgrade();        // MakeOpt wraps the box — the sticky-? law
 }}
 entry fn main() -> i32 {{
-    let mut ot: ?Tile = Tile::new(5);   // the OPT BOX is the referent
+    let ot: ?Tile = Tile::new(5);   // the OPT BOX is the referent
     let w = Weak::new(ot);              // Weak<?Tile>: legal (D2)
     ot = nil;                          // the box loses its only strong handle: it dies
     let b = probe_ot(w);
@@ -390,7 +390,7 @@ fn probe_o(w: Weak<opaque>) -> i32 {{
 }}
 entry fn main() -> i32 {{
     let t = Tile::new(8);
-    let mut o = opaque(t);      // a Rut store entry — the TAGGED-word referent
+    let o = opaque(t);      // a Rut store entry — the TAGGED-word referent
     let w = Weak::new(o);
     o = opaque(t);              // the first entry is released: it dies on the entry path
     return probe_o(w);
@@ -420,7 +420,7 @@ fn probe_o(w: Weak<opaque>) -> i32 {
     return 0;
 }
 entry fn main() -> i32 {
-    let mut b = make_box(41);
+    let b = make_box(41);
     let w = Weak::new(b);
     b = make_box(42);      // the first host box is released: the weak goes dead
     return probe_o(w);
@@ -657,7 +657,7 @@ impl Gad {
     fn make(n: i32) -> Self { return Self { n: n }; }
 }
 entry fn main() -> i32 {
-    let mut v = Gad::make(9);
+    let v = Gad::make(9);
     let w = Weak::new(v);            // the mint consumes the temporary
     v = Gad::make(10);               // the binding dies: the old referent with it
     let b1 = w.upgrade();
@@ -762,8 +762,8 @@ fn heap_usage_returns_to_baseline_after_a_weak_churn() {
         r#"{TILE}
 use core::{{ Weak }};
 entry fn main() -> i32 {{
-    let mut live = 0;
-    for (let mut i = 0; i < 50; i += 1) {{
+    let live = 0;
+    for (let i = 0; i < 50; i += 1) {{
         let t = Tile::new(i);
         let w = Weak::new(t);
         let b = w.upgrade();

@@ -119,7 +119,7 @@ use std::rc::Rc;
 const DISP: &str = r#"
 use core::{ DisposalContext };
 struct A { n: i32 = 0; }
-impl A { [disposal] fn release(mut self, cx: DisposalContext) { Logger::new("t").info(f"gone {self.n}"); } }
+impl A { [disposal] fn release(self, cx: DisposalContext) { Logger::new("t").info(f"gone {self.n}"); } }
 "#;
 
 #[test]
@@ -127,9 +127,9 @@ fn the_heap_returns_to_baseline_through_the_disposal_drain() {
     let src = format!(
         r#"{DISP}
 entry fn main() -> i32 {{
-    let mut acc = 0;
-    for (let mut i = 0; i < 50; i += 1) {{
-        let mut a = A {{ n: i }};
+    let acc = 0;
+    for (let i = 0; i < 50; i += 1) {{
+        let a = A {{ n: i }};
         acc += a.n;
         a = A {{ n: 7 }};   // a mid-frame death: pin, queue, drain at the end
     }}
@@ -191,7 +191,7 @@ fn the_disposal_row_rides_the_binary() {
     let src = r#"
 use core::{ DisposalContext };
 struct A { n: i32 = 0; }
-impl A { [disposal] fn release(mut self, cx: DisposalContext) { } }
+impl A { [disposal] fn release(self, cx: DisposalContext) { } }
 entry fn main() -> i32 { let a = A { n: 9 }; return 0; }
 "#;
     let out = rut_driver::compile_module(src, rut_ast::parser::Mode::Impl, "app_main");
@@ -232,7 +232,7 @@ entry fn main() -> i32 { let a = A { n: 9 }; return 0; }
 fn disposal_requires_the_import() {
     let body = r#"
 struct A { n: i32 = 0; }
-impl A { [disposal] fn release(mut self, cx: DisposalContext) { } }
+impl A { [disposal] fn release(self, cx: DisposalContext) { } }
 entry fn main() -> i32 { let a = A { n: 9 }; return a.n; }
 "#;
     // no use at all: the cx-type miss names the fix
@@ -249,7 +249,7 @@ entry fn main() -> i32 { let a = A { n: 9 }; return a.n; }
     // the removed `impl Disposal for Q` spelling dies at the parser
     // (the `for` branch is deleted from the impl grammar — disposal is
     // the `[disposal]` marker on the type's own inherent impl)
-    let gone = "use core::{ DisposalContext };\nclass Q { }\nimpl Disposal for Q { fn dispose(mut self, cx: DisposalContext) { } }\nentry fn main() -> i32 { return 0; }\n".to_string();
+    let gone = "use core::{ DisposalContext };\nclass Q { }\nimpl Disposal for Q { fn dispose(self, cx: DisposalContext) { } }\nentry fn main() -> i32 { return 0; }\n".to_string();
     let out = rut_driver::compile_module(&gone, rut_ast::parser::Mode::Impl, "app_main");
     assert!(
         out.diags

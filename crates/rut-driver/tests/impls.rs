@@ -1,7 +1,7 @@
 //! Inherent impl blocks and structural interface satisfaction: the
 //! impl forms (struct/class/enum targets, coverage/placement checks),
-//! the boundary satisfaction check (missing member, signature differs,
-//! receiver form), and the two dispatch rules — static bind when the
+//! the boundary satisfaction check (missing member, signature
+//! differs), and the two dispatch rules — static bind when the
 //! call site names exactly one concrete origin, vtable when origins
 //! merge. Primitives carry no members: capability on a value type is
 //! manufactured by a spelled wrapper (a newtype class) whose inherent
@@ -78,7 +78,7 @@ fn diags_of(src: &str) -> Vec<String> {
 // structural) satisfaction — died with the trait registry. Their
 // nearest surviving laws live at the BOUNDARY (the member-set match:
 // `satisfaction_fails_names_the_missing_member` /
-// `receiver_form_must_match_the_interface` below and in
+// `signature_differs_at_the_boundary` below and in
 // cross_traits.rs) and in the duplicate-inherent-member check
 // (`duplicate_inherent_member_diagnoses`).
 
@@ -149,13 +149,15 @@ fn satisfaction_fails_names_the_missing_member() {
 }
 
 #[test]
-fn receiver_form_must_match_the_interface() {
-    // the member is there but spelled `self` where the interface asks
-    // `mut self` — the signature differs, at the boundary
+fn signature_differs_at_the_boundary() {
+    // the member is there but shaped differently (an extra parameter) —
+    // the signature differs, at the boundary. (Receiver mutability
+    // forms died with `mut`: a receiver is a receiver; only shape and
+    // asyncness still distinguish members.)
     let ds = diags_of(
-        "interface I { fn m(mut self) -> nil; }\n\
+        "interface I { fn m(self) -> nil; }\n\
          struct S { x: i32 }\n\
-         impl S { pub fn m(self) -> nil { } }\n\
+         impl S { pub fn m(self, v: i32) -> nil { } }\n\
          entry fn main() -> i32 {\n\
              let s = S { x: 1 };\n\
              let i: I = s;\n\
@@ -165,7 +167,7 @@ fn receiver_form_must_match_the_interface() {
     assert!(
         ds.iter()
             .any(|d| d.contains("`S` does not satisfy `I`") && d.contains("signature differs")),
-        "receiver form mismatch must diagnose: {ds:?}"
+        "signature mismatch must diagnose: {ds:?}"
     );
 }
 
@@ -331,7 +333,7 @@ fn reassignment_invalidates_a_stale_origin() {
          impl A { pub fn get(self) -> i32 { return 10; } }\n\
          impl B { pub fn get(self) -> i32 { return 20; } }\n\
          entry fn main() -> i32 {\n\
-             let mut w: Get = A { v: 1 };\n\
+             let w: Get = A { v: 1 };\n\
              w = B { v: 2 };\n\
              return w.get();\n\
          }\n",
@@ -458,7 +460,7 @@ fn probe_answers_the_boxed_satisfaction() {
                impl WI { pub fn m(self) -> i32 { return 1; } }\n\
                class Plain(i32);\n\
                entry fn main() -> i32 {\n\
-                   let mut acc = 0;\n\
+                   let acc = 0;\n\
                    let w: T = WI(5);\n\
                    if (w is T) { acc = acc + 1; }\n\
                    let p = Plain(7);\n\
@@ -647,7 +649,7 @@ const VIS_DEP: &str = "\
 pub struct Counter { n: i32 }\n\
 impl Counter {\n\
 \x20   pub fn new() -> Self { return Counter { n: 0 }; }\n\
-\x20   pub fn bump(mut self) -> Self { self.n += 1; return self; }\n\
+\x20   pub fn bump(self) -> Self { self.n += 1; return self; }\n\
 \x20   fn secret(self) -> i32 { return self.n; }\n\
 }\n\
 // same-module: the plain fn is right there — the ordinary law\n\
@@ -770,13 +772,13 @@ fn iterable_member_drives_for_break_continue() {
                entry fn main() -> i32 {\n\
                \x20   // the capture law: scalars copy into the emit closure,\n\
                \x20   // so the accumulator is a shared cell\n\
-               \x20   let mut acc: ?Acc = Acc { };\n\
+               \x20   let acc: ?Acc = Acc { };\n\
                \x20   for (let v of Lights::new()) {\n\
                \x20       acc.hits += 1;\n\
                \x20       if (acc.hits == 2) { break; }\n\
                \x20   }\n\
                \x20   if (acc.hits != 2) { return -1; }\n\
-               \x20   let mut all: ?Acc = Acc { };\n\
+               \x20   let all: ?Acc = Acc { };\n\
                \x20   for (let v of Lights::new()) {\n\
                \x20       all.hits += 1;\n\
                \x20       continue;\n\
@@ -812,7 +814,7 @@ fn disposal_stays_data_only_for_enums() {
     let ds = diags_of(
         "use core::{ DisposalContext };\n\
          enum Light { Green, Red }\n\
-         impl Light { [disposal] fn dispose_light(mut self, cx: DisposalContext) { } }\n\
+         impl Light { [disposal] fn dispose_light(self, cx: DisposalContext) { } }\n\
          entry fn main() -> i32 { return 0; }\n",
     );
     assert!(
@@ -829,7 +831,7 @@ fn disposal_stays_data_only_for_enums() {
              [iterable] fn iterate(self, emit: fn(Light) -> bool) { emit(Light::Green); emit(Light::Red); }\n\
          }\n\
          entry fn main() -> i32 {\n\
-             let mut acc: ?Acc = Acc { };\n\
+             let acc: ?Acc = Acc { };\n\
              for (let l of Light::Red) {\n\
                  let x = when (l) { Light::Green -> 1, Light::Red -> 2 };\n\
                  acc.n = acc.n + x;\n\

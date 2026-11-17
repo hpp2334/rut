@@ -333,7 +333,7 @@ use json::{ encodeJson, JsonSerialize, JsonWriter, EncodeJsonError };
 class Todo { name: str; n: i64; }
 
 impl Todo {
-    pub fn encode(self, mut w: JsonWriter) -> ?EncodeJsonError {
+    pub fn encode(self, w: JsonWriter) -> ?EncodeJsonError {
         w.begin_object();
         w.key(\"name\");
         w.write_str(self.name);

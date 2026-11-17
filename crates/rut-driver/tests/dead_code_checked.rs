@@ -71,7 +71,7 @@ fn valid_dead_private_code_compiles_clean() {
         "class Counter { n: i32 }\n\
          impl Counter {\n\
          \x20   pub fn new() -> Self { return Counter { n: 0 }; }\n\
-         \x20   fn bump(mut self) -> Self { self.n += 1; return self; }\n\
+         \x20   fn bump(self) -> Self { self.n += 1; return self; }\n\
          }\n\
          enum Dial { Low, High }\n\
          impl Dial {\n\

@@ -170,8 +170,8 @@ fn encodeJson<T requires JsonSerialize>(v: T) -> (?str, ?EncodeJsonError);
 fn decodeJson<T requires JsonDeserialize>(s: str) -> (?T, ?DecodeJsonError);
 fn decodeJsonBytes<T requires JsonDeserialize>(b: bytes) -> (?T, ?DecodeJsonError);
 
-interface JsonSerialize   { fn encode(self, mut w: JsonWriter) -> ?EncodeJsonError; }
-interface JsonDeserialize { fn decode(mut r: JsonReader) -> (?Self, ?DecodeJsonError); }
+interface JsonSerialize   { fn encode(self, w: JsonWriter) -> ?EncodeJsonError; }
+interface JsonDeserialize { fn decode(r: JsonReader) -> (?Self, ?DecodeJsonError); }
 ```
 
 A type satisfies them STRUCTURALLY — `pub fn encode` / `pub fn decode`
@@ -248,9 +248,9 @@ pub class StringBuilder {
 impl StringBuilder {
     fn new() -> Self;                   // grow from small
     fn with_cap(cap: i32) -> Self;      // pre-size to an octet HINT
-    fn append(mut self, value: str);    // the one appender (in place,
+    fn append(self, value: str);    // the one appender (in place,
                                         //   amortized O(|s|))
-    fn append_code(mut self, cp: u32);  // one codepoint (invalid
+    fn append_code(self, cp: u32);  // one codepoint (invalid
                                         //   scalars mint U+FFFD)
     fn len(self) -> i32;                // codepoints so far, O(1)
     fn build(self) -> str;              // the ONE materialization —

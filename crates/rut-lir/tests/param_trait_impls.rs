@@ -196,8 +196,8 @@ fn vtable_row_is_filled_for_the_instantiation() {
          entry fn main() -> i64 {\n\
              let a: Src<i64> = IntW(5);\n\
              let b: Src<i64> = AltW(6);\n\
-             let mut pick: Src<i64> = a;\n\
-             let mut pick2: Src<i64> = b;\n\
+             let pick: Src<i64> = a;\n\
+             let pick2: Src<i64> = b;\n\
              let use_b = 6 == 6;\n\
              if (use_b) {\n\
                  pick2 = AltW(7);\n\
@@ -323,7 +323,7 @@ fn double_compile_of_one_source_emits_identical_bytes() {
                    let b: Read<str> = w.b$;\n\
                    let c: Read<f64> = w.c$;\n\
                    let d: Read<bool> = w.d$;\n\
-                   let mut total: u32 = 0;\n\
+                   let total: u32 = 0;\n\
                    total = total + read_id(a);\n\
                    total = total + read_id(b);\n\
                    total = total + read_id(c);\n\

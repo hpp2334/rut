@@ -53,9 +53,9 @@ entry fn count(t: opaque) -> i32 { return map_len(t); }
 // `as i64` (a bare literal's box holds its own default width).
 entry fn basic_lifecycle() -> i64 {
     let t = map_new(8);
-    let mut fails: i64 = 0;
-    let mut first: [i32] = [0; 10];
-    let mut i: i64 = 0;
+    let fails: i64 = 0;
+    let first: [i32] = [0; 10];
+    let i: i64 = 0;
     while (i < 10) {
         let ans = map_hput(t, opaque(i));
         if (ans & 1 != 1) { fails += 100; }   // fresh keys must answer newly
@@ -109,7 +109,7 @@ entry fn remove_rebirth() -> i64 {
 // (the sealed-box spelling: the str key crosses as `opaque(s)`)
 entry fn str_keys() -> i64 {
     let t = map_new(8);
-    let mut fails: i64 = 0;
+    let fails: i64 = 0;
     let a: str = "alpha";
     let b: str = "beta";
     let c: str = "gamma";
@@ -137,7 +137,7 @@ entry fn str_keys() -> i64 {
 // bytes keys: octet equality, same shape
 entry fn bytes_keys() -> i64 {
     let t = map_new(8);
-    let mut fails: i64 = 0;
+    let fails: i64 = 0;
     let b1 = bytes::from([1, 2, 3]);
     let b2 = bytes::from([9, 9]);
     if (map_hput(t, opaque(b1)) & 1 != 1) { fails += 1; }
@@ -165,7 +165,7 @@ impl Bag {
 }
 
 entry fn churn_tables(n: i64) -> nil {
-    let mut i: i64 = 0;
+    let i: i64 = 0;
     while (i < n) {
         let b = Bag::adopt(map_new(16));
         map_hput(b.t, opaque(i));
@@ -188,7 +188,7 @@ entry fn sv_parity() -> i64 {
     let t1 = map_new(8);
     let t2 = map_new(8);
     let parent: str = "alpha-beta-gamma-delta";
-    let mut fails: i64 = 0;
+    let fails: i64 = 0;
     // sv inserts into t1; boxed-str inserts of the same texts into t2
     if (map_hput_sv(t1, parent, 0, 5) & 1 != 1) { fails += 1; }    // alpha
     if (map_hput_sv(t1, parent, 6, 4) & 1 != 1) { fails += 1; }    // beta
@@ -263,7 +263,7 @@ entry fn sv_put_ok(t: opaque) -> i64 {
 // the new box, remove answers the dead key's handle and kills the box.
 
 entry fn valued_bits(t: opaque) -> i64 {
-    let mut fails: i64 = 0;
+    let fails: i64 = 0;
     // the box TAGS the payload's type (the downcast law): seal an
     // explicit i64, or `opaque(0 as i64)` faithfully holds the
     // literal's own width and downcast<i64> correctly misses. THE KEY
@@ -299,7 +299,7 @@ entry fn empty_read_trap(t: opaque) -> i64 {
 // the box), and the replace's displaced box releases exactly once —
 // the balance is measured Rust-side.
 entry fn valued_strs(t: opaque) -> i64 {
-    let mut fails: i64 = 0;
+    let fails: i64 = 0;
     let a: str = "alpha-alpha-alpha-alpha";
     if (map_hvput(t, opaque(1 as i64), opaque(a)) & 1 != 1) { fails += 1; }
     let got: ?str = opaque::downcast<str>(map_hvget(t, opaque(1 as i64)));
@@ -320,14 +320,14 @@ entry fn valued_strs(t: opaque) -> i64 {
 
 // birth order, not bucket order: 30, 10, 20 inserted in that order
 entry fn iter_walk(t: opaque) -> i64 {
-    let mut fails: i64 = 0;
+    let fails: i64 = 0;
     map_hput(t, opaque(30 as i64));
     map_hput(t, opaque(10 as i64));
     map_hput(t, opaque(20 as i64));
     let cur = map_iter_new(t, type_id<i64>());
-    let mut word: [i64] = [0, 0, 0];
-    let mut n: i32 = 0;
-    let mut cell = map_iter_next(cur);
+    let word: [i64] = [0, 0, 0];
+    let n: i32 = 0;
+    let cell = map_iter_next(cur);
     while (cell != nil) {
         if (n >= 3) { fails += 1; break; }
         word[n] = opaque::downcast<i64>(cell);
@@ -369,10 +369,10 @@ entry fn iter_str_keys(t: opaque) -> i64 {
     map_hput(t, opaque(a));
     map_hput(t, opaque(b));
     let cur = map_iter_new(t, type_id<str>());
-    let mut fails: i64 = 0;
-    let mut first: str = "";
-    let mut n: i64 = 0;
-    let mut cell = map_iter_next(cur);
+    let fails: i64 = 0;
+    let first: str = "";
+    let n: i64 = 0;
+    let cell = map_iter_next(cur);
     while (cell != nil) {
         let k = opaque::downcast<str>(cell);
         if (n == 0) { first = k; }

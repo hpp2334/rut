@@ -43,7 +43,7 @@ struct Point { x: i32; y: i32; }
 
 entry fn main() {
     let log = Logger("t");
-    let mut p = Point { x: 1, y: 2 };
+    let p = Point { x: 1, y: 2 };
     let q = p;                       // SHARE: q and p name one cell (O(1))
     p.x = 4;                         // q.x is 4 now — sharing is the law
     log.info(f"{q.x}");
@@ -183,7 +183,7 @@ struct Counter { n: i32 }
 
 impl Counter {
     pub fn new() -> Self { return Counter { n: 0 }; }
-    fn bump(mut self) -> Self { self.n += 1; return self; }
+    fn bump(self) -> Self { self.n += 1; return self; }
     fn value(self) -> i32 { return self.n; }
 }
 

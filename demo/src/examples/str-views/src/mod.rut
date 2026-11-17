@@ -20,7 +20,7 @@ entry fn main() {
     log.info(f"word={word} len={word.len()} eq={word == want}");
 
     // a view IS a str: iterate it, slice it again (flattens to the root)
-    let mut n = 0;
+    let n = 0;
     for (let c of word) { n += 1; }
     log.info(f"iterated={n} reslice={word.slice(1, 3)}");
 

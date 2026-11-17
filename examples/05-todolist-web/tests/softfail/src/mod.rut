@@ -25,7 +25,7 @@ entry fn on_timer(c: opaque, tag: str) -> (?opaque, str) {
     if (t == nil) {
         panic("fixture: the event container is not a Tally — host drift");
     }
-    let mut tt: ?Tally = t;
+    let tt: ?Tally = t;
     if (tag == "boom") {
         // the soft failure: data for the host, the container untouched —
         // exactly-one-non-nil (the value channel is empty)

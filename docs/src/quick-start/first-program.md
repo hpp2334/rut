@@ -122,8 +122,8 @@ entry fn main() {
     let n = 10;            // i32 — the integer default
     let scale = 1.5;       // f32 — the float default
     let big: u64 = 10;     // u64 via annotation — fits the default
-    let flags = [1, 2, 3]; // [i32] — a fixed heap cell
-    let mut sum = 0;       // `mut` — this one is written to
+    const flags = [1, 2, 3]; // a const binding — the opt-out: `flags` itself never rebinds
+    let sum = 0;           // a plain `let` — mutable by default, this one is written to
     for (let x of flags) {
         sum += x * n;
     }

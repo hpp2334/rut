@@ -97,51 +97,51 @@ pub(pkg) fn of_check(on: bool) -> Widget {
     return Widget { kind: WKind::Checkbox, on: on };
 }
 
-// ---- the fluent builders (impl Widget, `mut self -> Self`) ----------
+// ---- the fluent builders (impl Widget, `self -> Self`) ----------
 // The constructors live in the component section (§5).
 
 impl Widget {
     /// Append a child (no variadics — one at a time, per §2.4).
-    pub fn w(mut self, child: Widget) -> Self {
+    pub fn w(self, child: Widget) -> Self {
         self.children.push(child);
         return self;
     }
 
-    pub fn gap(mut self, n: i32) -> Self {
+    pub fn gap(self, n: i32) -> Self {
         self.gap = n;
         return self;
     }
 
-    pub fn size(mut self, n: i32) -> Self {
+    pub fn size(self, n: i32) -> Self {
         self.size = n;
         return self;
     }
 
     /// Wire a reactive SUBTREE (tur's Each): the derived computes the
     /// whole branch; the diff splices it in at the render door.
-    pub fn live(mut self, d: store::Derived<Widget>) -> Self {
+    pub fn live(self, d: store::Derived<Widget>) -> Self {
         self.live = d;
         return self;
     }
 
-    pub fn pad(mut self, n: i32) -> Self {
+    pub fn pad(self, n: i32) -> Self {
         self.pad = n;
         return self;
     }
 
-    fn size(mut self, n: i32) -> Self {
+    fn size(self, n: i32) -> Self {
         self.size = n;
         return self;
     }
 
     /// The stable test id — the lowering emits it as the `id` attr.
-    pub fn hook(mut self, id: str) -> Self {
+    pub fn hook(self, id: str) -> Self {
         self.hook = id;
         return self;
     }
 
     /// The keyed-diff identity; defaults from `hook` when unset.
-    pub fn key(mut self, id: str) -> Self {
+    pub fn key(self, id: str) -> Self {
         self.key = id;
         return self;
     }
@@ -149,14 +149,14 @@ impl Widget {
     /// tur's `onClick(mutate(...))`: the mutation the framework runs
     /// when this widget fires (buttons, checkboxes). The event's
     /// SEMANTICS ride the mutation, not a subject string.
-    pub fn on_click(mut self, m: store::Mutation<str, opaque>) -> Self {
+    pub fn on_click(self, m: store::Mutation<str, opaque>) -> Self {
         self.on_click = m;
         return self;
     }
 
     /// tur's `{ onInput: mutate(...) }`: the mutation run with the
     /// input's event-carried value (fields).
-    pub fn on_input(mut self, m: store::Mutation<str, opaque>) -> Self {
+    pub fn on_input(self, m: store::Mutation<str, opaque>) -> Self {
         self.on_input = m;
         return self;
     }
@@ -164,14 +164,14 @@ impl Widget {
     /// tur's captured-index click, DATA-SHAPED: the machine mutation
     /// plus its arg as fields — no runtime closure mint (see on_row's
     /// comment); `ev_run` feeds it the bound arg on the firing event.
-    pub fn on_row(mut self, m: store::Mutation<i64, opaque>, arg: i64) -> Self {
+    pub fn on_row(self, m: store::Mutation<i64, opaque>, arg: i64) -> Self {
         self.on_row = m;
         self.row_arg = arg;
         return self;
     }
 
     /// The field's value — the LITERAL arm (tests, static shells).
-    pub fn value(mut self, v: str) -> Self {
+    pub fn value(self, v: str) -> Self {
         self.value = v;
         return self;
     }
@@ -179,36 +179,36 @@ impl Widget {
     /// tur's `Text({ text: derive(...) })`: a REACTIVE text content —
     /// the derived resolves at the render door; the literal `text`
     /// it replaces is what the diff compares.
-    pub fn text_of(mut self, d: store::Derived<str>) -> Self {
+    pub fn text_of(self, d: store::Derived<str>) -> Self {
         self.text$ = d;
         return self;
     }
 
     /// The reactive field value — the derived resolves at the render
     /// door (the draft mirror without an eager pull at view build).
-    pub fn value_of(mut self, d: store::Derived<str>) -> Self {
+    pub fn value_of(self, d: store::Derived<str>) -> Self {
         self.value$ = d;
         return self;
     }
 
     /// The placeholder (Field).
-    pub fn placeholder(mut self, p: str) -> Self {
+    pub fn placeholder(self, p: str) -> Self {
         self.placeholder = p;
         return self;
     }
 
     /// The checkbox state (app state, rendered as a token).
-    fn on(mut self, b: bool) -> Self {
+    fn on(self, b: bool) -> Self {
         self.on = b;
         return self;
     }
 
-    fn variant_primary(mut self) -> Self {
+    fn variant_primary(self) -> Self {
         self.bvar = BVariant::Primary;
         return self;
     }
 
-    fn variant_quiet(mut self) -> Self {
+    fn variant_quiet(self) -> Self {
         self.bvar = BVariant::Quiet;
         return self;
     }

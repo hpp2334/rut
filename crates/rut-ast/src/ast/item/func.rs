@@ -51,21 +51,20 @@ impl FnNode {
     }
 }
 
-/// `mut`? name: ty — or a type-less lambda param `(x)`
+/// name: ty — or a type-less lambda param `(x)`; params are mutable by
+/// default, no const params in v1
 #[derive(Clone, Debug)]
 pub struct ParamNode {
     pub span: Span,
-    pub is_mut: bool,
     pub name: IdentId,
     pub name_span: Span,
     pub ty: Option<TyRef>,
 }
 
-/// `self` / `mut self`
+/// `self`
 #[derive(Clone, Debug)]
 pub struct SelfParamNode {
     pub span: Span,
-    pub is_mut: bool,
 }
 
 /// the parameter slot — Param, SelfParam, or an ErrorNode in place

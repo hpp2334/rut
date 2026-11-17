@@ -380,7 +380,7 @@ fn own_strbuf_named_type_still_resolves() {
     let out = compile_with_core(
         "class StrBuf {\n    n: i32;\n}\n\
          impl StrBuf {\n    pub fn new() -> Self { return Self { n: 0 }; }\n\
-         \x20   pub fn push(mut self, k: i32) { self.n += k; }\n\
+         \x20   pub fn push(self, k: i32) { self.n += k; }\n\
          \x20   pub fn len(self) -> i32 { return self.n; }\n}\n\
          entry fn main() -> i32 { let b = StrBuf::new(); b.push(4); return b.len(); }\n",
     );

@@ -23,7 +23,7 @@ impl Counter {
     }                                   // run logic. `new` is a convention,
                                         // not syntax
 
-    pub fn press(mut self) {         // instance method: explicit receiver,
+    pub fn press(self) {         // instance method: explicit receiver,
         self.n = self.n.wrapping_add(1);                // wrapping add (§8) — or `+=` to trap
     }
 

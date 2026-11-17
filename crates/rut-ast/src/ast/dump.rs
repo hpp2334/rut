@@ -559,9 +559,6 @@ fn param_dump(a: &Ast, r: ParamRef, next: &mut u32) -> DumpNode {
         ParamRef::Param(h) => {
             let d: &ParamNode = h.get(a);
             let mut fields = Vec::new();
-            if d.is_mut {
-                fields.push(field("mut", DumpVal::Flag(true)));
-            }
             fields.push(field("name", DumpVal::Str(a.name(d.name).to_string())));
             if let Some(t) = d.ty {
                 fields.push(field("ty", DumpVal::Node(Box::new(ty_dump(a, t, next)))));
@@ -575,10 +572,7 @@ fn param_dump(a: &Ast, r: ParamRef, next: &mut u32) -> DumpNode {
         }
         ParamRef::SelfParam(h) => {
             let d: &SelfParamNode = h.get(a);
-            let mut fields = Vec::new();
-            if d.is_mut {
-                fields.push(field("mut", DumpVal::Flag(true)));
-            }
+            let fields = Vec::new();
             DumpNode {
                 id: take_id(next),
                 kind: "SelfParam",
@@ -618,8 +612,8 @@ fn stmt_dump(a: &Ast, r: StmtRef, next: &mut u32) -> DumpNode {
     let kind: &'static str = match r {
         StmtRef::Let(h) => {
             let d: &LetStmtNode = h.get(a);
-            if d.is_mut {
-                fields.push(field("mut", DumpVal::Flag(true)));
+            if d.is_const {
+                fields.push(field("const", DumpVal::Flag(true)));
             }
             fields.push(field("name", DumpVal::Str(a.name(d.name).to_string())));
             if let Some(names) = &d.destructure {
@@ -672,8 +666,8 @@ fn stmt_dump(a: &Ast, r: StmtRef, next: &mut u32) -> DumpNode {
         }
         StmtRef::ForOf(h) => {
             let d: &ForOfNode = h.get(a);
-            if d.is_mut {
-                fields.push(field("mut", DumpVal::Flag(true)));
+            if d.is_const {
+                fields.push(field("const", DumpVal::Flag(true)));
             }
             fields.push(field("var", DumpVal::Str(a.name(d.var).to_string())));
             fields.push(field(
@@ -688,9 +682,6 @@ fn stmt_dump(a: &Ast, r: StmtRef, next: &mut u32) -> DumpNode {
         }
         StmtRef::ForC(h) => {
             let d: &ForCNode = h.get(a);
-            if d.is_mut {
-                fields.push(field("mut", DumpVal::Flag(true)));
-            }
             fields.push(field("var", DumpVal::Str(a.name(d.var).to_string())));
             fields.push(field(
                 "init",

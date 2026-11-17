@@ -18,7 +18,7 @@ entry fn main() {
     let log = Logger("checked");
 
     // wrapping: two's-complement, always defined
-    let mut v: u8 = 250;
+    let v: u8 = 250;
     v = v.wrapping_add(10);                  // 260 mod 256
     let under = 0u8.wrapping_sub(1);
     log.info(f"wrap={v} under={under}");

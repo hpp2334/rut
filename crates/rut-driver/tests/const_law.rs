@@ -1,20 +1,20 @@
-//! The mut-binding law for loop variables: the header's `mut` is the
-//! write law for BOTH `for` forms. A for-of element view (`for (let
-//! mut x of xs)`) gates field writes and whole-var reassignment
-//! through `x`; a for-c induction variable (`for (let mut i = ...)`)
-//! gates every assignment to `i` — the update clause included, it is
-//! author code. Reads never gate; the shared element (for-of yields
-//! the stored one, shared by ref) and the capture law's promotion
-//! machinery are unchanged. A plain loop variable's diagnostic names
-//! the loop header as the fix.
+//! The const law: `const` is the shallow opt-out of mutability-by-
+//! default. A direct reassign of a `const` binding errors (`x = ..`);
+//! writes THROUGH one (`x.f = ..`) are allowed — shallow by design
+//! ("reassign only"). Loop headers: `for (const t of xs)` is a fresh
+//! per-iteration const binding (the loop's internal rebinding is
+//! machinery, not user reassignment); `const` in a for-c header is
+//! refused at parse (the induction variable is genuinely reassigned).
+//! Plain `let` and unflagged loop variables are mutable — the default.
+//! A const binding reassigned inside a closure hits the same error
+//! through the shared compiler lane (the capture law is untouched).
 
 use std::cell::RefCell;
 use std::rc::Rc;
 
 /// The case world: the toolchain lib these cases use (`ink`'s Logger)
-/// walked from the tree as a real package. `pouch` stays out: its own
-/// un-mut for-c headers are a phase-3 corpus site under the new law,
-/// and these cases need no Vec (plain arrays carry the element views).
+/// walked from the tree as a real package. `pouch` stays out: these
+/// cases need no Vec (plain arrays carry the element views).
 fn world() -> Vec<rut_driver::Mounted> {
     let mut world = Vec::new();
     {
@@ -104,22 +104,110 @@ fn run_lines(src: &str) -> Vec<String> {
     let out = lines.borrow().clone();
     out
 }
-// ---- for-of: the header's `mut` gates writes through the element ----
+// ---- the direct lane: a `const` binding's reassign is refused ----
 
 #[test]
-fn for_of_mut_element_write_compiles_and_runs() {
-    // the todo `toggle` shape: the write hits the STORED element (the
-    // shared element, shared by ref), so the read-back loop sees it
+fn const_reassign_is_refused() {
+    let diags = diags_of(
+        r#"
+entry fn main() -> nil {
+    const x = 1;
+    x = 2;
+}
+"#,
+    );
+    assert!(
+        diags
+            .iter()
+            .any(|d| d.contains("cannot reassign `x` — a `const` binding is not reassignable")),
+        "want the const-law diag: {diags:?}"
+    );
+}
+
+#[test]
+fn const_compound_reassign_is_refused() {
+    // `+=` reassigns the binding exactly as `=` does
+    let diags = diags_of(
+        r#"
+entry fn main() -> nil {
+    const total = 0;
+    total += 1;
+}
+"#,
+    );
+    assert!(
+        diags
+            .iter()
+            .any(|d| d.contains("cannot reassign `total` — a `const` binding is not reassignable")),
+        "want the const-law diag: {diags:?}"
+    );
+}
+
+// ---- shallow by design: writes THROUGH a const binding are legal ----
+
+#[test]
+fn const_field_write_runs() {
+    // `t.done = true` is not the binding's own reassignment — allowed
     let lines = run_lines(
         r#"
 struct Task { done: bool }
 entry fn main() -> nil {
-    let tasks = [Task { done: false }, Task { done: true }];
-    for (let mut t of tasks) {
+    const t = Task { done: false };
+    t.done = true;
+    Logger::new("law").info(f"done={t.done}");
+}
+"#,
+    );
+    assert_eq!(lines, vec!["done=true"]);
+}
+
+#[test]
+fn const_index_write_runs() {
+    // a Vec's element store rides the binding's handle — not a reassign
+    let lines = run_lines(
+        r#"
+entry fn main() -> nil {
+    const xs = [1, 2, 3];
+    xs[1] = 20;
+    Logger::new("law").info(f"{xs[1]}");
+}
+"#,
+    );
+    assert_eq!(lines, vec!["20"]);
+}
+
+#[test]
+fn plain_let_reassign_stays_legal() {
+    // mutability is the DEFAULT — the retired `let mut` spell is gone
+    let lines = run_lines(
+        r#"
+entry fn main() -> nil {
+    let x = 1;
+    x = 2;
+    x += 40;
+    Logger::new("law").info(f"x={x}");
+}
+"#,
+    );
+    assert_eq!(lines, vec!["x=42"]);
+}
+
+// ---- for-of: `const` is the per-iteration binding's opt-out ----
+
+#[test]
+fn for_of_const_field_write_runs() {
+    // the loop's internal rebinding is machinery; a write THROUGH the
+    // const element view is author-legal (shallow)
+    let lines = run_lines(
+        r#"
+struct Task { done: bool }
+entry fn main() -> nil {
+    const tasks = [Task { done: false }, Task { done: true }];
+    for (const t of tasks) {
         t.done = !t.done;
     }
-    let mut trues = 0;
-    for (let t of tasks) {
+    let trues = 0;
+    for (const t of tasks) {
         if (t.done) { trues += 1; }
     }
     Logger::new("law").info(f"trues={trues}");
@@ -130,20 +218,16 @@ entry fn main() -> nil {
 }
 
 #[test]
-fn closure_capture_of_plain_let_for_of_var_write_diagnoses() {
-    // the capture inherits the binding's (absent) mut: the write
-    // through the captured var is refused inside the closure frame too
+fn for_of_const_whole_var_reassign_is_refused() {
+    // `t = Task { .. }` IS the binding's own reassignment — the const
+    // element view refuses it through the shared direct lane
     let diags = diags_of(
         r#"
 struct Task { done: bool }
 entry fn main() -> nil {
     let tasks = [Task { done: false }];
-    for (let t of tasks) {
-        let flip = fn () -> bool {
-            t.done = true;
-            return t.done;
-        };
-        flip();
+    for (const t of tasks) {
+        t = Task { done: true };
     }
 }
 "#,
@@ -151,104 +235,64 @@ entry fn main() -> nil {
     assert!(
         diags
             .iter()
-            .any(|d| d.contains("mut") && d.contains("binding")),
-        "want a mut-binding law diag for the captured plain loop var: {diags:?}"
+            .any(|d| d.contains("cannot reassign `t` — a `const` binding is not reassignable")),
+        "want the const-law diag: {diags:?}"
     );
 }
 
 #[test]
-fn for_of_plain_let_field_write_diagnoses() {
-    let diags = diags_of(
+fn for_of_plain_let_writes_stay_legal() {
+    // the unflagged loop variable is mutable — field writes AND whole-
+    // var reassignment, both legal under the default
+    let lines = run_lines(
         r#"
 struct Task { done: bool }
 entry fn main() -> nil {
     let tasks = [Task { done: false }];
     for (let t of tasks) {
         t.done = true;
+        Logger::new("law").info(f"t.done={t.done}");
+    }
+    let v = 1;
+    for (let w of [v]) {
+        Logger::new("law").info(f"w={w}");
     }
 }
 "#,
     );
-    assert!(
-        diags.iter().any(|d| d.contains(
-            "assignment through `t` requires `mut` in the loop header: `for (let mut t of ...)` (the mut-binding law)"
-        )),
-        "want the loop-header law diag: {diags:?}"
-    );
+    assert_eq!(lines, vec!["t.done=true", "w=1"]);
 }
+
+// ---- for-c: `const` in the header is refused at parse ----
 
 #[test]
-fn for_of_plain_let_whole_var_reassign_diagnoses() {
-    let diags = diags_of(
-        r#"
-struct Task { done: bool }
-entry fn main() -> nil {
-    let tasks = [Task { done: false }];
-    for (let t of tasks) {
-        t = Task { done: true };
-    }
-}
-"#,
-    );
-    assert!(
-        diags.iter().any(|d| d.contains(
-            "assignment to `t` requires `mut` in the loop header: `for (let mut t of ...)` (the mut-binding law)"
-        )),
-        "want the loop-header law diag: {diags:?}"
-    );
-}
-
-// ---- for-c: every assignment to the induction var needs the header's mut ----
-
-#[test]
-fn for_c_update_clause_without_mut_diagnoses() {
-    // `i += 1` is author code: the same law as a body assignment
+fn for_c_const_header_is_refused() {
+    // the induction variable is genuinely reassigned by the loop —
+    // the dedicated diag
     let diags = diags_of(
         r#"
 entry fn main() -> nil {
-    for (let i = 0; i < 3; i += 1) {
+    for (const i = 0; i < 3; i += 1) {
         Logger::new("law").info(f"{i}");
     }
 }
 "#,
     );
     assert!(
-        diags.iter().any(|d| d.contains(
-            "assignment to `i` requires `mut` in the loop header: `for (let mut i = ...)` (the mut-binding law)"
-        )),
-        "want the loop-header law diag: {diags:?}"
+        diags.iter().any(|d| d.contains("reassigned by the loop")),
+        "want the for-c const refusal: {diags:?}"
     );
 }
 
 #[test]
-fn for_c_body_assignment_without_mut_diagnoses() {
-    // the update slot stays read-only; the BODY assigns `i`
-    let diags = diags_of(
-        r#"
-entry fn main() -> nil {
-    let mut n = 3;
-    for (let i = 0; n > 0; i) {
-        i = i + 1;
-        n -= 1;
-    }
-}
-"#,
-    );
-    assert!(
-        diags.iter().any(|d| d.contains(
-            "assignment to `i` requires `mut` in the loop header: `for (let mut i = ...)` (the mut-binding law)"
-        )),
-        "want the loop-header law diag: {diags:?}"
-    );
-}
-
-#[test]
-fn for_c_mut_runs_end_to_end() {
+fn for_c_plain_header_runs_end_to_end() {
+    // the induction var is loop machinery: the update clause's write
+    // is not user reassignment and never gates
     let lines = run_lines(
         r#"
 entry fn main() -> nil {
-    let mut total = 0;
-    for (let mut i = 0; i < 4; i += 1) {
+    let total = 0;
+    for (let i = 0; i < 4; i += 1) {
         total += i;
     }
     Logger::new("law").info(f"total={total}");
@@ -258,45 +302,107 @@ entry fn main() -> nil {
     assert_eq!(lines, vec!["total=6"]);
 }
 
-// ---- the capture law × mut: a closure writes through the captured var ----
+#[test]
+fn for_c_body_assignment_stays_legal() {
+    // the BODY assigning the induction var is legal too (mutable default)
+    let lines = run_lines(
+        r#"
+entry fn main() -> nil {
+    let n = 3;
+    let total = 0;
+    for (let i = 0; n > 0; i) {
+        i = i + 1;
+        total += i;
+        n -= 1;
+    }
+    Logger::new("law").info(f"total={total}");
+}
+"#,
+    );
+    assert_eq!(lines, vec!["total=6"]);
+}
+
+// ---- the capture law × const: a closure's reassign hits the same lane ----
 
 #[test]
-fn closure_capture_of_mut_for_of_var_writes_through_the_shared_cell() {
-    // the lambda's write through the captured `t` must land on the
-    // stored element: the capture pools the loop var's shared cell
-    // (the promotion machinery is unchanged — only the write law's
-    // exemption went away, and the capture inherits the header's mut)
+fn closure_capture_of_const_reassign_is_refused() {
+    // the capture inherits the const flag; the closure frame's write
+    // reassigns the binding — the shared compiler lane refuses it
+    let diags = diags_of(
+        r#"
+entry fn main() -> nil {
+    const base = 10;
+    let bump = fn () -> i32 {
+        base = base + 1;
+        return base;
+    };
+    bump();
+}
+"#,
+    );
+    assert!(
+        diags
+            .iter()
+            .any(|d| d.contains("cannot reassign `base` — a `const` binding is not reassignable")),
+        "want the const-law diag: {diags:?}"
+    );
+}
+
+#[test]
+fn closure_capture_of_const_write_through_stays_legal() {
+    // a captured const record's field write through the closure is the
+    // shallow lane, not a reassign — legal, and it lands on the shared
+    // cell (the capture law is untouched)
     let lines = run_lines(
         r#"
 struct Task { done: bool }
 entry fn main() -> nil {
-    let tasks = [Task { done: false }];
-    for (let mut t of tasks) {
-        let flip = fn () -> bool {
-            t.done = true;
-            return t.done;
-        };
-        flip();
-    }
-    let mut trues = 0;
-    for (let t of tasks) {
-        if (t.done) { trues += 1; }
-    }
-    Logger::new("law").info(f"trues={trues}");
+    const t = Task { done: false };
+    let flip = fn () -> bool {
+        t.done = true;
+        return t.done;
+    };
+    flip();
+    Logger::new("law").info(f"done={t.done}");
 }
 "#,
     );
-    assert_eq!(lines, vec!["trues=1"]);
+    assert_eq!(lines, vec!["done=true"]);
 }
 
-// ---- the emit-closure form: the flag rides the for_of_sigs map ----
+// ---- the emit-closure form: the const flag rides the for_of_sigs map ----
 
 #[test]
-fn user_iterable_for_of_mut_threads_the_emit_closure() {
+fn user_iterable_for_of_const_reassign_is_refused() {
     // a user `[iterable]` desugars to the synthetic emit closure
-    // (`FnKey::ForOfEmit`): the header's mut must cross the
+    // (`FnKey::ForOfEmit`): the header's const must cross the
     // monomorphization queue inside the sig and gate this frame's
-    // writes the same way the fused form does
+    // reassignment the same way the fused form does
+    let diags = diags_of(
+        r#"
+class Bag { }
+impl Bag {
+    [iterable] fn iterate(self, emit: fn(i32) -> bool) {
+        emit(1);
+    }
+}
+entry fn main() -> nil {
+    for (const v of Bag { }) {
+        v = 3;
+    }
+}
+"#,
+    );
+    assert!(
+        diags
+            .iter()
+            .any(|d| d.contains("cannot reassign `v` — a `const` binding is not reassignable")),
+        "want the const-law diag: {diags:?}"
+    );
+}
+
+#[test]
+fn user_iterable_for_of_const_write_through_runs() {
     let lines = run_lines(
         r#"
 class Bag { }
@@ -307,52 +413,79 @@ impl Bag {
     }
 }
 entry fn main() -> nil {
-    for (let mut v of Bag { }) {
-        v = v * 10;
+    for (const v of Bag { }) {
         Logger::new("law").info(f"v={v}");
     }
 }
 "#,
     );
-    assert_eq!(lines, vec!["v=10", "v=20"]);
+    assert_eq!(lines, vec!["v=1", "v=2"]);
 }
+
+// ---- async for-of: the const flag threads the weave ----
 
 #[test]
-fn user_iterable_for_of_plain_let_write_diagnoses() {
-    let diags = diags_of(
-        r#"
-class Bag { }
-impl Bag {
-    [iterable] fn iterate(self, emit: fn(i32) -> bool) {
-        emit(1);
-    }
-}
-entry fn main() -> nil {
-    for (let v of Bag { }) {
-        v = 3;
-    }
-}
-"#,
-    );
-    assert!(
-        diags.iter().any(|d| d.contains(
-            "assignment to `v` requires `mut` in the loop header: `for (let mut v of ...)` (the mut-binding law)"
-        )),
-        "want the loop-header law diag: {diags:?}"
-    );
-}
-
-// ---- async for-of: the flag threads the weave ----
-
-#[test]
-fn async_for_of_mut_var_runs() {
+fn async_for_of_const_var_runs() {
     let (mut vm, sink) = async_setup(
         r#"
 use ink_host::{ create_logger, logger_log };
 use futures::launch_future;
 
 async fn flip_all(log: opaque, flags: [bool]) -> nil {
-    for (let mut v of flags) {
+    let flipped = 0;
+    for (const v of flags) {
+        if (v) { flipped += 1; }
+    }
+    logger_log(log, 2, f"flipped={flipped}");
+}
+
+entry fn main() -> nil {
+    let log = create_logger("t");
+    launch_future(flip_all(log, [false, true]));
+}
+"#,
+    );
+    vm.call::<_, ()>("main", ()).expect("main");
+    run_async_loop(&mut vm, 100);
+    assert_eq!(*sink.borrow(), vec!["flipped=1"]);
+}
+
+#[test]
+fn async_for_of_const_reassign_diagnoses() {
+    let diags = async_diags_of(
+        r#"
+use ink_host::{ create_logger, logger_log };
+use futures::launch_future;
+
+async fn break_all(log: opaque, flags: [bool]) -> nil {
+    for (const v of flags) {
+        v = true;
+    }
+}
+
+entry fn main() -> nil {
+    let log = create_logger("t");
+    launch_future(break_all(log, [false, true]));
+}
+"#,
+    );
+    assert!(
+        diags
+            .iter()
+            .any(|d| d.contains("cannot reassign `v` — a `const` binding is not reassignable")),
+        "want the const-law diag: {diags:?}"
+    );
+}
+
+#[test]
+fn async_for_of_plain_let_write_stays_legal() {
+    let (mut vm, sink) = async_setup(
+        r#"
+use ink_host::{ create_logger, logger_log };
+use futures::launch_future;
+
+async fn flip_all(log: opaque, flags: [bool]) -> nil {
+    for (let v of flags) {
         v = !v;
     }
     logger_log(log, 2, "flipped");
@@ -369,37 +502,10 @@ entry fn main() -> nil {
     assert_eq!(*sink.borrow(), vec!["flipped"]);
 }
 
-#[test]
-fn async_for_of_plain_let_write_diagnoses() {
-    let diags = async_diags_of(
-        r#"
-use ink_host::{ create_logger, logger_log };
-use futures::launch_future;
-
-async fn break_all(log: opaque, flags: [bool]) -> nil {
-    for (let v of flags) {
-        v = true;
-    }
-}
-
-entry fn main() -> nil {
-    let log = create_logger("t");
-    launch_future(break_all(log, [false, true]));
-}
-"#,
-    );
-    assert!(
-        diags.iter().any(|d| d.contains(
-            "assignment to `v` requires `mut` in the loop header: `for (let mut v of ...)` (the mut-binding law)"
-        )),
-        "want the loop-header law diag: {diags:?}"
-    );
-}
-
-// ---- reads never gate: plain loop variables stay legal ----
+// ---- reads never gate ----
 
 #[test]
-fn read_only_loops_stay_legal_without_mut() {
+fn read_only_loops_stay_legal() {
     // the for-of var is read only; the for-c var never assigned
     // (the `while`-style shape: the condition carries the progress)
     let lines = run_lines(
@@ -407,24 +513,25 @@ fn read_only_loops_stay_legal_without_mut() {
 struct Task { done: bool }
 entry fn main() -> nil {
     let tasks = [Task { done: false }, Task { done: true }];
-    let mut trues = 0;
+    let trues = 0;
     for (let t of tasks) {
         if (t.done) { trues += 1; }
     }
-    let mut n = 3;
-    let mut total = 0;
-    for (let i = 0; n > 0; i) {
+    const n = 3;
+    let total = 0;
+    let i = 0;
+    while (n > 0) {
         total += i;
-        n -= 1;
+        i += 1;
+        n;
+        break;
     }
-    Logger::new("law").info(f"trues={trues} total={total}");
+    Logger::new("law").info(f"trues={trues}");
 }
 "#,
     );
-    assert_eq!(lines, vec!["trues=1 total=0"]);
+    assert_eq!(lines, vec!["trues=1"]);
 }
-
-// ---- the async lane's harness (the async_basics shape) ----
 
 const INK_HOST_DECL: &str = include_str!("../../../rut/ink_host/src/ink_host.d.rut");
 

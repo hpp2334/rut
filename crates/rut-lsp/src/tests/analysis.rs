@@ -176,7 +176,7 @@ fn no_package_context_is_parse_only() {
 fn check_enabled_doc_maps_lir_diags_to_ranges() {
     // the diagnosis pair, half one: a bool→str assignment mismatch
     // surfaces through the checker with the range the editor highlights
-    let src = "use kit::{ Task };\nfn main() -> nil {\n    let mut checked: str = \" \";\n    checked = true;\n}\n";
+    let src = "use kit::{ Task };\nfn main() -> nil {\n    let checked: str = \" \";\n    checked = true;\n}\n";
     let uri = "file:///ws/app/mod.rut";
     let parse = analyze_unstamped(IMPL_URI, src.to_string()).diags;
     assert!(parse.is_empty(), "the doc parses clean: {parse:?}");

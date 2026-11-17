@@ -167,7 +167,7 @@ fn no_else_form_runs_only_the_live_arm() {
         r#"
 entry fn main() -> i32 {
     let d: f64 = 1.0;
-    let mut n = 0;
+    let n = 0;
     if (d is f32) { n = 10; }
     if (d is f64) { n = n + 1; }
     n

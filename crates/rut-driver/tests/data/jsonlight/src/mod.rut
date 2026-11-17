@@ -47,7 +47,7 @@ entry fn dec_f(s: str) -> str {
 // [T] rides the BASE (no peers needed) — through JsonArr, the base's
 // structural-array wrapper
 entry fn enc_a() -> ?str {
-    let mut a: [JsonI64] = [JsonI64(1); 2];
+    let a: [JsonI64] = [JsonI64(1); 2];
     a[1] = JsonI64(2);
     let (s, e) = encodeJson(JsonArr(a));
     if (e != nil) { return nil; }
@@ -60,8 +60,8 @@ entry fn dec_a(s: str) -> str {
     let w: JsonArr<JsonI64> = v;
     let a: [JsonI64] = w.to_arr();
     let n = a.len();
-    let mut acc = f"OK:len={n}";
-    let mut i: i32 = 0;
+    let acc = f"OK:len={n}";
+    let i: i32 = 0;
     while (i < n) {
         acc = f"{acc}:{a[i].get()}";
         i += 1;

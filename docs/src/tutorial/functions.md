@@ -17,7 +17,7 @@ use ink::{ Logger };
 
 struct Point { x: f32; y: f32 }
 
-fn swap(mut xs: Vec<i32>, a: i32, b: i32) {
+fn swap(xs: Vec<i32>, a: i32, b: i32) {
     let t = xs[a];
     xs[a] = xs[b];
     xs[b] = t;
@@ -39,10 +39,10 @@ entry fn main() {
 first=3 length=5
 ```
 
-A `mut` parameter (`fn step(mut p: Point)`) is the callee's permission
-to write through `p` — and because non-primitive values share, that
-means the caller's value. A plain parameter promises not to write
-through it.
+Parameters are mutable by default: `fn step(p: Point)` may write
+through `p` — and because non-primitive values share, that means the
+caller's value. There is no const parameter in v1; to refuse a write,
+pass a copy (a primitive already is one).
 
 Recursion works as expected — functions are visible in their own
 bodies, and mutual recursion within a module needs no forward
@@ -113,10 +113,10 @@ use ink::{ Logger };
 
 entry fn main() -> nil {
     let log = Logger("cap");
-    let mut xs: Vec<i32> = Vec::new();
+    let xs: Vec<i32> = Vec::new();
     xs.push(1);
     let len = fn() -> i32 { return xs.len(); };
-    let mut ys: Vec<i32> = Vec::new();
+    let ys: Vec<i32> = Vec::new();
     ys.push(9); ys.push(9);
     xs = ys;                       // a rebind the closure sees
     log.info(f"len={len()}");      // 2 — the closure shares the slot
@@ -253,7 +253,7 @@ fn first<T>(xs: [T], fallback: T) -> T {
 }
 
 fn sum(xs: Vec<i32>) -> i32 {
-    let mut total = 0;
+    let total = 0;
     for (let x of xs) {
         total += x;
     }

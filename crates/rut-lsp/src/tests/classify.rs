@@ -63,7 +63,7 @@ fn decls_and_keywords() {
 
 #[test]
 fn members_fields_and_locals() {
-    let src = "class Circle {\n    pub r: f32;\n    fn scale(mut self, k: f32) -> Self { self.r = self.r * k; }\n}\n";
+    let src = "class Circle {\n    pub r: f32;\n    fn scale(self, k: f32) -> Self { self.r = self.r * k; }\n}\n";
     let spans = classify_src(src);
     assert_eq!(find(src, &spans, "Circle"), vec![TokenType::Class]);
     // the declared field + both `self.r` path tails

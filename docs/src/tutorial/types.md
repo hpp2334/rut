@@ -99,8 +99,9 @@ plain `fn` stays module-private (see
 
 **Structs share.** A struct value is a handle to a heap cell:
 assignment, arguments, and returns all pass the handle, and a write
-through any alias is visible through all of them. Writing needs a
-`mut` binding or `mut` parameter:
+through any alias is visible through all of them. Any binding may
+write — mutability is the default, `const` only refuses the binding's
+own reassignment:
 
 ```rut
 use ink::{ Logger };
@@ -109,7 +110,7 @@ struct Point { x: f32; y: f32 }
 
 entry fn main() {
     let log = Logger("sharing");
-    let mut p = Point { x: 1, y: 2 };
+    let p = Point { x: 1, y: 2 };
     let q = p;              // q and p name ONE cell
     p.x = 4;                // q.x is 4 now
     log.info(f"q.x={q.x} same cell: {q == p}");
@@ -137,7 +138,7 @@ struct Node {
 }
 
 fn count(n: ?Node) -> i32 {
-    let mut c = 1;
+    let c = 1;
     if (n.left != nil) { c += count(n.left); }
     if (n.right != nil) { c += count(n.right); }
     return c;
@@ -180,7 +181,7 @@ impl Counter {
         return Self { };                   // the class-private literal
     }
 
-    pub fn press(mut self) {
+    pub fn press(self) {
         self.n = self.n.wrapping_add(1);
     }
 
@@ -208,8 +209,8 @@ The pieces:
 - **The `Self { .. }` literal is class-private** — legal anywhere in
   the class's own impl block, never outside. This is the seal.
 - **Instance methods spell `self` explicitly** as the first parameter;
-  `mut self` marks methods that write. A computed property is a method
-  (`c.count()`).
+  every method may write (mutability is the default). A computed
+  property is a method (`c.count()`).
 - **Construction is validation.** A constructor is an ordinary
   function — it can check arguments and refuse:
 
@@ -294,7 +295,7 @@ impl Counter {
         return Self { };
     }
 
-    pub fn press(mut self) {
+    pub fn press(self) {
         self.n = self.n.wrapping_add(1);
     }
 

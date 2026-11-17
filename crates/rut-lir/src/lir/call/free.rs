@@ -259,10 +259,7 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
         let md = mnode.get(self.ctx.ast).clone();
         let (params, ret, mname) = (md.params, md.ret, md.name);
         // no-self first param (or no params at all) = class method
-        if params
-            .first()
-            .is_some_and(|p| self.ctx.self_param_mut(*p).is_some())
-        {
+        if params.first().is_some_and(|p| self.ctx.is_self_param(*p)) {
             self.ctx
                 .err(sp, "instance methods are called on a value, not the class");
             return Err(());

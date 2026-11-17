@@ -129,7 +129,7 @@ fn blit(g: Canvas, s: Area) { g.render(s.area()); }   // a parameter over any Ar
 entry fn main() {
     let log = Logger("shapes");
     let g = Canvas { log: log };
-    let mut mixed: Vec<Area> = Vec::new();   // heterogeneous storage
+    let mixed: Vec<Area> = Vec::new();   // heterogeneous storage
     mixed.push(Circle { r: 1.0 });
     mixed.push(UnitSquare { side: 2.0 });
     for (let s of mixed) { blit(g, s); }
@@ -228,7 +228,7 @@ class CountUp {
 
 impl CountUp {
     [iterable] pub fn iterate(self, emit: fn(i32) -> bool) {
-        for (let mut i = 1; i <= self.n; i += 1) {
+        for (let i = 1; i <= self.n; i += 1) {
             if (!emit(i)) { return; }
         }
     }

@@ -15,7 +15,23 @@ use rut_lexer::token::Tok;
 use crate::parser::expr::{AtomFrame, AtomMode, ExprFrame, ExprMode};
 use crate::parser::frame::{Done, Frame, Step};
 use crate::parser::ty::TypeFrame;
-use crate::parser::{Name, Parser};
+use crate::parser::{is_reserved_kw, Name, Parser};
+
+/// A binding name refuses the reserved heads — `const` is a keyword
+/// now, so `let const = ..` eats the generic parse error (as does
+/// `let if`); the RETIRED reservations (`null`, `var`, …) stay plain
+/// identifiers. The destructure members and the loop variable ride
+/// the same guard.
+fn binding_name(p: &mut Parser) -> Option<Name> {
+    if let Tok::Ident(s) = p.tok().clone() {
+        if is_reserved_kw(&s) {
+            let found = p.peek(0).describe();
+            p.err_here(format!("expected a binding name, found {found}"));
+            return None;
+        }
+    }
+    p.expect_ident("a binding name")
+}
 
 // ---- blocks ----
 
@@ -128,15 +144,15 @@ pub(crate) struct StmtFrame {
 
 enum StmtStage {
     Dispatch,
-    /// `let` — waiting for the optional type
+    /// `let`/`const` — waiting for the optional type
     LetTy {
-        is_mut: bool,
+        is_const: bool,
         name: Name,
         destructure: Option<Vec<crate::IdentId>>,
     },
-    /// `let` — waiting for the initializer
+    /// `let`/`const` — waiting for the initializer
     LetInit {
-        is_mut: bool,
+        is_const: bool,
         name: Name,
         destructure: Option<Vec<crate::IdentId>>,
         ty: Option<TyRef>,
@@ -145,31 +161,27 @@ enum StmtStage {
     WhileBody,
     ForIter {
         var: Name,
-        is_mut: bool,
+        is_const: bool,
     },
     ForInit {
         var: Name,
-        is_mut: bool,
     },
     ForCond {
         var: Name,
-        is_mut: bool,
         init: ExprRef,
     },
     ForUpdate {
         var: Name,
-        is_mut: bool,
         init: ExprRef,
         cond: ExprRef,
     },
     ForBodyOf {
         var: Name,
-        is_mut: bool,
+        is_const: bool,
         iter: ExprRef,
     },
     ForBodyC {
         var: Name,
-        is_mut: bool,
         init: ExprRef,
         cond: ExprRef,
         update: ExprRef,
@@ -196,21 +208,21 @@ impl StmtFrame {
         self.dmark = p.mark();
         match p.tok().clone() {
             Tok::Ident(kw) => match kw.as_str() {
-                "let" => {
-                    p.bump(); // let
-                    let is_mut = p.at_kw("mut") && {
-                        p.bump();
-                        true
-                    };
-                    // `let (a, b) = ..` — tuple destructuring; the row's
-                    // binding name is the FIRST list member (no extra
-                    // token is consumed — v1's shape)
+                // `let` (always mutable) or `const` (the shallow
+                // opt-out) — same frame, a flag; the span starts at the
+                // head keyword
+                "let" | "const" => {
+                    let is_const = kw.as_str() == "const";
+                    p.bump();
+                    // `let (a, b) = ..` / `const (a, b) = ..` — tuple
+                    // destructuring; the row's binding name is the FIRST
+                    // list member (no extra token is consumed — v1's shape)
                     let mut destructure_first: Option<Name> = None;
                     let destructure = if matches!(p.tok(), Tok::LParen) {
                         p.bump();
                         let mut names = Vec::new();
                         loop {
-                            let Some(n) = p.expect_ident("a binding name") else {
+                            let Some(n) = binding_name(p) else {
                                 return Step::Pop(Done::Failed);
                             };
                             if destructure_first.is_none() {
@@ -232,7 +244,7 @@ impl StmtFrame {
                     let name = match destructure_first {
                         Some(n) => n,
                         None => {
-                            let Some(name) = p.expect_ident("a binding name") else {
+                            let Some(name) = binding_name(p) else {
                                 return Step::Pop(Done::Failed);
                             };
                             name
@@ -240,13 +252,13 @@ impl StmtFrame {
                     };
                     if p.eat_punct(Tok::Colon) {
                         self.stage = StmtStage::LetTy {
-                            is_mut,
+                            is_const,
                             name,
                             destructure,
                         };
                         return Step::Push(Frame::Type(TypeFrame::new(p)));
                     }
-                    self.let_eq(p, is_mut, name, destructure, None)
+                    self.let_eq(p, is_const, name, destructure, None)
                 }
                 "if" => Step::Push(Frame::If(IfFrame::new())),
                 "while" => {
@@ -309,14 +321,14 @@ impl StmtFrame {
     fn let_eq(
         &mut self,
         p: &mut Parser,
-        is_mut: bool,
+        is_const: bool,
         name: Name,
         destructure: Option<Vec<crate::IdentId>>,
         ty: Option<TyRef>,
     ) -> Step {
         p.expect(Tok::Eq);
         self.stage = StmtStage::LetInit {
-            is_mut,
+            is_const,
             name,
             destructure,
             ty,
@@ -328,7 +340,7 @@ impl StmtFrame {
     fn let_done(
         &mut self,
         p: &mut Parser,
-        is_mut: bool,
+        is_const: bool,
         name: Name,
         destructure: Option<Vec<crate::IdentId>>,
         ty: Option<TyRef>,
@@ -337,7 +349,7 @@ impl StmtFrame {
         p.expect(Tok::Semi);
         let node = crate::LetStmtNode {
             span: Span::new(self.lo.lo, p.prev_end.max(self.lo.lo)),
-            is_mut,
+            is_const,
             name: name.id,
             name_span: name.span,
             destructure,
@@ -351,7 +363,7 @@ impl StmtFrame {
     fn let_hole(
         &mut self,
         p: &mut Parser,
-        is_mut: bool,
+        is_const: bool,
         name: Name,
         destructure: Option<Vec<crate::IdentId>>,
         ty: Option<TyRef>,
@@ -361,33 +373,42 @@ impl StmtFrame {
         p.sync_stmt();
         let (before, mark) = (self.before, self.dmark);
         let hole = ExprRef::Error(p.fence(before, mark));
-        self.let_done(p, is_mut, name, destructure, ty, hole)
+        self.let_done(p, is_const, name, destructure, ty, hole)
     }
 
     fn for_header(&mut self, p: &mut Parser) -> Step {
         p.bump(); // for
         p.expect(Tok::LParen);
-        if !p.at_kw("let") {
-            p.err_here("expected `let` in a for header");
-            p.sync_stmt();
-            return Step::Pop(Done::Failed);
-        }
-        p.bump();
-        let is_mut = p.at_kw("mut") && {
+        // the header head: `const` (the shallow opt-out — for-of's
+        // per-iteration binding) or the plain `let`
+        let is_const = if p.at_kw("const") {
             p.bump();
             true
+        } else {
+            if !p.at_kw("let") {
+                p.err_here("expected `let` in a for header");
+                p.sync_stmt();
+                return Step::Pop(Done::Failed);
+            }
+            p.bump();
+            false
         };
-        let Some(var) = p.expect_ident("a loop variable") else {
+        let Some(var) = binding_name(p) else {
             return Step::Pop(Done::Failed);
         };
         // for-of vs for-c: peek `of` vs `=`
         if p.at_kw("of") {
             p.bump();
-            self.stage = StmtStage::ForIter { var, is_mut };
+            self.stage = StmtStage::ForIter { var, is_const };
             return Step::Push(Frame::Expr(ExprFrame::new(p, ExprMode::Full)));
         }
+        // the induction variable is genuinely reassigned by the loop —
+        // `const` is refused here (the one dedicated diag)
+        if is_const {
+            p.err_here("a `const` induction variable is reassigned by the loop — spell `let`");
+        }
         p.expect(Tok::Eq);
-        self.stage = StmtStage::ForInit { var, is_mut };
+        self.stage = StmtStage::ForInit { var };
         Step::Push(Frame::Expr(ExprFrame::new(p, ExprMode::Full)))
     }
 
@@ -395,31 +416,31 @@ impl StmtFrame {
         match (std::mem::replace(&mut self.stage, StmtStage::Dispatch), d) {
             (
                 StmtStage::LetTy {
-                    is_mut,
+                    is_const,
                     name,
                     destructure,
                 },
                 Done::Ty(t),
-            ) => self.let_eq(p, is_mut, name, destructure, Some(t)),
+            ) => self.let_eq(p, is_const, name, destructure, Some(t)),
             (
                 StmtStage::LetInit {
-                    is_mut,
+                    is_const,
                     name,
                     destructure,
                     ty,
                 },
                 Done::Expr(e),
-            ) => self.let_done(p, is_mut, name, destructure, ty, e),
+            ) => self.let_done(p, is_const, name, destructure, ty, e),
             // the failed init: the let survives with an Error slot
             (
                 StmtStage::LetInit {
-                    is_mut,
+                    is_const,
                     name,
                     destructure,
                     ty,
                 },
                 Done::Failed,
-            ) => self.let_hole(p, is_mut, name, destructure, ty),
+            ) => self.let_hole(p, is_const, name, destructure, ty),
             (StmtStage::WhileCond, Done::Expr(cond)) => {
                 p.expect(Tok::RParen);
                 self.while_cond = Some(cond);
@@ -437,62 +458,56 @@ impl StmtFrame {
                     .allocate(&mut p.ast),
                 ))
             }
-            (StmtStage::ForIter { var, is_mut }, Done::Expr(iter)) => {
+            (StmtStage::ForIter { var, is_const }, Done::Expr(iter)) => {
                 p.expect(Tok::RParen);
-                self.stage = StmtStage::ForBodyOf { var, is_mut, iter };
+                self.stage = StmtStage::ForBodyOf {
+                    var,
+                    is_const,
+                    iter,
+                };
                 Step::Push(Frame::Block(BlockFrame::strict(p)))
             }
-            (StmtStage::ForInit { var, is_mut }, Done::Expr(init)) => {
+            (StmtStage::ForInit { var }, Done::Expr(init)) => {
                 p.expect(Tok::Semi);
-                self.stage = StmtStage::ForCond { var, is_mut, init };
+                self.stage = StmtStage::ForCond { var, init };
                 Step::Push(Frame::Expr(ExprFrame::new(p, ExprMode::Full)))
             }
-            (StmtStage::ForCond { var, is_mut, init }, Done::Expr(cond)) => {
+            (StmtStage::ForCond { var, init }, Done::Expr(cond)) => {
                 p.expect(Tok::Semi);
-                self.stage = StmtStage::ForUpdate {
-                    var,
-                    is_mut,
-                    init,
-                    cond,
-                };
+                self.stage = StmtStage::ForUpdate { var, init, cond };
                 Step::Push(Frame::Expr(ExprFrame::new(p, ExprMode::Full)))
             }
-            (
-                StmtStage::ForUpdate {
-                    var,
-                    is_mut,
-                    init,
-                    cond,
-                },
-                Done::Expr(update),
-            ) => {
+            (StmtStage::ForUpdate { var, init, cond }, Done::Expr(update)) => {
                 p.expect(Tok::RParen);
                 self.stage = StmtStage::ForBodyC {
                     var,
-                    is_mut,
                     init,
                     cond,
                     update,
                 };
                 Step::Push(Frame::Block(BlockFrame::strict(p)))
             }
-            (StmtStage::ForBodyOf { var, is_mut, iter }, Done::Block(body)) => {
-                Step::Pop(Done::Stmt(
-                    ForOfNode {
-                        span: Span::new(self.lo.lo, p.prev_end.max(self.lo.lo)),
-                        var: var.id,
-                        name_span: var.span,
-                        is_mut,
-                        iter,
-                        body,
-                    }
-                    .allocate(&mut p.ast),
-                ))
-            }
+            (
+                StmtStage::ForBodyOf {
+                    var,
+                    is_const,
+                    iter,
+                },
+                Done::Block(body),
+            ) => Step::Pop(Done::Stmt(
+                ForOfNode {
+                    span: Span::new(self.lo.lo, p.prev_end.max(self.lo.lo)),
+                    var: var.id,
+                    name_span: var.span,
+                    is_const,
+                    iter,
+                    body,
+                }
+                .allocate(&mut p.ast),
+            )),
             (
                 StmtStage::ForBodyC {
                     var,
-                    is_mut,
                     init,
                     cond,
                     update,
@@ -503,7 +518,6 @@ impl StmtFrame {
                     span: Span::new(self.lo.lo, p.prev_end.max(self.lo.lo)),
                     var: var.id,
                     name_span: var.span,
-                    is_mut,
                     init,
                     cond,
                     update,

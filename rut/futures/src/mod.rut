@@ -36,7 +36,7 @@ impl<T> LaunchedFutureHandle<T> {
     // reverse binding order). `false` when the future already finished
     // — a completed frame's state is retired, and the engine answers
     // false on it, so a repeat abort is stable (and harmless).
-    pub fn abort(mut self) -> bool {
+    pub fn abort(self) -> bool {
         let f = self.f;
         if (f == nil) {
             return false;
@@ -160,7 +160,7 @@ impl<T> Completer<T> {
     // the future already retired — resolved, cancelled, or abandoned
     // (the `__abort`-style stability law). ONE resolve: the right
     // consumes itself.
-    pub fn resolve(mut self, v: T) -> bool {
+    pub fn resolve(self, v: T) -> bool {
         let f = self.f;
         if (f == nil) {
             return false;

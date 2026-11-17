@@ -158,7 +158,7 @@ use maker::{make};
 
 entry fn go() -> i64 {
     let made = make();
-    let mut mine: Cell<i64> = Cell { v: 1 };
+    let mine: Cell<i64> = Cell { v: 1 };
     // the identity law: the lib's `Cell<i64>` and the consumer's ARE one
     // type — assignment flows both ways and `is` agrees
     mine = made;
@@ -192,7 +192,7 @@ fn one_instantiation_row_and_one_body_set_program_wide() {
 use cells::{Cell};
 
 pub fn touch(c: Cell<i64>) -> i64 {
-    let mut c2: Cell<i64> = c;
+    let c2: Cell<i64> = c;
     return c2.v;
 }
 

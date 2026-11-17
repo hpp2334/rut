@@ -209,7 +209,7 @@ console.log('\n[2b] fuel off by default: >10M ops of bounded work, no cap');
     '',
     'entry fn main() {',
     '    let log = Logger("case");',
-    '    let mut i = 0;',
+    '    let i = 0;',
     '    while (i < 2000000) {',
     '        i += 1;',
     '    }',
@@ -402,8 +402,8 @@ if (!existsSync(LSP_ARTIFACT)) {
   // -> tok-<name>), never on a hardcoded order — an async bridge now
   const legend = await lsp.legend;
   check(
-    legend.length === 16,
-    'the legend carries the ABI-reported 16 token types',
+    legend.length === 15,
+    'the legend carries the ABI-reported 15 token types',
     JSON.stringify(legend),
   );
   for (const want of ['keyword', 'number', 'string', 'type', 'function', 'method', 'enumMember', 'namespace']) {
@@ -438,7 +438,7 @@ if (!existsSync(LSP_ARTIFACT)) {
     ['hello-format', /^enum Flavor \{/, 'enum', 'keyword'],
     ['hello-format', /return when \(f\) \{/, 'when', 'keyword'],
     ['values-and-pointers', /^struct Point \{/, 'struct', 'keyword'],
-    ['values-and-pointers', /let mut p = Point \{/, 'mut', 'keyword'],
+    ['values-and-pointers', /const p = Point \{/, 'const', 'keyword'],
     ['sieve', /^use pouch::\{Vec\};/, 'use', 'keyword'],
     ['sieve', /^entry fn main\(\) \{/, 'entry', 'keyword'],
     // the rest of the use line: the path segment classifies namespace

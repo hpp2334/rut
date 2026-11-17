@@ -63,8 +63,8 @@ fn val_text(sign: u32, mag: u32) -> str {
 // vals, tags, meta (rev + kind).
 fn gen_doc(rows: i32, vals_n: i32, alpha: Vec<str>) -> str {
     let parts: Vec<str> = Vec::new();
-    let mut x: u32 = 42;
-    for (let mut i = 0; i < rows; i += 1) {
+    let x: u32 = 42;
+    for (let i = 0; i < rows; i += 1) {
         if (i > 0) { parts.push(","); }
         x = lcg(x);
         let id = (((x >> 5) % 899998) as i32) + 100000;
@@ -160,8 +160,8 @@ fn jpeek(cur: ?Cur) -> str {
     return "";
 }
 
-fn jskip(mut cur: ?Cur) {
-    let mut again = true;
+fn jskip(cur: ?Cur) {
+    let again = true;
     while (again) {
         let c = jpeek(cur);
         again = c == " " || c == "\t" || c == "\n" || c == "\r";
@@ -175,8 +175,8 @@ fn is_digit(c: str) -> bool {
 }
 
 fn join_chars(cs: Vec<str>) -> str {
-    let mut out = "";
-    for (let mut i = 0; i < cs.len(); i += 1) {
+    let out = "";
+    for (let i = 0; i < cs.len(); i += 1) {
         out = f"{out}{cs[i]}";
     }
     return out;
@@ -187,28 +187,28 @@ fn join_chars(cs: Vec<str>) -> str {
 fn valid_number(cs: Vec<str>) -> bool {
     let n = cs.len();
     if (n == 0) { return false; }
-    let mut i = 0;
+    let i = 0;
     if (cs[0] == "-") { i = 1; }
-    let mut intd = 0;
+    let intd = 0;
     while (i < n && is_digit(cs[i])) { i = i + 1; intd = intd + 1; }
     if (intd == 0) { return false; }
     if (i < n && cs[i] == ".") {
         i = i + 1;
-        let mut fracd = 0;
+        let fracd = 0;
         while (i < n && is_digit(cs[i])) { i = i + 1; fracd = fracd + 1; }
         if (fracd == 0) { return false; }
     }
     if (i < n && (cs[i] == "e" || cs[i] == "E")) {
         i = i + 1;
         if (i < n && (cs[i] == "+" || cs[i] == "-")) { i = i + 1; }
-        let mut exd = 0;
+        let exd = 0;
         while (i < n && is_digit(cs[i])) { i = i + 1; exd = exd + 1; }
         if (exd == 0) { return false; }
     }
     return i == n;
 }
 
-fn jparse_value(mut cur: ?Cur) -> (opaque, str) {
+fn jparse_value(cur: ?Cur) -> (opaque, str) {
     jskip(cur);
     let c = jpeek(cur);
     if (c == "") { return (noopaque(), "json: unexpected end of input"); }
@@ -222,9 +222,9 @@ fn jparse_value(mut cur: ?Cur) -> (opaque, str) {
     return (noopaque(), f"json: unexpected `{c}` at index {cur.pos}");
 }
 
-fn jparse_lit(mut cur: ?Cur, word: str, v: Json) -> (opaque, str) {
+fn jparse_lit(cur: ?Cur, word: str, v: Json) -> (opaque, str) {
     let start = cur.pos;
-    let mut ok = true;
+    let ok = true;
     for (let wch of word) {
         if (jpeek(cur) != f"{wch}") { ok = false; }
         cur.pos = cur.pos + 1;
@@ -235,12 +235,12 @@ fn jparse_lit(mut cur: ?Cur, word: str, v: Json) -> (opaque, str) {
     return (opaque(v), "");
 }
 
-fn jparse_string(mut cur: ?Cur) -> (opaque, str) {
+fn jparse_string(cur: ?Cur) -> (opaque, str) {
     let start = cur.pos;
     cur.pos = cur.pos + 1;   // opening quote
     let out: Vec<str> = Vec::new();
-    let mut closed = false;
-    let mut open = true;
+    let closed = false;
+    let open = true;
     while (open && cur.pos < cur.cs.len()) {
         let c = cur.cs[cur.pos];
         cur.pos = cur.pos + 1;
@@ -276,10 +276,10 @@ fn jparse_string(mut cur: ?Cur) -> (opaque, str) {
     return (opaque(jstr(join_chars(out))), "");
 }
 
-fn jparse_number(mut cur: ?Cur) -> (opaque, str) {
+fn jparse_number(cur: ?Cur) -> (opaque, str) {
     let start = cur.pos;
     let chars: Vec<str> = Vec::new();
-    let mut again = true;
+    let again = true;
     while (again) {
         let c = jpeek(cur);
         again = is_digit(c) || c == "-" || c == "+" || c == "." || c == "e" || c == "E";
@@ -294,7 +294,7 @@ fn jparse_number(mut cur: ?Cur) -> (opaque, str) {
     return (opaque(jnum(join_chars(chars))), "");
 }
 
-fn jparse_array(mut cur: ?Cur) -> (opaque, str) {
+fn jparse_array(cur: ?Cur) -> (opaque, str) {
     cur.depth = cur.depth + 1;
     if (cur.depth > 64) {
         return (noopaque(), "json: nesting deeper than 64");
@@ -306,7 +306,7 @@ fn jparse_array(mut cur: ?Cur) -> (opaque, str) {
         cur.pos = cur.pos + 1;
         return (opaque(v), "");
     }
-    let mut again = true;
+    let again = true;
     while (again) {
         let item = jparse_value(cur);
         if (item.1 != "") { return (noopaque(), item.1); }
@@ -327,7 +327,7 @@ fn jparse_array(mut cur: ?Cur) -> (opaque, str) {
     return (opaque(v), "");
 }
 
-fn jparse_object(mut cur: ?Cur) -> (opaque, str) {
+fn jparse_object(cur: ?Cur) -> (opaque, str) {
     cur.depth = cur.depth + 1;
     if (cur.depth > 64) {
         return (noopaque(), "json: nesting deeper than 64");
@@ -339,7 +339,7 @@ fn jparse_object(mut cur: ?Cur) -> (opaque, str) {
         cur.pos = cur.pos + 1;
         return (opaque(v), "");
     }
-    let mut again = true;
+    let again = true;
     while (again) {
         jskip(cur);
         if (jpeek(cur) != "\"") {
@@ -383,7 +383,7 @@ fn unwrap_box(r: (opaque, str)) -> opaque {
 // ----------------------------------------------------------------- fold ---
 
 /// Sum the codepoints of `s` into `h` (wrapping i64 ops).
-fn fold_str(mut h: i64, s: str) -> i64 {
+fn fold_str(h: i64, s: str) -> i64 {
     for (let c of s) {
         h = h.wrapping_mul(31 as i64).wrapping_add(c.code() as i64);
     }
@@ -395,9 +395,9 @@ fn fold_str(mut h: i64, s: str) -> i64 {
 /// This document has no exponents; '.' (or anything non-digit after the
 /// integer part) ends the scan; '-' only leads.
 fn lex_int(s: str) -> i64 {
-    let mut acc: i64 = 0;
-    let mut neg = false;
-    let mut digits = true;
+    let acc: i64 = 0;
+    let neg = false;
+    let digits = true;
     for (let c of s) {
         if (digits) {
             if (c == "-" && acc == 0 && neg == false) {
@@ -420,27 +420,27 @@ fn lex_int(s: str) -> i64 {
 fn jdoc_sum(o: opaque) -> i64 {
     let j = opaque::downcast<Json>(o);
     assert(j != nil, "json-decode: downcast failed in the fold pass");
-    let mut s: i64 = 0;
+    let s: i64 = 0;
     when (j.tag) {
         JTag::Null -> { s = 1; },
         JTag::False -> { s = 2; },
         JTag::True -> { s = 3; },
         JTag::Num -> { s = lex_int(j.num); },
         JTag::Str -> {
-            let mut t: i64 = 4;
+            let t: i64 = 4;
             t = fold_str(t, j.str);
             s = t;
         },
         JTag::Arr -> {
-            let mut t: i64 = 5;
-            for (let mut i = 0; i < j.arr.len(); i += 1) {
+            let t: i64 = 5;
+            for (let i = 0; i < j.arr.len(); i += 1) {
                 t = t.wrapping_mul(11 as i64).wrapping_add(jdoc_sum(j.arr[i]));
             }
             s = t;
         },
         JTag::Obj -> {
-            let mut t: i64 = 6;
-            for (let mut i = 0; i < j.keys.len(); i += 1) {
+            let t: i64 = 6;
+            for (let i = 0; i < j.keys.len(); i += 1) {
                 t = fold_str(t, j.keys[i]);
                 t = t.wrapping_mul(11 as i64).wrapping_add(jdoc_sum(j.vals[i]));
             }
@@ -466,9 +466,9 @@ entry fn main() -> nil {
     let doc = gen_doc(rows, vals, alpha);
     // the split is setup — shared across reps, fresh cursor per rep
     let chars = split_chars(doc);
-    let mut total: i64 = 0;
-    let mut first: i64 = 0;
-    for (let mut r = 0; r < reps; r += 1) {
+    let total: i64 = 0;
+    let first: i64 = 0;
+    for (let r = 0; r < reps; r += 1) {
         let cur: ?Cur = Cur { cs: chars, pos: 0, depth: 0 };
         let v = jparse_value(cur);
         if (v.1 != "") { panic(v.1); }

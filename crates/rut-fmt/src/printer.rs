@@ -1184,21 +1184,15 @@ impl<'a> P<'a> {
         }
     }
 
-    /// one parameter: `mut self` / `self` / `mut x: T` / `x: T` / `x`
+    /// one parameter: `self` / `x: T` / `x` — params are mutable by
+    /// default (no mutability spell exists on a param)
     fn param(&mut self, pr: ParamRef) {
         match pr {
-            ParamRef::SelfParam(h) => {
-                let d = h.get(self.a);
-                if d.is_mut {
-                    self.text("mut ");
-                }
+            ParamRef::SelfParam(_) => {
                 self.text("self");
             }
             ParamRef::Param(h) => {
                 let d = h.get(self.a);
-                if d.is_mut {
-                    self.text("mut ");
-                }
                 self.text(self.a.name(d.name));
                 if let Some(t) = d.ty {
                     self.text(": ");
@@ -1396,10 +1390,10 @@ impl<'a> P<'a> {
         match s {
             StmtRef::Let(h) => {
                 let d = h.get(self.a);
-                self.text("let");
-                if d.is_mut {
-                    self.sp();
-                    self.text("mut");
+                if d.is_const {
+                    self.text("const");
+                } else {
+                    self.text("let");
                 }
                 match &d.destructure {
                     Some(names) => {
@@ -1439,9 +1433,10 @@ impl<'a> P<'a> {
             }
             StmtRef::ForOf(h) => {
                 let d = h.get(self.a);
-                self.text("for (let ");
-                if d.is_mut {
-                    self.text("mut ");
+                if d.is_const {
+                    self.text("for (const ");
+                } else {
+                    self.text("for (let ");
                 }
                 self.text(self.a.name(d.var));
                 self.text(" of ");
@@ -1453,9 +1448,6 @@ impl<'a> P<'a> {
             StmtRef::ForC(h) => {
                 let d = h.get(self.a);
                 self.text("for (let ");
-                if d.is_mut {
-                    self.text("mut ");
-                }
                 self.text(self.a.name(d.var));
                 self.text(" = ");
                 self.expr(d.init);
@@ -2028,7 +2020,7 @@ impl<'a> P<'a> {
     }
 
     /// the lambda's two spellings (the parser's two forms):
-    /// - one type-less non-mut param, no ret → `x => body`;
+    /// - one type-less param, no ret → `x => body`;
     /// - a Block body otherwise → `fn (params) (-> ret)? { .. }` (the
     ///   anon form, block-bodied by grammar);
     /// - an expr body otherwise → `(params) (-> ret)? => body` (the
@@ -2037,7 +2029,7 @@ impl<'a> P<'a> {
         if params.len() == 1 && ret.is_none() {
             if let ParamRef::Param(ph) = params[0] {
                 let d = ph.get(self.a);
-                if d.ty.is_none() && !d.is_mut {
+                if d.ty.is_none() {
                     self.text(self.a.name(d.name));
                     self.sp();
                     self.text("=>");

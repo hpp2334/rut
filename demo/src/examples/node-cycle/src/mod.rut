@@ -16,7 +16,7 @@ class Node {                              // initializer covers `next`
 impl Node {
     fn new() -> Self { return Self {}; }  // explicit construction — no
                                           // implicit default
-    fn link(mut self, other: ?Node) {
+    fn link(self, other: ?Node) {
         self.next = other;
     }
 }

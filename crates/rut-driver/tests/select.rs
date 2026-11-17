@@ -222,7 +222,7 @@ class Tracked {
     n: i32 = 0;
 }
 impl Tracked {
-    [disposal] fn dispose_tracked(mut self, cx: DisposalContext) {
+    [disposal] fn dispose_tracked(self, cx: DisposalContext) {
         Logger::new("t").info(f"gone {self.n}");
     }
 }
@@ -282,7 +282,7 @@ class Tracked {
     tag: str;
 }
 impl Tracked {
-    [disposal] fn dispose_tracked(mut self, cx: DisposalContext) {
+    [disposal] fn dispose_tracked(self, cx: DisposalContext) {
         Logger::new("t").info(f"cancelled {self.tag}");
     }
 }

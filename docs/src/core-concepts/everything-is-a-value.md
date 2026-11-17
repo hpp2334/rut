@@ -35,7 +35,7 @@ struct Point { x: f32; y: f32 }
 
 entry fn main() {
     let log = Logger("values");
-    let mut p = Point { x: 1, y: 2 };
+    let p = Point { x: 1, y: 2 };
     let q = p;          // q and p name ONE cell
     p.x = 4;            // q.x is 4 now — sharing is the law
     log.info(f"q.x = {q.x}");   // read through the other alias
@@ -134,8 +134,8 @@ fn parse_hex(s: str) -> (bytes, str) {
         return (bytes::zeroed(0), "hex: odd-length input");
     }
     let n = s.len() / 2;
-    let mut buf: [u8] = [0u8; n];
-    for (let mut i = 0; i < n; i += 1) {
+    let buf: [u8] = [0u8; n];
+    for (let i = 0; i < n; i += 1) {
         let hi = hex_digit(s.code_at(i * 2));
         let lo = hex_digit(s.code_at(i * 2 + 1));
         if (hi < 0 || lo < 0) {

@@ -69,7 +69,7 @@ fn relational_blocked_after_tighter_op() {
 
 #[test]
 fn assignment_is_right_associative() {
-    let src = "fn f() -> nil { let mut x = 0; let mut y = 0; let mut z = 0; x = y = z; }";
+    let src = "fn f() -> nil { let x = 0; let y = 0; let z = 0; x = y = z; }";
     let (ast, diags) = parse(src, Mode::Impl);
     assert!(diags.is_empty(), "expected a clean parse: {diags:?}");
     let stmts = &first_fn_body(&ast).get(&ast).stmts;

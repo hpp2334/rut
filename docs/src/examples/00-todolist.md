@@ -67,7 +67,7 @@ impl TodoList {
 
     // ---- CREATE ----
 
-    pub fn add(mut self, title: str) -> i32 {
+    pub fn add(self, title: str) -> i32 {
         let id = self.next_id;
         self.items.push(Todo { id: id, title: title });
         self.next_id += 1;
@@ -76,9 +76,9 @@ impl TodoList {
 
     // ---- DELETE ----
 
-    pub fn remove(mut self, id: i32) -> bool {
+    pub fn remove(self, id: i32) -> bool {
         let kept: Vec<Todo> = Vec::new();
-        let mut removed = false;
+        let removed = false;
         for (let t of self.items) {
             when (t.id == id) {
                 true -> { removed = true; },   // drop the row
@@ -94,7 +94,7 @@ impl TodoList {
 
 entry fn main() {
     let log = Logger("todos");
-    let mut list = TodoList::new();
+    let list = TodoList::new();
     list.add("implement the VM");
     list.add("ship the demo");
     let first = list.remove(1);

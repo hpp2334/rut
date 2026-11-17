@@ -160,11 +160,11 @@ fn nullable_backed_vec_shape_is_an_ordinary_ref_elem_array() {
          }\n\
          impl<T> Box2<T> {\n\
              fn new() -> Self { return Self { buf: [nil; 4], len: 0 }; }\n\
-             fn push(mut self, v: T) -> nil { self.buf[self.len] = v; self.len += 1; }\n\
+             fn push(self, v: T) -> nil { self.buf[self.len] = v; self.len += 1; }\n\
              fn get(self, i: i32) -> T { return self.buf[i]; }\n\
          }\n\
          entry fn main() -> i32 {\n\
-             let mut b: Box2<i32> = Box2::new();\n\
+             let b: Box2<i32> = Box2::new();\n\
              b.push(5);\n\
              b.push(7);\n\
              b[0] = 6;\n\
@@ -219,7 +219,7 @@ fn prefix_question_binds_the_following_type_term() {
     let out = compile(
         "fn count(xs: [?i32]) -> i32 { return xs.len(); }\n\
          entry fn main() -> i32 {\n\
-             let mut a: [?i32] = [7; 3];\n\
+             let a: [?i32] = [7; 3];\n\
              a[1] = nil;\n\
              let e: ?i32 = a[0];\n\
              let plain: [i32] = [1; 2];\n\

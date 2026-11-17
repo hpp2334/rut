@@ -77,7 +77,7 @@ impl Connection {
 }
 
 impl Connection {
-    [disposal] fn close(mut self, cx: DisposalContext) {
+    [disposal] fn close(self, cx: DisposalContext) {
         self.log.info(f"closed {self.url}");
     }
 }
@@ -132,7 +132,7 @@ class View {
 
 entry fn main() {
     let log = Logger("rc");
-    let mut m = Model { name: "doc" };
+    let m = Model { name: "doc" };
     let v = View { model: nil, observer: Weak::new(m) };   // observe without owning
     log.info(f"holding {m.name}; the view holds only a weak edge");
     m = Model { name: "next" };   // the old cell's last strong reference dies here

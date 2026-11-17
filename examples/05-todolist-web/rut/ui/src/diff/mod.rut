@@ -95,7 +95,7 @@ pub fn t1_mount(root_id: str) -> T1Root {
 /// answer passes through: the app's event wrappers return the BOOKING
 /// (an `opaque(Req)`) or `opaque(nil)` when there is nothing to book.
 pub fn t1_event(r: T1Root, id: str, detail: str) -> opaque {
-    let mut regs: HashMap<str, Ev> = r.regs;
+    let regs: HashMap<str, Ev> = r.regs;
     let hit = regs.get(id);
     if (hit == nil) {
         panic(f"t1: listener '{id}' answers no mutation — stale or unknown");
@@ -114,7 +114,7 @@ pub fn t1_event(r: T1Root, id: str, detail: str) -> opaque {
 /// nothing). The resolved tree is what the diff sees and what `prev`
 /// stores, so reactive and literal arms compare alike.
 fn resolve_tree(w: widget::Widget) -> widget::Widget {
-    let mut out = w;
+    let out = w;
     if (out.live != nil) {
         let d: store::Derived<widget::Widget> = out.live;
         return resolve_tree(d.get());
@@ -128,7 +128,7 @@ fn resolve_tree(w: widget::Widget) -> widget::Widget {
         out.value = d.get();
     }
     let kids: Vec<widget::Widget> = out.children;
-    let mut resolved: Vec<widget::Widget> = Vec::new();
+    let resolved: Vec<widget::Widget> = Vec::new();
     for (let k of kids) {
         resolved.push(resolve_tree(k));
     }
@@ -139,7 +139,7 @@ fn resolve_tree(w: widget::Widget) -> widget::Widget {
 /// THE render — once per turn, any turn. First render builds the whole
 /// tree; every later render diffs against the previous tree and fires
 /// only the deltas.
-pub fn t1_render(mut r: T1Root, next: widget::Widget) -> nil {
+pub fn t1_render(r: T1Root, next: widget::Widget) -> nil {
     let next = resolve_tree(next);
     let path = widget::key_of(next, 0);
     let prev = r.prev;
@@ -159,7 +159,7 @@ pub fn t1_render(mut r: T1Root, next: widget::Widget) -> nil {
 /// The live handle for a path — LOUD when the framework's own table
 /// has drifted.
 fn els_handle(r: T1Root, path: str) -> opaque {
-    let mut els: HashMap<str, opaque> = r.els;
+    let els: HashMap<str, opaque> = r.els;
     let hit = els.get(path);
     if (hit == nil) {
         panic(f"t1: no live handle for '{path}' — the patch named an element that never appeared");
@@ -169,17 +169,17 @@ fn els_handle(r: T1Root, path: str) -> opaque {
 }
 
 fn els_drop(r: T1Root, path: str) -> nil {
-    let mut els: HashMap<str, opaque> = r.els;
+    let els: HashMap<str, opaque> = r.els;
     els.remove(path);
 }
 
 /// First appearance: mint the element, the attrs, the text or value,
 /// the ONE listener of its lifetime, then the children.
-fn create_subtree(mut r: T1Root, w: widget::Widget, path: str, parent: opaque) -> nil {
+fn create_subtree(r: T1Root, w: widget::Widget, path: str, parent: opaque) -> nil {
     let low = lowering::lower(w);
     let el: opaque = ui_create(low.tag);
 
-    let mut els: HashMap<str, opaque> = r.els;
+    let els: HashMap<str, opaque> = r.els;
     els.put(path, el);
 
     if (w.hook != "") {
@@ -197,7 +197,7 @@ fn create_subtree(mut r: T1Root, w: widget::Widget, path: str, parent: opaque) -
         // on_click, else the arg-bound on_row — at least one arm must
         // exist (the vocabulary enforces the pairing: fields take
         // on_input; buttons/checks take on_click or on_row)
-        let mut e = Ev { };
+        let e = Ev { };
         if (w.on_input != nil) {
             e.m = w.on_input;
         } else {
@@ -213,9 +213,9 @@ fn create_subtree(mut r: T1Root, w: widget::Widget, path: str, parent: opaque) -
             }
         }
         let id: i64 = ui_listen(el, low.listens);
-        let mut regs: HashMap<str, Ev> = r.regs;
+        let regs: HashMap<str, Ev> = r.regs;
         regs.put(f"{id}", e);
-        let mut lids: HashMap<str, i64> = r.lids;
+        let lids: HashMap<str, i64> = r.lids;
         lids.put(path, id);
     }
 
@@ -233,13 +233,13 @@ fn create_subtree(mut r: T1Root, w: widget::Widget, path: str, parent: opaque) -
     }
 
     let kids: Vec<widget::Widget> = w.children;
-    for (let mut j = 0; j < kids.len(); j += 1) {
+    for (let j = 0; j < kids.len(); j += 1) {
         create_subtree(r, kids[j], f"{path}/{widget::key_of(kids[j], j)}", el);
     }
 }
 
 /// Patch one surviving node in place — deltas only.
-fn patch_tree(mut r: T1Root, old: widget::Widget, new: widget::Widget, path: str) -> nil {
+fn patch_tree(r: T1Root, old: widget::Widget, new: widget::Widget, path: str) -> nil {
     if (widget::kind_name(old) != widget::kind_name(new)) {
         let a = widget::kind_name(old);
         let b = widget::kind_name(new);
@@ -270,7 +270,7 @@ fn patch_tree(mut r: T1Root, old: widget::Widget, new: widget::Widget, path: str
 }
 
 fn key_index_of(v: Vec<str>, k: str) -> i32 {
-    for (let mut i = 0; i < v.len(); i += 1) {
+    for (let i = 0; i < v.len(); i += 1) {
         if (v[i] == k) {
             return i;
         }
@@ -279,7 +279,7 @@ fn key_index_of(v: Vec<str>, k: str) -> i32 {
 }
 
 fn old_index_of(olds: Vec<widget::Widget>, k: str) -> i32 {
-    for (let mut j = 0; j < olds.len(); j += 1) {
+    for (let j = 0; j < olds.len(); j += 1) {
         if (widget::key_of(olds[j], j) == k) {
             return j;
         }
@@ -290,9 +290,9 @@ fn old_index_of(olds: Vec<widget::Widget>, k: str) -> i32 {
 /// `cur` with the entry at `p` moved to the back — the model of what
 /// ui_append does to a surviving child (appendChild MOVES).
 fn key_moved_to_back(v: Vec<str>, p: i32) -> Vec<str> {
-    let mut out: Vec<str> = Vec::new();
+    let out: Vec<str> = Vec::new();
     let moved = v[p];
-    for (let mut i = 0; i < v.len(); i += 1) {
+    for (let i = 0; i < v.len(); i += 1) {
         if (i != p) {
             out.push(v[i]);
         }
@@ -304,33 +304,33 @@ fn key_moved_to_back(v: Vec<str>, p: i32) -> Vec<str> {
 /// The children level of the diff: match by key, patch in place,
 /// create the new, remove the gone, and re-append survivors whose
 /// position broke (reorder = appends, zero creates, zero re-listens).
-fn patch_children(mut r: T1Root, old: widget::Widget, new: widget::Widget, path: str, parent: opaque) -> nil {
+fn patch_children(r: T1Root, old: widget::Widget, new: widget::Widget, path: str, parent: opaque) -> nil {
     let olds: Vec<widget::Widget> = old.children;
     let news: Vec<widget::Widget> = new.children;
 
-    let mut new_keys: Vec<str> = Vec::new();
-    for (let mut i = 0; i < news.len(); i += 1) {
+    let new_keys: Vec<str> = Vec::new();
+    for (let i = 0; i < news.len(); i += 1) {
         new_keys.push(widget::key_of(news[i], i));
     }
 
-    let mut cur: Vec<str> = Vec::new();
-    for (let mut j = 0; j < olds.len(); j += 1) {
+    let cur: Vec<str> = Vec::new();
+    for (let j = 0; j < olds.len(); j += 1) {
         cur.push(widget::key_of(olds[j], j));
     }
 
-    for (let mut i = 0; i < news.len(); i += 1) {
+    for (let i = 0; i < news.len(); i += 1) {
         let k = new_keys[i];
         let cpath = f"{path}/{k}";
         let at = old_index_of(olds, k);
         if (at >= 0) {
             patch_tree(r, olds[at], news[i], cpath);
             // in place iff the live predecessor is the previous new key
-            let mut pred = "";
+            let pred = "";
             if (i > 0) {
                 pred = new_keys[i - 1];
             }
             let live_at = key_index_of(cur, k);
-            let mut in_place = false;
+            let in_place = false;
             if (live_at == 0) {
                 if (pred == "") {
                     in_place = true;
@@ -354,7 +354,7 @@ fn patch_children(mut r: T1Root, old: widget::Widget, new: widget::Widget, path:
 
     // gone keys: fetch the live handle, retire the subtree's table
     // rows, then detach — the registry tracks live ids only
-    for (let mut j = 0; j < olds.len(); j += 1) {
+    for (let j = 0; j < olds.len(); j += 1) {
         let ok = widget::key_of(olds[j], j);
         if (key_index_of(new_keys, ok) < 0) {
             let cpath = f"{path}/{ok}";
@@ -367,21 +367,21 @@ fn patch_children(mut r: T1Root, old: widget::Widget, new: widget::Widget, path:
 
 /// Retirement (§4.3 — the no-ui_unlisten law's rut-side half): drop
 /// every live handle and every listener row the removed subtree owns.
-fn retire_subtree(mut r: T1Root, w: widget::Widget, path: str) -> nil {
+fn retire_subtree(r: T1Root, w: widget::Widget, path: str) -> nil {
     els_drop(r, path);
     let low = lowering::lower(w);
     if (low.listens != "") {
-        let mut lids: HashMap<str, i64> = r.lids;
+        let lids: HashMap<str, i64> = r.lids;
         let hit = lids.get(path);
         if (hit != nil) {
             let id: i64 = hit;
-            let mut regs: HashMap<str, Ev> = r.regs;
+            let regs: HashMap<str, Ev> = r.regs;
             regs.remove(f"{id}");
             lids.remove(path);
         }
     }
     let kids: Vec<widget::Widget> = w.children;
-    for (let mut j = 0; j < kids.len(); j += 1) {
+    for (let j = 0; j < kids.len(); j += 1) {
         retire_subtree(r, kids[j], f"{path}/{widget::key_of(kids[j], j)}");
     }
 }

@@ -249,10 +249,10 @@ state is one `opaque` handle, every method one host call.
 pub class HashMap<K requires i8 | i16 | i32 | i64 | u8 | u16 | u32 | u64 | bool | str | bytes, V> {
     [constructor] pub fn new() -> Self;
     pub fn with_capacity(n: i32) -> Self;
-    pub fn put(mut self, k: K, v: V) -> bool;      // true = newly inserted
+    pub fn put(self, k: K, v: V) -> bool;      // true = newly inserted
     pub fn get(self, k: K) -> ?V;                  // the STORED cell, not a copy
     pub fn has(self, k: K) -> bool;
-    pub fn remove(mut self, k: K) -> bool;
+    pub fn remove(self, k: K) -> bool;
     pub fn len(self) -> i32;
 }
 pub class HashSet<T requires ..same key set..> { new, with_capacity, put, has, remove, len }
@@ -318,8 +318,8 @@ fn encodeJson<T requires JsonSerialize>(v: T) -> (?str, ?EncodeJsonError);
 fn decodeJson<T requires JsonDeserialize>(s: str) -> (?T, ?DecodeJsonError);
 fn decodeJsonBytes<T requires JsonDeserialize>(b: bytes) -> (?T, ?DecodeJsonError);
 
-pub interface JsonSerialize   { fn encode(self, mut w: JsonWriter) -> ?EncodeJsonError; }
-pub interface JsonDeserialize { fn decode(mut r: JsonReader) -> (?Self, ?DecodeJsonError); }
+pub interface JsonSerialize   { fn encode(self, w: JsonWriter) -> ?EncodeJsonError; }
+pub interface JsonDeserialize { fn decode(r: JsonReader) -> (?Self, ?DecodeJsonError); }
 ```
 
 - **The pair law**: `(?T, ?E)` with exactly one nil — success = `(value,
@@ -385,7 +385,7 @@ use strbuild::{ StringBuilder };
 entry fn main() {
     let log = Logger("t");
     let k = "name";
-    let mut b = StringBuilder::with_cap(1024);   // octet hint
+    let b = StringBuilder::with_cap(1024);   // octet hint
     b.append(f"{k}=");
     b.append_code(0x21);
     let s = b.build();                          // the ONE materialization

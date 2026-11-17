@@ -39,8 +39,8 @@ entry fn host_nop4(a: i64, b: i64, c: i64, d: i64) -> i64 { return nop4(a, b, c,
 // twin must agree bit-for-bit on every value (the bench row's checksum
 // law — host loop and rut loop accumulate the same sums)
 entry fn twins_agree(n: i64) -> i64 {
-    let mut fails: i64 = 0;
-    let mut i: i64 = 0;
+    let fails: i64 = 0;
+    let i: i64 = 0;
     while (i < n) {
         let x = i * 7919 - 1000003;
         if (nop(x) != nop_rut(x)) { fails += 1; }

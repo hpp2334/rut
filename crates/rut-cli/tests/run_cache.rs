@@ -250,7 +250,7 @@ impl<T> Box<T> {
         return Self { v };
     }
 
-    pub fn get(mut self) -> T {
+    pub fn get(self) -> T {
         return self.v;
     }
 }

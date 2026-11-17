@@ -4,8 +4,8 @@ use ink::{ Logger };
 // Scale: 5_000_000 iterations. Canonical reference: 628038624.
 
 entry fn main() -> nil {
-    let mut s: i32 = 0;
-    for (let mut i = 0; i < 5000000; i += 1) {
+    let s: i32 = 0;
+    for (let i = 0; i < 5000000; i += 1) {
         s = (s.wrapping_add(i.wrapping_mul(3))).wrapping_sub(1);
     }
     Logger("app").info(f"CHECKSUM {s}");

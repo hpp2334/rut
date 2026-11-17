@@ -74,7 +74,7 @@ door re-passes the container and answers the entry-err pair:
 pump reports *while keeping the page alive*.
 
 ```rut
-fn dom_event(mut r: AppRoot, id: str, detail: str) -> (?opaque, str) {
+fn dom_event(r: AppRoot, id: str, detail: str) -> (?opaque, str) {
     let booked = t1_event(r.t1, id, detail);
     let req = opaque::downcast<Req>(booked);
     if (req != nil) {
@@ -158,7 +158,7 @@ line is the worked example (`rut/biz/src/world/mod.rut`):
 let counts$ = store::derive(fn (ctx) -> str {
     let items = ctx.get(items$);
     let reqs = ctx.get(reqs$);
-    let mut open = 0;
+    let open = 0;
     for (let t of items) {
         if (t.done == false) {
             open += 1;

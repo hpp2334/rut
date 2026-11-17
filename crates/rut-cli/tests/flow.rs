@@ -184,7 +184,7 @@ use ink::{ Logger };
 entry fn main() -> nil {
     let log = Logger::new("flow");
     let nums: Vec<i32> = Vec::new();
-    let mut i = 0;
+    let i = 0;
     while (i < 10) { nums.push(i); i += 1; }
     let page: Vec<i32> = VecFlow<i32>::from_flow(VecFlow<i32>(nums).into_flow().skip(2).take(3)).collected();
     log.info(f"page n={page.len} first={page[0]} last={page[page.len-1]}");
@@ -270,7 +270,7 @@ class CountUp {
 impl CountUp {
     fn new(n: i32) -> Self { return Self { n: n }; }
     [iterable] fn iterate(self, emit: fn(i32) -> bool) {
-        let mut i = 1;
+        let i = 1;
         while (i <= self.n) {
             if (!emit(i)) { return; }
             i += 1;
@@ -282,7 +282,7 @@ impl CountUp {
     pub fn into_flow(self) -> Flow<i32> {
         let n: i32 = self.n;
         return Flow::new(fn (emit: fn(i32) -> bool) -> nil {
-            let mut i = 1;
+            let i = 1;
             while (i <= n) {
                 if (!emit(i)) { return; }
                 i += 1;
@@ -423,8 +423,8 @@ class Counting {
 }
 impl Counting {
     fn new() -> Self { return Self { n: 0 }; }
-    [iterable] fn iterate(mut self, emit: fn(i32) -> bool) {
-        let mut i = 1;
+    [iterable] fn iterate(self, emit: fn(i32) -> bool) {
+        let i = 1;
         while (i <= 100) {
             self.n += 1;
             if (!emit(i)) { return; }
@@ -435,7 +435,7 @@ impl Counting {
 
 entry fn main() -> nil {
     let log = Logger::new("flow");
-    let mut c: Counting = Counting::new();
+    let c: Counting = Counting::new();
     let stopped: Vec<i32> = Vec::new();
     for (let x of c) {
         if (stopped.len == 2) { break; }
@@ -443,7 +443,7 @@ entry fn main() -> nil {
     }
     log.info(f"stopped n={stopped.len} last={stopped[1]} driven={c.n}");
     let nums: Vec<i32> = Vec::new();
-    let mut i = 0;
+    let i = 0;
     while (i < 100) { nums.push(i + 1); i += 1; }
     let out: Vec<i32> = VecFlow<i32>::from_flow(VecFlow<i32>(nums).into_flow().take(2)).collected();
     log.info(f"out n={out.len} first={out[0]} last={out[1]}");

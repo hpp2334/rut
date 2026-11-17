@@ -1336,7 +1336,7 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                     caps.push(Capture {
                         name: n,
                         ty: l.ty,
-                        is_mut: l.is_mut,
+                        is_const: l.is_const,
                         cell: l.cell,
                         origins: l.origins.clone(),
                     });
@@ -1350,7 +1350,7 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                     caps.push(Capture {
                         name: n,
                         ty: l.ty,
-                        is_mut: l.is_mut,
+                        is_const: l.is_const,
                         cell: None,
                         origins: l.origins.clone(),
                     });

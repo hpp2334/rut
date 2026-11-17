@@ -57,7 +57,7 @@ wrong == nil: true
 
   entry fn main() {
       let log = Logger("t");
-      let mut n = 5;
+      let n = 5;
       let b = opaque(n);    // a prim payload COPIES the bits
       n = 9;                // ...so the source moving stays out
       log.info(f"{opaque::downcast<i32>(b)} vs {n}");

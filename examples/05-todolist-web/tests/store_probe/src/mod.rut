@@ -27,14 +27,14 @@ fn wt(c: opaque) -> ?World {
 
 /// Books an add; answers the tag to hand `tim_after`.
 entry fn store_request_add(c: opaque, title: str) -> str {
-    let mut w = wt(c);
+    let w = wt(c);
     let req = w.add_m.run(title);
     return req.tag;
 }
 
 /// Books a toggle; "" when the todo id is unknown.
 entry fn store_request_toggle(c: opaque, todo: i64) -> str {
-    let mut w = wt(c);
+    let w = wt(c);
     let req = w.toggle_m.run(todo);
     if (req == nil) {
         return "";
@@ -44,7 +44,7 @@ entry fn store_request_toggle(c: opaque, todo: i64) -> str {
 
 /// Books a remove; "" when the todo id is unknown.
 entry fn store_request_remove(c: opaque, todo: i64) -> str {
-    let mut w = wt(c);
+    let w = wt(c);
     let req = w.remove_m.run(todo);
     if (req == nil) {
         return "";
@@ -56,17 +56,17 @@ entry fn store_request_remove(c: opaque, todo: i64) -> str {
 /// entry-err shape — (line, "") for a commit, ("", why) for a
 /// rejection or a lost id. Unknown tag = loud trap (drift).
 entry fn store_answer(c: opaque, tag: str) -> (str, str) {
-    let mut w = wt(c);
+    let w = wt(c);
     return w.answer_m.run(tag);
 }
 
 /// The committed list as `#1 [x] milk|#2 [ ] tea` — the DOM-free board.
 entry fn store_board(c: opaque) -> str {
-    let mut w = wt(c);
+    let w = wt(c);
     let items = w.items$.get();
-    let mut out = "";
+    let out = "";
     for (let t of items) {
-        let mut mark = "[ ]";
+        let mark = "[ ]";
         if (t.done) {
             mark = "[x]";
         }
@@ -82,9 +82,9 @@ entry fn store_board(c: opaque) -> str {
 /// The booked rows as `req:1@400|req:2@250` — book order, latency per
 /// kind. The deadline-order oracle.
 entry fn store_fly(c: opaque) -> str {
-    let mut w = wt(c);
+    let w = wt(c);
     let rs = w.reqs$.get();
-    let mut out = "";
+    let out = "";
     for (let r of rs) {
         let row_s = f"{r.tag}@{r.latency}";
         if (out != "") {
@@ -99,10 +99,10 @@ entry fn store_fly(c: opaque) -> str {
 /// `open=1 done=1 fly=2` — the counts line (the ENTRY format; the
 /// status line's counts half is the derived counts$).
 entry fn store_counts(c: opaque) -> str {
-    let mut w = wt(c);
+    let w = wt(c);
     let items = w.items$.get();
     let rs = w.reqs$.get();
-    let mut open = 0;
+    let open = 0;
     for (let t of items) {
         if (t.done == false) {
             open += 1;
@@ -114,7 +114,7 @@ entry fn store_counts(c: opaque) -> str {
 
 /// The last answer line, verbatim.
 entry fn store_last(c: opaque) -> str {
-    let mut w = wt(c);
+    let w = wt(c);
     return w.last$.get();
 }
 
@@ -130,7 +130,7 @@ entry fn atom_recomputes(c: opaque) -> i32 {
 
 /// The derived's value — the status line's counts half, byte-for-byte.
 entry fn atom_counts(c: opaque) -> str {
-    let mut w = wt(c);
+    let w = wt(c);
     return w.counts$.get();
 }
 
@@ -143,7 +143,7 @@ entry fn atom_deps(c: opaque) -> str {
 
 /// Write a str atom by name (the str cells: draft, note, last).
 entry fn atom_str_set(c: opaque, name: str, v: str) -> nil {
-    let mut w = wt(c);
+    let w = wt(c);
     if (name == "draft") {
         w.draft$.set(v);
         return;
@@ -161,7 +161,7 @@ entry fn atom_str_set(c: opaque, name: str, v: str) -> nil {
 
 /// Read a str atom by name.
 entry fn atom_str_get(c: opaque, name: str) -> str {
-    let mut w = wt(c);
+    let w = wt(c);
     if (name == "draft") {
         return w.draft$.get();
     }
@@ -178,7 +178,7 @@ entry fn atom_str_get(c: opaque, name: str) -> str {
 /// every call — the Vec lane never equality-skips; two calls with the
 /// same title mark twice).
 entry fn atom_items_set(c: opaque, title: str) -> nil {
-    let mut w = wt(c);
+    let w = wt(c);
     let fresh: Vec<Todo> = Vec::new();
     fresh.push(Todo { id: 1, title: title, done: false });
     w.items$.set(fresh);
@@ -198,7 +198,7 @@ pub class Probe {
 }
 
 entry fn probes_new() -> opaque {
-    let mut store = Store::new();
+    let store = Store::new();
     let items$ = store.source<i64>(0);
     let log: Vec<str> = Vec::new();
     let up$ = store.derive(fn (ctx) -> i64 {
@@ -240,7 +240,7 @@ entry fn probe_bump(c: opaque, v: i64) -> nil {
 entry fn probe_pull(c: opaque) -> str {
     let p = pt(c);
     let _ = p.down$.get();
-    let mut out = "";
+    let out = "";
     for (let d of p.log) {
         if (out != "") {
             out = f"{out}|{d}";
@@ -285,8 +285,8 @@ pub class CycleProbe {
 }
 
 entry fn probes_cycle_new() -> opaque {
-    let mut store = Store::new();
-    let mut h: CycleHolder = CycleHolder { };
+    let store = Store::new();
+    let h: CycleHolder = CycleHolder { };
     let a$ = store.derive(fn (ctx) -> i64 {
         let b: Derived<i64> = h.b$;
         let v = ctx.get<i64, Derived<i64>>(b);

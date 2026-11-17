@@ -48,7 +48,7 @@ fn ws_table() -> [u8] {
     // so the table must seat every classified codepoint EXACTLY and end
     // with a zero slot: size 34 seats space (32) exactly and leaves
     // index 33 — every codepoint above it — matching as token text.
-    let mut t: [u8] = [0; 34];
+    let t: [u8] = [0; 34];
     t[9] = 1;  // tab
     t[10] = 1; // newline
     t[32] = 1; // space
@@ -57,9 +57,9 @@ fn ws_table() -> [u8] {
 
 fn split_argv(args: str) -> Vec<str> {
     let ws = ws_table();
-    let mut out: Vec<str> = Vec::new();
+    let out: Vec<str> = Vec::new();
     let n = args.len();
-    let mut i: i32 = 0;
+    let i: i32 = 0;
     while (i < n) {
         // (stop << 8) | class — class 0 means end of input; the tail
         // before it is still a token (the join's last argument carries
@@ -81,9 +81,9 @@ fn split_argv(args: str) -> Vec<str> {
 // nonempty name. Answers (ok, owner, name).
 fn carve_repo(v: str) -> (bool, str, str) {
     let n = v.len();
-    let mut slashes = 0;
-    let mut at: i32 = -1;
-    let mut j: i32 = 0;
+    let slashes = 0;
+    let at: i32 = -1;
+    let j: i32 = 0;
     while (j < n) {
         if (v.code_at(j) == 47) { slashes += 1; at = j; } // '/' = 47
         j += 1;
@@ -95,7 +95,7 @@ fn carve_repo(v: str) -> (bool, str, str) {
 // the path's basename — everything after the final '/'
 fn basename(p: str) -> str {
     let n = p.len();
-    let mut i = n - 1;
+    let i = n - 1;
     while (i >= 0) {
         if (p.code_at(i) == 47) { return p.slice(i + 1, n); }
         i -= 1;
@@ -129,8 +129,8 @@ struct Entry {
 // (The wrapper route exists — `decodeJson<JsonVec<Entry>>` over
 // json's pouch group, `.to_vec()` unwraps — but the direct reader
 // loop keeps the recursive shape in one spelled place.)
-fn decode_entry_files<T requires JsonDeserialize>(mut r: JsonReader) -> (?Vec<T>, ?DecodeJsonError) {
-    let mut v = Vec<T>::new();
+fn decode_entry_files<T requires JsonDeserialize>(r: JsonReader) -> (?Vec<T>, ?DecodeJsonError) {
+    let v = Vec<T>::new();
     r.begin_array();
     while (r.more()) {
         let (x, e) = T::decode(r);
@@ -147,12 +147,12 @@ fn decode_entry_files<T requires JsonDeserialize>(mut r: JsonReader) -> (?Vec<T>
 // satisfied STRUCTURALLY, by having the member (its `requires` bounds
 // check the member set at instantiation).
 impl Entry {
-    pub fn decode(mut r: JsonReader) -> (?Self, ?DecodeJsonError) {
+    pub fn decode(r: JsonReader) -> (?Self, ?DecodeJsonError) {
         r.begin_object();
-        let mut name: ?str = nil;
-        let mut size: ?i64 = nil;
-        let mut hash: ?str = nil;
-        let mut files: ?Vec<Entry> = nil;
+        let name: ?str = nil;
+        let size: ?i64 = nil;
+        let hash: ?str = nil;
+        let files: ?Vec<Entry> = nil;
         while (r.more()) {
             let k = r.next_key();
             if (r.failed()) { return (nil, r.error()); }
@@ -188,7 +188,7 @@ impl Entry {
             return (nil, DecodeJsonError { kind: DecodeErrorKind::WrongType, at: r.err_at() as i64, got: "", expected: "name" });
         }
         let nm: str = name;
-        let mut sz: i64 = 0;
+        let sz: i64 = 0;
         if (size != nil) {
             let v: i64 = size;
             sz = v;
@@ -203,7 +203,7 @@ impl Entry {
 // so the array row rides a LOCAL generic shim, the `decode_entry_files`
 // twin: at T = Entry it monomorphizes in THIS unit, and `x.encode(w)`
 // dispatches Entry's own `encode` member recursively.
-fn encode_entry_array<T requires JsonSerialize>(kids: Vec<T>, mut w: JsonWriter) -> ?EncodeJsonError {
+fn encode_entry_array<T requires JsonSerialize>(kids: Vec<T>, w: JsonWriter) -> ?EncodeJsonError {
     w.begin_array();
     for (let x of kids) {
         let e = x.encode(w);
@@ -216,7 +216,7 @@ fn encode_entry_array<T requires JsonSerialize>(kids: Vec<T>, mut w: JsonWriter)
 // the entry's encode member — Entry's own inherent impl again (the
 // structural twin of `decode` above).
 impl Entry {
-    pub fn encode(self, mut w: JsonWriter) -> ?EncodeJsonError {
+    pub fn encode(self, w: JsonWriter) -> ?EncodeJsonError {
         w.begin_object();
         w.key("name");
         w.write_str(self.name);
@@ -257,7 +257,7 @@ struct Root {
 // a body that somehow carried a broken octet surfaces as a reader
 // parse error, same exit code, one message.
 fn decode_root_bytes<T requires JsonDeserialize>(b: bytes) -> (?T, ?DecodeJsonError) {
-    let mut r = JsonReader::of(b.decode());
+    let r = JsonReader::of(b.decode());
     let (v, e) = T::decode(r);
     if (e != nil) { return (nil, e); }
     if (!r.at_end()) {
@@ -271,9 +271,9 @@ fn decode_root_bytes<T requires JsonDeserialize>(b: bytes) -> (?T, ?DecodeJsonEr
 // the root's decode member — Root's own inherent impl (the structural
 // admission again: having the member is the interface).
 impl Root {
-    pub fn decode(mut r: JsonReader) -> (?Self, ?DecodeJsonError) {
+    pub fn decode(r: JsonReader) -> (?Self, ?DecodeJsonError) {
         r.begin_object();
-        let mut files: ?Vec<Entry> = nil;
+        let files: ?Vec<Entry> = nil;
         while (r.more()) {
             let k = r.next_key();
             if (r.failed()) { return (nil, r.error()); }
@@ -326,7 +326,7 @@ fn hash8(h: ?str) -> str {
 // file prints one tab-separated line
 fn emit_dir(prefix: str, fs: Vec<Entry>) {
     for (let e of fs) {
-        let mut pfx = prefix;
+        let pfx = prefix;
         if (pfx.len() > 0) {
             pfx = f"{pfx}/{e.name}";
         } else {
@@ -409,7 +409,7 @@ async fn do_download(client: HttpClient, owner: str, repo: str, rf: str, path: s
         return 1;
     }
     let stream = resp.byte_stream();
-    let mut total: i32 = 0;
+    let total: i32 = 0;
     while (true) {
         let c = await stream.next();
         if (c == nil) {
@@ -445,12 +445,12 @@ async fn rgh_run(args: str) -> i32 {
     let argc = argv.len();
 
     // flags sit before the subcommand; each at most once
-    let mut owner = "";
-    let mut repo = "";
-    let mut rf = "";
-    let mut have_repo = false;
-    let mut have_ref = false;
-    let mut i: i32 = 0;
+    let owner = "";
+    let repo = "";
+    let rf = "";
+    let have_repo = false;
+    let have_ref = false;
+    let i: i32 = 0;
     while (i < argc) {
         let a = argv[i];
         if (!a.starts_with(0, "--")) { break; }
@@ -492,7 +492,7 @@ async fn rgh_run(args: str) -> i32 {
         if (path.code_at(path.len() - 1) == 47) {
             return usage(f"download: {path} is a directory target — rgh downloads one file");
         }
-        let mut dest = basename(path);
+        let dest = basename(path);
         if (i + 2 < argc) {
             dest = argv[i + 2];
         }

@@ -72,7 +72,7 @@ fn todolist(tag: &str) -> PathBuf {
 mod imp;
 
 fn boot() -> TodoList {
-    let mut list = TodoList { count: 0, last: Task { id: 0, title: "none", done: false } };
+    let list = TodoList { count: 0, last: Task { id: 0, title: "none", done: false } };
     list.add("first");
     list.add("second");
     return list;
@@ -100,7 +100,7 @@ pub class TodoList {
 }
 
 impl TodoList {
-    pub fn add(mut self, title: str) {
+    pub fn add(self, title: str) {
         self.count += 1;
         self.last = Task { id: self.count, title: title, done: false };
     }

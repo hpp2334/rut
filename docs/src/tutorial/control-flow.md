@@ -15,9 +15,9 @@ use ink::{ Logger };
 entry fn main() {
     let log = Logger("flow");
     for (let hits of [0, 5, 12]) {
-        let mut first = false;
-        let mut warm = false;
-        let mut hot = false;
+        let first = false;
+        let warm = false;
+        let hot = false;
         if (hits == 0) {
             first = true;
         } else if (hits < 10) {
@@ -87,8 +87,8 @@ entry fn main() {
     let log = Logger("sieve");
     let i = 2;
     let limit = 12;
-    let mut marks = [0; 16];
-    let mut m = i * i;
+    let marks = [0; 16];
+    let m = i * i;
     while (m <= limit) {
         marks[m] = 1;
         m += i;
@@ -112,7 +112,7 @@ use ink::{ Logger };
 
 entry fn main() {
     let log = Logger("loops");
-    let mut n = 0;
+    let n = 0;
     for (let w of ["rut", "runs", "rut"]) {
         // w is a str
     }
@@ -128,13 +128,13 @@ n=5
 ```
 
 The loop variable is a fresh binding each iteration — and a **normal**
-one: assigning it in the body takes `mut` in the header, like any
-`let`.
+one: mutable by default, like any `let` (spell `const` to refuse the
+body's reassignment of it).
 
 **Indexed `for`** is the C shape. The header is a normal binding too:
-the update clause assigns the counter every iteration, so a written-to
-counter is spelled `for (let mut i = 0; ...)` — plain `let` there is a
-compile error.
+the update clause assigns the counter every iteration, so the header
+spells plain `let` — `const` there refuses at parse (the induction
+variable is reassigned by the loop).
 
 ```rut
 use ink::{ Logger };
@@ -143,8 +143,8 @@ entry fn main() {
     let log = Logger("loops");
     let xs = [3, 1, 4];
     let n = xs.len();
-    let mut total = 0;
-    for (let mut i = 0; i < n; i += 1) {
+    let total = 0;
+    for (let i = 0; i < n; i += 1) {
         total += xs[i];
     }
     log.info(f"total={total}");
@@ -167,7 +167,7 @@ arrow is omitted and `return;` (or simply falling off the end) returns:
 use pouch::{ Vec };
 use ink::{ Logger };
 
-fn swap(mut xs: Vec<i32>, a: i32, b: i32) {
+fn swap(xs: Vec<i32>, a: i32, b: i32) {
     let t = xs[a];
     xs[a] = xs[b];
     xs[b] = t;
@@ -435,7 +435,7 @@ entry fn main() {
         log.info(f"{n}: {classify(n)}");
     }
 
-    let mut i = 0;
+    let i = 0;
     while (i < 3) {
         log.info(action(light_for(i)));
         i += 1;

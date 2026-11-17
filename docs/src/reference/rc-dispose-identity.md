@@ -39,7 +39,7 @@ use ink::{ Logger };
 struct Conn { log: Logger; url: str; }
 
 impl Conn {
-    [disposal] fn close(mut self, cx: DisposalContext) {
+    [disposal] fn close(self, cx: DisposalContext) {
         self.log.info(f"closed {self.url}");
     }
 }

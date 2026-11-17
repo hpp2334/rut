@@ -547,7 +547,7 @@ pub(crate) use with_doc;
 /// and any tooling that needs the keyword set share this one table.
 pub const RESERVED_KW: &[&str] = &[
     "let",
-    "mut",
+    "const",
     "if",
     "else",
     "while",

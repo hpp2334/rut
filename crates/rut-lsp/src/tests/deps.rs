@@ -36,7 +36,7 @@ pub class Vec<T> {
     len: i64;
 
     pub fn new() -> Self;
-    pub fn push(mut self, item: T);
+    pub fn push(self, item: T);
     pub fn len(self) -> i64;
 }
 
@@ -282,7 +282,7 @@ fn a_compiled_bundle_indexes_its_declaration_entry() {
         b.files[0].src
     );
     assert!(
-        b.files[0].src.contains("pub fn push(mut self,"),
+        b.files[0].src.contains("pub fn push(self,"),
         "the entry: {}",
         b.files[0].src
     );
@@ -323,7 +323,7 @@ fn a_packed_v12_bundle_indexes_hover_and_completion_from_the_entry() {
     assert!(names.contains(&"push"), "{names:?}");
     let push = vec.methods.iter().find(|m| m.name == "push").expect("push");
     assert!(
-        push.src.contains("pub fn push(mut self"),
+        push.src.contains("pub fn push(self"),
         "the verbatim signature: {}",
         push.src
     );

@@ -319,7 +319,7 @@ fn pouch_module_source_compiles() {
     assert!(merged.contains("class Vec<T>"), "Vec is here");
     let src = format!(
         "{merged}\nentry fn main() -> i32 {{\n\
-             let mut v: Vec<i32> = Vec::new();\n\
+             let v: Vec<i32> = Vec::new();\n\
              v.push(1);\n\
              v.push(2);\n\
              return v.len();\n\
@@ -415,7 +415,7 @@ fn consumer_uses_pouch_vec() {
                     "app_main",
                     "use pouch::{ Vec };\n\
                      entry fn main() -> i32 {\n\
-                         let mut v: Vec<i32> = Vec::new();\n\
+                         let v: Vec<i32> = Vec::new();\n\
                          v.push(1);\n\
                          v.push(2);\n\
                          return v.len();\n\

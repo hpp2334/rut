@@ -2101,7 +2101,6 @@ pub(crate) struct ParamsFrame {
     stage: PsStage,
     /// the parameter under construction
     p_lo: Span,
-    p_mut: bool,
     p_name: Name,
     /// param start + diag watermark (the fence's extent)
     before: usize,
@@ -2120,7 +2119,6 @@ impl ParamsFrame {
             out: Vec::new(),
             stage: PsStage::List,
             p_lo: Span::new(0, 0),
-            p_mut: false,
             p_name: Name {
                 id: IdentId(0),
                 span: Span::new(0, 0),
@@ -2153,16 +2151,10 @@ impl ParamsFrame {
             self.before = before;
             self.dmark = dmark;
             let lo = p.span();
-            let mut is_mut = false;
-            if p.at_kw("mut") && p.at_kw2("self") {
-                is_mut = true;
-                p.bump();
-            }
             if p.at_kw("self") {
                 let sp = p.bump().span;
                 let node = SelfParamNode {
                     span: Span::new(lo.lo, sp.hi.max(lo.lo)),
-                    is_mut,
                 }
                 .allocate(&mut p.ast);
                 self.out.push(node);
@@ -2171,10 +2163,6 @@ impl ParamsFrame {
                     return Step::Pop(Done::Members(std::mem::take(&mut self.out)));
                 }
                 continue;
-            }
-            if p.at_kw("mut") {
-                is_mut = true;
-                p.bump();
             }
             let Some(name) = p.expect_ident("a parameter name") else {
                 // the ladder's param tier: a broken param fences IN the
@@ -2188,7 +2176,6 @@ impl ParamsFrame {
                 continue;
             };
             self.p_lo = lo;
-            self.p_mut = is_mut;
             self.p_name = name;
             if p.eat_punct(Tok::Colon) {
                 self.stage = PsStage::Ty;
@@ -2196,7 +2183,6 @@ impl ParamsFrame {
             }
             let node = ParamNode {
                 span: Span::new(lo.lo, p.prev_end.max(lo.lo)),
-                is_mut,
                 name: name.id,
                 name_span: name.span,
                 ty: None,
@@ -2215,10 +2201,9 @@ impl ParamsFrame {
             Done::Ty(t) => {
                 debug_assert!(matches!(self.stage, PsStage::Ty));
                 self.stage = PsStage::List;
-                let (lo, is_mut, name) = (self.p_lo, self.p_mut, self.p_name);
+                let (lo, name) = (self.p_lo, self.p_name);
                 let node = ParamNode {
                     span: Span::new(lo.lo, p.prev_end.max(lo.lo)),
-                    is_mut,
                     name: name.id,
                     name_span: name.span,
                     ty: Some(t),

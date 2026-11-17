@@ -209,7 +209,7 @@ fn statement_if_with_trailing_semicolon_discards() {
     let v = run_main(
         r#"
 entry fn main() -> i32 {
-    let mut t = 1;
+    let t = 1;
     if (3 > 2) { t = 10; } else { t = 20; };
     t
 }
@@ -228,7 +228,7 @@ fn no_else_produces_nil_and_runs_the_arm() {
         r#"
 entry fn main() -> i32 {
     let c = 3 > 2;
-    let mut t = 0;
+    let t = 0;
     let n = if (c) { t = 5; };
     let d = if (!c) { t = 50; };
     n;
@@ -272,7 +272,7 @@ class Box2(i32);
 impl Box2 { pub fn get(self) -> i32 { return self.inner; } }
 
 entry fn main() -> i32 {
-    let mut b = Box2(1);
+    let b = Box2(1);
     let g = fn () -> i32 { let r = if (true) { b } else { Box2(0 - 1) }; r.get() };
     b = Box2(2);
     g()
@@ -312,7 +312,7 @@ fn break_inside_an_arm_binds_to_the_loop() {
     let v = run_main(
         r#"
 entry fn main() -> i32 {
-    let mut n = 0;
+    let n = 0;
     while (n < 10) {
         n = n + 1;
         let done = if (n >= 3) { break; } else { 0 };

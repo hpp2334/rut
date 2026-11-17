@@ -22,7 +22,7 @@ struct Point { x: i32; y: i32; }
 
 entry fn main() {
     let log = Logger("t");
-    let mut p = Point { x: 1, y: 2 };
+    let p = Point { x: 1, y: 2 };
     let q = p;              // SHARE: one cell, two names — no copy
     p.x = 4;                // q.x is 4 now
     log.info(f"{q.x}");

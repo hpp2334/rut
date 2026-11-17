@@ -41,8 +41,8 @@ struct Counter {
 n: i32;
 }
 impl Counter {
-fn bump(mut self) -> i32 { return self.n; }
-fn reset(mut self) -> nil { }
+fn bump(self) -> i32 { return self.n; }
+fn reset(self) -> nil { }
 }
 fn use_it(c: Counter) -> i32 {
 return c.;
@@ -153,8 +153,8 @@ fn bare_completion_gates_pub_builtin_core_names() {
     // the compiler's ambient split, mirrored so a completion never
     // offers a name the compile rejects. Ambient core rows
     // (`prelude builtin`) stay ungated.
-    let core_src = "pub builtin class Iterable<E> {\nfn next(mut self) -> ?E;\n}\n\
-                        pub builtin class Disposal {\nfn dispose(mut self, cx: DisposalContext);\n}\n\
+    let core_src = "pub builtin class Iterable<E> {\nfn next(self) -> ?E;\n}\n\
+                        pub builtin class Disposal {\nfn dispose(self, cx: DisposalContext);\n}\n\
                         pub builtin class DisposalContext { }\n\
                         pub builtin class Weak { }\n\
                         prelude builtin class StackTrace { }\n";
@@ -1029,7 +1029,7 @@ n: i32;
 pub static COUNT: i32;
 }
 impl Counter {
-fn bump(mut self) -> i32 { return self.n; }
+fn bump(self) -> i32 { return self.n; }
 fn mk() -> Counter { return Counter { n: 0 }; }
 }
 entry fn main() -> nil {
@@ -1456,7 +1456,7 @@ fn locals_complete_at_a_bare_position_ahead_of_the_keywords() {
     // ride their own kinds, ahead of the keyword table
     let src = "\
 fn go(ready: bool) -> nil {
-    let mut checked: str = \" \";
+    let checked: str = \" \";
     che
 }
 ";
@@ -1651,7 +1651,7 @@ fn member_completion_survives_the_end_of_buffer() {
 #[test]
 fn locals_complete_at_the_end_of_buffer() {
     // A1 at EOF (post-A7): the doc ends mid-statement
-    let src = "fn go() -> nil {\n    let mut checked: str = \" \";\n    che";
+    let src = "fn go() -> nil {\n    let checked: str = \" \";\n    che";
     let items = complete_after(src, "    che");
     let ls = labels(&items);
     assert!(

@@ -12,7 +12,7 @@ fn first<T>(xs: [T], fallback: T) -> T {   // builtin container: `T` infers
 }
 
 fn sum(xs: Vec<i32>) -> i32 {             // a generic CLASS (Vec<T>) in a
-    let mut total = 0;                    // signature does not unify yet —
+    let total = 0;                    // signature does not unify yet —
     for (let x of xs) {                   // concrete Vec<i32> is fine
         total += x;
     }

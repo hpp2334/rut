@@ -75,8 +75,8 @@ fn val_text(sign: u32, mag: u32) -> str {
 
 fn gen_doc(rows: i32, vals_n: i32, alpha: Vec<str>) -> str {
     let parts: Vec<str> = Vec::new();
-    let mut x: u32 = 42;
-    for (let mut i = 0; i < rows; i += 1) {
+    let x: u32 = 42;
+    for (let i = 0; i < rows; i += 1) {
         if (i > 0) { parts.push(","); }
         x = lcg(x);
         let id = (((x >> 5) % 899998) as i32) + 100000;
@@ -140,7 +140,7 @@ struct DocRow {
 }
 
 impl DocMeta {
-    pub fn encode(self, mut w: JsonWriter) -> ?EncodeJsonError {
+    pub fn encode(self, w: JsonWriter) -> ?EncodeJsonError {
         w.begin_object();
         w.key("rev");
         w.write_i64(self.rev);
@@ -159,7 +159,7 @@ impl DocMeta {
 // (`self.meta.encode(w)` — the interface satisfaction is structural).
 
 impl DocRow {
-    pub fn encode(self, mut w: JsonWriter) -> ?EncodeJsonError {
+    pub fn encode(self, w: JsonWriter) -> ?EncodeJsonError {
         w.begin_object();
         w.key("id");
         w.write_i64(self.id);
@@ -197,20 +197,20 @@ impl DocRow {
 }
 
 impl DocRow {
-    pub fn decode(mut r: JsonReader) -> (?Self, ?DecodeJsonError) {
+    pub fn decode(r: JsonReader) -> (?Self, ?DecodeJsonError) {
         r.begin_object();
-        let mut id: ?i64 = nil;
-        let mut name: ?str = nil;
-        let mut active: ?bool = nil;
+        let id: ?i64 = nil;
+        let name: ?str = nil;
+        let active: ?bool = nil;
         // `?bool == nil` is the nmapset-disclosed checker limit (the
         // bool lane, rut/nmapset/nmapset.rut:373) — presence rides a
         // flag instead
-        let mut have_active = false;
-        let mut score: ?f64 = nil;
-        let mut vals: ?Vec<i64> = nil;
-        let mut tags: ?Vec<str> = nil;
-        let mut note: ?i64 = nil;
-        let mut meta: ?DocMeta = nil;
+        let have_active = false;
+        let score: ?f64 = nil;
+        let vals: ?Vec<i64> = nil;
+        let tags: ?Vec<str> = nil;
+        let note: ?i64 = nil;
+        let meta: ?DocMeta = nil;
         while (r.more()) {
             let k = r.next_key();
             if (r.failed()) { return (nil, r.error()); }
@@ -237,7 +237,7 @@ impl DocRow {
                     score = v;
                 },
                 "vals" -> {
-                    let mut v = Vec<i64>::new();
+                    let v = Vec<i64>::new();
                     r.begin_array();
                     while (r.more()) {
                         let x = r.read_i64();
@@ -249,7 +249,7 @@ impl DocRow {
                     vals = v;
                 },
                 "tags" -> {
-                    let mut v = Vec<str>::new();
+                    let v = Vec<str>::new();
                     r.begin_array();
                     while (r.more()) {
                         let x = r.read_str();
@@ -280,8 +280,8 @@ impl DocRow {
                     // spelled directly, exactly the shape the member
                     // would run)
                     r.begin_object();
-                    let mut rev: ?i64 = nil;
-                    let mut kind: ?str = nil;
+                    let rev: ?i64 = nil;
+                    let kind: ?str = nil;
                     while (r.more()) {
                         let mk = r.next_key();
                         if (r.failed()) { return (nil, r.error()); }
@@ -337,30 +337,30 @@ impl DocRow {
 // (the pre-registered value checksum; mirrored bit-for-bit by the JS
 // twin — see the header for the one disclosed f64 normalization)
 
-fn fold_str(mut h: i64, s: str) -> i64 {
+fn fold_str(h: i64, s: str) -> i64 {
     for (let c of s) {
         h = h.wrapping_mul(31 as i64).wrapping_add(c.code() as i64);
     }
     return h;
 }
 
-fn fold_f64(mut h: i64, v: f64) -> i64 {
+fn fold_f64(h: i64, v: f64) -> i64 {
     return fold_str(h, f"{v}");
 }
 
-fn row_sum(mut h: i64, r: DocRow) -> i64 {
+fn row_sum(h: i64, r: DocRow) -> i64 {
     h = h.wrapping_mul(31 as i64).wrapping_add(r.id);
     h = fold_str(h, r.name);
-    let mut b: i64 = 0;
+    let b: i64 = 0;
     if (r.active) { b = 1; }
     h = h.wrapping_mul(31 as i64).wrapping_add(b);
     h = fold_f64(h, r.score);
     h = h.wrapping_mul(31 as i64).wrapping_add(r.vals.len() as i64);
-    for (let mut i = 0; i < r.vals.len(); i += 1) {
+    for (let i = 0; i < r.vals.len(); i += 1) {
         h = h.wrapping_mul(31 as i64).wrapping_add(r.vals[i]);
     }
     h = h.wrapping_mul(31 as i64).wrapping_add(r.tags.len() as i64);
-    for (let mut i = 0; i < r.tags.len(); i += 1) {
+    for (let i = 0; i < r.tags.len(); i += 1) {
         h = fold_str(h, r.tags[i]);
     }
     if (r.note == nil) {
@@ -375,8 +375,8 @@ fn row_sum(mut h: i64, r: DocRow) -> i64 {
 }
 
 fn rows_sum(rows: Vec<DocRow>) -> i64 {
-    let mut t: i64 = rows.len() as i64;
-    for (let mut i = 0; i < rows.len(); i += 1) {
+    let t: i64 = rows.len() as i64;
+    for (let i = 0; i < rows.len(); i += 1) {
         t = row_sum(t, rows[i]);
     }
     return t;
@@ -397,10 +397,10 @@ entry fn main() -> nil {
     let reps = reps_n();
     let alpha = alpha_vec();
     let doc = gen_doc(rows, vals, alpha);
-    let mut total: i64 = 0;
-    let mut first: i64 = 0;
-    let mut first_len: i32 = 0;
-    for (let mut r = 0; r < reps; r += 1) {
+    let total: i64 = 0;
+    let first: i64 = 0;
+    let first_len: i32 = 0;
+    for (let r = 0; r < reps; r += 1) {
         let d = decodeJson<JsonVec<DocRow>>(doc);
         if (d.1 != nil) {
             panic("json-roundtrip: decode failed");

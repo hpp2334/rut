@@ -224,7 +224,7 @@ fn the_six_pin_set_loads_and_duplicates_first_mount_wins() {
         // json's compiled rows: the Writer class binds from the binary;
         // the interface crosses on the surface; the satisfaction is THIS
         // app's own members (structural, local dispatch)
-        "use json::{ EncodeJsonError, JsonSerialize, JsonWriter };\n\nclass Item { name: str; n: i64; }\n\nimpl Item {\n    pub fn encode(self, mut w: JsonWriter) -> ?EncodeJsonError {\n        w.begin_object();\n        w.key(\"name\");\n        w.write_str(self.name);\n        w.end_object();\n        return nil;\n    }\n}\n\nentry fn main() -> str {\n    let mut w = JsonWriter::new();\n    let it = Item { name: \"a\", n: 1 };\n    let e = it.encode(w);\n    if (e != nil) { return \"err\"; }\n    return w.finish();\n}\n",
+        "use json::{ EncodeJsonError, JsonSerialize, JsonWriter };\n\nclass Item { name: str; n: i64; }\n\nimpl Item {\n    pub fn encode(self, w: JsonWriter) -> ?EncodeJsonError {\n        w.begin_object();\n        w.key(\"name\");\n        w.write_str(self.name);\n        w.end_object();\n        return nil;\n    }\n}\n\nentry fn main() -> str {\n    let w = JsonWriter::new();\n    let it = Item { name: \"a\", n: 1 };\n    let e = it.encode(w);\n    if (e != nil) { return \"err\"; }\n    return w.finish();\n}\n",
     )
     .expect("the six-pin world loads");
     assert!(diags.is_empty(), "{}", diags.join("; "));
@@ -441,7 +441,7 @@ fn mixed_dir_and_archive_of_one_pkg_bind_per_row() {
         &base,
         &rows,
         table,
-        "use strbuild::{ StringBuilder };\n\nentry fn main() -> str {\n    let mut b = StringBuilder::new();\n    b.append(\"mixed\");\n    return b.build();\n}\n",
+        "use strbuild::{ StringBuilder };\n\nentry fn main() -> str {\n    let b = StringBuilder::new();\n    b.append(\"mixed\");\n    return b.build();\n}\n",
     )
     .expect("the mixed world loads");
     assert!(diags.is_empty(), "{}", diags.join("; "));
@@ -521,7 +521,7 @@ fn a_concrete_class_lib_serves_from_the_bundle() {
     std::fs::create_dir_all(app.join("src")).unwrap();
     std::fs::write(
         app.join("src/mod.rut"),
-        "use strbuild::{ StringBuilder };\n\nentry fn main() -> str {\n    let mut b = StringBuilder::new();\n    b.append(\"hello, \");\n    b.append(\"cdn\");\n    return b.build();\n}\n",
+        "use strbuild::{ StringBuilder };\n\nentry fn main() -> str {\n    let b = StringBuilder::new();\n    b.append(\"hello, \");\n    b.append(\"cdn\");\n    return b.build();\n}\n",
     )
     .unwrap();
     write_lock(&app, &table);

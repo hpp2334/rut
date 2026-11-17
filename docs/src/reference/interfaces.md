@@ -15,7 +15,7 @@ pub interface Shape {
 }
 
 pub interface Decoder<E> {
-    fn decode(mut r: JsonReader) -> (Self, ?E);   // Self + generics legal
+    fn decode(r: JsonReader) -> (Self, ?E);   // Self + generics legal
 }
 ```
 
@@ -110,7 +110,7 @@ impl is the only impl form:
 
 ```rut
 pub interface Serializable {
-    fn encode(mut self, w: JsonWriter) -> nil;
+    fn encode(self, w: JsonWriter) -> nil;
 }
 
 class Point {
@@ -119,7 +119,7 @@ class Point {
 }
 
 impl Point {
-    pub fn encode(mut self, w: JsonWriter) -> nil {
+    pub fn encode(self, w: JsonWriter) -> nil {
         w.key("x"); w.write_i64(self.x);
         w.key("y"); w.write_i64(self.y);
     }
@@ -204,10 +204,10 @@ entry fn main() {
 
     let s: Shape = Square { side: 2.0 };   // 3. satisfaction assertion
 
-    let mut shapes: Vec<Shape> = Vec::new();  // 4. heterogeneous: itable boxes
+    let shapes: Vec<Shape> = Vec::new();  // 4. heterogeneous: itable boxes
     shapes.push(Circle { r: 1.0 });
     shapes.push(Square { side: 3.0 });
-    let mut total: f64 = 0.0;
+    let total: f64 = 0.0;
     for (let sh of shapes) { total += sh.area(); }
     log.info(f"total={total}");
 }
@@ -301,7 +301,7 @@ impl CountUp {
     pub fn new(n: i32) -> Self { return Self { n: n }; }
 
     [iterable] pub fn iterate(self, emit: fn(i32) -> bool) {
-        for (let mut i = 1; i <= self.n; i += 1) {
+        for (let i = 1; i <= self.n; i += 1) {
             if (!emit(i)) { return; }
         }
     }
@@ -355,7 +355,7 @@ the for-of weave read their slot directly, never an itable lookup;
 
 ```rut
 impl Db {
-    [disposal] fn dispose_db(mut self, cx: DisposalContext) {  // name FREE —
+    [disposal] fn dispose_db(self, cx: DisposalContext) {  // name FREE —
         self.file.close();                                      // the bracket
     }                                                           // designates
 }

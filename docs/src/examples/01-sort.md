@@ -58,8 +58,8 @@ struct Bank {
 entry fn serialize(c: opaque) -> str {
     let b = opaque::downcast<?Bank>(c);
     let xs = b.data;
-    let mut out = "[";
-    for (let mut i = 0; i < xs.len(); i += 1) {
+    let out = "[";
+    for (let i = 0; i < xs.len(); i += 1) {
         if (i > 0) {
             out = f"{out}, ";
         }
@@ -93,7 +93,7 @@ are an ordinary value, not a trap — the empty string means success:
 ```rut
 entry fn sort(c: opaque, algo: str) -> str {
     let b = opaque::downcast<?Bank>(c);
-    let mut unknown = false;
+    let unknown = false;
     when (algo) {
         "insertion" -> { insertion_sort(b.data); },
         "bubble"    -> { bubble_sort(b.data); },
@@ -128,10 +128,10 @@ use pouch::{ Vec };
 struct Bank { data: ?Vec<i32>; }   // inlined from above — the block runs alone
 
 entry fn fill(c: opaque, n: u32, seed: u32) {
-    let mut b = opaque::downcast<?Bank>(c);
+    let b = opaque::downcast<?Bank>(c);
     let fresh: Vec<i32> = Vec::new();
-    let mut x = seed | 1;         // the LCG needs an odd state
-    for (let mut i = 0; i < n as i32; i += 1) {
+    let x = seed | 1;         // the LCG needs an odd state
+    for (let i = 0; i < n as i32; i += 1) {
         x = (x.wrapping_mul(1664525)).wrapping_add(1013904223);
         fresh.push((x % 1000) as i32);
     }
@@ -145,7 +145,7 @@ entry fn main() {
     fill(c, 8, 42);
     let b = opaque::downcast<?Bank>(c);
     let xs = b.data;
-    let mut out = "";
+    let out = "";
     for (let x of xs) {
         out = f"{out} {x}";
     }
@@ -170,7 +170,7 @@ fns — the call-frame stack is the VM's, counted by the same fuel
 budget ([the bytecode VM](../core-concepts/the-vm.md)):
 
 ```rut
-fn quicksort(mut xs: ?Vec<i32>, lo: i32, hi: i32) {
+fn quicksort(xs: ?Vec<i32>, lo: i32, hi: i32) {
     if (lo >= hi) {
         return;
     }

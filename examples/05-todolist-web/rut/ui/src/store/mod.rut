@@ -81,11 +81,11 @@ impl<T> Source<T> {
     // vocabulary. ----------
 
     /// THE READ, handle-side: pull-on-read freshness through the store.
-    pub fn get(mut self) -> T {
+    pub fn get(self) -> T {
         return self.st.get<T>(self);
     }
     /// THE PLAIN WRITE, handle-side: one lane, str content-skip, bump.
-    pub fn set(mut self, v: T) -> nil {
+    pub fn set(self, v: T) -> nil {
         self.st.set<T, T>(self, v);
     }
     pub(pkg) fn atom_id(self) -> u32 { return self.id; }
@@ -98,7 +98,7 @@ impl<T> Source<T> {
 impl<T> Derived<T> {
     /// THE READ, handle-side. No set exists here — a derived is not
     /// writable (the type says so; the store says so again, loud).
-    pub fn get(mut self) -> T {
+    pub fn get(self) -> T {
         return self.st.get<T>(self);
     }
     // the shared read members. atom_id is the key the store reads
@@ -111,7 +111,7 @@ impl<T> Derived<T> {
 impl<A, R> Mutation<A, R> {
     /// THE INVOCATION, handle-side: the program runs through the ONE
     /// write lane (the cycle guard, the in-flight set, all of it).
-    pub fn run(mut self, arg: A) -> R {
+    pub fn run(self, arg: A) -> R {
         return self.st.set<A, R>(self, arg);
     }
     // the shared write member.
@@ -201,7 +201,7 @@ impl Store {
     // ---- minting: the four constructors ----
 
     /// The general cell: never equality-skips — every set bumps.
-    pub fn source<T>(mut self, v: T) -> Source<T> {
+    pub fn source<T>(self, v: T) -> Source<T> {
         let id = self.ids;
         self.ids += 1;
         self.kinds.put(id, 0);
@@ -210,7 +210,7 @@ impl Store {
 
     /// The str lane: a write of the CURRENT content marks nothing (the
     /// recorded asymmetry — == compiles StrCmp at this concrete lane).
-    pub fn source_str(mut self, v: str) -> Source<str> {
+    pub fn source_str(self, v: str) -> Source<str> {
         let id = self.ids;
         self.ids += 1;
         self.kinds.put(id, 0);
@@ -222,7 +222,7 @@ impl Store {
     /// DISCOVERED on first read (and re-discovered on every recompute),
     /// never declared — a stale declaration is impossible by
     /// construction.
-    pub fn derive<T>(mut self, f: fn(DeriveCtx) -> T) -> Derived<T> {
+    pub fn derive<T>(self, f: fn(DeriveCtx) -> T) -> Derived<T> {
         let id = self.ids;
         self.ids += 1;
         self.kinds.put(id, 1);
@@ -232,7 +232,7 @@ impl Store {
 
     /// The write program: the machine's verbs live in mutation fns so
     /// every multi-step write is a VALUE biz composes with store.set.
-    pub fn mutation<A, R>(mut self, f: fn(MutCtx, A) -> R) -> Mutation<A, R> {
+    pub fn mutation<A, R>(self, f: fn(MutCtx, A) -> R) -> Mutation<A, R> {
         let id = self.ids;
         self.ids += 1;
         self.kinds.put(id, 2);
@@ -248,7 +248,7 @@ impl Store {
     /// flush — the survey §4.3 turn-boundary refresh is retired).
     /// MODULE-PRIVATE: biz reads through the handles' `get` — the
     /// store itself is mint-and-observe surface only.
-    fn get<T, A requires Readable>(mut self, a: A) -> T {
+    fn get<T, A requires Readable>(self, a: A) -> T {
         let id = a.atom_id();
         let k = self.kind_of(id);
         if (k == 0) {
@@ -270,7 +270,7 @@ impl Store {
     /// lands here anyway.
     /// MODULE-PRIVATE: biz writes through the handles (`set`, `run`)
     /// — the compiler enforces what the grep gate pins.
-    fn set<A, R, W requires Writable>(mut self, w: W, arg: A) -> R {
+    fn set<A, R, W requires Writable>(self, w: W, arg: A) -> R {
         let id = w.atom_id();
         let k = self.kind_of(id);
         if (k == 2) {
@@ -315,7 +315,7 @@ impl Store {
     /// Recompute iff stale, ONCE. The cycle guard: a derived still on
     /// the in-flight stack that gets read again is a discovered cycle
     /// — a declaration bug in a closure, named loud, drift-style.
-    fn ensure_fresh<T>(mut self, id: u32) -> nil {
+    fn ensure_fresh<T>(self, id: u32) -> nil {
         for (let f of self.in_flight) {
             if (f == id) {
                 panic(f"store: derived #{id} reads itself — a discovered cycle");
@@ -369,7 +369,7 @@ impl Store {
         return false;
     }
 
-    fn note_seen(mut self, id: u32) -> nil {
+    fn note_seen(self, id: u32) -> nil {
         let deps = self.edges.get(id);
         let s: HashMap<u32, i64> = HashMap();
         for (let d of deps) {
@@ -378,7 +378,7 @@ impl Store {
         self.seen.put(id, s);
     }
 
-    fn record_edge(mut self, reader: u32, dep: u32) -> nil {
+    fn record_edge(self, reader: u32, dep: u32) -> nil {
         let es = self.edges.get(reader);
         es.push(dep);
     }
@@ -391,7 +391,7 @@ impl Store {
         return g;
     }
 
-    fn bump(mut self, id: u32) -> nil {
+    fn bump(self, id: u32) -> nil {
         self.gens.put(id, self.gen_of(id) + 1);
     }
 
@@ -422,7 +422,7 @@ impl Store {
     /// twin's successor: the DAG is now WHAT THE PROGRAM READS.
     pub fn deps_of<T, A requires Readable>(self, a: A) -> str {
         let deps = self.edges.get(a.atom_id());
-        let mut out = "";
+        let out = "";
         for (let d of deps) {
             if (out != "") {
                 out = f"{out}|{d}";

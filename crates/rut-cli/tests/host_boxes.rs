@@ -27,7 +27,7 @@ class Store {
 }
 impl Store {
     fn adopt(h: opaque) -> Self { return Self { h: h }; }
-    fn set(mut self, k: str, v: i64) -> nil { store_set(self.h, k, v); }
+    fn set(self, k: str, v: i64) -> nil { store_set(self.h, k, v); }
     fn get(self, k: str) -> i64 { return store_get(self.h, k); }
 }
 
@@ -287,7 +287,7 @@ impl Node {
 }
 
 entry fn churn(n: i64) -> nil {
-    for (let mut i = 0i64; i < n; i += 1) {
+    for (let i = 0i64; i < n; i += 1) {
         let node = Node::new(f"n{i}");
         node.tags.push(f"t{i}");
     }

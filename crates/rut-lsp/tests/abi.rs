@@ -114,7 +114,7 @@ fn complete_answers_locals_and_members_at_the_end_of_buffer() {
 
     // the locals tier (A1) at the same moment: `che⏐` after
     // `let mut checked …` — the binding rides the variable kind
-    let doc = "fn go() -> nil {\n    let mut checked: str = \" \";\n    che";
+    let doc = "fn go() -> nil {\n    let checked: str = \" \";\n    che";
     let uri = "file:///ws/eof-locals.rut";
     let last = doc.rfind('\n').map(|i| i + 1).unwrap_or(0);
     let line = doc[..last].matches('\n').count() as u32;
@@ -304,7 +304,7 @@ fn analyze_runs_the_checker_over_a_stamped_chain() {
     );
     // the doc's own pkg root, stamped the same way the extension's
     // workspace indexer stamps it
-    let doc = "use chkdep::{ Task };\nfn main() -> nil {\n    let mut checked: str = \" \";\n    checked = true;\n    let t = Task { title: \"x\", completed: false };\n}\n";
+    let doc = "use chkdep::{ Task };\nfn main() -> nil {\n    let checked: str = \" \";\n    checked = true;\n    let t = Task { title: \"x\", completed: false };\n}\n";
     let app_uri = "file:///ws/chk/app/mod.rut";
     let stamped = take(pool.run_until(lsp.index_mod_at(
         app_uri.to_string(),

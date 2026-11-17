@@ -729,8 +729,8 @@ async fn streamed(log: opaque, url: str) -> nil {
     let client = HttpClient::new();
     let resp = await client.get(url).build().send();
     let s = resp.byte_stream();
-    let mut total: i32 = 0;
-    let mut failed = false;
+    let total: i32 = 0;
+    let failed = false;
     while (true) {
         let c = await s.next();
         if (c == nil) {
@@ -1097,7 +1097,7 @@ async fn probe2(log: opaque, url: str) -> nil {
     let resp = await client.get(url).build().send();
     let s = resp.byte_stream();
     let c = await s.next();
-    let mut n: i32 = -1;
+    let n: i32 = -1;
     if (c != nil) {
         let v: bytes = c;
         n = v.len();
@@ -1408,8 +1408,8 @@ async fn streamed(log: opaque, url: str) -> nil {
     let resp = await client.get(url).build().send();
     logger_log(log, 2, f"status={resp.status()}");
     let s = resp.byte_stream();
-    let mut total: i32 = 0;
-    let mut failed = false;
+    let total: i32 = 0;
+    let failed = false;
     while (true) {
         let c = await s.next();
         if (c == nil) {

@@ -169,7 +169,7 @@
     },
     "keyword": {
       "name": "keyword.other.rut",
-      "match": "\\b(let|mut|enum|class|struct|interface|impl|requires|use|pub|static|is|host|fn|as|super|self|entry)\\b"
+      "match": "\\b(let|const|enum|class|struct|interface|impl|requires|use|pub|static|is|host|fn|as|super|self|entry)\\b"
     },
     "builtin-keyword": {
       "match": "\\b(?:(builtin)(?=\\s+(?:fn|primitive|impl|class)\\b)|(prelude)(?=\\s+builtin\\b)|(?<=builtin\\s)(primitive)(?=\\s+[A-Za-z_]))",

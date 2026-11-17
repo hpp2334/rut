@@ -58,7 +58,7 @@ consecutive messages from one sender mutes them), muted users
 rejected on rejoin, a `!stats` command, tick heartbeats:
 
 ```rut
-pub fn on_msg(mut self, user: str, text: str) {
+pub fn on_msg(self, user: str, text: str) {
     if (self.is_muted(user)) {
         self.say("muted", user);
     } else if (text == "!stats") {

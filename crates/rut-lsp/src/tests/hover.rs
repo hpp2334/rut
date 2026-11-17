@@ -394,14 +394,14 @@ n: i32;
 }
 impl Counter {
 // add one
-fn bump(mut self) -> i32 { self.n += 1; return self.n; }
+fn bump(self) -> i32 { self.n += 1; return self.n; }
 }
 fn use_it(c: Counter) -> i32 {
 return c.bump();
 }
 ";
     let md = hover_nth(src, "bump", 1).unwrap();
-    assert!(md.contains("fn bump(mut self) -> i32"), "{md}");
+    assert!(md.contains("fn bump(self) -> i32"), "{md}");
     assert!(md.contains("in `Counter`"), "{md}");
     assert!(md.contains("add one"), "doc: {md}");
 }
@@ -647,15 +647,15 @@ return acc;
 }
 
 #[test]
-fn loop_header_mut_renders_in_the_hover() {
-    // the header's `mut` rides the binding record — the hover shows the
-    // binding as it binds; a mut-less loop var stays unadorned
+fn loop_header_const_renders_in_the_hover() {
+    // the header's `const` rides the binding record — the hover shows
+    // the binding as it binds; a plain loop var stays unadorned
     let src = "\
 struct Task {
 done: bool;
 }
 fn flip(tasks: [Task]) -> nil {
-for (let mut t of tasks) {
+for (const t of tasks) {
 t.done = true;
 }
 for (let u of tasks) {
@@ -664,23 +664,29 @@ u.done = u.done;
 }
 ";
     let md = hover_nth(src, "t", 1).unwrap();
-    assert!(md.contains("mut t: Task"), "{md}");
+    assert!(md.contains("const t: Task"), "{md}");
     assert!(md.contains("loop variable"), "{md}");
     let md = hover_nth(src, "u", 1).unwrap();
     assert!(md.contains("u: Task"), "{md}");
-    assert!(!md.contains("mut"), "no `mut` without the flag: {md}");
-    // the indexed form too
+    assert!(!md.contains("const"), "no `const` without the flag: {md}");
+    // the let binding renders its head keyword too
     let src = "\
-fn f(n: i32) -> i32 {
+fn f() -> i32 {
+const base = 10;
 let acc = 0;
-for (let mut i = 0; i < n; i += 1) {
+for (let i = 0; i < base; i += 1) {
 acc += i;
 }
 return acc;
 }
 ";
+    let md = hover_nth(src, "base", 1).unwrap();
+    assert!(md.contains("const base: i32"), "{md}");
+    let md = hover_nth(src, "acc", 1).unwrap();
+    assert!(md.contains("let acc: i32"), "{md}");
     let md = hover_nth(src, "i", 1).unwrap();
-    assert!(md.contains("mut i: i32"), "{md}");
+    assert!(md.contains("i: i32"), "{md}");
+    assert!(!md.contains("const i"), "for-c carries no const: {md}");
 }
 
 #[test]

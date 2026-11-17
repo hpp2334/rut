@@ -431,7 +431,7 @@ fn codec_world(tag: &str) -> (PathBuf, Vec<u8>, String) {
     write(
         &root.join("pouch"),
         "src/mod.rut",
-        "pub class Vec<T> {\n    items: [T];\n}\n\nimpl<T> Vec<T> {\n    pub fn filled(v: T, n: i32) -> Self {\n        let mut items: [T] = [v; n];\n        return Self { items: items };\n    }\n\n    pub fn first(self) -> T {\n        return self.items[0];\n    }\n}\n",
+        "pub class Vec<T> {\n    items: [T];\n}\n\nimpl<T> Vec<T> {\n    pub fn filled(v: T, n: i32) -> Self {\n        let items: [T] = [v; n];\n        return Self { items: items };\n    }\n\n    pub fn first(self) -> T {\n        return self.items[0];\n    }\n}\n",
     );
     // codec — the json shape: the interface and public names in the
     // base, dev-deps for its own build

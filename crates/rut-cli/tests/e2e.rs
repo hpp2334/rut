@@ -219,10 +219,10 @@ fn case2_sharing() {
     let src = r#"
 struct Point { x: f32; y: f32 }
 entry fn main() -> nil {
-    let mut p = Point { x: 1, y: 2 };
+    let p = Point { x: 1, y: 2 };
     let q = p;
     p.x = 4;
-    let mut r = p;
+    let r = p;
     r.x = 9;
     Logger::new("app").info(f"q.x={q.x} p.x={p.x} r.x={r.x}");
     Logger::new("app").info(f"q==p {q == p}, r==p {r == p}");
@@ -303,10 +303,10 @@ fn find(o: opaque) -> ?Point {
 }
 entry fn main() -> nil {
     let log = Logger::new("app");
-    let mut pt = Point { x: 1, y: 2 };
+    let pt = Point { x: 1, y: 2 };
     let b = opaque(pt);
-    let mut p = opaque::downcast<Point>(b);
-    let mut q = opaque::downcast<Point>(b);
+    let p = opaque::downcast<Point>(b);
+    let q = opaque::downcast<Point>(b);
     p.x = 9;                       // through the recovery...
     q.y = 7;                       // ...through a second holder...
     pt.y = 5;                      // ...and back the other way
@@ -336,7 +336,7 @@ fn case3c_opaque_downcast_prim_value_and_nil_trap() {
     let src = r#"
 struct Point { x: i32; y: i32 }
 entry fn main() -> i32 {
-    let mut n = 5;
+    let n = 5;
     let b = opaque(n);
     n = 9;
     let v = opaque::downcast<i32>(b);
@@ -357,12 +357,12 @@ fn case4_sieve() {
     let src = r#"
 use pouch::{ Vec };
 fn sieve(limit: i32) -> Vec<i32> {
-    let mut marks = Vec<u8>::filled(0, limit + 1);
+    let marks = Vec<u8>::filled(0, limit + 1);
     let primes: Vec<i32> = Vec::new();
-    for (let mut i = 2; i <= limit; i += 1) {
+    for (let i = 2; i <= limit; i += 1) {
         if (marks[i] == 0) {
             primes.push(i);
-            let mut m = i * i;
+            let m = i * i;
             while (m <= limit) {
                 marks[m] = 1;
                 m += i;
@@ -418,7 +418,7 @@ struct B { v: i32 }
 impl A { pub fn get(self) -> i32 { return 10; } }
 impl B { pub fn get(self) -> i32 { return 20; } }
 entry fn main() -> nil {
-    let mut w: Get = A { v: 1 };
+    let w: Get = A { v: 1 };
     Logger::new("app").info(f"first={w.get()}");
     w = B { v: 2 };
     Logger::new("app").info(f"second={w.get()}");
@@ -499,7 +499,7 @@ entry fn main() -> nil {
 fn case8_fuel_traps_and_parks() {
     let src = r#"
 entry fn main() -> nil {
-    let mut i = 0;
+    let i = 0;
     while (true) {
         i += 1;
         if (i % 1000000 == 0) {
@@ -521,10 +521,10 @@ entry fn main() -> nil {
 fn overflow_traps_and_wrapping_escapes() {
     let src = r#"
 entry fn main() -> nil {
-    let mut x = 2147483647;
+    let x = 2147483647;
     x = x.wrapping_add(1);   // wrapping: fine
     Logger::new("app").info(f"x={x}");
-    let mut s = 1073741824;  // 1 << 30
+    let s = 1073741824;  // 1 << 30
     s = s.wrapping_shl(1);   // wrapping shl: bits shifted out are gone
     Logger::new("app").info(f"s={s}");
     s = s.wrapping_shl(1);   // same law
@@ -590,7 +590,7 @@ entry fn main() -> nil {
     Logger::new("app").info(f"b={1 == 56}");
     Logger::new("app").info(f"c={2 != 2}");
     if (3 != 4) { Logger::new("app").info("differs"); } else { Logger::new("app").info("equal"); }
-    let mut m: Vec<u8> = Vec::new();
+    let m: Vec<u8> = Vec::new();
     m.push(0x80);
     while (m.len() % 64 != 56) { m.push(0); }
     Logger::new("app").info(f"padded={m.len()}");
@@ -615,12 +615,12 @@ fn bare_vec_filled_with_a_value_reads_back() {
     let src = r#"
 use pouch::{ Vec };
 entry fn main() -> nil {
-    let mut k: Vec<u32> = Vec::filled(0, 4);
+    let k: Vec<u32> = Vec::filled(0, 4);
     Logger::new("app").info(f"a len={k.len()} k3={k[3]}");
     k[0] = 7;
     k[3] = 9;
     Logger::new("app").info(f"b k0={k[0]} k3={k[3]} len={k.len()}");
-    let mut j: Vec<u8> = Vec::filled(0, 3);
+    let j: Vec<u8> = Vec::filled(0, 3);
     j.push(1);
     Logger::new("app").info(f"c len={j.len()} j0={j[0]} j3={j[3]}");
     let e: Vec<u32> = Vec::filled(0, 0);
@@ -699,18 +699,22 @@ entry fn main() -> nil {
 }
 
 #[test]
-fn mut_binding_law_is_enforced() {
+fn const_law_is_enforced() {
+    // the shallow const law: a `const` binding's DIRECT reassign
+    // refuses; writes through it stay legal (see const_law.rs)
     let src = r#"
-struct P { x: i32 }
 entry fn main() -> nil {
-    let p = P { x: 1 };
-    p.x = 2;
+    const x = 1;
+    x = 2;
 }
 "#;
     let out = compile(src, "main");
     assert!(
-        out.graph.diags.iter().any(|d| d.msg.contains("let mut")),
-        "want the mut-binding law diag: {:?}",
+        out.graph
+            .diags
+            .iter()
+            .any(|d| d.msg.contains("a `const` binding is not reassignable")),
+        "want the const-law diag: {:?}",
         out.graph.diags
     );
     assert!(out.graph.program.is_none());
@@ -806,8 +810,8 @@ entry fn main() -> nil {
     Logger::new("app").info(classify(0));
     Logger::new("app").info(classify(-3));
     Logger::new("app").info(classify(7));
-    let mut late = 0;
-    for (let mut i = 0; i < 4; i += 1) {
+    let late = 0;
+    for (let i = 0; i < 4; i += 1) {
         if (i % 2 == 0) { late += 1; } else { late += 10; }
     }
     Logger::new("app").info(f"late={late}");
@@ -856,7 +860,7 @@ class Counter {
 }
 impl Counter {
     fn new() -> Self { return Self { n: 0 }; }
-    fn bump(mut self) -> nil { self.n += 1; }
+    fn bump(self) -> nil { self.n += 1; }
     fn count(self) -> i32 { return self.n; }
 }
 class Wrapped {
@@ -864,15 +868,15 @@ class Wrapped {
 }
 impl Wrapped {
     fn new() -> Self { return Self { inner: Counter::new() }; }
-    fn bump(mut self) -> nil { self.inner.bump(); }
+    fn bump(self) -> nil { self.inner.bump(); }
     fn count(self) -> i32 { return self.inner.count(); }
 }
 entry fn main() -> nil {
-    let mut c = Counter::new();
+    let c = Counter::new();
     c.bump();
     c.bump();
     Logger::new("app").info(f"count={c.count()}");
-    let mut w = Wrapped::new();
+    let w = Wrapped::new();
     w.bump();
     Logger::new("app").info(f"wrapped={w.count()}");
 }
@@ -889,9 +893,9 @@ fn when_statement_block_arms() {
     let src = r#"
 enum Light { Green, Yellow, Red }
 entry fn main() -> nil {
-    let mut dropped = 0;
-    let mut kept = 0;
-    for (let mut i = 0; i < 6; i += 1) {
+    let dropped = 0;
+    let kept = 0;
+    for (let i = 0; i < 6; i += 1) {
         when (i % 3) {
             0       -> { dropped += 1; },
             1, 2    -> { kept += 1; },
@@ -931,7 +935,7 @@ entry fn main() -> nil {
     Logger::new("app").info(hits[0]);
     Logger::new("app").info(hits[1]);
     Logger::new("app").info(hits[2]);
-    for (let mut i = 0; i < 50; i += 1) {
+    for (let i = 0; i < 50; i += 1) {
         Logger::new("app").info(describe(when (i % 2) { 0 -> Flavor::Sweet, else -> Flavor::Salty }));
     }
 }
@@ -1178,14 +1182,14 @@ entry fn main() -> nil {
     let a = bytes::from([1, 2, 3]);
     let b = bytes::from([1, 2, 3]);
     Logger::new("app").info(f"a={a.len()} eq={a == b} ne={a != z}");
-    let mut buf: Vec<u8> = Vec::new();
+    let buf: Vec<u8> = Vec::new();
     buf.push(9);
     buf.push(8);
     let f = freeze_bytes(buf);
     Logger::new("app").info(f"f={f.len()} f0={f[0]} f1={f[1]}");
     let enc = "rut".encode();
     Logger::new("app").info(f"enc={enc.len()} dec={enc.decode()}");
-    let mut sum: u8 = 0u8;
+    let sum: u8 = 0u8;
     for (let x of a) { sum = sum + x; }
     Logger::new("app").info(f"sum={sum}");
 }
@@ -1225,11 +1229,11 @@ fn str_index_ascii_and_utf8_and_for_of_array() {
 entry fn main() -> nil {
     let a = "ACGT";
     let u = "héllo";
-    let mut k = 0;
+    let k = 0;
     for (let c of u) { k += 1; }
     Logger::new("app").info(f"{a[0]}{a[3]}{u[1]} {k}");
     let xs = [10, 20, 30];
-    let mut s = 0;
+    let s = 0;
     for (let x of xs) { s += x; }
     Logger::new("app").info(f"s={s}");
 }
@@ -1263,12 +1267,12 @@ pub class Stack {
 }
 impl Stack {
     fn new() -> Self { return Self { items: Vec::new() }; }
-    fn push(mut self, id: i32) -> nil { self.items.push(Row { id: id }); }
+    fn push(self, id: i32) -> nil { self.items.push(Row { id: id }); }
     pub fn len(self) -> i32 { return self.items.len(); }
 }
 pub fn drain(s: Stack) -> i32 { return s.len(); }
 entry fn main() -> nil {
-    let mut st = Stack::new();
+    let st = Stack::new();
     st.push(1);
     Logger::new("app").info(f"drained {drain(st)}");
 }
@@ -1289,12 +1293,12 @@ pub class Gauge {
 }
 impl Gauge {
     pub fn new() -> Self { return Self { n: 0, w: 3 }; }
-    pub(super) fn bump(mut self) -> nil { self.n += self.w; }
+    pub(super) fn bump(self) -> nil { self.n += self.w; }
     fn raw(self) -> i32 { return self.n; }
     fn secret(self) -> i32 { return self.n * 100; }
 }
 entry fn main() -> nil {
-    let mut g = Gauge::new();
+    let g = Gauge::new();
     g.bump();
     g.bump();
     Logger::new("app").info(f"gauge={g.raw()} secret={g.secret()} w={g.w}");
@@ -1342,7 +1346,7 @@ fn make(depth: i32, v: i32) -> Node {
     return Node { value: v, left: l, right: r };
 }
 fn count(n: Node) -> i32 {
-    let mut c = 1;
+    let c = 1;
     if (n.left != nil) { c += count(n.left); }
     if (n.right != nil) { c += count(n.right); }
     return c;
@@ -1420,14 +1424,14 @@ impl<T> Vec<T> {
     fn new() -> Self { return Vec::with_capacity(0); }
     fn with_capacity(cap: i32) -> Self { return Self { buf: [nil; cap], len: 0 }; }
     fn len(self) -> i32 { return self.len; }
-    fn push(mut self, v: T) -> nil {
+    fn push(self, v: T) -> nil {
         if (self.len == self.buf.len()) {
-            let mut cap = self.buf.len() * 2;
+            let cap = self.buf.len() * 2;
             if (cap == 0) {
                 cap = 4;
             }
-            let mut next: [?T] = [nil; cap];
-            for (let mut i = 0; i < self.len; i += 1) {
+            let next: [?T] = [nil; cap];
+            for (let i = 0; i < self.len; i += 1) {
                 next[i] = self.buf[i];
             }
             self.buf = next;
@@ -1438,13 +1442,13 @@ impl<T> Vec<T> {
     fn get(self, i: i32) -> T { return self.buf[i]; }
     // v1.1: pop returns the value; an empty pop is the caller's contract
     // breach (guard with `len()`), not an error value
-    fn pop(mut self) -> T {
+    fn pop(self) -> T {
         self.len -= 1;
         return self.buf[self.len];
     }
 }
 entry fn main() -> nil {
-    let mut v: Vec<i32> = Vec::new();
+    let v: Vec<i32> = Vec::new();
     v.push(10);
     v.push(20);
     v.push(30);
@@ -1467,10 +1471,10 @@ fn vec_class_slice_syntax_runs() {
     let src = r#"
 use pouch::{ Vec };
 entry fn main() -> nil {
-    let mut v: Vec<i32> = Vec::new();
+    let v: Vec<i32> = Vec::new();
     v.push(1); v.push(2); v.push(3);
     v[0] = 10;
-    let mut sum = 0;
+    let sum = 0;
     for (let x of v) { sum += x; }
     let w: Vec<i32> = Vec::from([7, 8]);
     let z: Vec<u8> = Vec::filled(0, 3);
@@ -1498,7 +1502,7 @@ fn pouch_vec_via_module_loader_runs() {
 use pouch::{ Vec };
 use ink::{ Logger };
 entry fn main() -> nil {
-    let mut v: Vec<i32> = Vec::new();
+    let v: Vec<i32> = Vec::new();
     v.push(10);
     v.push(20);
     v.push(30);
@@ -1573,7 +1577,7 @@ use core::{ string_join };
 use pouch::{ Vec };
 use ink::{ Logger };
 entry fn main() -> nil {
-    let mut v: Vec<str> = Vec::new();
+    let v: Vec<str> = Vec::new();
     v.push("hello");
     v.push(" ");
     v.push("world");
@@ -1661,15 +1665,15 @@ fn fstring_accumulator_appends_in_place() {
     // bail cases (alias in a later part, different target) too.
     let src = r#"
 entry fn main() -> nil {
-    let mut s = "";
-    let mut i = 0;
+    let s = "";
+    let i = 0;
     while (i < 1000) { s = f"{s}ab"; i += 1; }
-    let mut a = "a";
+    let a = "a";
     a = f"{a}{a}";
     let base = "x";
     let b = f"{base}y";
-    let mut n = "";
-    let mut k = 0;
+    let n = "";
+    let k = 0;
     while (k < 5) { n = f"{n}{k},"; k += 1; }
     Logger::new("app").info(f"{s.len()} {a} {b} {base} {n}");
 }
@@ -1691,9 +1695,9 @@ fn fstring_accumulator_is_linear_at_100k() {
     // the deterministic linearity discriminator.
     let src = r#"
 entry fn main() -> nil {
-    let mut out = "";
+    let out = "";
     let t = "xy";
-    let mut i = 0;
+    let i = 0;
     while (i < 100000) {
         out = f"{out}{t}";
         i += 1;
@@ -1719,9 +1723,9 @@ fn fstring_accumulator_concat_lowers_with_dst_as_first_arg() {
     // prefix every step) fails THIS test, not just the wall clock.
     let src = r#"
 entry fn main() -> nil {
-    let mut out = "";
+    let out = "";
     let t = "xy";
-    let mut i = 0;
+    let i = 0;
     while (i < 4) { out = f"{out}{t}"; i += 1; }
 }
 "#;
@@ -1767,8 +1771,8 @@ fn plus_shape_concat_is_linear_bytes_decode_at_100k() {
     // is ≈ 5×10^9 octets of copying. Correctness: every octet survives.
     let src = r#"
 entry fn main() -> nil {
-    let mut b: [u8] = [0; 100000];
-    let mut i = 0;
+    let b: [u8] = [0; 100000];
+    let i = 0;
     while (i < 100000) { b[i] = (65 + i % 26) as u8; i += 1; }
     let out = bytes::from(b).decode();
     Logger::new("app").info(f"{out.len()}");
@@ -1787,10 +1791,10 @@ fn fstring_accumulator_with_alias_stays_correct_on_the_slow_path() {
     // the alias keeps the pre-loop text while `out` grows past it.
     let src = r#"
 entry fn main() -> nil {
-    let mut out = "head";
+    let out = "head";
     let alias = out;
     let t = "xy";
-    let mut i = 0;
+    let i = 0;
     while (i < 100000) {
         out = f"{out}{t}";
         i += 1;
@@ -1810,7 +1814,7 @@ fn string_join_and_vec_as_array_run() {
 use core::{ string_join };
 use pouch::{ Vec };
 entry fn main() -> nil {
-    let mut v: Vec<str> = Vec::new();
+    let v: Vec<str> = Vec::new();
     v.push("x"); v.push("y"); v.push("z");
     let e: Vec<str> = Vec::new();
     Logger::new("app").info(f"{string_join(v.as_array())} {string_join(e.as_array()).len()}");
@@ -2125,21 +2129,21 @@ class CountUp {
 impl CountUp {
     fn new(n: i32) -> Self { return Self { n: n }; }
     [iterable] fn iterate(self, emit: fn(i32) -> bool) {
-        for (let mut i = 1; i <= self.n; i += 1) {
+        for (let i = 1; i <= self.n; i += 1) {
             if (!emit(i)) { return; }
         }
     }
 }
 
 fn total(it: CountUp) -> i32 {
-    let mut acc: ?Acc = Acc { };
+    let acc: ?Acc = Acc { };
     it.iterate(fn (v: i32) -> bool { acc.total = acc.total + v; return true; });
     return acc.total;
 }
 
 entry fn main() -> nil {
     let log = Logger::new("it");
-    let mut acc: ?Acc = Acc { };
+    let acc: ?Acc = Acc { };
     for (let v of CountUp::new(9)) {
         if (v % 2 == 0) { continue; }
         if (v > 6) { break; }
@@ -2169,7 +2173,7 @@ entry fn main() -> nil {
     let log = Logger::new("ref");
     let xs: Vec<i32> = Vec::new();
     xs.push(1); xs.push(2); xs.push(3);
-    let mut sum = 0;
+    let sum = 0;
     for (let v of xs) { sum += v; }
     log.info(f"sum={sum}");
     let m: Vec<Vec<i32>> = Vec::new();
@@ -2178,9 +2182,9 @@ entry fn main() -> nil {
     log.info(f"rowlen={m[0].len()}");
     let rs: Vec<Row> = Vec::new();
     rs.push(Row { v: 5 });
-    for (let mut r of rs) { r.v = 7; }
+    for (let r of rs) { r.v = 7; }
     log.info(f"v={rs[0].v}");
-    let mut hits = 0;
+    let hits = 0;
     for (let v of xs) { if (v == 2) { hits += 1; } }
     log.info(f"hits={hits}");
 }
@@ -2263,17 +2267,17 @@ fn a9_repeat_fill_and_addr_of_roundtrip() {
 use pouch::{ Vec };
 struct P { x: i32 = 0 }
 entry fn main() -> nil {
-    let mut a: [i32] = [0; 8];
+    let a: [i32] = [0; 8];
     a[3] = 33;
     Logger::new("t").info(f"a3={a[3]} len={a.len()}");
-    let mut ps: [?P] = [nil; 2];
+    let ps: [?P] = [nil; 2];
     let p0 = P { x: 4 };
     ps[0] = p0;
     Logger::new("t").info(f"p0={ps[0].x} p1nil={ps[1] == nil}");
     let all: Vec<i32> = Vec::filled(9, 3);
     Logger::new("t").info(f"all={all[0]} {all[1]} {all[2]}");
     let shared = P { x: 5 };
-    let mut both: [?P] = [shared; 2];
+    let both: [?P] = [shared; 2];
     both[1].x = 6;
     Logger::new("t").info(f"shared={both[0].x}");
     let n: i32 = 3;
@@ -2331,7 +2335,7 @@ fn disposal_runs_at_refcount_zero() {
     let src = r#"
 use core::{ DisposalContext };
 struct P { x: i32 = 0; }
-impl P { [disposal] fn dispose(mut self, cx: DisposalContext) { Logger::new("t").info(f"dropped {self.x}"); } }
+impl P { [disposal] fn dispose(self, cx: DisposalContext) { Logger::new("t").info(f"dropped {self.x}"); } }
 entry fn main() -> nil { let p = P { x: 9 }; Logger::new("t").info("body done"); }
 "#;
     let (lines, trap, _) = run_case(src, 100_000);
@@ -2347,9 +2351,9 @@ fn disposal_fires_in_reverse_binding_order_at_frame_end() {
     let src = r#"
 use core::{ DisposalContext };
 struct A { }
-impl A { [disposal] fn dispose_a(mut self, cx: DisposalContext) { Logger::new("t").info("dispose:a"); } }
+impl A { [disposal] fn dispose_a(self, cx: DisposalContext) { Logger::new("t").info("dispose:a"); } }
 struct B { }
-impl B { [disposal] fn dispose_b(mut self, cx: DisposalContext) { Logger::new("t").info("dispose:b"); } }
+impl B { [disposal] fn dispose_b(self, cx: DisposalContext) { Logger::new("t").info("dispose:b"); } }
 entry fn main() -> nil {
     let a = A { };
     let b = B { };
@@ -2368,9 +2372,9 @@ fn dispose_runs_when_a_binding_is_rebound_mid_frame() {
     let src = r#"
 use core::{ DisposalContext };
 struct A { n: i32 = 0; }
-impl A { [disposal] fn release(mut self, cx: DisposalContext) { Logger::new("t").info(f"gone {self.n}"); } }
+impl A { [disposal] fn release(self, cx: DisposalContext) { Logger::new("t").info(f"gone {self.n}"); } }
 entry fn main() -> nil {
-    let mut a = A { n: 1 };
+    let a = A { n: 1 };
     a = A { n: 2 };
     Logger::new("t").info("body done");
 }
@@ -2389,7 +2393,7 @@ fn dispose_cascades_through_a_record_field() {
     let src = r#"
 use core::{ DisposalContext };
 struct Kid { }
-impl Kid { [disposal] fn release_kid(mut self, cx: DisposalContext) { Logger::new("t").info("kid gone"); } }
+impl Kid { [disposal] fn release_kid(self, cx: DisposalContext) { Logger::new("t").info("kid gone"); } }
 struct Parent { kid: ?Kid = nil; }
 entry fn main() -> nil {
     let p = Parent { kid: Kid { } };
@@ -2406,7 +2410,7 @@ fn a_trap_in_dispose_propagates() {
     let src = r#"
 use core::{ DisposalContext };
 struct A { }
-impl A { [disposal] fn boom(mut self, cx: DisposalContext) { panic("boom in dispose"); } }
+impl A { [disposal] fn boom(self, cx: DisposalContext) { panic("boom in dispose"); } }
 entry fn main() -> nil {
     let a = A { };
     Logger::new("t").info("body done");
@@ -2424,7 +2428,7 @@ fn the_vm_survives_a_trapping_dispose_for_the_next_call() {
     let src = r#"
 use core::{ DisposalContext };
 struct A { }
-impl A { [disposal] fn boom(mut self, cx: DisposalContext) { panic("boom in dispose"); } }
+impl A { [disposal] fn boom(self, cx: DisposalContext) { panic("boom in dispose"); } }
 entry fn main() -> nil {
     let a = A { };
     Logger::new("t").info("body done");
@@ -2446,14 +2450,15 @@ entry fn next_call() -> i64 {
 }
 
 #[test]
-fn disposal_pins_the_mut_self_receiver() {
+fn disposal_takes_self_first() {
     // the engine calls the `[disposal]` member on the pinned cell — a
-    // by-value `self` spelling refuses (the cx param + nil ret are the
-    // ordinary descriptor signature check; the NAME stays free)
+    // receiver-less spelling refuses (the cx param + nil ret are the
+    // ordinary descriptor signature check; the NAME stays free). The
+    // receiver itself is a plain `self` — the `mut self` form is gone.
     let src = r#"
 use core::{ DisposalContext };
 struct P { x: i32 = 0; }
-impl P { [disposal] fn dispose(self, cx: DisposalContext) { } }
+impl P { [disposal] fn dispose(cx: DisposalContext) { } }
 entry fn main() -> nil { }
 "#;
     let out = compile(&with_logger_use(src), "main");
@@ -2461,7 +2466,7 @@ entry fn main() -> nil { }
         out.graph
             .diags
             .iter()
-            .any(|d| d.msg.contains("`[disposal]` member takes `mut self` first")),
+            .any(|d| d.msg.contains("`[disposal]` member takes `self` first")),
         "{:?}",
         out.graph.diags
     );
@@ -2472,7 +2477,7 @@ fn disposal_refuses_a_generic_target() {
     let src = r#"
 use core::{ DisposalContext };
 class Box2<T> { v: T; }
-impl<T> Box2<T> { [disposal] fn dispose(mut self, cx: DisposalContext) { } }
+impl<T> Box2<T> { [disposal] fn dispose(self, cx: DisposalContext) { } }
 entry fn main() -> nil { }
 "#;
     let out = compile(&with_logger_use(src), "main");
@@ -2751,7 +2756,7 @@ use pouch::{ Vec };
 struct Inner { v: i32 = 0; }
 struct Outer { inner: Inner; nums: Vec<i32>; tag: str; }
 entry fn main() -> nil {
-    let mut o = Outer { inner: Inner { v: 1 }, nums: Vec::new(), tag: "x" };
+    let o = Outer { inner: Inner { v: 1 }, nums: Vec::new(), tag: "x" };
     o.nums.push(7);
     let snap = o;
     o.inner.v = 99;
@@ -2796,7 +2801,7 @@ fn dbg_freeze() {
     let src = r#"
 use pouch::{ Vec };
 entry fn f(s: str) -> (bytes, str) {
-    let mut out: Vec<u8> = Vec::new();
+    let out: Vec<u8> = Vec::new();
     out.push(7);
     return (freeze_bytes(out), s);
 }
@@ -2848,14 +2853,14 @@ entry fn main() -> nil {
     if (w == "world") { log.info("eq"); }
     let u = "héllo wörld";
     log.info(f"[{u.slice(1, 5)}]");
-    let mut parts: Vec<str> = Vec::new();
+    let parts: Vec<str> = Vec::new();
     parts.push(s.slice(0, 5));
     parts.push(u.slice(6, 11));
     log.info(f"[{parts[0]}][{parts[1]}]");
-    let mut joined = parts[0];
+    let joined = parts[0];
     joined = f"{joined}!";
     log.info(f"[{joined}] base=[{parts[0]}]");
-    let mut n = 0;
+    let n = 0;
     for (let c of w) { n += 1; }
     log.info(f"n={n}");
 }
@@ -2902,16 +2907,16 @@ use pouch::{ Vec };
 use ink::{ Logger };
 entry fn main() -> nil {
     let log = Logger::new("win");
-    let mut v: Vec<i32> = Vec::new();
+    let v: Vec<i32> = Vec::new();
     v.push(1); v.push(2); v.push(3); v.push(4);
-    let mut w = v.slice(1, 3);
+    let w = v.slice(1, 3);
     log.info(f"[{w[0]} {w[1]}] len={w.len()}");
     w[0] = 20;
     log.info(f"v1={v[1]} w0={w[0]}");
-    let mut w2 = w.slice(0, 1);
+    let w2 = w.slice(0, 1);
     w2[0] = 99;
     log.info(f"v1={v[1]}");
-    let mut s = 0;
+    let s = 0;
     for (let x of w) { s += x; }
     log.info(f"s={s}");
     v.push(5);
@@ -2940,7 +2945,7 @@ fn array_views_are_fixed_length_and_bounds_checked() {
 use pouch::{ Vec };
 use ink::{ Logger };
 entry fn main() -> nil {
-    let mut v: Vec<i32> = Vec::new();
+    let v: Vec<i32> = Vec::new();
     v.push(1); v.push(2);
     let w = v.slice(0, 2);
     w.push(3);
@@ -3018,7 +3023,7 @@ class Gen {
 impl Gen {
     fn new(n: i32) -> Self { return Self { n: n }; }
     [iterable] fn iterate(self, emit: fn(i32) -> bool) {
-        let mut i = 0;
+        let i = 0;
         while (i < self.n) {
             if (!emit(i)) { return; }
             i += 1;
@@ -3028,7 +3033,7 @@ impl Gen {
 
 entry fn main() -> nil {
     let log = Logger::new("cap");
-    let mut cur = Box2 { v: -1 };
+    let cur = Box2 { v: -1 };
     for (let b of Gen::new(3)) {
         cur = Box2 { v: b * 100 };
     }
@@ -3049,10 +3054,10 @@ use pouch::{ Vec };
 use ink::{ Logger };
 entry fn main() -> nil {
     let log = Logger::new("cap");
-    let mut xs: Vec<i32> = Vec::new();
+    let xs: Vec<i32> = Vec::new();
     xs.push(1);
     let get = fn() -> i32 { return xs.len(); };
-    let mut ys: Vec<i32> = Vec::new();
+    let ys: Vec<i32> = Vec::new();
     ys.push(9); ys.push(9);
     xs = ys;
     log.info(f"see={get()}");
@@ -3072,7 +3077,7 @@ use pouch::{ Vec };
 use ink::{ Logger };
 entry fn main() -> nil {
     let log = Logger::new("cap");
-    let mut zs: Vec<i32> = Vec::new();
+    let zs: Vec<i32> = Vec::new();
     zs.push(5);
     let set = fn() -> bool { zs = Vec::new(); zs.push(7); return true; };
     set();
@@ -3093,7 +3098,7 @@ fn primitive_capture_stays_a_copy() {
 use ink::{ Logger };
 entry fn main() -> nil {
     let log = Logger::new("cap");
-    let mut count = 0;
+    let count = 0;
     let bump = fn() -> i32 { count = count + 1; return count; };
     let a = bump();
     let b = bump();
@@ -3142,7 +3147,7 @@ class Gen {
 impl Gen {
     fn new(n: i32) -> Self { return Self { n: n }; }
     [iterable] fn iterate(self, emit: fn(i32) -> bool) {
-        let mut i = 0;
+        let i = 0;
         while (i < self.n) {
             if (!emit(i)) { return; }
             i += 1;
@@ -3152,14 +3157,14 @@ impl Gen {
 
 entry fn main() -> nil {
     let log = Logger::new("cap");
-    let mut picked = Box2 { v: -1 };
+    let picked = Box2 { v: -1 };
     for (let a of Gen::new(2)) {
         for (let b of Gen::new(2)) {
             if (b == 1) { picked = Box2 { v: a * 10 + b }; }
         }
     }
     log.info(f"picked={picked.v}");
-    let mut shared: Vec<i32> = Vec::new();
+    let shared: Vec<i32> = Vec::new();
     shared.push(0);
     for (let a of Gen::new(2)) {
         shared = Vec::new();
@@ -3197,13 +3202,13 @@ impl Count3 {
 
 entry fn main() -> nil {
     let log = Logger::new("cap");
-    let mut grab: ?(fn() -> i32) = nil;
+    let grab: ?(fn() -> i32) = nil;
     let src: [i32] = [7, 8, 9];
     for (let x of src) {
         grab = fn() -> i32 { return x; };
     }
     let fused = grab();
-    let mut grab2: ?(fn() -> i32) = nil;
+    let grab2: ?(fn() -> i32) = nil;
     for (let y of Count3::new()) {
         grab2 = fn() -> i32 { return y; };
     }
@@ -3313,50 +3318,52 @@ entry fn main() -> nil {
     assert_eq!(lines, vec!["42 Eat an apple false"]);
 }
 
-// ---- `mut` in loop headers — the CLI e2e lane's pins (phase 5) ----
+// ---- loop variables + the const law — the CLI e2e lane's pins ----
 //
-// The mut-binding law now covers BOTH for forms: the header's `mut` is
-// the write law for the loop variable. The plan's 9 shapes map here as:
+// Mutability is the default; `const` is the shallow opt-out. The law's
+// shapes map here as:
 //
-//   1. for-of `let mut` element write — the user's todo snippet
-//      verbatim (`toggle_task` + `format_list`), the canonical happy
-//      path, run end to end below.
-//   2. for-of plain `let` field write → the header-naming error (also
-//      pinned at the driver level:
-//      rut-driver/tests/loop_mut_law.rs::for_of_plain_let_field_write_diagnoses).
-//   3. for-of plain `let` whole-var reassign → error (driver twin:
-//      for_of_plain_let_whole_var_reassign_diagnoses).
-//   4. for-c body assigns the induction var without `mut` → error
-//      (driver twin: for_c_body_assignment_without_mut_diagnoses).
-//   5. for-c update clause `i += 1` without `mut` → error, the
-//      uniform-law case (driver twin:
-//      for_c_update_clause_without_mut_diagnoses).
-//   6. `for (let mut i = 0; ..)` works end to end — already pinned in
-//      this lane by case4_sieve (its `for (let mut i = 2; i <= limit;
-//      i += 1)` runs the full pipeline) and case8_fuel_traps_and_parks;
+//   1. for-of field write through a plain loop var — the user's todo
+//      snippet verbatim (`toggle_task` + `format_list`), the canonical
+//      happy path, run end to end below.
+//   2. for-of plain `let` field write compiles (the default's proof)
+//      — for_of_plain_let_field_write_compiles.
+//   3. for-of `const` whole-var reassign → the const-law error
+//      (for_of_const_whole_var_reassign_is_refused; driver twin:
+//      rut-driver/tests/const_law.rs::
+//      for_of_const_whole_var_reassign_is_refused).
+//   4. for-c body assigns the induction var → legal (the loop's
+//      update machinery is not user reassignment) —
+//      for_c_body_assignment_compiles.
+//   5. `const` in a for-c header → refused at parse (the induction
+//      variable is reassigned by the loop) —
+//      for_c_const_header_is_refused; driver twin:
+//      const_law.rs::for_c_const_header_is_refused.
+//   6. `for (let i = 0; ..)` works end to end — already pinned in
+//      this lane by case4_sieve and case8_fuel_traps_and_parks;
 //      cross-referenced, not duplicated.
-//   7. the capture law × mut: a closure writes through a captured
-//      `let mut` for-of var into the shared cell; the non-mut capture
-//      write is refused (driver twins:
-//      closure_capture_of_mut_for_of_var_writes_through_the_shared_cell /
-//      closure_capture_of_plain_let_for_of_var_write_diagnoses).
-//   8. async for-of with a `let mut` var — pinned at the driver level
-//      (loop_mut_law.rs::async_for_of_mut_var_runs /
-//      async_for_of_plain_let_write_diagnoses, compile → link → verify
+//   7. the capture law × const: a closure's reassign of a captured
+//      `const` refuses (closure_capture_of_const_reassign_is_refused;
+//      driver twin: const_law.rs::closure_capture_of_const_reassign_is_refused);
+//      a write THROUGH a captured binding lands in the shared cell
+//      (closure_capture_of_mut_loop_var_writes_through_the_shared_cell).
+//   8. async for-of — pinned at the driver level
+//      (const_law.rs::async_for_of_const_var_runs /
+//      async_for_of_const_reassign_diagnoses, compile → link → verify
 //      → VM → async drive through the futures pair); this lane mounts
 //      no async host world, so duplicating that harness 1:1 would buy
 //      nothing — cross-referenced, not duplicated.
-//   9. fmt: `mut` survives parse→fmt→parse — pinned in
-//      rut-fmt/tests/pin.rs::loop_header_mut_survives_parse_fmt_parse
+//   9. fmt: `const` survives parse→fmt→parse — pinned in
+//      rut-fmt/tests/pin.rs::loop_header_const_survives_parse_fmt_parse
 //      (byte-level round-trip + idempotence) and VM-verified in
-//      rut-fmt/tests/semantic_equiv.rs::loop_header_mut_survives_formatting.
+//      rut-fmt/tests/semantic_equiv.rs::loop_header_const_survives_formatting.
 
 /// The canonical happy path: the user's todo snippet verbatim. The
-/// header's `mut` is what makes `task.completed = !task.completed`
-/// legal — and the write must land on the STORED elements, so the
-/// format after the toggle sees the flipped flags.
+/// loop variable is mutable by default, so `task.completed =
+/// !task.completed` is legal — and the write must land on the STORED
+/// elements, so the format after the toggle sees the flipped flags.
 #[test]
-fn mut_loop_todo_toggle_and_format_list_end_to_end() {
+fn loop_todo_toggle_and_format_list_end_to_end() {
     let src = r#"
 use pouch::{ Vec };
 use ink::{ Logger };
@@ -3371,13 +3378,13 @@ class TodoList {
 }
 impl TodoList {
     fn new() -> Self { return Self { tasks: Vec::new() }; }
-    fn add(mut self, title: str) -> nil { self.tasks.push(Task { title: title, completed: false }); }
+    fn add(self, title: str) -> nil { self.tasks.push(Task { title: title, completed: false }); }
     fn toggle_task(self) -> nil {
-        for (let mut task of self.tasks) { task.completed = !task.completed; }
+        for (let task of self.tasks) { task.completed = !task.completed; }
     }
     fn format_list(self) -> str {
-        let mut out = "";
-        for (let mut task of self.tasks) {
+        let out = "";
+        for (let task of self.tasks) {
             let mark = if (task.completed) { "[x] " } else { "[ ] " };
             out = f"{out}{mark}{task.title}";
         }
@@ -3387,7 +3394,7 @@ impl TodoList {
 
 entry fn main() -> nil {
     let log = Logger::new("todo");
-    let mut list = TodoList::new();
+    let list = TodoList::new();
     list.add("buy milk");
     list.add("walk dog");
     list.add("write rut");
@@ -3408,8 +3415,9 @@ entry fn main() -> nil {
 }
 
 #[test]
-fn for_of_plain_let_field_write_names_the_loop_header() {
-    // the header-naming fix, spelled through the CLI lane's compile
+fn for_of_plain_let_field_write_compiles() {
+    // the loop variable is mutable by default: a field write through it
+    // compiles clean (no header flag to spell)
     let src = r#"
 struct Task { completed: bool }
 entry fn main() -> nil {
@@ -3421,44 +3429,43 @@ entry fn main() -> nil {
 "#;
     let out = compile(src, "main");
     assert!(
-        out.graph.diags.iter().any(|d| d.msg.contains(
-            "assignment through `t` requires `mut` in the loop header: `for (let mut t of ...)` (the mut-binding law)"
-        )),
-        "want the loop-header law diag: {:?}",
+        out.graph.diags.is_empty(),
+        "the field write is legal: {:?}",
         out.graph.diags
     );
-    assert!(out.graph.program.is_none());
+    assert!(out.graph.program.is_some());
 }
 
 #[test]
-fn for_of_plain_let_whole_var_reassign_names_the_loop_header() {
+fn for_of_const_whole_var_reassign_is_refused() {
+    // the const element view refuses the binding's own reassignment
     let src = r#"
 struct Task { completed: bool }
 entry fn main() -> nil {
     let tasks = [Task { completed: false }];
-    for (let t of tasks) {
+    for (const t of tasks) {
         t = Task { completed: true };
     }
 }
 "#;
     let out = compile(src, "main");
     assert!(
-        out.graph.diags.iter().any(|d| d.msg.contains(
-            "assignment to `t` requires `mut` in the loop header: `for (let mut t of ...)` (the mut-binding law)"
-        )),
-        "want the loop-header law diag: {:?}",
+        out.graph
+            .diags
+            .iter()
+            .any(|d| d.msg.contains("a `const` binding is not reassignable")),
+        "want the const-law diag: {:?}",
         out.graph.diags
     );
     assert!(out.graph.program.is_none());
 }
 
 #[test]
-fn for_c_body_assignment_names_the_loop_header() {
-    // the update slot stays read-only (`i` as a no-op update expr); the
-    // BODY assigns the induction var — same law, same fix
+fn for_c_body_assignment_compiles() {
+    // the induction var is mutable: the BODY assigning it compiles
     let src = r#"
 entry fn main() -> nil {
-    let mut n = 3;
+    let n = 3;
     for (let i = 0; n > 0; i) {
         i = i + 1;
         n -= 1;
@@ -3467,31 +3474,31 @@ entry fn main() -> nil {
 "#;
     let out = compile(src, "main");
     assert!(
-        out.graph.diags.iter().any(|d| d.msg.contains(
-            "assignment to `i` requires `mut` in the loop header: `for (let mut i = ...)` (the mut-binding law)"
-        )),
-        "want the loop-header law diag: {:?}",
+        out.graph.diags.is_empty(),
+        "the body assignment is legal: {:?}",
         out.graph.diags
     );
-    assert!(out.graph.program.is_none());
+    assert!(out.graph.program.is_some());
 }
 
 #[test]
-fn for_c_update_clause_names_the_loop_header() {
-    // `i += 1` in the update clause is author code: the uniform-law case
+fn for_c_const_header_is_refused() {
+    // the induction variable is reassigned by the loop itself — `const`
+    // in a for-c header refuses at parse (the one dedicated diag)
     let src = r#"
 entry fn main() -> nil {
-    for (let i = 0; i < 3; i += 1) {
+    for (const i = 0; i < 3; i += 1) {
         Logger::new("law").info(f"{i}");
     }
 }
 "#;
     let out = compile(src, "main");
     assert!(
-        out.graph.diags.iter().any(|d| d.msg.contains(
-            "assignment to `i` requires `mut` in the loop header: `for (let mut i = ...)` (the mut-binding law)"
-        )),
-        "want the loop-header law diag: {:?}",
+        out.graph
+            .diags
+            .iter()
+            .any(|d| d.msg.contains("reassigned by the loop")),
+        "want the for-c const refusal: {:?}",
         out.graph.diags
     );
     assert!(out.graph.program.is_none());
@@ -3509,7 +3516,7 @@ struct Flag { on: bool }
 entry fn main() -> nil {
     let log = Logger::new("cap");
     let flags = [Flag { on: false }];
-    for (let mut f of flags) {
+    for (let f of flags) {
         let set = fn () -> bool { f.on = true; return f.on; };
         set();
     }
@@ -3522,34 +3529,26 @@ entry fn main() -> nil {
 }
 
 #[test]
-fn closure_capture_of_plain_loop_var_write_is_refused() {
-    // the capture inherits the binding's (absent) mut: the write is
-    // refused inside the closure frame too. Note the refusal diag is the
-    // GENERIC mut-binding message here ("field assignment requires a
-    // `let mut` binding"), not the loop-header-naming variant: the
-    // closure frame's copy of the captured var is a fresh local without
-    // the loop_var flag, so the fix clause names a `let mut` the author
-    // cannot spell for a loop var. The refusal itself is the law — this
-    // is the behavior phase 2 landed and the driver twin
-    // (loop_mut_law.rs::closure_capture_of_plain_let_for_of_var_write_diagnoses)
-    // pins with containment asserts; flagged to the plan as a diagnostic
-    // quality note, not changed (no compiler edits in this phase).
+fn closure_capture_of_const_reassign_is_refused() {
+    // the capture inherits the const flag: the closure frame's reassign
+    // of the captured binding refuses through the shared const lane
     let src = r#"
-struct Flag { on: bool }
 entry fn main() -> nil {
-    let flags = [Flag { on: false }];
-    for (let f of flags) {
-        let set = fn () -> bool { f.on = true; return f.on; };
-        set();
-    }
+    const base = 10;
+    let bump = fn () -> i32 {
+        base = base + 1;
+        return base;
+    };
+    bump();
 }
 "#;
     let out = compile(src, "main");
     assert!(
-        out.graph.diags.iter().any(|d| d.msg.contains("mut")
-            && d.msg.contains("binding")
-            && d.msg.contains("the mut-binding law")),
-        "want a mut-binding law refusal for the captured plain loop var: {:?}",
+        out.graph
+            .diags
+            .iter()
+            .any(|d| d.msg.contains("a `const` binding is not reassignable")),
+        "want the const-law refusal for the captured const: {:?}",
         out.graph.diags
     );
     assert!(out.graph.program.is_none());

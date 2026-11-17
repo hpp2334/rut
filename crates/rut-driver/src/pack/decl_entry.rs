@@ -213,7 +213,7 @@ fn method_line(
 fn params_spelled(has_self: bool, tys: &[String]) -> String {
     let mut ps: Vec<String> = Vec::with_capacity(tys.len() + 1);
     if has_self {
-        ps.push("mut self".to_string());
+        ps.push("self".to_string());
     }
     for (i, t) in tys.iter().enumerate() {
         ps.push(format!("_{i}: {t}"));

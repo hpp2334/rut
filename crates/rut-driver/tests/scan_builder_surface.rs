@@ -112,7 +112,7 @@ fn scan_stops_at_the_first_nonzero_class_and_packs_index_plus_class() {
     // else 0 (keep scanning); the packed result is (stop << 8) | class
     assert_ok(
         "entry fn main() -> i32 {
-    let mut t: [u8] = [0; 257];
+    let t: [u8] = [0; 257];
     t[0x5B] = 7;  // '[' -> 7
     t[0x7B] = 9;  // '{' -> 9
     let s = \"ab [cd {ef\";
@@ -136,12 +136,12 @@ fn scan_table_last_entry_serves_every_high_codepoint() {
     // rule); a 257-entry table isolates the high slot instead
     assert_ok(
         "entry fn main() -> i32 {
-    let mut t: [u8] = [0, 5];
+    let t: [u8] = [0, 5];
     let r = \"abc\".scan(0, t);
     if ((r >> 8) as i32 != 0 || (r & 255) as i32 != 5) { return 1; }
     let r2 = \"\\u{e9}x\".scan(0, t);
     if ((r2 >> 8) as i32 != 0 || (r2 & 255) as i32 != 5) { return 2; }
-    let mut t2: [u8] = [0; 257];
+    let t2: [u8] = [0; 257];
     t2[0xE9] = 3; // the é slot (0xE9 < 256: its own entry)
     let r3 = \"ab\\u{e9}c\".scan(0, t2);
     if ((r3 >> 8) as i32 != 2 || (r3 & 255) as i32 != 3) { return 3; }
@@ -162,7 +162,7 @@ fn scan_walks_codepoints_not_octets_on_non_ascii_text() {
     // skips whole scalars rather than classifying octets
     assert_ok(
         "entry fn main() -> i32 {
-    let mut t: [u8] = [0; 257];
+    let t: [u8] = [0; 257];
     t[0x62] = 2; // 'b' -> 2
     let s = \"a\\u{e9}\\u{1F600}b\"; // 4 codepoints, 8 octets
     let r = s.scan(0, t);
@@ -180,8 +180,8 @@ fn scan_matches_a_rut_side_reference_over_all_byte_values() {
     // table says — at the codepoint with its class, or the end with 0
     assert_ok(
         "entry fn main() -> i32 {
-    let mut t: [u8] = [0; 257];
-    let mut c: i32 = 0;
+    let t: [u8] = [0; 257];
+    let c: i32 = 0;
     while (c < 256) {
         t[c] = 1;
         let s = str::from_code(c as u32);
@@ -224,14 +224,14 @@ fn scan_cross_check_reassembles_through_the_fstring_accumulator() {
     // path) reassembles the pieces
     assert_ok(
         "entry fn main() -> i32 {
-    let mut dig: [u8] = [1; 257];
-    let mut i: i32 = 0x30;
+    let dig: [u8] = [1; 257];
+    let i: i32 = 0x30;
     while (i <= 0x39) { dig[i] = 0; i += 1; }
     let s = \"12345abc\";
     let r = s.scan(0, dig);
     let stop = (r >> 8) as i32;
     if (stop != 5 || (r & 255) != 1) { return 1; }
-    let mut out = \"\";
+    let out = \"\";
     out = f\"{out}{s.slice(stop, s.len())}\";
     out = f\"{out}-\";
     out = f\"{out}{s.slice(0, stop)}\";

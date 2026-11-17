@@ -71,7 +71,7 @@ pub class MyMap {
 
 impl MyMap {
     pub fn new(cap: i32) -> Self { return Self { h: my_map_new(cap) }; }
-    pub fn set(mut self, k: str, v: opaque) -> nil { my_map_set(self.h, k, v); }
+    pub fn set(self, k: str, v: opaque) -> nil { my_map_set(self.h, k, v); }
     pub fn get(self, k: str) -> ?opaque { return my_map_get(self.h, k); }
     pub fn size(self) -> i32 { return my_map_size(self.h); }
 }

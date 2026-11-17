@@ -127,7 +127,7 @@ class Node  { child: ?Node; }
 class Child { back: ?Weak<Node>; }   // the observer's weak back-pointer
 
 impl Child {
-    [disposal] fn release(mut self, cx: DisposalContext) {
+    [disposal] fn release(self, cx: DisposalContext) {
         // the parent's death released self through the field walk,
         // and the parent's weak list was nulled before any of that
         // user code ran — the back-pointer reads nil from in here:

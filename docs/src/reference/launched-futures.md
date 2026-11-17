@@ -21,7 +21,7 @@ vocabulary ([async and await](async.md)).
 
 ```rut
 pub class LaunchedFutureHandle<T> {
-    pub fn abort(mut self) -> bool;
+    pub fn abort(self) -> bool;
 }
 ```
 
@@ -63,7 +63,7 @@ class Drops {
 }
 
 impl Drops {
-    [disposal] fn release(mut self, cx: DisposalContext) { self.n += 1; }
+    [disposal] fn release(self, cx: DisposalContext) { self.n += 1; }
 }
 
 async fn job() -> nil {

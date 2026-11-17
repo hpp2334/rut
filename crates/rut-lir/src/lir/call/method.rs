@@ -34,7 +34,9 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
         // raw instead of a boundary clone; a PROMOTED binding reads
         // through the capture law's accessor instead (its register
         // holds the shared cell, the value loads from it — method
-        // mutation through the read hits the same shared cell)
+        // mutation through the read hits the same shared cell). The
+        // receiver's binding is never checked: mutability is the
+        // default, and the const law gates only direct reassignment.
         let recv_raw = match recv {
             ExprRef::Path(ph)
                 if ph.get(self.ctx.ast).segs.len() == 1

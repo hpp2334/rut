@@ -47,9 +47,9 @@ use ink::{ Logger };
 
 entry fn main() {
     let log = Logger("optional");
-    let mut scores: HashMap<str, i32> = HashMap();
+    let scores: HashMap<str, i32> = HashMap();
     scores.put("rut", 41);
-    let mut n = 0;
+    let n = 0;
     let hit = scores.get("rut");      // ?i32
     if (hit != nil) {
         n = hit + 1;                  // a hit auto-unwraps for `+`

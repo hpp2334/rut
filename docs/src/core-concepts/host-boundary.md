@@ -102,7 +102,7 @@ optimize around:
 ```rut
 class Canvas {
     h: opaque;
-    fn circle(mut self, x: f32, y: f32, r: f32) -> nil {
+    fn circle(self, x: f32, y: f32, r: f32) -> nil {
         canvas_circle(self.h, x, y, r);
     }
     fn hits(self) -> i32 { return canvas_hits(self.h); }

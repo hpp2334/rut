@@ -79,7 +79,10 @@ pub enum ElseBranch {
 #[derive(Clone, Debug)]
 pub struct LetStmtNode {
     pub span: Span,
-    pub is_mut: bool,
+    /// the head spelled `const` — a shallow opt-out: reassignment of
+    /// the binding itself errors, writes through it (`x.f = ..`) are
+    /// allowed
+    pub is_const: bool,
     pub name: IdentId,
     pub name_span: Span,
     /// `let (a, b) = ..` — tuple destructuring (name_span is names[0]'s)
@@ -108,7 +111,9 @@ pub struct ForOfNode {
     pub span: Span,
     pub var: IdentId,
     pub name_span: Span,
-    pub is_mut: bool,
+    /// the header spelled `const` — a fresh per-iteration binding that
+    /// the body may not reassign
+    pub is_const: bool,
     pub iter: ExprRef,
     pub body: Handle<BlockNode>,
 }
@@ -118,7 +123,8 @@ pub struct ForCNode {
     pub span: Span,
     pub var: IdentId,
     pub name_span: Span,
-    pub is_mut: bool,
+    /// `const` in a for-c header is refused at parse (the induction
+    /// variable is genuinely reassigned) — there is no flag to carry
     pub init: ExprRef,
     pub cond: ExprRef,
     pub update: ExprRef,

@@ -13,21 +13,21 @@ use pouch::{ Vec };
 // checksum = 1000000000000.
 
 fn churn(n: i32, m: i32) -> i64 {
-    let mut v: Vec<i32> = Vec::new();
+    let v: Vec<i32> = Vec::new();
     // push churn: n values through the grow path
-    for (let mut i = 0; i < n; i += 1) {
+    for (let i = 0; i < n; i += 1) {
         v.push(i % m);
     }
     // indexed read + write
-    let mut acc: i64 = 0;
-    for (let mut i = 0; i < n; i += 1) {
+    let acc: i64 = 0;
+    for (let i = 0; i < n; i += 1) {
         let x: i32 = v[i];
         v[i] = (x + 1) % m;
         acc += x as i64;
     }
     // iterate the whole sequence (Vec for-of yields the shared ?T —
     // RFC 0012 §6 + RFC 0044)
-    let mut total: i64 = 0;
+    let total: i64 = 0;
     for (let x of v) {
         total += x as i64;
     }

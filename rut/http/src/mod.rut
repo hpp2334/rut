@@ -97,7 +97,7 @@ pub class RequestBuilder {
 }
 
 impl RequestBuilder {
-    pub fn method(mut self, m: ClientQueryMethod) -> Self {
+    pub fn method(self, m: ClientQueryMethod) -> Self {
         when (m) {
             ClientQueryMethod::Get -> { self.m = "GET"; },
             ClientQueryMethod::Post -> { self.m = "POST"; },
@@ -108,13 +108,13 @@ impl RequestBuilder {
         return self;
     }
 
-    pub fn url(mut self, url: str) -> Self {
+    pub fn url(self, url: str) -> Self {
         self.url = url;
         return self;
     }
 
     /// repeatable — each call appends one `Name: value` line
-    pub fn header(mut self, name: str, value: str) -> Self {
+    pub fn header(self, name: str, value: str) -> Self {
         if (self.headers.len() > 0) {
             self.headers.append("\n");
         }
@@ -124,7 +124,7 @@ impl RequestBuilder {
         return self;
     }
 
-    pub fn body(mut self, b: bytes) -> Self {
+    pub fn body(self, b: bytes) -> Self {
         self.body = b;
         return self;
     }

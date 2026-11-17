@@ -18,7 +18,7 @@ is the in-body suspension point, and it consumes the future:
 
 ```rut
 async fn countdown(log: Logger, n: u32) {
-    let mut i = n;
+    let i = n;
     while (i > 0) {
         log.info(f"t-{i}");
         await sleep(500);       // park here; the loop resumes the frame
@@ -184,7 +184,7 @@ use futures::{ launch_future, sleep };
 use ink::{ Logger };
 
 async fn countdown(log: Logger, n: u32) {
-    let mut i = n;
+    let i = n;
     while (i > 0) {
         log.info(f"t-{i}");
         await sleep(500);

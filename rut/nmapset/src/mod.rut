@@ -57,7 +57,7 @@ impl<K, V> HashMap<K, V> {
     // SEALS at this edge (the erasure box) — the map never
     // learns what V is; the key seals with it, opened host-side for
     // hash/eq only.
-    pub fn put(mut self, k: K, v: V) -> bool {
+    pub fn put(self, k: K, v: V) -> bool {
         let ans = map_hvput(self.t, opaque(k), opaque(v));
         return (ans & 1) == 1;
     }
@@ -78,7 +78,7 @@ impl<K, V> HashMap<K, V> {
 
     // `true` = was present; the held value releases in-crossing.
     // Handles are never reused — a re-insert is a new entry.
-    pub fn remove(mut self, k: K) -> bool {
+    pub fn remove(self, k: K) -> bool {
         return map_hvremove(self.t, opaque(k)) >= 0;
     }
 
@@ -98,7 +98,7 @@ impl<K, V> HashMap<K, V> {
     /// Insert-or-replace over a byte-range key; `true` = newly added.
     /// On a replace the stored key keeps its original bytes. The value
     /// seals at this edge, as in `put`.
-    pub fn put_range(mut self, parent: str, off: i32, len: i32, v: V) -> bool {
+    pub fn put_range(self, parent: str, off: i32, len: i32, v: V) -> bool {
         let ans = map_hvput_sv(self.t, parent, off, len, opaque(v));
         return (ans & 1) == 1;
     }
@@ -116,7 +116,7 @@ impl<K, V> HashMap<K, V> {
     }
 
     /// `true` = was present.
-    pub fn remove_range(mut self, parent: str, off: i32, len: i32) -> bool {
+    pub fn remove_range(self, parent: str, off: i32, len: i32) -> bool {
         return map_hvremove_sv(self.t, parent, off, len) >= 0;
     }
 
@@ -142,7 +142,7 @@ impl<K, V> HashMap<K, V> {
     // can never nil (the `?K` auto-derefs into `emit`'s `K` param).
     [iterable] pub fn iterate(self, emit: fn(K) -> bool) {
         let cur = map_iter_new(self.t, type_id<K>());
-        let mut cell = map_iter_next(cur);
+        let cell = map_iter_next(cur);
         while (cell != nil) {
             if (!emit(opaque::downcast<K>(cell))) { break; }
             cell = map_iter_next(cur);
@@ -167,7 +167,7 @@ impl<T> HashSet<T> {
     }
 
     // `true` when the element was newly added (bit 0 of the answer).
-    pub fn put(mut self, t: T) -> bool {
+    pub fn put(self, t: T) -> bool {
         return (map_hput(self.t, opaque(t)) & 1) == 1;
     }
 
@@ -189,7 +189,7 @@ impl<T> HashSet<T> {
     // `emit` false = break — see the map's `iterate` for the full law.
     [iterable] pub fn iterate(self, emit: fn(T) -> bool) {
         let cur = map_iter_new(self.t, type_id<T>());
-        let mut cell = map_iter_next(cur);
+        let cell = map_iter_next(cur);
         while (cell != nil) {
             if (!emit(opaque::downcast<T>(cell))) { break; }
             cell = map_iter_next(cur);

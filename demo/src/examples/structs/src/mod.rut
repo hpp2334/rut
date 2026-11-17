@@ -23,9 +23,8 @@ struct Style {
     width: f32 = 1;
 }
 
-fn nudge(mut pt: ?Point) {     // nullable param: mutation is shared —
+fn nudge(pt: ?Point) {     // nullable param: mutation is shared —
     pt.x += 1;                 // writes through hit the caller's Point
-                               // (`mut` on the binding)
 }
 
 fn nudged(pt: Point) -> Point {    // no mutation: builds a NEW record
@@ -38,13 +37,13 @@ fn length(pt: Point) -> f64 {     // free function instead of a method
 
 fn structs() {
     let log = Logger("structs");
-    let mut p = Point { x: 1, y: 2 };   // literal — the only construction
-    p.x = 3;                            // needs the `mut` binding
+    let p = Point { x: 1, y: 2 };   // literal — the only construction
+    p.x = 3;                            // a field write through the binding
     let q = p;                          // SHARE: q and p name one cell (O(1))
     p.x = 4;                            // q.x is 4 now — sharing is the law
 
-    // a write through a `?T` head needs `mut` on the binding:
-    let mut rp: ?Point = p;             // rp: ?Point — shares p's cell
+    // a write through a `?T` head writes the SHARED record:
+    let rp: ?Point = p;             // rp: ?Point — shares p's cell
     rp.x = 9;                           // p.x is now 9 too
 
     // `==` on records is CELL IDENTITY: bindings of one cell
@@ -52,7 +51,7 @@ fn structs() {
     let same_cell = q == p;                    // true — one shared cell
     let distinct = q == Point { x: 9, y: 2 };  // false — a different cell
 
-    let mut r = Rect { min: Point { x: 0, y: 0 }, max: q };  // max shares p
+    let r = Rect { min: Point { x: 0, y: 0 }, max: q };  // max shares p
     let s = Style {};              // zero-value defaults fill the fields
     r.max.x = 5;                   // a write THROUGH r: p.x is now 5
     nudge(p);                      // shared write through `?Point`: p.x = 6

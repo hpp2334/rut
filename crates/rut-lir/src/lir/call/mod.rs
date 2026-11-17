@@ -1291,46 +1291,4 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
     pub(crate) fn same_ty(&self, a: TypeId, b: TypeId) -> bool {
         self.ctx.same_instantiation(a, b)
     }
-
-    pub(crate) fn check_recv_mut(
-        &mut self,
-        recv: ExprRef,
-        sp: rut_lexer::span::Span,
-        what: &str,
-    ) -> bool {
-        match recv {
-            ExprRef::Path(ph) if ph.get(self.ctx.ast).segs.len() == 1 => {
-                let segs = &ph.get(self.ctx.ast).segs;
-                if let Some(l) = self.lookup(segs[0].name) {
-                    // the mut-binding law is uniform under the by-reference
-                    // regime: every binding shares its cell, so
-                    // ANY store through the binding — including through a
-                    // `?T` head that derefs first — requires `let mut`
-                    // (the old pointer exception is gone). A loop
-                    // variable's fix is the header's `mut` instead.
-                    if !l.is_mut {
-                        let msg = if l.loop_var {
-                            format!(
-                                "assignment through `{}` requires `mut` in the loop header: {} (the mut-binding law)",
-                                self.ctx.name(l.name),
-                                self.loop_header_fix(l)
-                            )
-                        } else {
-                            format!("{what} requires a `let mut` binding (the mut-binding law)")
-                        };
-                        self.ctx.err(sp, msg);
-                        return false;
-                    }
-                }
-                true
-            }
-            ExprRef::Field(inner_fh) => {
-                self.check_recv_mut(inner_fh.get(self.ctx.ast).recv, sp, what)
-            }
-            ExprRef::Index(inner_fh) => {
-                self.check_recv_mut(inner_fh.get(self.ctx.ast).recv, sp, what)
-            }
-            _ => true,
-        }
-    }
 }

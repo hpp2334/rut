@@ -115,7 +115,7 @@ law exactly like the fused form:
 
 ```rut
 for (let x of expr) { .. }         // plain `let`: a read-only view
-for (let mut x of expr) { .. }     // `mut`: the body may assign x
+for (let x of expr) { .. }     // `mut`: the body may assign x
 ```
 
 The keyed collections mark it too: `for (let k of m)` walks a
@@ -125,7 +125,7 @@ The keyed collections mark it too: `for (let k of m)` walks a
 Indexed form — the C shape:
 
 ```rut
-for (let mut i = 0; i < n; i += 1) { .. }
+for (let i = 0; i < n; i += 1) { .. }
 ```
 
 Both headers declare a **normal binding**, and the mut-binding law
@@ -137,13 +137,13 @@ use ink::{ Logger };
 
 entry fn main() {
     let log = Logger("for");
-    let mut total = 0;
-    for (let mut i = 0; i < 5; i += 1) {   // the update clause assigns i
+    let total = 0;
+    for (let i = 0; i < 5; i += 1) {   // the update clause assigns i
         total += i;
     }
     // for (let i = 0; i < 5; i += 1) { }  // ERROR: assignment to `i` requires `mut`
     let rows = [[1, 2], [3, 4]];
-    for (let mut row of rows) {            // the body assigns the element
+    for (let row of rows) {            // the body assigns the element
         row[0] = 99;                       // the write reaches the sequence
     }
     log.info(f"total={total} rows[1][0]={rows[1][0]}");

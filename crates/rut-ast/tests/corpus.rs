@@ -208,7 +208,7 @@ fn retired_reservations_are_ordinary_identifiers() {
         ),
         (
             "with ident",
-            "fn f() -> nil { let with = 1; let const = with; }",
+            "fn f() -> nil { let with = 1; let with2 = with; }",
             Mode::Impl,
         ),
         (
@@ -222,6 +222,40 @@ fn retired_reservations_are_ordinary_identifiers() {
             diags.is_empty(),
             "{label}: retired reservation drew a diag: {diags:?}"
         );
+    }
+}
+
+#[test]
+fn const_is_a_reserved_head_not_an_identifier() {
+    // `mut`'s seat in the table went to `const`: a binding head now, so
+    // a BINDING may not be NAMED `const` — `let const = ..` and a
+    // const-named destructure member eat the generic parse error (the
+    // retired reservations stay identifiers; see the test above). In
+    // EXPRESSION position `const` degrades to an unresolved-name error
+    // at resolution, like `null` — not a parse diag.
+    for (label, src) in [
+        ("let const binding", "fn f() -> nil { let const = 1; }"),
+        (
+            "const destructure member",
+            "fn f() -> nil { let (const, b) = (1, 2); }",
+        ),
+        (
+            "const loop var",
+            "fn f(xs: Vec<i32>) -> nil { for (let const of xs) { } }",
+        ),
+    ] {
+        let (_, diags) = parse(src, Mode::Impl);
+        assert!(!diags.is_empty(), "{label}: must refuse: {diags:?}");
+    }
+    // the keyword itself parses as the head, in every shape
+    for src in [
+        "fn f() -> nil { const x = 1; }",
+        "fn f() -> nil { const (a, b) = (1, 2); }",
+        "fn f() -> nil { const x: i32 = 1; }",
+        "fn f(xs: Vec<i32>) -> nil { for (const t of xs) { } }",
+    ] {
+        let (_, diags) = parse(src, Mode::Impl);
+        assert!(diags.is_empty(), "`{src}` must parse clean: {diags:?}");
     }
 }
 

@@ -225,7 +225,7 @@ impl<'a> Ctx<'a> {
         }
         if name == sym::DISPOSAL {
             return Some(
-                "`Disposal` is gone — mark the member: `impl T { [disposal] fn dispose_db(mut self, cx: DisposalContext) { .. } }` (the engine calls it at refcount zero; the name is free, the bracket designates)".to_string(),
+                "`Disposal` is gone — mark the member: `impl T { [disposal] fn dispose_db(self, cx: DisposalContext) { .. } }` (the engine calls it at refcount zero; the name is free, the bracket designates)".to_string(),
             );
         }
         if name == sym::FUTURE {

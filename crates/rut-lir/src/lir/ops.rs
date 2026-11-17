@@ -1,5 +1,6 @@
 //! Operators (equal widths, traps by default; the wrapping
-//! &op family) and assignment: the mut-binding law,
+//! &op family) and assignment: the const law (a `const` binding's
+//! direct reassign refuses; writes through stay legal),
 //! compound forms, field/index targets.
 
 use super::*;
@@ -299,7 +300,7 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
         Ok(TY_BOOL)
     }
 
-    // ---- assignment (mut-binding law) ----
+    // ---- assignment (the const law) ----
 
     pub(crate) fn compile_assign(
         &mut self,
@@ -319,31 +320,13 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                 // assign the last field
                 if segs[0].generics.is_empty() {
                     if let Some(l) = self.lookup(segs[0].name).cloned() {
-                        // the mut-binding law is uniform under
-                        // the by-reference regime: a `?T` head
-                        // derefs, then writes through the shared cell — the
-                        // head binding itself must be `let mut`. Loop
-                        // variables take the header's flag: the fix
-                        // names the loop header, not a `let mut`
-                        if !l.is_mut {
-                            if l.loop_var {
-                                self.ctx.err(sp, format!(
-                                    "assignment through `{}` requires `mut` in the loop header: {} (the mut-binding law)",
-                                    self.ctx.name(segs[0].name),
-                                    self.loop_header_fix(&l)
-                                ));
-                            } else {
-                                self.ctx.err(sp, format!(
-                                    "assignment through `{}` requires a `let mut` binding (the mut-binding law)",
-                                    self.ctx.name(segs[0].name)
-                                ));
-                            }
-                            return Err(());
-                        }
                         // the chain head: a promoted binding loads its
                         // shared cell's value first (the capture law's
                         // accessor); an ordinary one chains off its
-                        // register raw, as before
+                        // register raw, as before. The const law is
+                        // SHALLOW: writes through the binding are not
+                        // the binding's own reassignment — no head
+                        // check here.
                         let mut cur = if l.cell.is_some() {
                             self.read_local(&l, sp.lo)
                         } else {
@@ -414,8 +397,8 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                             return Err(());
                         };
                         // the final SetF target takes the dial: the WRITE
-                        // is the visibility's test (the mut-binding law
-                        // above stays the mutability's)
+                        // is the visibility's test (the const law is the
+                        // binding's own reassignment only)
                         if let Some(msg) = self.ctx.field_vis_err(cur_ty, last.name) {
                             self.ctx.err(sp, msg);
                             return Err(());
@@ -485,24 +468,16 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                         .err(sp, format!("unknown name `{}`", self.ctx.name(name)));
                     return Err(());
                 };
-                if !l.is_mut {
-                    if l.loop_var {
-                        // whole-var reassignment of a plain loop
-                        // variable: the header's `mut` is the fix
-                        self.ctx.err(sp, format!(
-                            "assignment to `{}` requires `mut` in the loop header: {} (the mut-binding law)",
-                            self.ctx.name(name),
-                            self.loop_header_fix(&l)
-                        ));
-                    } else {
-                        self.ctx.err(
-                            sp,
-                            format!(
-                            "assignment to `{}` requires a `let mut` binding (the mut-binding law)",
+                if l.is_const {
+                    // the const law: the DIRECT reassign lane is the
+                    // only error — `x = ..` on a `const` binding.
+                    self.ctx.err(
+                        sp,
+                        format!(
+                            "cannot reassign `{}` — a `const` binding is not reassignable",
                             self.ctx.name(name)
                         ),
-                        );
-                    }
+                    );
                     return Err(());
                 }
                 match op {
@@ -592,9 +567,6 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                 let f = fh.get(self.ctx.ast);
                 (f.recv, f.name)
             };
-            if !self.check_recv_mut(recv, sp, "field assignment") {
-                return Err(());
-            }
             let rt = self.compile_expr(recv, None)?;
             let rreg = self.last_reg;
             // `p.f = ..` through a nullable auto-derefs —
@@ -678,9 +650,6 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                 let f = ih.get(self.ctx.ast);
                 (f.recv, f.idx)
             };
-            if !self.check_recv_mut(recv, sp, "index assignment") {
-                return Err(());
-            }
             let rt = self.compile_expr(recv, None)?;
             let rreg = self.last_reg;
             // `xs[i] = ..` through a pointer auto-derefs

@@ -104,8 +104,8 @@ fn mix64_shaped_free_fn_flattens() {
     let out = compile(
         "fn mix64(bits: u64) -> u64 { return (14695981039346656037u64 ^ bits).wrapping_mul(1099511628211u64); }\n\
          entry fn main() -> u64 {\n\
-         \x20   let mut h = 0u64;\n\
-         \x20   for (let mut i = 0; i < 4; i += 1) {\n\
+         \x20   let h = 0u64;\n\
+         \x20   for (let i = 0; i < 4; i += 1) {\n\
          \x20       h = mix64(h ^ i as u64);\n\
          \x20   }\n\
          \x20   return h;\n\
@@ -155,7 +155,7 @@ fn iface_heavy_checksum_parity() {
          \x20   return KU(9u8);\n\
          }\n\
          entry fn main() -> i32 {\n\
-         \x20   let mut acc: i32 = 0;\n\
+         \x20   let acc: i32 = 0;\n\
          \x20   let a = KI(5);\n\
          \x20   if (a.key_eq(KI(5))) { acc += 1; }\n\
          \x20   if (!a.key_eq(KI(6))) { acc += 10; }\n\

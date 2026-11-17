@@ -506,13 +506,13 @@ impl<'a> Ctx<'a> {
                         );
                         continue;
                     }
-                    // signature: `(mut self, cx: DisposalContext)` -> nil
+                    // signature: `(self, cx: DisposalContext)` -> nil
                     let mut params = md.params.iter();
-                    let self_form = params.next().and_then(|p| self.self_param_mut(*p));
-                    if self_form != Some(true) {
+                    let has_self = params.next().is_some_and(|p| self.is_self_param(*p));
+                    if !has_self {
                         self.err(
                             mnode.span(self.ast),
-                            "a `[disposal]` member takes `mut self` first — the engine calls it on the pinned cell",
+                            "a `[disposal]` member takes `self` first — the engine calls it on the pinned cell",
                         );
                     }
                     let cx_ok = match params.next().and_then(|p| self.param_ty(*p)) {
@@ -528,7 +528,7 @@ impl<'a> Ctx<'a> {
                     if params.next().is_some() {
                         self.err(
                             mnode.span(self.ast),
-                            "a `[disposal]` member takes exactly `(mut self, cx: DisposalContext)`",
+                            "a `[disposal]` member takes exactly `(self, cx: DisposalContext)`",
                         );
                     }
                     if md
@@ -549,9 +549,7 @@ impl<'a> Ctx<'a> {
                     // signature: `(self, emit: fn(E) -> bool)` -> nil —
                     // the element type falls out of the emit parameter
                     let mut params = md.params.iter();
-                    let has_self = params
-                        .next()
-                        .is_some_and(|p| self.self_param_mut(*p).is_some());
+                    let has_self = params.next().is_some_and(|p| self.is_self_param(*p));
                     if !has_self {
                         self.err(
                             mnode.span(self.ast),
@@ -642,11 +640,7 @@ impl<'a> Ctx<'a> {
                     }
                     // signature: NO receiver (the class itself is the
                     // call's subject) and the return is `Self` or `?Self`
-                    if md
-                        .params
-                        .first()
-                        .is_some_and(|p| self.self_param_mut(*p).is_some())
-                    {
+                    if md.params.first().is_some_and(|p| self.is_self_param(*p)) {
                         self.err(
                             mnode.span(self.ast),
                             "a `[constructor]` member takes no receiver — `fn <free>(..) -> Self` (the call `Type(..)` spells the class, not a value)",
