@@ -280,7 +280,7 @@ rode a transitive head now refuse with D5 and the fix row — add the
 head to the consumer's own manifest.
 
 Embedders and hand-mounted worlds are lawed by the same declaration
-table, carried structurally on the `Pkg` — `parse_manifest` for an
+table, carried structurally on the `Mounted` — `parse_manifest` for an
 embedded jsonc, `Manifest::lib(name, &[heads])` for an ad-hoc surface
 ([embedding](embedding.md)). The wasm playground stamps the same
 shape, defaulting the program's declaration host-side to the offered

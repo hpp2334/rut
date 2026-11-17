@@ -3,7 +3,7 @@
 The host is a Rust program. It walks the program's packages off disk (or
 offers them by hand), composes **one run** fluently, binds native
 function **bodies** to declared **surfaces**, and drives rut entry
-points. One value flows end to end: **`Pkg` → `RutRun` → `Compiled` →
+points. One value flows end to end: **`Offer` → `RutRun` → `Compiled` →
 `Vm`**. Compiling and type-checking rut code never requires any Rust:
 surfaces are declared in rut source ([host fns and declaration
 files](host-fns.md)), and the boot join proves every referenced native
@@ -30,9 +30,8 @@ rut-vm     = { git = "https://github.com/hpp2334/rut.git", rev = "<commit-hash>"
 
 `rut-native` is the walk and the world — everything with a filesystem
 or a wire ([the walk vs the offer](#the-walk-vs-the-offer)). A host
-that offers every
-`Pkg` by hand (a wasm page, an in-memory test) depends on the driver
-alone and skips it. The build needs the nightly this repo pins
+that mounts the walk's yield by hand (a wasm page, an in-memory test)
+depends on the driver alone and skips it. The build needs the nightly this repo pins
 (`rut-vm-threaded` uses incomplete features) — your project's
 `rust-toolchain.toml` carries the pin. Add `rut-std` the same way when
 the program uses std packages; the full walk-through (hash lookup,
@@ -50,14 +49,15 @@ let loaded = block_on(rut_native::load_dir_with(
     &rut_native::HttpRemote::project_local(project_dir), // cache-only — prime first, or use online_local
 ))?;
 
-// 2. The chain (rut-driver): offer the walk's yield, hand over the
+// 2. The chain (rut-driver): mount the walk's yield, hand over the
 //    host bodies, name the root — and ONE terminal step compiles.
-//    `pkg(..)` is the ONE offering verb over the Offer classification;
-//    `&Bundle` and `HostPkg` coerce in (`impl Into`).
+//    `mount(..)` takes the walk's `Mounted`s; `pkg(..)` is the ONE
+//    offering verb over the Offer classification (`&Bundle` and
+//    `HostPkg` coerce in — `impl Into`).
 let compiled = loaded
     .pkgs
     .iter()
-    .fold(rut_driver::RutRun::new(), |r, p| r.pkg(p.clone())) // first-pkg-wins
+    .fold(rut_driver::RutRun::new(), |r, p| r.mount(p.clone())) // first-offer-wins
     .pkg(rut_std::math::pkg())                         // calc's bodies (Offer::Host)
     .pkg(rut_std::logger::pkg(|s| println!("{s}")))
     .entrypoint(&loaded.root)
@@ -150,7 +150,9 @@ fn is a **construction error**, never a mid-run trap.
 
 ## The walk vs the offer
 
-Two doors produce `Pkg`s; both feed the same chain.
+Two doors fill a run: the walk's yield is `Mounted`s — they mount
+through `mount(..)` — and byte carriers (a decoded archive, an
+assembled source member) offer through `pkg(..)`.
 
 **The walk** ([`rut-native`](#getting-the-crates)) reads a module
 directory — or a packed `.rutbundle` — and yields the closure:
@@ -162,20 +164,22 @@ directory — or a packed `.rutbundle` — and yields the closure:
 | `load_dir_fetched(dir, &map)` | the walk over PRE-fetched url bytes — the sync core; tests and offline hosts hand a `url → bytes` map |
 | `load_path_session(path)` / `load_path_session_with(path, &remote)` | dispatch on the shape: a directory walks (above); a `.rutbundle` loads closed (below) |
 
-The yield is `rut_driver::Walk { pkgs, root }` — pure pkgs plus the
-root's name. Offer each pkg through `pkg(..)` (first-pkg-wins — fold
-the walk into the chain) or pick pieces with `walked.pkg(name)`.
+The yield is `rut_driver::Walk { pkgs, root }` — pure `Mounted`s plus
+the root's name. Mount each pkg through `mount(..)` (first-offer-wins —
+fold the walk into the chain) or pick pieces with `walked.pkg(name)`.
 
 **The offer** is ONE verb, `RutRun::pkg(..)`, over the `Offer`
 classification — the same lib/host pair the manifest `type` field
-spells:
+spells; the walk's `Mounted`s take the data door beside it,
+`RutRun::mount(..)` (first offer wins, exactly like the
+classification):
 
 | offer | what it is |
 |---|---|
 | `pkg(&bundle)` — `Offer::Lib(&Bundle)` | a decoded `.rutbundle` archive: `Bundle::parse(&bytes)` decodes + verifies ONCE (CRC, version, group decode), the handle is reusable across runs, and each offer only relocates + mounts |
 | `pkg(rut_std::math::pkg())` — `Offer::Host(hp)` | host bodies — the embedding Rust's own rows |
 | `pkg(pack_inline_pkg(name, text))` | ephemeral source as a one-member source bundle — a pack method that assembles, never compiles; the run compiles the member when it is offered |
-| `pkg(mounted)` | the walked pkg data (deprecated bridge — offer bundles instead) |
+| `mount(mounted)` | the walked pkg data — the dir/srczip walks' yield and the hand mounts' builder shape; the data door beside the classification |
 
 An archive handle carries its strip restore too:
 `bundle.restore_symbols(&map)` — applied once, before any offer; every
@@ -385,6 +389,7 @@ contain those names.
 | API | Meaning |
 |---|---|
 | `.pkg(offer)` | the ONE offering verb over the `Offer` classification — `pkg(&bundle)` (`Offer::Lib`), `pkg(host_pkg)` (`Offer::Host`), `pkg(pack_inline_pkg(name, text))` for ephemeral source. FIRST OFFER WINS: a pkg whose name is already offered is ignored |
+| `.mount(mounted)` | the data door beside the classification — the walk's `Mounted`s and the hand mounts' builder shape enter here; byte carriers (a decoded archive, an assembled source member) offer through `.pkg(..)` instead. First offer wins, exactly like the classification |
 | `.entrypoint(name)` | the root pkg — the graph compiles it and its transitive uses |
 | `.compile() -> Result<Compiled, RunError>` | the terminal step ([the law](#the-compile-law)) |
 | `Compiled { graph, hosts }` | the linked graph (diags inside — check `graph.diags` before trusting `graph.program`) and the host registry every `Offer::Host` installed |

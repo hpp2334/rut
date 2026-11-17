@@ -30,13 +30,14 @@ so they are fuzzable and reusable in an LSP or formatter with no VM present.
 ## The lexer
 
 - One flat `Tok` enum for literals, punctuation, and operators. Keywords are
-  ordinary `Ident`s; the parser matches them by interner name. **Reserved
-  words are rejected by the lexer** with a message naming the rut
-  replacement (`interface`, `private`, `void`, `in`);
-  `?.` and `??` are punctuation-level rejections, a separate mechanism.
+  ordinary `Ident`s; the parser matches them by interner name — one table
+  (`rut_ast::parser::RESERVED_KW`) is the whole keyword set, shared with the
+  LSP classifier. There is NO reserved-word ban: a word the grammar does not
+  claim stays an identifier (`private`, `void`, `switch` —
+  [keywords](lexical-structure.md)).
 - Maximal munch with an explicit longest-match table; `/` vs `//` vs `/*`
   resolves with one lookahead. Compound assignment operators are one token
-  each (`+=`, `<<=`, `&&=`, …), so there is no munch ambiguity.
+  each (`+=`, `<<=`, …), so there is no munch ambiguity.
 - Numeric literals: `0x`/`0b`/`0o`, `_` separators, and per-width suffixes
   (`u8..u64`, `i8..i64`, `f32`/`f64`). Unsuffixed integers default to
   `i32`, unsuffixed floats to `f32`.
@@ -59,8 +60,8 @@ enum FPart {
 The lexer enters hole mode after `{` (not `{{`), balances braces, and lexes
 normally until depth 0. Holes are re-lexed, not stored as text, so
 placeholder expressions carry real spans inside the literal's span. A hole
-may contain any expression except a string literal — a quote inside a hole
-is a lex error with a *bind it to a name first* note. See
+may contain any expression — a string literal included: termination is
+brace-based, so the quote lexes as an ordinary string token. See
 [Templates](templates.md) for the surface semantics.
 
 Raw strings `r"..."` carry everything up to the closing `"` literally;
@@ -89,7 +90,7 @@ overflow the host stack.
 One loop over the token slice drives two mechanisms:
 
 - A **frame stack** handles structure — one frame kind per grammar rule
-  (`Module`, `Item`, `Block`, `TypeArgList`, `Pattern`, `Arm`, `Impl`, …).
+  (`Module`, `Block`, `Pattern`, `When`, `Impl`, `Lambda`, …).
   A rule that needs a child pushes a frame; a completed frame pops and hands
   its `NodeId` to the parent.
 - An embedded **Pratt engine** handles expressions — an operator stack plus
@@ -101,7 +102,7 @@ powers, loosest to tightest:
 
 | prec | assoc | operators |
 |---|---|---|
-| 1 | right | `=` `+=` `-=` `*=` `/=` `%=` `&=` `\|=` `^=` `<<=` `>>=` `&&=` `\|\|=` (target must be a path or index) |
+| 1 | right | `=` `+=` `-=` `*=` `/=` `%=` `&=` `\|=` `^=` `<<=` `>>=` (target must be a path or index) |
 | 2 | – | `=>` lambda bodies — decided by the scan below, not by binding powers |
 | 3 | left | `\|\|` |
 | 4 | left | `&&` |
@@ -113,8 +114,8 @@ powers, loosest to tightest:
 | 10 | left | `+` `-` |
 | 11 | left | `*` `/` `%` |
 | 12 | left | `as` — numeric cast; the RHS is a type-naming position |
-| 13 | right | unary `-` `!` `~` |
-| 14 | left | postfix: `.name`, `.name<..>(..)`, `(..)`, `[..]`, `?` |
+| 13 | right | unary `-` `!` |
+| 14 | left | postfix: `.name`, `.name<..>(..)`, `(..)`, `[..]` |
 
 Postfixes chain in one loop, so `p.value.x` and `arr[i].push(x)` compose
 without special cases. `is` (type test) is a keyword; `as` is the only cast.
@@ -135,17 +136,16 @@ stage — no lookahead).
 | struct literal vs path expression | peek 2: `Ident {` ⇒ literal (classes have no instance literal) |
 | `when`-arm body form | peek 1 after `->` (`{` ⇒ block arm, else expression arm) |
 | `if` atom vs statement | peek 2: `if (` in expression position ⇒ the if ATOM (statement-leading `if` is claimed by the statement grammar first) |
-| postfix loop step | peek 1 (`.` `(` `[` `?`) |
+| postfix loop step | peek 1 (`.` `(` `[`) |
 | assignment target | no lookahead — parse, then validate |
 
 Two decisions need more than 4 tokens and use **scans** — read-only,
 commit-once, never a guess:
 
 - **Lambda vs parenthesized expression.** Scan to the matching `)`; it is a
-  lambda iff the tokens form a valid parameter list and `=>` follows (an
-  optional `-> Type` may sit between). Otherwise a comma inside the parens
-  errors at the comma — rut has no tuples-as-expressions spelling — with a
-  note: *if you meant a lambda, add `=>`*.
+  lambda iff `=>` follows the matching `)` (an optional `-> Type` may sit
+  between). Otherwise the parens group — `(a)` — or a comma makes the
+  expression a tuple — `(a, b)`.
 - **Generic call vs `<` comparison** (`Vec<f32>(n)` vs `a < b > (c)`). Scan
   from the `<` tracking angle depth; a `>>`/`<<` consumed where a
   closer/opener is expected counts as two, so `Vec<Vec<i32>>` needs no
@@ -220,7 +220,6 @@ enum NodeKind {
     Block { stmts, tail },               // the block value; tail: Option
     Lambda { params, ret, body }, When { scrut, arms },
     If { cond, then, els },              // the if ATOM (statement-if above)
-    Try { expr },                 // postfix ?
     FStr { parts },               // holes are NodeIds
     StructLit { ty, fields }, Array { elems }, Conv { ty, expr },
 }
@@ -231,8 +230,9 @@ side tables by node id, diagnostics reach spans through them, and the LSP,
 formatter, and dumper hold copyable references with no reparenting.
 
 What the AST does **not** contain: no `new`, no `switch`/`case`, no `?.`
-or `??` — the lexer rejects those words before parsing. There are no paren
-nodes either: the parse's grouping *is* the tree.
+or `??` — the grammar has no such forms (those words are ordinary
+identifiers, and a stray postfix `?` draws the ordinary error ladder).
+There are no paren nodes either: the parse's grouping *is* the tree.
 
 ## Diagnostics
 
@@ -248,10 +248,10 @@ from `rut fmt`), the caret line under the span, secondary labels, and
 notes, all over byte offsets (`rut_lexer::diag::render_diags`).
 Rendering sorts by (file, span start) and groups by file, so multi-file
 output is stable; a diag with no file of its own spells the fallback
-`--> line L, column C`. Suggestions are part of the message set:
-*did you mean `when`?* for `switch`/`match`; *bind it to a name first* for
-string literals in format-string holes; *classes have no instance literal —
-use `Circle(..)`* for `Circle { .. }` on a class.
+`--> line L, column C`. Messages name their fixes: *expected `super` or
+`pkg` in pub(..)* for an unknown visibility scope; *classes have no
+instance literal — construct through a class method (`Circle::new(..)`)*
+for a struct literal on a class.
 
 The compile stops before IR if any diagnostic exists — a module with
 diagnostics never produces bytecode. See

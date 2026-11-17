@@ -1,9 +1,10 @@
 //! `pub` visibility on members: the scoped forms parse on
 //! class fields and on inherent impl methods (`pub(super)`,
 //! `pub(pkg)`), the repealed `pub(mod)`/`pub(self)` spellings
-//! diagnose naming the fix, structs reject the dial, and the dropped
-//! `private` keyword is a lexer hard error naming its replacement.
-//! Type bodies are FIELDS ONLY — methods live in `impl` blocks.
+//! draw the ordinary pub error (``expected `super` or `pkg` in
+//! pub(..)``), structs reject the dial, and the dropped `private`
+//! keyword is an ordinary identifier — it names bindings and fns
+//! clean. Type bodies are FIELDS ONLY — methods live in `impl` blocks.
 
 mod common;
 

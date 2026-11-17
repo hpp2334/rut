@@ -228,7 +228,7 @@ rut/
 │   ├── rut-core/         # types, ops, binary encode/decode, link, sym
 │   ├── rut-vm/           # heap, interpreter, verifier, driving loop
 │   ├── rut-vm-threaded/  # tail-call threaded dispatch (nightly `become`)
-│   ├── rut-driver/       # the run chain: Pkg, RutRun, Compiled; bundles, dep graph, decl
+│   ├── rut-driver/       # the run chain: Offer, RutRun, Compiled; bundles, dep graph, decl
 │   ├── rut-native/       # the walk and the world: Source/FsSource, DepRemote/HttpRemote, pack
 │   ├── rut-fmt/          # the formatter
 │   ├── rut-std/          # host bodies: log, math, nmap, http, async
