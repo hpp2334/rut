@@ -121,7 +121,7 @@ msgstr "内存：Rc 堆、弱引用与循环引用"
 
 
 #: src/SUMMARY.md:33 src/core-concepts/host-boundary.md:1
-#: src/reference/vm-core.md:52
+#: src/reference/vm-core.md:53
 msgid "The host boundary"
 msgstr "宿主边界"
 
@@ -749,106 +749,106 @@ msgid ""
 msgstr ""
 
 
-#: src/quick-start/installation.md:110
+#: src/quick-start/installation.md:109
 msgid ""
 "// 4. call an export, get a Rust value back\n"
 msgstr ""
 
 
-#: src/quick-start/installation.md:111
+#: src/quick-start/installation.md:110
 msgid "\"answer\""
 msgstr ""
 
 
-#: src/quick-start/installation.md:112
+#: src/quick-start/installation.md:111
 msgid "\"answer = {answer}\""
 msgstr ""
 
 
-#: src/quick-start/installation.md:112
+#: src/quick-start/installation.md:111
 msgid ""
 "// 42\n"
 msgstr ""
 
 
-#: src/quick-start/installation.md:117
+#: src/quick-start/installation.md:116
 msgid ""
 "`entry fn` is the host-callable surface — what `vm.call` can name. `cargo run` prints `answer = 42`: a rut value crossed into Rust unchanged, no std bindings involved."
 msgstr ""
 "`entry fn` 是宿主可调用的表面——`vm.call` 能点名的导出。`cargo run` 打印 `answer = 42`：一个 rut 值原封不动地穿到了 Rust，不涉及任何 std 绑定。"
 
 
-#: src/quick-start/installation.md:121
+#: src/quick-start/installation.md:120
 msgid ""
 "When the program uses the std packages (`ink`, `pouch`, `json`, …), add `rut-std` as a dependency the same way and bind its `pkg()` builders — the [embedding and native modules](../reference/embedding.md) page is the full contract."
 msgstr ""
 "当程序用到 std 包（`ink`、`pouch`、`json` 等）时，以同样的方式加上 `rut-std` 依赖并绑定它的 `pkg()` 构建器——[嵌入与原生模块](../reference/embedding.md)一页是完整的契约。"
 
 
-#: src/quick-start/installation.md:126
+#: src/quick-start/installation.md:125
 msgid "The rut CLI — temporary runs"
 msgstr "rut CLI——临时运行"
 
 
-#: src/quick-start/installation.md:128
+#: src/quick-start/installation.md:127
 msgid ""
 "For temporary runs the repo builds a standalone binary — three ways to get it on `PATH`, pick one."
 msgstr "临时运行用仓库构建的独立二进制——有三种方式把它放上 `PATH`，任选其一。"
 
 
-#: src/quick-start/installation.md:131
+#: src/quick-start/installation.md:130
 msgid "`cargo install` from git — no checkout"
 msgstr "`cargo install`——从 git 安装，无需检出"
 
 
-#: src/quick-start/installation.md:138
+#: src/quick-start/installation.md:137
 msgid ""
 "The pinned nightly is not optional — the engine builds on incomplete features (see [Pin the nightly](#pin-the-nightly) above) and a stable toolchain refuses to; the pin is `nightly-2026-07-15` (check this repo's `rust-toolchain.toml` for the current value). `--locked` builds against the repo's committed `Cargo.lock`. The binary lands at `~/.cargo/bin/rut`, normally already on `PATH`."
 msgstr ""
 "锁定的 nightly 不是可选项——引擎构建在未完成的特性之上（见上文[锁定 nightly](#pin-the-nightly)），稳定版工具链会拒绝编译；锁定值是 `nightly-2026-07-15`（当前值查看这个仓库的 `rust-toolchain.toml`）。`--locked` 基于仓库已提交的 `Cargo.lock` 构建。二进制会落在 `~/.cargo/bin/rut`，通常已在 `PATH` 上。"
 
 
-#: src/quick-start/installation.md:145
+#: src/quick-start/installation.md:144
 msgid "`cargo install` from a checkout"
 msgstr "`cargo install`——从检出安装"
 
 
-#: src/quick-start/installation.md:153
+#: src/quick-start/installation.md:152
 msgid ""
 "Standing inside the clone, rustup resolves the repo's `rust-toolchain.toml` pin for you — same binary, same destination."
 msgstr "只要站在克隆目录里，rustup 就会替你解析仓库的 `rust-toolchain.toml` 锁定——同一个二进制，同一个目的地。"
 
 
-#: src/quick-start/installation.md:156
+#: src/quick-start/installation.md:155
 msgid "Plain build"
 msgstr "普通构建"
 
 
-#: src/quick-start/installation.md:162
+#: src/quick-start/installation.md:161
 msgid "\"$PWD/target/release:$PATH\""
 msgstr "\"$PWD/target/release:$PATH\""
 
 
-#: src/quick-start/installation.md:165
+#: src/quick-start/installation.md:164
 msgid ""
 "All three lanes end in the same `rut` binary — call it by path or put it on your `PATH` (the pages here use the bare name). `rut --help` prints the surface (and `rut <command> --help` each command's flags):"
 msgstr ""
 "三条车道最终得到的都是同一个 `rut` 二进制 —— 按路径调用它，或把它放到你的 `PATH` 上（本书各页使用裸名称）。`rut --help` 打印整体命令面（`rut <command> --help` 则列出各命令的标志）："
 
 
-#: src/quick-start/installation.md:192
+#: src/quick-start/installation.md:191
 msgid ""
 "The binary embeds the whole engine: lexer, parser, compiler, typed bytecode, and the VM. The toolchain's standard packages (`core`, `pouch`, `ink`, `json`, …) ship as source zips on jsDelivr — source compiles with YOUR toolchain, so a pinned zip never goes stale the way compiled IR can. A program says `use ink::{ Logger };` and its manifest's `deps` row mounts the package from the CDN, pinned by the project's `rut.lock` ([dependency kinds](../reference/dependency-kinds.md)), since every rut program is a module directory ([your first rut program](first-program.md))."
 msgstr ""
 "这个二进制内嵌了整个引擎：词法分析器、语法分析器、编译器、类型化字节码和 VM。工具链的标准包（`core`、`pouch`、`ink`、`json`……）以源码压缩包（source zip）的形式发布在 jsDelivr 上——源码用你的工具链编译，所以被固定的压缩包绝不会像编译后 IR 那样过时。程序写下 `use ink::{ Logger };`，清单里的 `deps` 行就从 CDN 挂载这个包，固定值由项目的 `rut.lock` 携带（[依赖种类](../reference/dependency-kinds.md)）；每个 rut 程序都是一个模块目录（[你的第一个 rut 程序](first-program.md)）。"
 
 
-#: src/quick-start/installation.md:203
+#: src/quick-start/installation.md:202
 msgid "Try it:"
 msgstr "试一下："
 
 
-#: src/quick-start/installation.md:207 src/quick-start/first-program.md:33
+#: src/quick-start/installation.md:206 src/quick-start/first-program.md:33
 msgid ""
 "<<'EOF'\n"
 "// hello/rut.jsonc — the manifest IS the program's door\n"
@@ -874,7 +874,7 @@ msgid ""
 msgstr ""
 
 
-#: src/quick-start/installation.md:230 src/quick-start/first-program.md:56
+#: src/quick-start/installation.md:229 src/quick-start/first-program.md:56
 msgid ""
 "```text\n"
 "install: ink — downloading https://cdn.jsdelivr.net/gh/hpp2334/rut@std-v18/dist/std/ink.zip\n"
@@ -886,70 +886,70 @@ msgid ""
 msgstr ""
 
 
-#: src/quick-start/installation.md:238
+#: src/quick-start/installation.md:237
 msgid ""
 "`rut install` fetched `ink` from jsDelivr into the **global dep store** (`$RUT_HOME/deps` — `~/.rut` by default, one content-addressed dir per pinned dep, shared by every project; no dep cache lands inside `hello/` — the one local write is the walk's `.rut/unpacked/` scratch, where `.zip` deps unpack once as gitignored machine output) and pinned its sha256 in `hello/rut.lock` — the lock every later load verifies against, committed alongside the manifest (same manifest + same `rut.lock` ⇒ identical resolved world). `rut install --locked` re-verifies the pair without writing, re-warming the store on a miss (the CI lane)."
 msgstr ""
 "`rut install` 把 `ink` 从 jsDelivr 取回放进**全局依赖存储**（`$RUT_HOME/deps`——默认 `~/.rut`，每个被固定的依赖一个按内容寻址的目录，所有项目共享；依赖缓存绝不落进 `hello/`——唯一的本地写入是遍历的 `.rut/unpacked/` 草稿，`.zip` 依赖在那里一次性解包，是 gitignored 的机器输出），并把它的 sha256 固定进 `hello/rut.lock`——此后每次加载都对照这把锁校验，它随清单一起提交（同一清单 + 同一 `rut.lock` ⇒ 完全相同的解析世界）。`rut install --locked` 只复核这对文件、绝不写入，未命中时再预热存储（CI 车道）。"
 
 
-#: src/quick-start/installation.md:249
+#: src/quick-start/installation.md:248
 msgid ""
 "The hand-typed walkthrough is the lesson — the manifest is what you are learning. When it is routine, `rut new hello` is the one-step equivalent: it scaffolds the directory in three files (`rut.jsonc` plus the matching `rut.lock` plus the hello `src/mod.rut`), with the whole swappable std set as url deps and the std pins already in the lock ([the rut CLI](../reference/cli.md))."
 msgstr ""
 "亲手敲一遍才是本课的意义——你要学的就是清单。等它成了肌肉记忆，`rut new hello` 就是一步到位的等价物：它用三个文件搭好目录（`rut.jsonc` 加配套的 `rut.lock` 再加 hello 的 `src/mod.rut`），整个可换 std 集合作为 url 依赖，std 的固定值已经写进锁里（[rut CLI](../reference/cli.md)）。"
 
 
-#: src/quick-start/installation.md:256
+#: src/quick-start/installation.md:255
 msgid ""
 "If that printed, the CLI is ready. Continue to [your first rut program](first-program.md) — and keep the lane's role in mind: the CLI is for **temporary runs** (`run`, `fmt`, `dump`, `pack`), not a shipping path. Real projects depend on the crates and embed the engine; [the rut CLI](../reference/cli.md) is the binary's reference."
 msgstr ""
 "打印出了这一行，CLI 就绪了。继续阅读[你的第一个 rut 程序](first-program.md)——同时记住这条车道的角色：CLI 是为**临时运行**（`run`、`fmt`、`dump`、`pack`）准备的，不是交付路径。真正的项目依赖这些 crate 并嵌入引擎；[rut CLI](../reference/cli.md) 是这个二进制的参考。"
 
 
-#: src/quick-start/installation.md:263
+#: src/quick-start/installation.md:262
 msgid "Optional: the wasm playground"
 msgstr "可选：wasm Playground"
 
 
-#: src/quick-start/installation.md:265
+#: src/quick-start/installation.md:264
 msgid ""
 "The [playground](playground.md) runs the same engine compiled to WebAssembly. Building it needs [wasm-pack](https://rustwasm.github.io/wasm-pack/) and one extra target:"
 msgstr ""
 "[Playground](playground.md) 运行的是同一个引擎，只是编译成了 WebAssembly。构建它需要 [wasm-pack](https://rustwasm.github.io/wasm-pack/) 和一个额外的 target："
 
 
-#: src/quick-start/installation.md:272
+#: src/quick-start/installation.md:271
 msgid ""
 "# the JS face + declarations the editors import (pkg/index.js, pkg/index.d.ts)\n"
 msgstr ""
 "# 编辑器导入的 JS 面与声明（pkg/index.js、pkg/index.d.ts）\n"
 
 
-#: src/quick-start/installation.md:277
+#: src/quick-start/installation.md:276
 msgid ""
 "or, from `demo/`, the one-command lane that also copies the artifacts into place:"
 msgstr "或者，在 `demo/` 里走那条只需一条命令的路径，它还会把产物复制到位："
 
 
-#: src/quick-start/installation.md:284
+#: src/quick-start/installation.md:283
 msgid "Optional: build this book"
 msgstr "可选：构建本书"
 
 
-#: src/quick-start/installation.md:286
+#: src/quick-start/installation.md:285
 msgid "The documentation is an [mdbook](https://rust-lang.github.io/mdBook/) site:"
 msgstr "本文档是一个 [mdbook](https://rust-lang.github.io/mdBook/) 站点："
 
 
-#: src/quick-start/installation.md:291
+#: src/quick-start/installation.md:290
 msgid ""
 "# live-reload preview at http://localhost:3000\n"
 msgstr ""
 "# live-reload preview at http://localhost:3000\n"
 
 
-#: src/quick-start/installation.md:292
+#: src/quick-start/installation.md:291
 msgid ""
 "# static site in docs/book/\n"
 msgstr ""
@@ -7432,9 +7432,9 @@ msgstr ""
 
 #: src/core-concepts/the-vm.md:21
 msgid ""
-"// registered native bodies, clock, loader\n"
+"// the host-fn bodies, joined at construction\n"
 msgstr ""
-"// 已注册的原生函数体、时钟、加载器\n"
+"// 宿主函数体，在构造时接入\n"
 
 
 #: src/core-concepts/the-vm.md:25
@@ -7554,7 +7554,7 @@ msgstr ""
 "失败是**陷阱**，不是异常，也不是 Rust panic：普通运算符上的整数溢出、对 `nil` 解引用、越界索引、`panic(..)`，或者耗尽的预算。陷阱捕获原始帧链（惰性渲染——只有当有人打印它时才做符号化），在退出路上运行析构器，并以 `Err(Trap)` 的形式沿栈展开到宿主调用。Rut 代码无法捕获它；边界就是捕获点（参见[宿主边界](host-boundary.md)）。"
 
 
-#: src/core-concepts/the-vm.md:130 src/reference/vm-core.md:104
+#: src/core-concepts/the-vm.md:130 src/reference/vm-core.md:105
 msgid "Budgets and interrupts"
 msgstr "预算与中断"
 
@@ -18742,7 +18742,7 @@ msgstr ""
 
 #: src/reference/embedding.md:75
 msgid ""
-"// the run's product; also .limits/.hooks/.hosts\n"
+"// the run's product; also .limits/.hosts\n"
 msgstr ""
 
 
@@ -19684,7 +19684,7 @@ msgstr ""
 
 #: src/reference/embedding.md:420
 msgid ""
-"the construction door: `.compiled(x)` (anything `IntoVmParts` — the driver's `Compiled`) or `.program(rc)` for embedders holding a decoded binary, each plus `.limits(l)` / `.hooks(h)` / `.hosts(registry)`, ending at `.build() -> Result<Vm, VmError>`. Unset limits ⇒ `Limits::default()` — uncapped, the mechanism law; explicit setters win over the compiled parts"
+"the construction door: `.compiled(x)` (anything `IntoVmParts` — the driver's `Compiled`) or `.program(rc)` for embedders holding a decoded binary, each plus `.limits(l)` / `.hosts(registry)`, ending at `.build() -> Result<Vm, VmError>`. Unset limits ⇒ `Limits::default()` — uncapped, the mechanism law; explicit setters win over the compiled parts"
 msgstr ""
 
 
@@ -26077,229 +26077,229 @@ msgstr ""
 
 #: src/reference/vm-core.md:18
 msgid ""
-"// embedder surface\n"
+"// the host-fn dispatch row (joined from\n"
+"                                  // the HostRegistry at construction)\n"
 msgstr ""
-"// embedder surface\n"
-
-
-#: src/reference/vm-core.md:19
-msgid ""
-"// launched/parked frames to (re)drive\n"
-msgstr ""
-"// launched/parked frames to (re)drive\n"
 
 
 #: src/reference/vm-core.md:20
 msgid ""
+"// launched/parked frames to (re)drive\n"
+msgstr ""
+"// launched/parked frames to (re)drive\n"
+
+
+#: src/reference/vm-core.md:21
+msgid ""
 "// sleep deadlines -> wake lists\n"
 msgstr ""
 "// sleep deadlines -> wake lists\n"
 
 
-#: src/reference/vm-core.md:21
+#: src/reference/vm-core.md:22
 msgid ""
 "// the VM's virtual clock\n"
 msgstr ""
 "// the VM's virtual clock\n"
 
 
-#: src/reference/vm-core.md:26
+#: src/reference/vm-core.md:27
 msgid ""
 "A `Vm` is single-threaded by construction. Saved frames are plain records `{ func, pc, regs, ret_dst }`; calls push, returns pop. Register files are recycled through a pool, and per-function side tables (reference-typed register indices, per-type field layouts, baked type representations) keep the hot loop free of type-table lookups."
 msgstr ""
 "`Vm` 从构造上就是单线程的。保存的帧是普通记录 `{ func, pc, regs, ret_dst }`；调用压入，返回弹出。寄存器文件经由一个池回收，而每函数旁表（引用型寄存器索引、每类型字段布局、烘焙好的类型表示）让热循环无需查询类型表。"
 
 
-#: src/reference/vm-core.md:32
+#: src/reference/vm-core.md:33
 msgid "The interpreter loop"
 msgstr "解释器循环"
 
 
-#: src/reference/vm-core.md:34
+#: src/reference/vm-core.md:35
 msgid ""
 "The loop is a `match` over decoded ops — `decode` is a table index, not a byte scan. On native targets the default engine is a **threaded** dispatcher (`rut-vm-threaded`): every op ends by tail-calling the next op's handler, so dispatch is a jump and hot state stays in registers. A portable loop over the same handler methods backs wasm and other targets; behavior is identical, only the dispatch shape differs. Ops the threaded engine does not absorb _bail_ to the match interpreter with the pc pinned at the op."
 msgstr ""
 "循环是对解码后操作的 `match`——`decode` 是一次表索引，不是字节扫描。在原生目标上，默认引擎是一个**线程化**分派器（`rut-vm-threaded`）：每个操作以尾调用下一个操作的处理例程收尾，因此分派就是一次跳转，热状态留在寄存器里。一个对相同处理例程方法的可移植循环支撑 wasm 及其他目标；行为完全一致，只有分派形状不同。线程化引擎吸收不了的操作会_退回_ match 解释器，pc 钉在该操作上。"
 
 
-#: src/reference/vm-core.md:43
+#: src/reference/vm-core.md:44
 msgid ""
 "Direct calls are an index + jump; interface (itable) calls are two loads (itable row) + an indirect jump."
 msgstr ""
 
 
-#: src/reference/vm-core.md:45
+#: src/reference/vm-core.md:46
 msgid ""
 "Refcount retain/release are inline in the loop; a release to zero nulls the weak list, queues the type's `dispose` body (the `[disposal]` contract), and frees ([The Rc heap and destructors](rc-heap.md))."
 msgstr ""
 
 
-#: src/reference/vm-core.md:49
+#: src/reference/vm-core.md:50
 msgid ""
 "Fuel is accounted per op, with the fuller budget check amortized every `interrupt_every` ops."
 msgstr "燃料按操作记账，更完整的预算检查每 `interrupt_every` 个操作摊销一次。"
 
 
-#: src/reference/vm-core.md:54
+#: src/reference/vm-core.md:55
 msgid ""
 "The embedder's host-fn binding table (`HostRegistry`) is built **before** the `Vm` exists and is consumed at construction: every host thunk the program declares is resolved against the registry immediately, so a declared-but-unbound host fn is a _construction error_, never a mid-run trap. The join produces one dense dispatch row per function — an adapter code pointer, the body's state word, the declared return type, and its is-reference verdict — so calling a host fn costs one table copy, no name work, no allocation."
 msgstr ""
 "嵌入方的宿主函数绑定表（`HostRegistry`）在 `Vm` 存在**之前**构建，并在构造时被消费：程序声明的每个宿主 thunk 都立即对照注册表解析，因此声明了却未绑定的宿主函数是一个_构造错误_，绝不是运行中途的陷阱。这次 join 为每个函数产出一条稠密的分派行——一个适配器代码指针、函数体的状态字、声明的返回类型及其是否引用的判定——因此调用一个宿主函数的代价是一次表复制，没有名字工作，没有分配。"
 
 
-#: src/reference/vm-core.md:63
+#: src/reference/vm-core.md:64
 msgid ""
 "Host bodies are plain Rust functions over `&mut Vm` and slots; arity is capped at 8 (the boundary's tuple law), and signatures are derived from the body's Rust shape, not written by hand."
 msgstr ""
 "宿主函数体是架在 `&mut Vm` 与槽位之上的普通 Rust 函数；元数上限 8（边界的元组法则），签名从函数体的 Rust 形状推导，不是手写的。"
 
 
-#: src/reference/vm-core.md:66
+#: src/reference/vm-core.md:67
 msgid ""
 "A host body records a trap in a VM-side channel rather than returning `Result`; the trap fires before any destination register is written."
 msgstr "宿主函数体把陷阱记录在一个 VM 侧通道里，而不是返回 `Result`；陷阱在任何目的寄存器被写入之前触发。"
 
 
-#: src/reference/vm-core.md:68
+#: src/reference/vm-core.md:69
 msgid ""
 "**Re-entrant calls** (a host fn calling back into rut) run the callee on a fresh frame stack under the same budget. The outer cursor is stash/restore: on return or trap the outer frame is exactly as it was, so a propagated nested trap parks the outer frame _at the host op_ and `resume()` re-runs the host fn. A host fn that prefers to handle the situation itself can catch the trap, add fuel, and retry its nested call."
 msgstr ""
 "**重入调用**（宿主函数回调进 rut）在同一个预算下、用一摞全新的帧栈运行被调用者。外层游标是暂存/恢复式的：返回或陷阱时，外层帧与原先完全一致，因此传播上来的嵌套陷阱会把外层帧停放在_宿主操作处_，`resume()` 会重新运行宿主函数。愿意自行处置局面的宿主函数可以捕获陷阱、补充燃料，然后重试它的嵌套调用。"
 
 
-#: src/reference/vm-core.md:75
+#: src/reference/vm-core.md:76
 msgid ""
 "The async host-fn lane (`register_async!`) binds a Rust async body to the minted `{scope}::{name}__start/__yield/__take/__cancel` rows the compiler weaves for `host async fn` declarations ([The host futures bridge](host-futures.md))."
 msgstr ""
 "异步宿主函数链路（`register_async!`）把一个 Rust async 函数体绑定到编译器为 `host async fn` 声明织出的 `{scope}::{name}__start/__yield/__take/__cancel` 铸造行上（[宿主 future 桥](host-futures.md)）。"
 
 
-#: src/reference/vm-core.md:80
+#: src/reference/vm-core.md:81
 msgid "Traps"
 msgstr "陷阱"
 
 
-#: src/reference/vm-core.md:82
+#: src/reference/vm-core.md:83
 msgid ""
 "Bugs are traps, errors are values. Arithmetic overflow, division by zero, indexing out of bounds, nil dereference, `panic(...)`, a failed downcast guard, and budget exhaustion all unwind as `Err(Trap)` — never a Rust panic:"
 msgstr ""
 "bug 是陷阱，错误是值。算术溢出、除以零、越界索引、nil 解引用、`panic(...)`、失败的向下转型守卫以及预算耗尽，全都以 `Err(Trap)` 的形式展开——绝不是 Rust panic："
 
 
-#: src/reference/vm-core.md:97
+#: src/reference/vm-core.md:98
 msgid ""
 "**Traps are catchable only at the host boundary.** `vm.call(...)` returns `Result`; rut code never catches one — errors in rut are `(T, err)` tuples ([Errors and optionality](../tutorial/errors.md)). On the way out, frames are dropped and destructors run: `dispose` bodies fire, borrow guards release. The `Vm` itself survives a trap — the next call starts clean."
 msgstr ""
 "**陷阱只在宿主边界可捕获。**`vm.call(...)` 返回 `Result`；rut 代码从不捕获陷阱——rut 里的错误是 `(T, err)` 元组（[错误与可空性](../tutorial/errors.md)）。在出去的路上，帧被丢弃、析构器运行：`dispose` 函数体被触发，借用守卫释放。`Vm` 本身能在陷阱后幸存——下一次调用干净地开始。"
 
 
-#: src/reference/vm-core.md:108
+#: src/reference/vm-core.md:109
 msgid ""
 "// per-op countdown\n"
 msgstr ""
 "// per-op countdown\n"
 
 
-#: src/reference/vm-core.md:110
+#: src/reference/vm-core.md:111
 msgid ""
 "// default 1024\n"
 msgstr ""
 "// default 1024\n"
 
 
-#: src/reference/vm-core.md:114
+#: src/reference/vm-core.md:115
 msgid ""
 "**Fuel** counts ops down. Exhaustion parks the frame at its pc — the loop state _is_ the frame — so `add_fuel(n)` + `resume()` continues it; nothing is lost or restarted. Loop back-edges carry `LoopHead` markers so tight loops still park."
 msgstr ""
 "**燃料**按操作倒数。耗尽会把帧停放在它的 pc——循环状态_就是_帧——因此 `add_fuel(n)` + `resume()` 能继续它；没有任何东西丢失或重启。循环回边携带 `LoopHead` 标记，因此紧凑循环也能停放。"
 
 
-#: src/reference/vm-core.md:118
+#: src/reference/vm-core.md:119
 msgid ""
 "**Heap budget** is checked at every allocation; over-limit allocation traps `OutOfMemory` the same parkable way."
 msgstr "**堆预算**在每次分配时检查；超限的分配以同样可停放的方式触发 `OutOfMemory` 陷阱。"
 
 
-#: src/reference/vm-core.md:120
+#: src/reference/vm-core.md:121
 msgid ""
 "**Heap accounting** is live: `heap_usage()` reports current bytes, `fuel_used` accumulates across resumes."
 msgstr "**堆记账**是实时的：`heap_usage()` 报告当前字节数，`fuel_used` 跨恢复累计。"
 
 
-#: src/reference/vm-core.md:122
+#: src/reference/vm-core.md:123
 msgid ""
 "**Interrupts** are cooperative: the budget check cadence bounds how long any host-requested stop can take. Native (host) bodies run outside the fuel budget and are expected to be fast."
 msgstr "**中断**是协作式的：预算检查的节奏为任何宿主请求的停止所需的时间设了上界。原生（宿主）函数体在燃料预算之外运行，并被期望是快的。"
 
 
-#: src/reference/vm-core.md:125
+#: src/reference/vm-core.md:126
 msgid ""
 "`Vm::builder().compiled(c).limits(l).build()` takes the limits (`.limits(..)` on the builder, or the parts a `Compiled` hands over); unset limits mean unbounded fuel and heap — embedders that need budgets pass them explicitly ([Resource limits and fuel](resource-limits.md))."
 msgstr ""
 
 
-#: src/reference/vm-core.md:131
+#: src/reference/vm-core.md:132
 msgid "Coroutines and the driving loop"
 msgstr "协程与驱动循环"
 
 
-#: src/reference/vm-core.md:133
+#: src/reference/vm-core.md:134
 msgid ""
 "Every async entry runs as a root frame, parked when `await` returns pending. There is no microtask queue and no job executor — two queues and a virtual clock:"
 msgstr "每个异步入口都作为一个根帧运行，在 `await` 返回 pending 时停放。没有微任务队列，也没有作业执行器——只有两条队列和一个虚拟时钟："
 
 
-#: src/reference/vm-core.md:137
+#: src/reference/vm-core.md:138
 msgid ""
 "`ready: VecDeque<Slot>` — launched or woken frames; each entry owns one reference (retained on enqueue, released on pop)."
 msgstr "`ready: VecDeque<Slot>`——已启动或已唤醒的帧；每个条目持有一个引用（入队时保留，出队时释放）。"
 
 
-#: src/reference/vm-core.md:139
+#: src/reference/vm-core.md:140
 msgid ""
 "`timers: BTreeMap<u64, Vec<Slot>>` — sleep deadlines against the VM's **virtual clock** (`now_ms` / `set_now` — deterministic; the host advances it explicitly, or maps it to wall time)."
 msgstr ""
 "`timers: BTreeMap<u64, Vec<Slot>>`——对照 VM **虚拟时钟**的 sleep 期限（`now_ms` / `set_now`——确定性的；宿主显式推进它，或把它映射到墙上时间）。"
 
 
-#: src/reference/vm-core.md:142
+#: src/reference/vm-core.md:143
 msgid ""
 "`drive(fut)` — one drive step through the future's designated yield slot (the `Future<T>` class's engine ABI): a fresh engine context over the frame edge, answering `Done` or `Parked` off the frame's state field. Fuel accounting rides the per-op budget unchanged: an exhausted drive parks the frame at its pc, and a re-drive re-enters at the checkpoint state."
 msgstr ""
 
 
-#: src/reference/vm-core.md:148
+#: src/reference/vm-core.md:149
 msgid ""
 "`run_ready()` drains the ready queue one drive per entry; `next_deadline()` expires due timers into `ready` and answers the earliest remaining deadline; `pending_tasks()` is the idle test."
 msgstr ""
 "`run_ready()` 排空就绪队列，每个条目驱动一次；`next_deadline()` 把到期定时器过期进 `ready` 并应答剩余的最早期限；`pending_tasks()` 是空闲判据。"
 
 
-#: src/reference/vm-core.md:151
+#: src/reference/vm-core.md:152
 msgid ""
 "The wake pair (awaiter edge on the awaited frame, pending edge on the awaiter) is one-directional and cleared on resume — no cycle forms."
 msgstr "唤醒对（被 await 帧上的 awaiter 边、awaiter 上的 pending 边）是单向的，并在恢复时清除——不会成环。"
 
 
-#: src/reference/vm-core.md:153
+#: src/reference/vm-core.md:154
 msgid ""
 "A completed drive re-enqueues the frame's awaiter edge. A parked async frame is simply not in `ready` until its wake edge or timer fires."
 msgstr "一次完成的驱动会重新入队帧的 awaiter 边。停放的异步帧就是不在 `ready` 里，直到它的唤醒边或定时器触发。"
 
 
-#: src/reference/vm-core.md:156
+#: src/reference/vm-core.md:157
 msgid ""
 "The engine never owns a wall clock: sleeps are virtual-clock deadlines, and tests virtualize time by advancing the clock — full determinism ([Async and await](async.md), [Launched futures](launched-futures.md))."
 msgstr ""
 "引擎从不拥有墙上时钟：sleep 是虚拟时钟期限，测试通过推进时钟来虚拟化时间——完全确定性（[异步与 await](async.md)、[已启动的 future](launched-futures.md)）。"
 
 
-#: src/reference/vm-core.md:160
+#: src/reference/vm-core.md:161
 msgid "Heap integration"
 msgstr "堆集成"
 
 
-#: src/reference/vm-core.md:162
+#: src/reference/vm-core.md:163
 msgid ""
 "Allocation, retain, and release are inline loop work. There is **no collection pass at all**: destruction happens at release-to-zero, so nothing ever interrupts a frame. Strong reference cycles leak by design; the weak-reference machinery and the shutdown leak report are the diagnostic surface ([Weak references and the cycle collector](weak-refs.md), [The Rc heap and destructors](rc-heap.md)). Heap layout, cell formats, and the bump allocator are [The VM heap](vm-heap.md)."
 msgstr ""
@@ -26510,7 +26510,7 @@ msgstr ""
 
 
 #: src/reference/loading.md:56
-msgid "`Vm::builder().compiled(c).limits(l).hooks(h).build()`"
+msgid "`Vm::builder().compiled(c).limits(l).hosts(r).build()`"
 msgstr ""
 
 

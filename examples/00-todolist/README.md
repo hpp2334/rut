@@ -1,8 +1,8 @@
 # 00-todolist — a Rust app that embeds rut
 
-The first **runnable** host example: everything else under `examples/`
-is the parse-only design corpus, waiting on M2+ features. This one runs
-today, on the M1 slice.
+The smallest **runnable** host example: six of the seven `examples/`
+projects run end to end today (`04-custom-async` is the parse-only
+corpus), and this one is the shortest walk through the embed loop.
 
 The split:
 
@@ -23,15 +23,15 @@ Output (abridged):
 ```
 added: #1, #2, #3
 set_done(#2, true)
-title_of(#2) = Opt(Some(Str("implement the VM")))
-title_of(42) = Opt(None)
-remove(#1) = Res(Ok(Bool(true)))
-remove(#1) again = Res(Err(Str("no todo #1")))
+title_of(#2) = "implement the VM"
+title_of(42) = ""
+remove(#1) = true
+remove(#1) again = false
 TodoList[2]
   #2 [x] implement the VM
   #3 [ ] ship the demo
 second list #1: 0 todos
-fuel used: 680 of Some(1000000)
+fuel used: 978 of Some(1000000)
 ```
 
 ## The design
@@ -46,9 +46,9 @@ fuel used: 680 of Some(1000000)
    host keeps the handle and passes it (plus the container) to every
    later call.
 3. CRUD calls cross with **plain values only**: `str`/`i32`/`bool` in,
-   `i32`/`bool`/`str`/`Option`/`Result` out (the
-   [value boundary](../../docs/src/reference/value-boundary.md)).
-   `TodoList`
+   `u32`/`i32`/`bool`/`str` out (the
+   [value boundary](../../docs/src/reference/value-boundary.md)) —
+   plus the `opaque` container handle itself. `TodoList`
    instances never leave the VM.
 
 ## What it demonstrates
@@ -67,7 +67,7 @@ fuel used: 680 of Some(1000000)
   run executes under fuel + heap limits;
   embedder mistakes (wrong value shape) come back as named traps, never
   silent zeros
-- the executable M1 surface — classes (`Self {}` construction,
+- the executable surface — classes (`Self {}` construction,
   zero-param `new`, `-> Self`), structs with field initializers,
-  `Vec<T>`/`Option<T>`/`Result<T,E>`, `if/else`, `&&`/`||`, `when` with
-  block arms, f-strings, `opaque.new`/`opaque.downcast`
+  `Vec<T>`/`?T` optionals, `if/else`, `&&`/`||`, `when` with
+  block arms, f-strings, `opaque(v)`/`opaque::downcast<T>`

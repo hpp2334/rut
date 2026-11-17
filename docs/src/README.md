@@ -60,7 +60,7 @@ lives at **<https://playground.rut.hpp2334.com>**.
 ```
 crates/     the implementation: lexer, parser, compiler, VM, std, CLI, wasm
 rut/        the in-tree rut packages (core, pouch, ink, json, http, …)
-examples/   seven runnable end-to-end projects
+examples/   six runnable end-to-end projects (04 is parse-only)
 demo/       the wasm playground
 docs/       this book (built with mdbook)
 ```

@@ -20,7 +20,7 @@ the shapes the [value boundary](../../docs/src/reference/value-boundary.md) lets
   (`rut/json`): `Json`'s inherent `pub fn encode` drives the pkg's
   `JsonWriter` — the exact shape a user type spells (the
   structural-satisfaction direction — the compiler's law,
-  [interfaces](../../docs/src/reference/traits.md): json owns the
+  [interfaces](../../docs/src/reference/interfaces.md): json owns the
   interface, `Json` is this file's, and having the member is the whole
   admission).
   The decode half stays the private cursor parser until json's
@@ -109,7 +109,7 @@ fuel used: 1014105 of Some(50000000)
   IETF RFC 8259's escape policy, the 128-level depth law). The lib teaches
   the shape every json consumer spells — and this block is the
   structural law's cross-pkg case
-  ([interfaces](../../docs/src/reference/traits.md)): the interface is
+  ([interfaces](../../docs/src/reference/interfaces.md)): the interface is
   json's, the type
   is ours, and having the members is admission exactly here
 

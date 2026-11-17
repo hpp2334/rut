@@ -14,8 +14,8 @@ example built on **re-entrant `vm.call`**
 where **both opaque directions** meet:
 
 - rut's moderator state lives rut-side behind a rut-constructed `opaque`
-  (`opaque.new(Moderator.new(bus))`, [opaque](../../docs/src/reference/opaque.md)) —
-  the host holds the
+  (`let mod_: ?Moderator = Moderator::new(bus);` then `opaque(mod_)`,
+  [opaque](../../docs/src/reference/opaque.md)) — the host holds the
   handle and hands it back on every event.
 - the host's event bus lives Rust-side behind a **host-constructed**
   `Opaque<EventBus>` (the
@@ -30,17 +30,20 @@ where **both opaque directions** meet:
 RUST biz (main / tests)      →  typed Plugin methods, no vm.call
 RUST adapter (src/lib.rs)    →  the ONLY vm.call sites
         ↓ bus box in · export names out
-RUT adapter (plugin/mod.rut) →  the ONLY entry fns; one-line forwards
-RUT biz (plugin/moderator.rut)  →  pure logic + emit, no entry fn
+RUT adapter (plugin/src/mod.rut) →  the ONLY entry fns; one-line forwards
+RUT biz (the Moderator impl, same file)  →  pure logic + emit, no entry fn
 ```
 
 Neither business layer touches the crossing protocol. `Moderator` holds
 the bus handle and speaks through one private `say(topic, payload)`;
 `Plugin` exposes `join`/`msg`/`tick`/`shutdown` and dispatches through
-one `fire`. The plugin stays free of generic packages, so it publishes
-compiled: the manifest is the plain directory grammar and the same
-directory packs unchanged — the pack door stamps the wire pair into
-the packed manifest; linkable pkgs ride `.rutc`, host pkgs ride source.
+one `fire`. The plugin publishes compiled: the manifest is the plain
+directory grammar and the same directory packs unchanged — the pack
+door stamps `format_version` 13 into the packed manifest; linkable
+pkgs ride `.rutc`, host pkgs ride source. And it is NOT generic-free:
+the manifest pins `pouch` (the CDN source-zip row) and the muted list
+is a consumer-spelled `Vec<str>`, compiled from the zip's ridden
+source at the link.
 
 ## The round trip
 

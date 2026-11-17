@@ -28,9 +28,12 @@ by hand (`src/mount.rs`), the `ink_host` precedent.
 
 ## What it teaches
 
-**1. The async pattern: a hand-written machine.** rut today has no
-async/await (the engine stops at the M3 wall), but a web
-page is nothing *but* async. The pattern that fills the gap:
+**1. The async pattern: a hand-written machine.** rut has
+async/await today ([async](../../docs/src/reference/async.md), the
+[async tutorial](../../docs/src/tutorial/async.md) — 06's brain runs
+on it), but this app keeps its asynchronous shape HAND-WRITTEN: a web
+page's async facts are DOM events and timers, and they cross as
+host-enqueued turns through doors named for their events. The pattern:
 
 * **state lives in ONE container the host holds.** rut has no mutable
   module state (module lets are load-time literals —
@@ -79,9 +82,10 @@ page is nothing *but* async. The pattern that fills the gap:
   in-flight row's title wears the same variant, and the committed row
   appears only when the answer lands as its own turn.
 
-This shape ages well: at M3 the request table becomes real futures and
-`tim_after` becomes a timer primitive — the app's turn law and store
-semantics do not change.
+This shape holds: rut's async lane has landed since ([async](../../docs/src/reference/async.md))
+— real futures, `select2`/`select_all`, `sleep` — and this app keeps
+its request-table shape with `tim_after` as the host's clock. The
+app's turn law and store semantics do not change.
 
 **2. The widget framework: biz never sinks to the DOM.** The framework
 makes a UI a VALUE:
@@ -324,7 +328,7 @@ examples/05-todolist-web/
   the Loader over `rut/biz` reads `rut/biz/rut.jsonc` and runs the
   [dependency-kinds](../../docs/src/reference/dependency-kinds.md) three
   passes (the deps walk — `ui` by its local path row, and through it
-  pouch/nmapset/nmap_host from the pinned jsDelivr bundles — then
+  pouch/nmapset/nmap_host from the pinned jsDelivr source zips — then
   compile) FOR REAL — the manifest, not a Rust fn, is the module list.
   The tests prime an offline remote from the committed dist/std
   artifacts (dist/std plays the wire), so the gates never network.
@@ -378,11 +382,11 @@ annotation law,
 [functions, closures, generics](../../docs/src/reference/functions-closures-generics.md)),
 first-class fns as values
 (`store.derive` / `store.mutation`
-take fn literals; `opaque.downcast` unwraps the erased program at the
+take fn literals; `opaque::downcast` unwraps the erased program at the
 trust boundary, [opaque](../../docs/src/reference/opaque.md)), literal structs (`World`,
 `AppRoot`, `Todo`, `Req`, `Widget`), shared-cell containers (the
 container crossing is NON-NULLABLE end to end: `opaque(AppRoot)` —
-`downcast<AppRoot>` — nil-checked unwrap `let mut r: AppRoot = root`),
+`opaque::downcast<AppRoot>` — nil-checked unwrap `let r: AppRoot = root`),
 `?T` nilables, `when` match, f-strings, and
 the two-package manifest tree — the medium-scale shape above. The
 store's own verbs are ui-module-private: biz speaks `a.get()` /
@@ -482,7 +486,7 @@ re-litigated):
   a rejection or a lost id is `("", why)` — and the app surfaces the
   why through `(?opaque, str)`'s err channel instead of pretending
   every answer succeeded.
-* the dispatch table is the val-column row `HashMap<str, i64>` —
+* the dispatch table is a plain `HashMap<str, i64>` row —
   nmapset's keys are the SUBJECT (the semantic event name), never the
   host's listener id.
 

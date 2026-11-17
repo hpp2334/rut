@@ -1,7 +1,7 @@
 {
   // 06-github-viewer-cli — the project root: the brain (`mod.rut`) is the
   // entry module, and the std closure mixes the two dep kinds the engine
-  // allows over a CDN artifact.
+  // allows over a committed std source zip.
   //
   // THE CDN ROW: `http` ships as a COMMITTED source zip
   // (dist/std-v18/http.zip, jsDelivr-served at the tag, pinned in
@@ -10,8 +10,9 @@
   // strbuild_host) rides inside as embedded source groups.
   //
   // THE PATH ROWS: pouch, nmapset, json and futures are GENERIC
-  // owners, and since the generic-source riding law their bundles would
-  // serve this app's consumer-spelled shapes at the link — the path rows
+  // owners, and std ships every pkg as a source zip — their source
+  // would serve this app's consumer-spelled shapes at the link from a
+  // url row too — so the path rows
   // are a CHOICE, not a wall: the tree checkout is this example's
   // hermetic test input (the fixture lane mounts them from the tree, the
   // url lane seeds http only). See docs/src/reference/bundles.md (the

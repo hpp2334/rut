@@ -6,13 +6,13 @@ example:
 
 | Project | Run | Demonstrates |
 |---|---|---|
-| [`00-todolist/`](00-todolist/) | `cargo run -p todolist` | an `entry fn` surface over a rut `class` — the host drives CRUD through `opaque` handles; the pouch dep rides its CDN bundle (pinned), the consumer-spelled shapes compiling from the ridden source at the link |
+| [`00-todolist/`](00-todolist/) | `cargo run -p todolist` | an `entry fn` surface over a rut `class` — the host drives CRUD through `opaque` handles; the pouch dep rides its committed source zip (pinned), the consumer-spelled shapes compiling from the ridden source at the link |
 | [`01-sort/`](01-sort/) | `cargo run -p sort` | a sorting library behind one dispatcher entry; `Result` at the boundary, known-input gates |
 | [`02-digest/`](02-digest/) | `cargo run -p digests` | byte-level codecs and hashes (MD5/SHA/base64/CRC/FNV), the host as test oracle |
-| [`03-plugin/`](03-plugin/) | `cargo run -p plugin` | a module directory + [`.rutbundle`](../docs/src/reference/bundles.md) chat-moderator plugin; re-entrant `vm.call`, both `opaque` directions; the pouch dep rides its CDN bundle (pinned) and the moderator's muted list is a consumer-spelled `Vec<str>` — the pack carries the pouch group inside the published bundle |
-| [`04-custom-async/`](04-custom-async/) | parse-only — no runnable harness yet (the disclosed follow-up); the dir carries its `rut.jsonc` for the shape law | a user-written launcher (`launch_custom`) over the CLOSED builtin `Future` class — per-checkpoint stats, cancellation probes read as data inside the async body (`cx.cancelled()`), resume state at each checkpoint (`cx.checkpoint()`). The engine mints every future (`async fn`/`async {}`/`sleep`); a user type cannot BE a future. `await` targets engine-woven futures in v1 (join not yet landed) |
-| [`05-todolist-web/`](05-todolist-web/) | `cargo test -p todolist-web` + `node tests/e2e-browser.mjs` | the full page app: a todolist with a simulated server (request table + per-kind `tim_after` latency) whose brain is pure rut — ten DOM/timer crossings over web_sys on wasm32, the fake-DOM twin as the cargo gate, a through-the-artifact e2e in node and Firefox headless; the wasm mirror takes the `nmap_host` surface from the committed CDN artifact (`mount_bundle_bytes` over `include_bytes!`) |
-| [`06-github-viewer-cli/`](06-github-viewer-cli/) | `cargo run -p rgh -- --repo=… --ref=… list` | `rgh` — a GitHub viewer over the jsDelivr CDN whose brain is rut (`mod.rut`, an ASYNC free fn over the redesigned std `rut/http` lane): argv carving, the tree JSON decode, and the human-size formatter run in the VM; `send` resolves at headers, the list drains in one body await, the download walks the byte stream chunk by chunk through the sync `append_file` row; the embedder launches the brain (`boot` + `launch_future`), pumps the loop to idle, exits with the brain's i32; the offline suite rides the fixture lane keyed on method+URL with virtual-clock chunk arrival; the std closure mounts through the project manifest (`rut.jsonc` — the url carrier), with `http` riding the committed CDN bundle (sha256-pinned) and the generic owners on path rows (the tree checkout is this example's hermetic test input; their bundles would serve the shapes the same way — the binaries carry the template bodies) |
+| [`03-plugin/`](03-plugin/) | `cargo run -p plugin` | a module directory + [`.rutbundle`](../docs/src/reference/bundles.md) chat-moderator plugin; re-entrant `vm.call`, both `opaque` directions; the pouch dep rides its committed source zip (pinned) and the moderator's muted list is a consumer-spelled `Vec<str>` — the pack carries the pouch group inside the published bundle |
+| [`04-custom-async/`](04-custom-async/) | parse-only — no runnable harness yet (the disclosed follow-up); the dir carries its `rut.jsonc` for the shape law | a user-written launcher (`launch_custom`) over the CLOSED builtin `Future` class — per-checkpoint stats, cancellation probes read as data inside the async body (`cx.cancelled()`), resume state at each checkpoint (`cx.checkpoint()`). The engine mints every future (`async fn`/`async {}`/`sleep`); a user type cannot BE a future. `await` targets engine-woven futures — `select2`/`select_all` are the competition surface (`join` on a launched receipt is compile-gated in this build) |
+| [`05-todolist-web/`](05-todolist-web/) | `cargo test -p todolist-web` + `node tests/e2e-browser.mjs` | the full page app: a todolist with a simulated server (request table + per-kind `tim_after` latency) whose brain is pure rut — ten DOM/timer crossings over web_sys on wasm32, the fake-DOM twin as the cargo gate, a through-the-artifact e2e in node and Firefox headless; the wasm mirror takes the `nmap_host` surface from the committed source zips (`mount_bundle_bytes` over `include_bytes!` — it rides inside `nmapset.zip` as the embedded group) |
+| [`06-github-viewer-cli/`](06-github-viewer-cli/) | `cargo run -p rgh -- --repo=… --ref=… list` | `rgh` — a GitHub viewer over the jsDelivr CDN whose brain is rut (`mod.rut`, an ASYNC free fn over the redesigned std `rut/http` lane): argv carving, the tree JSON decode, and the human-size formatter run in the VM; `send` resolves at headers, the list drains in one body await, the download walks the byte stream chunk by chunk through the sync `append_file` row; the embedder launches the brain (`boot` + `launch_future`), pumps the loop to idle, exits with the brain's i32; the offline suite rides the fixture lane keyed on method+URL with virtual-clock chunk arrival; the std closure mounts through the project manifest (`rut.jsonc` — the url carrier), with `http` riding the committed source zip (sha256-pinned) and the generic owners on path rows (the tree checkout is this example's hermetic test input; their zips would serve the shapes the same way — the source carries the template bodies) |
 
 Every rut program here is a module dir with a `rut.jsonc` — the
 manifest is the deps carrier, and since the nameability law it is the
@@ -52,7 +52,7 @@ project manifest is the only url carrier, and the embedder seeds the
 fetcher from it — [embedding](../docs/src/reference/embedding.md)).
 Only the CURRENT cut is committed: the `dist/std/` working mirror plus
 the `dist/std-vNN/` envelope of the latest tag. Old tags serve their
-own immutable commits, but this toolchain reads wire 12 only — stale
+own immutable commits, but this toolchain reads wire 13 only — stale
 bytes re-pack, they are never fetched back.
 The delivery is the engine's instantiation law: a compiled bundle
 carries its pack closure's instantiations in its ledger and its
@@ -133,10 +133,10 @@ Capability is declared as an `interface` and observed, never
 registered: a type satisfies an interface by **having its members on
 its own inherent impl** — there is no `impl Trait for Type` anymore,
 no pair placement rule, no orphan rule (the
-[interfaces reference](../docs/src/reference/traits.md), the
+[interfaces reference](../docs/src/reference/interfaces.md), the
 compiler's law). 02-digest's `Json` is the cross-pkg case: json owns
 the `JsonSerialize` interface, `Json` is that file's, and `Json`
-qualifies by spelling `pub fn encode(self, mut w: JsonWriter) ->
+qualifies by spelling `pub fn encode(self, w: JsonWriter) ->
 ?EncodeJsonError` on its own inherent impl.
 
 - **Primitives and bare containers never satisfy** — the primitives,
@@ -156,12 +156,11 @@ qualifies by spelling `pub fn encode(self, mut w: JsonWriter) ->
   (the type's members live where the type was declared).
 
 The full law: [interfaces and
-dispatch](../docs/src/reference/traits.md).
+dispatch](../docs/src/reference/interfaces.md).
 
 ## The std `json` package — the surface, the rulings, the run recipe
 
-`rut/json/` is the ninth std pkg (after `core`, `calc`, `nmap_host`,
-`nmapset`, `pouch`, `ink`, `rt`, `bench-cross`) — pure rut, zero host
+`rut/json/` is a std pkg — pure rut, zero host
 fns, the [stdlib rules](../docs/src/reference/stdlib.md) are its law.
 Three entries and two interfaces:
 
@@ -188,8 +187,7 @@ The locked rulings, user-visible as spells:
   encodeJson(v);` then check `e == nil`.
 - **`Self`, not a `<T>` param, on `JsonDeserialize`** — you cannot
   decode an A-reader into B; the decode member's `Self` IS the type.
-- **The streams are never nilable** (`mut w: JsonWriter`, `mut r:
-  JsonReader`): [by-reference](../docs/src/reference/by-reference-and-nullable.md)
+- **The streams are never nilable** (`w: JsonWriter`, `r: JsonReader`): [by-reference](../docs/src/reference/by-reference-and-nullable.md)
   sharing is the default; `?` only where
   absence is a legitimate state.
 - **`decodeJsonBytes` is strict UTF-8** — `bytes::decode()` is lossy,
@@ -233,7 +231,7 @@ The run recipe:
 
 ## The std `strbuild` package — the class contract, the mut law, the row
 
-`rut/strbuild/` is the tenth std pkg (after `json`) — a rut class over
+`rut/strbuild/` is a std pkg — a rut class over
 the HOST builder (the `ink`/`Logger` pattern): the `strbuild_host`
 decl pkg declares the five rows (`sb_new`/`sb_push`/`sb_push_code`/
 `sb_len`/`sb_finish`, registered under the pkg-name scope), the
@@ -265,7 +263,7 @@ for zero need). The rulings, user-visible as spells:
 - **The mut law is [by-reference sharing](../docs/src/reference/by-reference-and-nullable.md),
   not copying.** A binding shares
   the ONE instance cell, whose `out` slot shares the ONE host box:
-  appends through an alias — or through a `mut b: StringBuilder`
+  appends through an alias — or through a plain `b: StringBuilder`
   parameter — land in the CALLER's document, visible through the
   original. Copies happen at exactly two engineered points:
   `build()`'s materialization and `grow`'s prefix move. `build()`
@@ -298,7 +296,7 @@ The run recipe:
 
 - **A module dir**: `[deps]` strbuild by path — `rut run <dir>`.
 - **A taste in ten lines**:
-  `let mut b = StringBuilder::with_cap(1024); b.append(f"..."); ...; let s = b.build();`
+  `let b = StringBuilder::with_cap(1024); b.append(f"..."); ...; let s = b.build();`
 - **The bench row**: `node benches/run.mjs --workload strbuild`.
 
 ## The keyed collections — one family, the values in the entries
@@ -358,7 +356,7 @@ class remains the recorded future shape. The set never had a prim-named
 twin; `HashSet` has always been the one spelling.
 
 
-One compat note: json's decode-side diagnostics did NOT move — a map
+One unchanged corner: json's decode-side diagnostics did NOT move — a map
 keyed by `bytes` diagnoses exactly as before ("this key type has no
 JSON spelling"), because the decode wrapper family carries the law:
 `JMapBytes::decode` always answers the bytes-keys disclosure error (the
@@ -379,7 +377,7 @@ Run recipe:
 
 - **A module dir**: `[deps]` nmapset by path — `rut run <dir>`.
 - **A taste in ten lines**:
-  `let mut m = HashMap<str, i64>::new(); m.put(k, v); let v = m.get(k);`
+  `let m = HashMap<str, i64>::new(); m.put(k, v); let v = m.get(k);`
 - **The bench rows**: `node benches/run.mjs --workload
   nmapset-int`, `--workload nmap-hashset`, `--workload
   nmap-knucleotide` (the `nmap-primmap` twin was RETIRED with the
@@ -387,10 +385,10 @@ Run recipe:
 
 ## The std `http` lane — two pkgs, one feature, an async-only face
 
-`rut/http_host/` and `rut/http/` are the thirteenth and fourteenth
-std pkgs (grep `rut/` — both count), redesigned around the host
+`rut/http_host/` and `rut/http/` are a std pkg PAIR (grep
+`rut/` — both count), redesigned around the host
 future lane (`pub host async fn` + `register_async!`). They arrive
-as a PAIR:
+together:
 
 - **`http_host`** — the pure declaration surface, organized as a MOD
   TREE (the host-surface pilot): `pub mod net;` + `pub mod stream;`

@@ -79,7 +79,7 @@ One rut module — compiled, verified, booted, called from Rust — the
 use std::rc::Rc;
 
 use rut_ast::parser::Mode;
-use rut_vm::interp::{HostHooks, HostRegistry, Limits, Vm};
+use rut_vm::interp::{HostRegistry, Limits, Vm};
 
 const SRC: &str = "entry fn answer() -> i32 { return 6 * 7; }";
 
@@ -102,7 +102,6 @@ fn main() -> Result<(), String> {
     let mut vm = Vm::builder()
         .program(Rc::new(prog))
         .limits(limits)
-        .hooks(HostHooks::default())
         .hosts(HostRegistry::new())
         .build()
         .map_err(|e| e.msg)?;

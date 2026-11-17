@@ -183,9 +183,9 @@ entry fn fill(c: opaque, n: u32, seed: u32) {
     b.data = fresh;
 }
 
-/// Sort the bank in place. Unknown names come back as `Result.err` —
+/// Sort the bank in place. The `str` return is the error channel:
+/// `""` means success; an unknown name answers its message —
 /// an ordinary value, not a trap.
-// errors are values: an empty string means success
 entry fn sort(c: opaque, algo: str) -> str {
     let b = opaque::downcast<?Bank>(c);
     let unknown = false;

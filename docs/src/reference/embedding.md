@@ -72,7 +72,7 @@ let limits = rut_vm::interp::Limits {
     interrupt_every: 1024,
 };
 let mut vm = rut_vm::interp::Vm::builder()
-    .compiled(compiled)          // the run's product; also .limits/.hooks/.hosts
+    .compiled(compiled)          // the run's product; also .limits/.hosts
     .build()?;
 let answer: i64 = vm.call("compute", (41,))?;
 ```
@@ -417,7 +417,7 @@ lives in `rut-native`.
 
 | API | Meaning |
 |---|---|
-| `Vm::builder()` | the construction door: `.compiled(x)` (anything `IntoVmParts` — the driver's `Compiled`) or `.program(rc)` for embedders holding a decoded binary, each plus `.limits(l)` / `.hooks(h)` / `.hosts(registry)`, ending at `.build() -> Result<Vm, VmError>`. Unset limits ⇒ `Limits::default()` — uncapped, the mechanism law; explicit setters win over the compiled parts |
+| `Vm::builder()` | the construction door: `.compiled(x)` (anything `IntoVmParts` — the driver's `Compiled`) or `.program(rc)` for embedders holding a decoded binary, each plus `.limits(l)` / `.hosts(registry)`, ending at `.build() -> Result<Vm, VmError>`. Unset limits ⇒ `Limits::default()` — uncapped, the mechanism law; explicit setters win over the compiled parts |
 | `HostRegistry::new()` | an empty binding table (the raw lane) |
 | `HostPkg::new(scope)` | a pkg builder; rows register under bare names or scope-relative paths (`"net::connect"` — a row under the pkg's `mod net` tree; the scope itself is never part of the row name) and the scope prefixes once, at the install |
 | `pkg_fn!` / `pkg_async_fn!` | the builder's sugar: one spelling → one row / the five-row async family (the spelling may carry the mod path: `"net::send"` → `net::send__start` et al) |

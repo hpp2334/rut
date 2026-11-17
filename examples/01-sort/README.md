@@ -24,13 +24,13 @@ Output (abridged):
 pushed: [5, 2, 9, 2]
 after insertion: [2, 2, 5, 9]
 fill(16, seed=42), each algorithm:
-  insertion true  fuel   2335  [208, 320, 353, ..., 854, 893]
-  bubble    true  fuel   3895  [208, 320, 353, ..., 854, 893]
-  selection true  fuel   3353  [208, 320, 353, ..., 854, 893]
-  quick     true  fuel   2241  [208, 320, 353, ..., 854, 893]
-  merge     true  fuel   4358  [208, 320, 353, ..., 854, 893]
-sort(bogus) = Res(Err(Str("unknown algorithm: bogus")))
-fuel used: 21142 of Some(5000000)
+  insertion true  fuel   2043  [208, 320, 353, ..., 854, 893]
+  bubble    true  fuel   3155  [208, 320, 353, ..., 854, 893]
+  selection true  fuel   2830  [208, 320, 353, ..., 854, 893]
+  quick     true  fuel   1803  [208, 320, 353, ..., 854, 893]
+  merge     true  fuel   5595  [208, 320, 353, ..., 854, 893]
+sort(bogus) = "unknown algorithm: bogus"
+fuel used: 21367 of Some(5000000)
 ```
 
 ## The design
@@ -44,8 +44,8 @@ and the host holds the handle. Results come back three ways:
 
 - `serialize(c) -> str` — a JSON array, `[1, 2, 3]`: one string
   crosses, so a whole result is one host-side compare
-- `get(c, i) -> Option<i32>` — element-by-element, `Option.none()`
-  past the end
+- `get(c, i) -> i32` — element-by-element, `0` past the end
+  (`has(c, i) -> bool` is the membership probe)
 - `is_sorted(c) -> bool` — the verdict
 
 ## What it demonstrates
@@ -54,17 +54,20 @@ and the host holds the handle. Results come back three ways:
   (out-of-place `push`-built halves merged back through the shared
   handle); the call-frame stack is the VM's, under fuel
 - **`when` on strings** — `sort(c, algo)` dispatches on the algorithm
-  name via string-literal pattern arms; unknown names are an ordinary
-  `Result.err` value, not a trap
-- **the mut-binding law** ([modules and visibility](../../docs/src/reference/modules-and-visibility.md)) —
+  name via string-literal pattern arms; unknown names come back as an
+  ordinary `str` answer (the `"unknown algorithm: …"` message), not a trap
+- **mutable by default; `const` is the opt-out** ([modules and visibility](../../docs/src/reference/modules-and-visibility.md)) —
   every algorithm takes
-  `mut xs: Vec<i32>`: writing through a handle requires a `mut` head
-  binding, while reading (or `push`) doesn't
+  `xs: ?Vec<i32>` and writes through the shared handle: there is no
+  `mut` head to earn, a binding is reassignable and writable-through
+  unless spelled `const` (and that opt-out is shallow — reassignment
+  only, writes through the binding stay legal)
 - **wrapping escapes** ([primitive types](../../docs/src/reference/primitive-types.md)) —
   `fill`'s LCG runs on `&*`/`&+`
   so the u32 math never traps (plain `*` — and `<<` — would)
 - **budgets** ([resource limits](../../docs/src/reference/resource-limits.md)) — the run executes under fuel + heap limits,
   and `main.rs` prints fuel per algorithm: quick < insertion <
   selection < bubble, as it should be
-- the executable M1 surface — structs, `opaque.new`/`opaque.downcast`,
-  `Option`/`Result`, `for`/`while`, short-circuit `&&`, f-strings
+- the executable surface — structs, `opaque(v)`/`opaque::downcast<T>`,
+  `?T` optionals, `for`/`while`, short-circuit `&&`, f-strings, the
+  wrapping methods (`wrapping_mul`/`wrapping_add`)

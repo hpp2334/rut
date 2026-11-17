@@ -15,7 +15,8 @@ pub struct Vm {
     cur_regs: Vec<Slot>, cur_ret_dst: Option<Reg>,
     fuel: Option<u64>,            // per-op budget
     interrupt_every: u32,         // budget check cadence (default 1024)
-    hooks: HostHooks,             // embedder surface
+    host_slots: Vec<HostSlot>,    // the host-fn dispatch row (joined from
+                                  // the HostRegistry at construction)
     ready: VecDeque<Slot>,        // launched/parked frames to (re)drive
     timers: BTreeMap<u64, Vec<Slot>>,  // sleep deadlines -> wake lists
     now_ms: u64,                  // the VM's virtual clock

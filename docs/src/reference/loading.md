@@ -53,7 +53,7 @@ Everything the host needs is the chain plus a handful of `Vm` methods
 | `pkg_fn!` / `pkg_async_fn!` | the `HostPkg` builder's sugar — one spelling → one row / the five-row async family ([embedding and native modules](embedding.md)) |
 | `RutRun::new().mount(..).pkg(..).entrypoint(..).compile()` | the run chain: `mount(..)` takes the walk's `Mounted`s, `pkg(..)` offers the byte carriers (`Offer::Lib(&bundle)` / `Offer::Host(hp)`), the root — one terminal step compiles (`Result<Compiled, RunError>`) |
 | `bundle.restore_symbols(&map)` | restore a [stripped artifact's](symbol-stripping.md) private symbol table on the decoded archive handle — once, before any offer |
-| `Vm::builder().compiled(c).limits(l).hooks(h).build()` | boot; joins every declared host fn to its binding (a declared-but-unbound fn is a construction error) |
+| `Vm::builder().compiled(c).limits(l).hosts(r).build()` | boot; joins every declared host fn to its binding (a declared-but-unbound fn is a construction error) |
 | `vm.call(export, args) -> Result<Value, Trap>` | sync entry — typed arg/ret adapters over the boundary |
 | `vm.resume()` | continue a parked frame after `add_fuel` |
 | `vm.run_ready()`, `vm.next_deadline()`, `vm.pending_tasks()`, `vm.drive(fut)` | the async driving verbs |
