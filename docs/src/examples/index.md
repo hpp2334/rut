@@ -12,7 +12,7 @@ Each project has its own page in this chapter; the classics share
 | Project | Run | What it demonstrates |
 |---|---|---|
 | [00 — Todolist](00-todolist.md) | `cargo run -p todolist` | an `entry fn` surface over a rut `class` — the host drives CRUD through `opaque` handles |
-| [01 — Sort](01-sort.md) | `cargo run -p sort` | five sorting algorithms behind one dispatcher entry; `when` on strings, the mut-binding law, fuel budgets |
+| [01 — Sort](01-sort.md) | `cargo run -p sort` | five sorting algorithms behind one dispatcher entry; `when` on strings, the const-binding law, fuel budgets |
 | [02 — Digest](02-digest.md) | `cargo run -p digests` | byte-level codecs and hashes (MD5/SHA/base64/CRC/FNV); the host as an independent test oracle |
 | [03 — Plugin](03-plugin.md) | `cargo run -p plugin` | a module directory + `.rutbundle` chat-moderator plugin; re-entrant `vm.call`, both `opaque` directions |
 | [04 — Custom async](04-custom-async.md) | parse-only — no runnable harness | a user launcher re-spelled over the closed `Future` surface (no user type can BE a future) with per-checkpoint stats and cancellation audits |

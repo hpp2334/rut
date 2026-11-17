@@ -90,7 +90,7 @@ designated surfaces, one law:
 
 | marker | surface | caller | signature owner | body compiled |
 |---|---|---|---|---|
-| `[disposal]` | cell death | the engine, at refcount zero | the engine — `(mut self, cx: DisposalContext)` | eagerly queued at death ([the Rc heap](rc-heap.md)) |
+| `[disposal]` | cell death | the engine, at refcount zero | the engine — `(self, cx: DisposalContext)` | eagerly queued at death ([the Rc heap](rc-heap.md)) |
 | `[iterable]` | `for (x of it)` | the for-of desugar | the member — its `emit` parameter fixes `E` | fused into the loop ([interfaces](interfaces.md)) |
 | `[constructor]` | the call form `Type(..)` | user code | the member — its parameters fix the call's shape | byte-identical to `Point::from_xy(..)` |
 
@@ -227,9 +227,11 @@ like every class.
 
 - **The receiver is explicit.** An instance method spells its receiver
   as the first parameter — `fn add(self, x: i32, y: i32)` — and the
-  body reads fields through `self`. A
-  method that mutates declares `mut self` and requires a `let mut`
-  receiver (see [Modules and visibility](modules-and-visibility.md)).
+  body reads fields through `self`. A method that mutates just writes
+  through `self`: mutation is the default, gated only by the caller's
+  const opt-out (a `const` binding refuses its own reassignment, never
+  the write-through — see
+  [Modules and visibility](modules-and-visibility.md)).
 - A method **without** a `self` parameter is a **class method** —
   invoked on the class itself (`Rect::new(..)`, `Self.new(..)` inside
   the body). Presence or absence of `self` is the whole distinction.

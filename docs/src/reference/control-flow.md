@@ -114,8 +114,8 @@ ONE designated member with an `emit` closure that follows the capture
 law exactly like the fused form:
 
 ```rut
-for (let x of expr) { .. }         // plain `let`: a read-only view
-for (let x of expr) { .. }     // `mut`: the body may assign x
+for (let x of expr) { .. }         // mutable: the body may assign x
+for (const x of expr) { .. }       // `const`: reassigning x is refused
 ```
 
 The keyed collections mark it too: `for (let k of m)` walks a
@@ -128,9 +128,11 @@ Indexed form — the C shape:
 for (let i = 0; i < n; i += 1) { .. }
 ```
 
-Both headers declare a **normal binding**, and the mut-binding law
-gates them like any `let`: assigning the loop variable — in the body,
-or in the indexed form's update clause — requires `mut` in the header:
+Both headers declare a **normal binding**, and the binding law gates
+them like any `let`: the loop variable is mutable by default, and
+spelling `const` opts out — assigning the loop variable — in the body,
+or in the indexed form's update clause — is refused on a `const`
+header:
 
 ```rut
 use ink::{ Logger };
@@ -141,7 +143,8 @@ entry fn main() {
     for (let i = 0; i < 5; i += 1) {   // the update clause assigns i
         total += i;
     }
-    // for (let i = 0; i < 5; i += 1) { }  // ERROR: assignment to `i` requires `mut`
+    // for (const i = 0; i < 5; i += 1) { }
+    // ERROR: a `const` induction variable is reassigned by the loop — spell `let`
     let rows = [[1, 2], [3, 4]];
     for (let row of rows) {            // the body assigns the element
         row[0] = 99;                       // the write reaches the sequence

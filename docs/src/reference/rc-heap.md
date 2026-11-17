@@ -76,7 +76,7 @@ released 4 octets
 
 Laws:
 
-- The engine calls `dispose(mut self, cx: DisposalContext)` exactly
+- The engine calls `dispose(self, cx: DisposalContext)` exactly
   once per cell death — when the strong count reaches zero. Types
   without a `[disposal]` member release straight to the field walk.
 - The call runs **at a call boundary**, not re-entrantly inside the

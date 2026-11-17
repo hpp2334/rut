@@ -40,12 +40,19 @@ The keyword set is exactly:
 
 | | | | | |
 |---|---|---|---|---|
-| `fn` | `let` | `mut` | `if` | `else` |
+| `fn` | `let` | `const` | `if` | `else` |
 | `while` | `for` | `of` | `return` | `when` |
 | `enum` | `struct` | `class` | `interface` | `impl` |
 | `requires` | `use` | `pub` | `static` | `async` |
 | `await` | `is` | `host` | | |
 | `true` | `false` | `nil` | | |
+
+`const` is the newest seat: the binding-head opt-out (see
+[Modules and visibility](modules-and-visibility.md)) — `mut`'s old
+place in the table; the word `mut` itself is an ordinary identifier
+now. Because `const` is a binding head, a binding may not be NAMED
+`const` (`let const = 1;` eats the ordinary "expected a binding name"
+error), while retired words like `null` and `var` stay nameable.
 
 Contextual words — ordinary identifiers elsewhere:
 
@@ -70,11 +77,14 @@ Contextual words — ordinary identifiers elsewhere:
 There is NO reserved-word hard-ban left: every word the lexer scans is
 an identifier token, and the parser's own keyword table decides what a
 word means. Words that are keywords in JavaScript or Rust — `switch`,
-`match`, `null`, `var`, `const`, `delete`, `new`, `void`, `in`,
+`match`, `null`, `var`, `delete`, `new`, `void`, `in`,
 `private`, `extern`, `where`, … — are ordinary identifiers here:
 `let null = 5;` and `fn match()` are legal rut — and so is `trait`:
 an ordinary identifier (name your pet snake `trait` if you like; it
-carries no meaning).
+carries no meaning). The parser-table words above (`const` included —
+it heads a binding) keep their meaning only in the positions that
+expect one; `const` in expression position degrades to an
+unresolved-name error at resolution, not a parse diag.
 
 ## Punctuation: `::` and `.`
 

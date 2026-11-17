@@ -135,6 +135,12 @@ entry fn main() {
 sum=60 scale=1.5
 ```
 
+Two of those lines pin the binding law: `const flags` opts out — the
+name `flags` itself never rebinds (writes through the vec still work;
+`const` is shallow) — while `let sum` is mutable by default and the
+loop body reassigns it freely (see
+[values and variables](../tutorial/values-and-variables.md)).
+
 The full tour — suffixes, casts, strings, `bytes`, structs — is the
 [values and variables](../tutorial/values-and-variables.md) tutorial,
 and the exact rules live in

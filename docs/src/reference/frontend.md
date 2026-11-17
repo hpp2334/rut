@@ -134,7 +134,7 @@ stage — no lookahead).
 | item dispatch | peek 1 (`use` `let` `enum` `struct` `class` `interface` `impl` `fn`) |
 | statement vs expression-statement | peek 1 (leading keyword) |
 | `for`-of vs C-style `for` | peek 4: `for ( let Ident <of or =>` |
-| instance vs class method | peek 4: `fn Ident ( <mut? self? …>` |
+| instance vs class method | peek 4: `fn Ident ( <self? …>` |
 | struct literal vs path expression | peek 2: `Ident {` ⇒ literal (classes have no instance literal) |
 | `when`-arm body form | peek 1 after `->` (`{` ⇒ block arm, else expression arm) |
 | `if` atom vs statement | peek 2: `if (` in expression position ⇒ the if ATOM (statement-leading `if` is claimed by the statement grammar first) |

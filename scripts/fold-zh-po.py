@@ -40,6 +40,7 @@ FRESH = {}
 
 
 
+
 def main():
     pot_text = open(POT, encoding='utf-8').read()
     po_text = open(PO, encoding='utf-8').read()

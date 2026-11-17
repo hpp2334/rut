@@ -22,9 +22,9 @@ entry fn main() {
 5
 ```
 
-- Parameters are `name: Type`; a mutable parameter declares
-  `mut name` — the callee's permission to mutate the caller's object
-  (see [Modules and visibility](modules-and-visibility.md)).
+- Parameters are `name: Type`; they are mutable like any `let` —
+  `fn step(p: Point)` may write the caller's object (see
+  [Modules and visibility](modules-and-visibility.md)).
 - A function without a result arrow returns `nil`; `return;` (or
   falling off the end) is its return.
 - A function WITH a result arrow must return on every path: a body
@@ -40,9 +40,8 @@ entry fn main() {
   dead statements after a `return` are still just dead code. The same
   law covers the closure block form.
 - Methods are functions in impl blocks: the first parameter spelled
-  `self` (or `mut self`) makes it an instance method; absence of `self`
-  makes it a class method (see
-  [Classes and constructors](classes.md)).
+  `self` makes it an instance method; absence of `self` makes it a
+  class method (see [Classes and constructors](classes.md)).
 - `entry fn` publishes a function to the embedder (see
   [Modules and visibility](modules-and-visibility.md)); `async fn`
   declares a suspending function (see [Async and await](async.md)).
@@ -82,9 +81,9 @@ add=3 area=3.1415927
   promoted to a hidden shared-slot cell, so both frames stay linked
   for the binding's whole scope (a stash-then-reassign, a reassign
   inside the closure, and the `for..of` loop variable — one binding
-  reassigned per iteration, its write access gated by the header's
-  `mut` — all follow this one law). Refcounting keeps captures alive; a
-  closure is itself a shared cell value.
+  reassigned per iteration, its reassignment gated by the header's
+  `const` opt-out — all follow this one law). Refcounting keeps
+  captures alive; a closure is itself a shared cell value.
 
 ## Generics
 

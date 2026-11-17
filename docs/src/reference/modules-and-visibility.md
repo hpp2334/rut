@@ -235,7 +235,7 @@ to add ([dependency kinds](dependency-kinds.md)).
 The engine's builtin names — the primitives, `opaque`, `panic`,
 `type_id<T>()`, `str(x)` — are **ambient**: no `use` is
 needed for them. The gated names resolve only through
-`use core::{ .. }`: the const `NAN`, the disposal context
+`use core::{ .. }`: the surface const `NAN`, the disposal context
 `DisposalContext`, the weak reference `Weak<T>`, and the closed async
 pair (`Future<T>`, `RunContext`) — the engine's weave never needs the
 import, only source that spells one of the names does. The bracket
@@ -276,7 +276,7 @@ Initializers must be **load-time expressions**: literals, enum members,
 builtin operators over load-time expressions, struct literals whose
 fields are load-time expressions, fixed-array literals whose elements
 are, `type_id<T>()`, and builtin zero allocations (`[nil; n]` with a
-const `n`). Calls to user functions are not load-time expressions.
+load-time-constant `n`). Calls to user functions are not load-time expressions.
 
 ```rut
 let KIND_ADD: i64 = 1;
@@ -296,19 +296,38 @@ visibility and does not combine with `pub`. Consequences of
 declarations-only loading: no use side-effect ordering, no load-order
 bugs, deterministic and cheap loads.
 
-## Bindings: `let` vs `let mut`
+## Bindings: `let` and `const`
 
-- `let x = e;` binds immutably — no reassignment, no field assignment
-  through `x`, and no `mut self` method calls on it. It is a **read-only
-  view of the shared object**.
-- `let mut x = e;` may be reassigned and grants write access **to the
-  object it holds**. Every non-primitive is a shared cell (see
-  [By-reference and nullable](by-reference-and-nullable.md)), so that
-  write is visible through every other handle: `mut` is *permission*,
-  never a copy. Every assignment path must run through a `mut` binding.
-- Parameters may declare `mut name` — the callee's permission to mutate
-  **the caller's object**: `fn step(mut p: Point)` moves the caller's
-  point; `fn area(p: Point)` promises not to.
+Mutability is the **default**. A `let` binding may be reassigned
+(`x = e`), written through (`p.x = 3`, `xs[0] = 7`), and passed where a
+writer is expected — including every method call: parameters are
+mutable too, so `fn step(p: Point)` may write the caller's point, and
+there is no `mut` parameter spelling to grant it.
+
+- `let x = e;` — a **mutable binding**, the ordinary shape.
+- `const x = e;` — the **opt-out**: a *const binding* refuses the
+  binding's own reassignment, diagnosing
+  `cannot reassign 'x' — a 'const' binding is not reassignable`.
+
+**The const opt-out is shallow — reassignment only.** It gates the one
+operation that rebinds the name: `x = ...` on a const binding errors.
+It is *not* deep immutability — writes through the binding stay legal,
+so `p.x = 3` on a `const p` compiles and mutates the shared object,
+exactly as on a `let`. Nothing in rut freezes a record; if you need a
+value no one can write through, build a fresh one (a literal, or a
+copy of the fields you need) rather than expecting `const` to guard it.
+
+Sharing is not gated at all: every non-primitive is a shared cell (see
+[By-reference and nullable](by-reference-and-nullable.md)), writes are
+visible through every handle, and a const binding shares like any
+other — `const` is *about the name*, never a copy or a fence.
+
+> **Two meanings of "const".** This page's `const` is the *const
+> binding* — the statement head `const x = e;` in rut source. The
+> **surface const** is a different animal: the load-time constants a
+> dependency's `.d.rut` interface (or a host package) exports, bound
+> bare by a `use` — spelled `let` in the interface, never `const`
+> (see [Host fns and declaration files](host-fns.md#the-surface-grammar)).
 
 ## Visibility
 

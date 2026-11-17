@@ -115,7 +115,7 @@ entry fn main() {
 
     let out = "";
     for (let i = 0; i < xs.len(); i += 1) {
-        out = f"{out}{xs[i]} ";      // `mut`: rebinding; the f-string form builds in place
+        out = f"{out}{xs[i]} ";      // rebinding `out`; the f-string form builds in place
     }
     log.info(f"sorted: {out}");
 }

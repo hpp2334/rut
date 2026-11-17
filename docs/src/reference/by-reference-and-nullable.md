@@ -33,20 +33,21 @@ entry fn main() {
 4
 ```
 
-- Writing is gated by the **`mut`-binding law**, never by the sharing:
-  a `let` binding is a read-only view; `let mut` grants write access to
-  the object it holds (see
-  [Modules and visibility](modules-and-visibility.md)). Parameters
-  declare the same intent: `fn step(mut p: Point)` writes the caller's
-  point; `fn area(p: Point)` promises not to.
+- Writing is gated by the **const-binding law**, never by the sharing:
+  a `let` binding is mutable by default, and `const` opts out — it
+  refuses only the binding's own reassignment, while writes through the
+  value stay legal (see
+  [Modules and visibility](modules-and-visibility.md)). Parameters are
+  mutable like any `let`: `fn step(p: Point)` writes the caller's
+  point; a callee that promises not to write simply doesn't.
 - A `T` stored into a `?T` slot boxes once — the box **aliases** the
   payload's cell (a share); primitives and `nil` copy the bits. There
   is no deref-on-load/box-on-store special case anywhere.
 - Primitive elements in a `[T]` stay flat slots; composite elements are
   handle slots. `for (let x of xs)` yields the **shared** element, not
   a per-element copy — a cell element writes through to the sequence,
-  and writes through it are gated by the header's `mut`, like any
-  binding.
+  and writes through it are gated by the header exactly like any
+  binding (`const` there refuses the loop variable's reassignment).
 - The repeat `[v; n]` retains the handle `n` times: every slot aliases
   the one cell. The repeat never copies.
 
@@ -84,7 +85,7 @@ expected-type position, transitive through `??T`:
 - `p == nil` / `p != nil` compare against the null slot; guard before
   use. The trap is the bug-catcher, not the semantics.
 - A `?T` binding IS the cell reference: writes through it hit the
-  shared cell (a `nudge(mut pt: ?Point)` moves the caller's point).
+  shared cell (a `nudge(pt: ?Point)` moves the caller's point).
 - `nil` typing: a context-free `nil` has type `nil`; in an
   expected-`?T` position it types as that `?T` — so
   `let p: ?Node = nil` and a `left: nil` field in a literal just work.

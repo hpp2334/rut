@@ -48,7 +48,7 @@ When a count reaches zero, destruction runs in a fixed order:
 
 1. **Weak boxes null first, then the `[disposal]` member.** A type
    carrying a `[disposal]`-marked member gets it called —
-   `(mut self, cx: DisposalContext)`, the engine minting the cx — the
+   `(self, cx: DisposalContext)`, the engine minting the cx — the
    engine pins the dying cell, queues the call, and the interpreter
    drains the queue at call boundaries. One marked member per class;
    `use core::{ DisposalContext }` brings the cx type in. Fields

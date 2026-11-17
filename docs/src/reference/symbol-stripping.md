@@ -137,7 +137,8 @@ the pack). That determinism is also the honest limitation:
   in-binary templates at link, never from source. The keep-set
   therefore preserves every name instantiation independence (the
   separate-compilation contract) consults — the
-  exported surface's names (funcs, types, consts, interface and
+  exported surface's names (funcs, types, surface consts, interface
+  and
   inherent methods), the generic parameter names (the consumer's
   substitution env spells `#{param}` against them), the template
   rows' bound names and bounds, the bound-member stubs' member texts,

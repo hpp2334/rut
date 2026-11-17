@@ -12,7 +12,7 @@ closures' captured cells — is a **heap cell handle**:
 - assignment, argument passing, and returning copy the handle
   (retain/release), an O(1) move;
 - **mutation is visible through every alias**;
-- writing is gated by the `mut`-binding law (see
+- writing is gated by the const-binding law (see
   [Modules and visibility](modules-and-visibility.md)), never by the
   sharing.
 
@@ -58,7 +58,7 @@ closed tcp://edge
 
 - A `[disposal]` member runs when the cell's refcount reaches
   **zero** — deterministic destruction, not a collector callback. The
-  dying value arrives as `mut self`; the fields release after the body
+  dying value arrives as `self`; the fields release after the body
   returns. The member's NAME IS FREE — the bracket designates, the
   spelling never does (one `[disposal]` member per class).
 - `cx: DisposalContext` is **engine-minted**, one per call. It is

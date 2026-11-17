@@ -47,10 +47,12 @@ q.x = 4
 ```
 
 Mutation through an alias is visible through all of them, in both
-directions. What gates *writing* is the `mut`-binding rule — a binding
-must be declared `mut` to be written through — never the sharing itself.
-Sharing is always safe: a handle keeps its referent alive, so nothing
-dangles, and there is no borrow checker because there are no loans.
+directions. What gates *writing* is the const-binding rule — a `const`
+binding refuses its own reassignment (`x = ...`), while writes through
+the value (`p.x = 3`) stay legal, shallow by design — never the sharing
+itself. Sharing is always safe: a handle keeps its referent alive, so
+nothing dangles, and there is no borrow checker because there are no
+loans.
 
 If you want a value that aliases nothing, you build one: a literal, a
 constructor, a copy of the fields you need. The language has exactly one
@@ -179,10 +181,11 @@ boundary the same pair crosses field by field, which makes
   traffic. Algorithms that churn records and arrays pay aliasing, not
   copying.
 - **Loop variables share elements; the binding is one variable.** A
-  `for (let x of xs)` loop hands you the stored element: plain `let`
-  is a read-only view, and write access follows the header's `mut`
-  like any binding — a `let mut` loop variable's writes mutate the
-  sequence. The loop variable is ONE binding reassigned per
+  `for (let x of xs)` loop hands you the stored element: the loop
+  variable is mutable like any `let`, and a `const` header opts out —
+  refusing the body's reassignment of `x`, never the write-through.
+  A `let` loop variable's writes mutate the sequence. The loop
+  variable is ONE binding reassigned per
   iteration — `for..of` is sugar for a `while`-shaped loop, and the
   capture law treats it like any other ref-headed binding.
 - **Containers of primitives stay flat.** A fixed `[i32]` is a packed

@@ -1008,50 +1008,58 @@ msgstr ""
 
 #: src/quick-start/first-program.md:138
 msgid ""
+"Two of those lines pin the binding law: `const flags` opts out — the name "
+"`flags` itself never rebinds (writes through the vec still work; `const` is "
+"shallow) — while `let sum` is mutable by default and the loop body reassigns "
+"it freely (see [values and variables](../tutorial/values-and-variables.md))."
+msgstr ""
+
+#: src/quick-start/first-program.md:144
+msgid ""
 "The full tour — suffixes, casts, strings, `bytes`, structs — is the [values "
 "and variables](../tutorial/values-and-variables.md) tutorial, and the exact "
 "rules live in [literals and "
 "inference](../reference/literals-and-inference.md)."
 msgstr ""
 
-#: src/quick-start/first-program.md:143
+#: src/quick-start/first-program.md:149
 msgid "Format"
 msgstr ""
 
-#: src/quick-start/first-program.md:145
+#: src/quick-start/first-program.md:151
 msgid "The formatter is the style — there is no configuration:"
 msgstr ""
 
-#: src/quick-start/first-program.md:148 src/reference/cli.md:281
+#: src/quick-start/first-program.md:154 src/reference/cli.md:281
 msgid "# rewrite in place\n"
 msgstr ""
 
-#: src/quick-start/first-program.md:149
+#: src/quick-start/first-program.md:155
 msgid "# verify only (note: --check goes AFTER the path)\n"
 msgstr ""
 
-#: src/quick-start/first-program.md:150
+#: src/quick-start/first-program.md:156
 msgid "# walk a directory tree, every *.rut file\n"
 msgstr ""
 
-#: src/quick-start/first-program.md:153
+#: src/quick-start/first-program.md:159
 msgid ""
 "`--check` prints `unformatted: <file>` and exits `1` when a file needs "
 "changes, which makes it a clean CI gate. A file that does not parse is "
 "refused loudly rather than half-formatted."
 msgstr ""
 
-#: src/quick-start/first-program.md:157
+#: src/quick-start/first-program.md:163
 msgid "Inspect"
 msgstr ""
 
-#: src/quick-start/first-program.md:159
+#: src/quick-start/first-program.md:165
 msgid ""
 "`dump` compiles a single module and prints its structures — useful when a "
 "snippet behaves differently than you expect:"
 msgstr ""
 
-#: src/quick-start/first-program.md:166
+#: src/quick-start/first-program.md:172
 msgid ""
 "`dump` runs the lone module through the frontend _without_ mounting the "
 "packages, so it is the tool for surface questions (\"what does this lower "
@@ -1059,15 +1067,15 @@ msgid ""
 "panes show the same two views live — see [the playground](playground.md)."
 msgstr ""
 
-#: src/quick-start/first-program.md:172
+#: src/quick-start/first-program.md:178
 msgid "Budget it"
 msgstr ""
 
-#: src/quick-start/first-program.md:174
+#: src/quick-start/first-program.md:180
 msgid "Every `rut run` is uncapped by default — fuel is opt-in via `--fuel N`:"
 msgstr ""
 
-#: src/quick-start/first-program.md:180
+#: src/quick-start/first-program.md:186
 msgid ""
 "A program that exhausts its fuel halts with a diagnostic naming the budget — "
 "the same contract the VM enforces for embedded hosts, along with heap "
@@ -1075,23 +1083,23 @@ msgid ""
 "limits](../reference/resource-limits.md))."
 msgstr ""
 
-#: src/quick-start/first-program.md:185
+#: src/quick-start/first-program.md:191
 msgid "Where next"
 msgstr ""
 
-#: src/quick-start/first-program.md:187
+#: src/quick-start/first-program.md:193
 msgid ""
 "The [tutorial](../tutorial/values-and-variables.md) teaches the language "
 "hands-on, one concept per chapter."
 msgstr ""
 
-#: src/quick-start/first-program.md:189
+#: src/quick-start/first-program.md:195
 msgid ""
 "The [examples](../examples/index.md) are seven complete projects you can run "
 "today."
 msgstr ""
 
-#: src/quick-start/first-program.md:191
+#: src/quick-start/first-program.md:197
 msgid ""
 "[Core concepts](../core-concepts/design-goals.md) explains _why_ the "
 "language is shaped the way it is."
@@ -1282,7 +1290,7 @@ msgstr ""
 #: src/tutorial/values-and-variables.md:19 src/reference/primitive-types.md:13
 #: src/reference/literals-and-inference.md:211
 #: src/reference/rc-dispose-identity.md:124
-#: src/reference/by-reference-and-nullable.md:104
+#: src/reference/by-reference-and-nullable.md:105
 #: src/reference/value-boundary.md:36 src/reference/value-boundary.md:37
 #: src/reference/templates.md:19
 msgid "`str`"
@@ -1298,7 +1306,7 @@ msgstr ""
 
 #: src/tutorial/values-and-variables.md:20 src/examples/playground-corpus.md:55
 #: src/reference/primitive-types.md:14 src/reference/rc-dispose-identity.md:125
-#: src/reference/by-reference-and-nullable.md:105
+#: src/reference/by-reference-and-nullable.md:106
 #: src/reference/value-boundary.md:38 src/reference/value-boundary.md:39
 msgid "`bytes`"
 msgstr ""
@@ -1631,7 +1639,7 @@ msgstr ""
 
 #: src/tutorial/values-and-variables.md:268
 #: src/reference/rc-dispose-identity.md:121
-#: src/reference/by-reference-and-nullable.md:101
+#: src/reference/by-reference-and-nullable.md:102
 msgid "`==` means"
 msgstr ""
 
@@ -2112,7 +2120,7 @@ msgid ""
 "one-type law (see [below](#one-type-across-the-arms)):"
 msgstr ""
 
-#: src/tutorial/control-flow.md:294 src/reference/control-flow.md:184
+#: src/tutorial/control-flow.md:294 src/reference/control-flow.md:187
 msgid "Patterns"
 msgstr ""
 
@@ -2436,7 +2444,7 @@ msgid ""
 msgstr ""
 
 #: src/tutorial/functions.md:126
-#: src/reference/functions-closures-generics.md:89
+#: src/reference/functions-closures-generics.md:88
 msgid "Generics"
 msgstr ""
 
@@ -3975,7 +3983,7 @@ msgid ""
 "```"
 msgstr ""
 
-#: src/tutorial/modules.md:46 src/reference/modules-and-visibility.md:313
+#: src/tutorial/modules.md:46 src/reference/modules-and-visibility.md:332
 msgid "Visibility"
 msgstr ""
 
@@ -3985,12 +3993,12 @@ msgid ""
 "— the safe default. Nothing leaks unless it says `pub`:"
 msgstr ""
 
-#: src/tutorial/modules.md:52 src/reference/modules-and-visibility.md:319
+#: src/tutorial/modules.md:52 src/reference/modules-and-visibility.md:338
 #: src/reference/literals-and-inference.md:129
 msgid "Form"
 msgstr ""
 
-#: src/tutorial/modules.md:52 src/reference/modules-and-visibility.md:319
+#: src/tutorial/modules.md:52 src/reference/modules-and-visibility.md:338
 #: src/reference/primitive-types.md:25
 #: src/reference/builtin-generic-types.md:85
 #: src/reference/builtin-generic-types.md:96
@@ -4003,7 +4011,7 @@ msgstr ""
 msgid "Meaning"
 msgstr ""
 
-#: src/tutorial/modules.md:54 src/reference/modules-and-visibility.md:321
+#: src/tutorial/modules.md:54 src/reference/modules-and-visibility.md:340
 msgid "`pub fn ..`"
 msgstr ""
 
@@ -4011,7 +4019,7 @@ msgstr ""
 msgid "public — importable by any module, other packages included"
 msgstr ""
 
-#: src/tutorial/modules.md:55 src/reference/modules-and-visibility.md:322
+#: src/tutorial/modules.md:55 src/reference/modules-and-visibility.md:341
 msgid "`pub(pkg) fn ..`"
 msgstr ""
 
@@ -4019,7 +4027,7 @@ msgstr ""
 msgid "visible everywhere in this package's module tree"
 msgstr ""
 
-#: src/tutorial/modules.md:56 src/reference/modules-and-visibility.md:323
+#: src/tutorial/modules.md:56 src/reference/modules-and-visibility.md:342
 msgid "`pub(super) fn ..`"
 msgstr ""
 
@@ -5496,13 +5504,14 @@ msgstr ""
 #: src/core-concepts/everything-is-a-value.md:49
 msgid ""
 "Mutation through an alias is visible through all of them, in both "
-"directions. What gates _writing_ is the `mut`\\-binding rule — a binding "
-"must be declared `mut` to be written through — never the sharing itself. "
+"directions. What gates _writing_ is the const-binding rule — a `const` "
+"binding refuses its own reassignment (`x = ...`), while writes through the "
+"value (`p.x = 3`) stay legal, shallow by design — never the sharing itself. "
 "Sharing is always safe: a handle keeps its referent alive, so nothing "
 "dangles, and there is no borrow checker because there are no loans."
 msgstr ""
 
-#: src/core-concepts/everything-is-a-value.md:55
+#: src/core-concepts/everything-is-a-value.md:57
 msgid ""
 "If you want a value that aliases nothing, you build one: a literal, a "
 "constructor, a copy of the fields you need. The language has exactly one "
@@ -5512,12 +5521,12 @@ msgid ""
 "aliasing something you can reason about locally."
 msgstr ""
 
-#: src/core-concepts/everything-is-a-value.md:62
+#: src/core-concepts/everything-is-a-value.md:64
 #: src/reference/builtin-generic-types.md:43
 msgid "`?T` — the nullable"
 msgstr ""
 
-#: src/core-concepts/everything-is-a-value.md:64
+#: src/core-concepts/everything-is-a-value.md:66
 msgid ""
 "Absence is `nil` on a nullable type, spelled as a prefix on the type: `?T` "
 "is \"a `T` or `nil`\". `?` applies to the type term that follows, so `[?T]` "
@@ -5525,7 +5534,7 @@ msgid ""
 "(and unwraps transitively at use)."
 msgstr ""
 
-#: src/core-concepts/everything-is-a-value.md:69
+#: src/core-concepts/everything-is-a-value.md:71
 msgid ""
 "The coercions are one line: **`T → ?T` boxes; `?T → T` derefs.** The box is "
 "a fresh one-slot cell that _aliases_ the value's cell — boxing a record "
@@ -5534,7 +5543,7 @@ msgid ""
 "arithmetic all read through the box."
 msgstr ""
 
-#: src/core-concepts/everything-is-a-value.md:75
+#: src/core-concepts/everything-is-a-value.md:77
 msgid ""
 "```rut\n"
 "use ink::{ Logger };\n"
@@ -5557,7 +5566,7 @@ msgid ""
 "```"
 msgstr ""
 
-#: src/core-concepts/everything-is-a-value.md:99
+#: src/core-concepts/everything-is-a-value.md:101
 msgid ""
 "A `nil` reaching a value use traps (`NilDeref`) — never a silent read. Guard "
 "with `u == nil` where absence is expected; the trap is the bug-catcher, not "
@@ -5565,25 +5574,25 @@ msgid ""
 "returns `?V`, and callers compare against `nil`."
 msgstr ""
 
-#: src/core-concepts/everything-is-a-value.md:105
+#: src/core-concepts/everything-is-a-value.md:107
 msgid "`==` is honest about the regime"
 msgstr ""
 
-#: src/core-concepts/everything-is-a-value.md:107
+#: src/core-concepts/everything-is-a-value.md:109
 msgid "Primitives compare **by value**."
 msgstr ""
 
-#: src/core-concepts/everything-is-a-value.md:108
+#: src/core-concepts/everything-is-a-value.md:110
 msgid "`str` compares **by content** (codepoints); `bytes` by octets."
 msgstr ""
 
-#: src/core-concepts/everything-is-a-value.md:109
+#: src/core-concepts/everything-is-a-value.md:111
 msgid ""
 "Everything else compares **by identity** — two bindings are equal exactly "
 "when they name the same cell."
 msgstr ""
 
-#: src/core-concepts/everything-is-a-value.md:112
+#: src/core-concepts/everything-is-a-value.md:114
 msgid ""
 "Identity is the only equality full sharing can defend: two separately built "
 "`[1, 2]` arrays are two cells, so `[1,2] == [1,2]` is `false`. Content "
@@ -5592,29 +5601,29 @@ msgid ""
 "immortal singletons, so `Flavor::Sour == Flavor::Sour` is `true`."
 msgstr ""
 
-#: src/core-concepts/everything-is-a-value.md:119
+#: src/core-concepts/everything-is-a-value.md:121
 msgid "The answer channel: a pair"
 msgstr ""
 
-#: src/core-concepts/everything-is-a-value.md:121
+#: src/core-concepts/everything-is-a-value.md:123
 msgid ""
 "There is no exception type. Failures are data in the second element of a "
 "record — `(value, err)` — with one documented convention:"
 msgstr ""
 
-#: src/core-concepts/everything-is-a-value.md:125
+#: src/core-concepts/everything-is-a-value.md:127
 msgid "an **empty err plus a value** is success;"
 msgstr ""
 
-#: src/core-concepts/everything-is-a-value.md:126
+#: src/core-concepts/everything-is-a-value.md:128
 msgid "an **empty err plus `nil`** means \"not found\";"
 msgstr ""
 
-#: src/core-concepts/everything-is-a-value.md:127
+#: src/core-concepts/everything-is-a-value.md:129
 msgid "a **non-empty err** means \"failed\"."
 msgstr ""
 
-#: src/core-concepts/everything-is-a-value.md:129
+#: src/core-concepts/everything-is-a-value.md:131
 msgid ""
 "```rut\n"
 "use ink::{ Logger };\n"
@@ -5654,7 +5663,7 @@ msgid ""
 "```"
 msgstr ""
 
-#: src/core-concepts/everything-is-a-value.md:170
+#: src/core-concepts/everything-is-a-value.md:172
 msgid ""
 "The pair destructure in return position is free — the compiler fuses the "
 "mint away — so this shape costs nothing on hot paths. At the host boundary "
@@ -5662,35 +5671,36 @@ msgid ""
 "the standard answer a Rust embedder reads."
 msgstr ""
 
-#: src/core-concepts/everything-is-a-value.md:175
+#: src/core-concepts/everything-is-a-value.md:177
 msgid "Consequences you feel day to day"
 msgstr ""
 
-#: src/core-concepts/everything-is-a-value.md:177
+#: src/core-concepts/everything-is-a-value.md:179
 msgid ""
 "**Reassignment is cheap.** Moving containers around — returning them, "
 "storing them, restructuring them — is handle traffic, not payload traffic. "
 "Algorithms that churn records and arrays pay aliasing, not copying."
 msgstr ""
 
-#: src/core-concepts/everything-is-a-value.md:181
+#: src/core-concepts/everything-is-a-value.md:183
 msgid ""
 "**Loop variables share elements; the binding is one variable.** A `for (let "
-"x of xs)` loop hands you the stored element: plain `let` is a read-only "
-"view, and write access follows the header's `mut` like any binding — a `let "
-"mut` loop variable's writes mutate the sequence. The loop variable is ONE "
-"binding reassigned per iteration — `for..of` is sugar for a `while`\\-shaped "
-"loop, and the capture law treats it like any other ref-headed binding."
+"x of xs)` loop hands you the stored element: the loop variable is mutable "
+"like any `let`, and a `const` header opts out — refusing the body's "
+"reassignment of `x`, never the write-through. A `let` loop variable's writes "
+"mutate the sequence. The loop variable is ONE binding reassigned per "
+"iteration — `for..of` is sugar for a `while`\\-shaped loop, and the capture "
+"law treats it like any other ref-headed binding."
 msgstr ""
 
-#: src/core-concepts/everything-is-a-value.md:188
+#: src/core-concepts/everything-is-a-value.md:191
 msgid ""
 "**Containers of primitives stay flat.** A fixed `[i32]` is a packed `i32` "
 "buffer; growable sequences of primitives store raw payloads with a one-byte "
 "nil tag — no per-element heap box."
 msgstr ""
 
-#: src/core-concepts/everything-is-a-value.md:191
+#: src/core-concepts/everything-is-a-value.md:194
 msgid ""
 "**Erasure is a box.** `opaque(v)` mints an erasure box; recovery is "
 "`opaque::downcast<T>(o)`, checked against the runtime type. See [reified "
@@ -5698,7 +5708,7 @@ msgid ""
 "[`opaque`](../reference/opaque.md)."
 msgstr ""
 
-#: src/core-concepts/everything-is-a-value.md:196
+#: src/core-concepts/everything-is-a-value.md:199
 msgid ""
 "The memory machinery under all of this — refcounts, deterministic "
 "destructors, weak references — is the next chapter's subject: "
@@ -6772,11 +6782,11 @@ msgstr ""
 #: src/core-concepts/memory.md:49
 msgid ""
 "**Weak boxes null first, then the `[disposal]` member.** A type carrying a "
-"`[disposal]`\\-marked member gets it called — `(mut self, cx: "
-"DisposalContext)`, the engine minting the cx — the engine pins the dying "
-"cell, queues the call, and the interpreter drains the queue at call "
-"boundaries. One marked member per class; `use core::{ DisposalContext }` "
-"brings the cx type in. Fields release after the body returns."
+"`[disposal]`\\-marked member gets it called — `(self, cx: DisposalContext)`, "
+"the engine minting the cx — the engine pins the dying cell, queues the call, "
+"and the interpreter drains the queue at call boundaries. One marked member "
+"per class; `use core::{ DisposalContext }` brings the cx type in. Fields "
+"release after the body returns."
 msgstr ""
 
 #: src/core-concepts/memory.md:56
@@ -7577,7 +7587,7 @@ msgstr ""
 #: src/examples/index.md:15
 msgid ""
 "five sorting algorithms behind one dispatcher entry; `when` on strings, the "
-"mut-binding law, fuel budgets"
+"const-binding law, fuel budgets"
 msgstr ""
 
 #: src/examples/index.md:16
@@ -7865,21 +7875,21 @@ msgstr ""
 
 #: src/examples/00-todolist.md:110
 msgid ""
-"Note `mut self`: writing through a class handle requires a `mut` binding "
-"head, the same law [01 — Sort](01-sort.md) exercises on plain vecs — `add` "
-"and `remove` both declare it. `remove` filters through a `when`: the "
-"matching row is dropped, everything else is kept, and the list is rewritten "
-"only if something was actually removed. The read side (not shown) is "
-"ordinary code — `len`, `title_of` (which returns `\"\"` for a miss; the "
-"example pairs it with `has_title` because there is no `?.` sugar), and a "
-"`render` built from f-strings."
+"Note `self`: writing through a class handle needs no header spelling — "
+"mutation is the default, the same law [01 — Sort](01-sort.md) exercises on "
+"plain vecs — `add` and `remove` both write through it. `remove` filters "
+"through a `when`: the matching row is dropped, everything else is kept, and "
+"the list is rewritten only if something was actually removed. The read side "
+"(not shown) is ordinary code — `len`, `title_of` (which returns `\"\"` for a "
+"miss; the example pairs it with `has_title` because there is no `?.` sugar), "
+"and a `render` built from f-strings."
 msgstr ""
 
-#: src/examples/00-todolist.md:119
+#: src/examples/00-todolist.md:120
 msgid "The handle: one opaque box around the world"
 msgstr ""
 
-#: src/examples/00-todolist.md:121
+#: src/examples/00-todolist.md:122
 msgid ""
 "Instances of `TodoList` can never cross into Rust — the crossing set admits "
 "primitives, `str`, `bytes`, and `opaque` only, and `entry fn` signatures are "
@@ -7888,7 +7898,7 @@ msgid ""
 "whole container once and the host holds the handle:"
 msgstr ""
 
-#: src/examples/00-todolist.md:127
+#: src/examples/00-todolist.md:128
 msgid ""
 "```rut\n"
 "struct Lists {\n"
@@ -7914,7 +7924,7 @@ msgid ""
 "```"
 msgstr ""
 
-#: src/examples/00-todolist.md:149
+#: src/examples/00-todolist.md:150
 msgid ""
 "Two things to take away. First, `entry fn` marks the host-callable surface — "
 "distinct from `pub`, which is use-visibility for other rut modules and "
@@ -7926,45 +7936,45 @@ msgid ""
 "`fn` and may speak in full types."
 msgstr ""
 
-#: src/examples/00-todolist.md:158
+#: src/examples/00-todolist.md:159
 msgid "The embedder: typed calls, budgets, and honest errors"
 msgstr ""
 
-#: src/examples/00-todolist.md:160
+#: src/examples/00-todolist.md:161
 msgid ""
 "`examples/00-todolist/src/main.rs` mounts core and the `pouch` package (for "
 "`Vec`), compiles in one call, verifies the binary, and then talks to the "
 "module through typed closures:"
 msgstr ""
 
-#: src/examples/00-todolist.md:165
+#: src/examples/00-todolist.md:166
 msgid "\"createContainer\""
 msgstr ""
 
-#: src/examples/00-todolist.md:166
+#: src/examples/00-todolist.md:167
 msgid "\"create\""
 msgstr ""
 
-#: src/examples/00-todolist.md:169
+#: src/examples/00-todolist.md:170
 msgid "\"add\""
 msgstr ""
 
-#: src/examples/00-todolist.md:171
+#: src/examples/00-todolist.md:172
 msgid "\"implement the VM\""
 msgstr ""
 
-#: src/examples/00-todolist.md:172
+#: src/examples/00-todolist.md:173
 msgid "\"ship the demo\""
 msgstr ""
 
-#: src/examples/00-todolist.md:175
+#: src/examples/00-todolist.md:176
 msgid ""
 "The run executes under explicit budgets — fuel and a heap limit — so a "
 "runaway module fails loudly instead of hanging the host ([Resource limits "
 "and fuel](../reference/resource-limits.md)):"
 msgstr ""
 
-#: src/examples/00-todolist.md:187
+#: src/examples/00-todolist.md:188
 msgid ""
 "And the transcript's `remove(#1) again = Res(Err(...))` line is the VM's "
 "typed view of a `bool` answer — the second remove returns `false`, and the "
@@ -7972,7 +7982,7 @@ msgid ""
 "borrows](../reference/value-boundary.md))."
 msgstr ""
 
-#: src/examples/00-todolist.md:192 src/examples/01-sort.md:206
+#: src/examples/00-todolist.md:193 src/examples/01-sort.md:208
 #: src/examples/02-digest.md:199 src/examples/03-plugin.md:216
 #: src/examples/04-custom-async.md:127 src/examples/05-todolist-web.md:245
 #: src/examples/06-github-viewer-cli.md:212
@@ -7980,36 +7990,36 @@ msgstr ""
 msgid "Takeaways"
 msgstr ""
 
-#: src/examples/00-todolist.md:194
+#: src/examples/00-todolist.md:195
 msgid ""
 "`entry fn` is the host-callable surface; its signatures are checked against "
 "the crossing rule at compile time, so a bad plan is a diagnostic, never a "
 "call-time surprise."
 msgstr ""
 
-#: src/examples/00-todolist.md:197
+#: src/examples/00-todolist.md:198
 msgid ""
 "State lives rut-side in one `opaque` container the host holds and re-passes; "
 "plain values cross, instances never do."
 msgstr ""
 
-#: src/examples/00-todolist.md:199
+#: src/examples/00-todolist.md:200
 msgid "Erasure is `opaque(v)`; recovery is `opaque::downcast<T> -> ?T`."
 msgstr ""
 
-#: src/examples/00-todolist.md:200
+#: src/examples/00-todolist.md:201
 msgid ""
 "Budgets (fuel + heap) are the embedder's call, and every embedder mistake "
 "comes back as a named trap."
 msgstr ""
 
-#: src/examples/00-todolist.md:202
+#: src/examples/00-todolist.md:203
 msgid ""
 "The same file works as a library: entries are compilation roots, so a module "
 "with no `main` still emits every entry."
 msgstr ""
 
-#: src/examples/00-todolist.md:205
+#: src/examples/00-todolist.md:206
 msgid ""
 "Next: [01 — Sort](01-sort.md) scales the pattern to five algorithms and "
 "shows what recursion costs in fuel. The crossing rules behind this page are "
@@ -8023,7 +8033,7 @@ msgid ""
 "bubble, and selection (loop-shaped), plus quicksort and merge sort "
 "(recursion, in-place vs. out-of-place) — driven from Rust through **one** "
 "`entry fn` dispatcher. Where 00 is about the boundary, this one is about the "
-"language: recursion, `when` on strings, the mut-binding law, wrapping "
+"language: recursion, `when` on strings, the const-binding law, wrapping "
 "arithmetic, and visible fuel budgets."
 msgstr ""
 
@@ -8221,92 +8231,94 @@ msgstr ""
 
 #: src/examples/01-sort.md:183
 msgid ""
-"Note the `mut xs` parameter heads: vecs are handles, so an in-place swap "
-"inside a call is shared with the bank — but **writing** through the handle "
-"requires the `mut` binding head, while mere reads (and `push`) do not. That "
-"asymmetry is the mut-binding law, and every algorithm in this file declares "
-"it ([Modules and visibility](../reference/modules-and-visibility.md))."
-msgstr ""
-
-#: src/examples/01-sort.md:190
-msgid "The embedder's sweep"
+"Note the plain parameter heads: vecs are handles, so an in-place swap inside "
+"a call is shared with the bank — and **writing** through the handle is the "
+"default, no header spelling required. Parameters are mutable like any `let` "
+"binding; `const` is the only opt-out, and it gates a binding's own "
+"reassignment, never the write-through. That is the const-binding law, and "
+"every algorithm in this file rides it ([Modules and "
+"visibility](../reference/modules-and-visibility.md))."
 msgstr ""
 
 #: src/examples/01-sort.md:192
+msgid "The embedder's sweep"
+msgstr ""
+
+#: src/examples/01-sort.md:194
 msgid ""
 "`src/main.rs` drives the sweep and prints the fuel deltas, which is how the "
 "table above gets its numbers:"
 msgstr ""
 
-#: src/examples/01-sort.md:196
+#: src/examples/01-sort.md:198
 msgid "\"fill(16, seed=42), each algorithm:\""
 msgstr ""
 
-#: src/examples/01-sort.md:197
+#: src/examples/01-sort.md:199
 msgid "\"insertion\""
 msgstr ""
 
-#: src/examples/01-sort.md:197
+#: src/examples/01-sort.md:199
 msgid "\"bubble\""
 msgstr ""
 
-#: src/examples/01-sort.md:197
+#: src/examples/01-sort.md:199
 msgid "\"selection\""
 msgstr ""
 
-#: src/examples/01-sort.md:197
+#: src/examples/01-sort.md:199
 msgid "\"quick\""
 msgstr ""
 
-#: src/examples/01-sort.md:197
+#: src/examples/01-sort.md:199
 msgid "\"merge\""
 msgstr ""
 
-#: src/examples/01-sort.md:198
+#: src/examples/01-sort.md:200
 msgid "\"fill\""
 msgstr ""
 
-#: src/examples/01-sort.md:200
+#: src/examples/01-sort.md:202
 msgid "\"sort\""
 msgstr ""
 
-#: src/examples/01-sort.md:201
+#: src/examples/01-sort.md:203
 msgid "\"is_sorted\""
 msgstr ""
 
-#: src/examples/01-sort.md:202
+#: src/examples/01-sort.md:204
 msgid "\"  {algo:<9} {sorted}  fuel {:>6}  {}\""
 msgstr ""
 
-#: src/examples/01-sort.md:208
+#: src/examples/01-sort.md:210
 msgid ""
 "Same host pattern as [00 — Todolist](00-todolist.md), one entry richer: a "
 "single string-keyed dispatcher keeps the `entry fn` surface small."
 msgstr ""
 
-#: src/examples/01-sort.md:211
+#: src/examples/01-sort.md:213
 msgid ""
 "`Vec<T>` never crosses; a serialized JSON array makes a whole result one "
 "host-side compare."
 msgstr ""
 
-#: src/examples/01-sort.md:213
+#: src/examples/01-sort.md:215
 msgid ""
 "Errors are values: an unknown algorithm comes back as a string, not a trap."
 msgstr ""
 
-#: src/examples/01-sort.md:215
+#: src/examples/01-sort.md:217
 msgid ""
-"`mut` on a binding is a capability law, not a suggestion — and the wrapping "
-"arithmetic family is explicit about overflow."
+"Mutation is the default and `const` is the shallow opt-out — and the "
+"wrapping arithmetic family is explicit about overflow."
 msgstr ""
 
-#: src/examples/01-sort.md:217
+#: src/examples/01-sort.md:219
 msgid ""
 "Fuel budgets make algorithmic differences visible from the host, for free."
 msgstr ""
 
-#: src/examples/01-sort.md:220
+#: src/examples/01-sort.md:222
 msgid ""
 "Deep-dives: [the bytecode VM](../core-concepts/the-vm.md) explains what a "
 "unit of fuel counts; [02 — Digest](02-digest.md) takes the same run shape to "
@@ -9881,7 +9893,7 @@ msgid "`point 1 2`"
 msgstr ""
 
 #: src/examples/playground-corpus.md:57 src/reference/lexical-structure.md:44
-#: src/reference/control-flow.md:157
+#: src/reference/control-flow.md:160
 msgid "`when`"
 msgstr ""
 
@@ -10033,8 +10045,8 @@ msgid ""
 "\n"
 "    let out = \"\";\n"
 "    for (let i = 0; i < xs.len(); i += 1) {\n"
-"        out = f\"{out}{xs[i]} \";      // `mut`: rebinding; the f-string "
-"form builds in place\n"
+"        out = f\"{out}{xs[i]} \";      // rebinding `out`; the f-string form "
+"builds in place\n"
 "    }\n"
 "    log.info(f\"sorted: {out}\");\n"
 "}\n"
@@ -10234,7 +10246,7 @@ msgid "`let`"
 msgstr ""
 
 #: src/reference/lexical-structure.md:43
-msgid "`mut`"
+msgid "`const`"
 msgstr ""
 
 #: src/reference/lexical-structure.md:43
@@ -10322,133 +10334,143 @@ msgid "`nil`"
 msgstr ""
 
 #: src/reference/lexical-structure.md:50
+msgid ""
+"`const` is the newest seat: the binding-head opt-out (see [Modules and "
+"visibility](modules-and-visibility.md)) — `mut`'s old place in the table; "
+"the word `mut` itself is an ordinary identifier now. Because `const` is a "
+"binding head, a binding may not be NAMED `const` (`let const = 1;` eats the "
+"ordinary \"expected a binding name\" error), while retired words like `null` "
+"and `var` stay nameable."
+msgstr ""
+
+#: src/reference/lexical-structure.md:57
 msgid "Contextual words — ordinary identifiers elsewhere:"
 msgstr ""
 
-#: src/reference/lexical-structure.md:52
+#: src/reference/lexical-structure.md:59
 msgid "Word"
 msgstr ""
 
-#: src/reference/lexical-structure.md:52
+#: src/reference/lexical-structure.md:59
 msgid "Special meaning"
 msgstr ""
 
-#: src/reference/lexical-structure.md:54 src/reference/project-structure.md:63
+#: src/reference/lexical-structure.md:61 src/reference/project-structure.md:63
 msgid "`type`"
 msgstr ""
 
-#: src/reference/lexical-structure.md:54
+#: src/reference/lexical-structure.md:61
 msgid ""
 "the alias introducer (`type Km = Meters;` — see [Type aliases and union "
 "bounds](type-aliases.md))"
 msgstr ""
 
-#: src/reference/lexical-structure.md:55
+#: src/reference/lexical-structure.md:62
 msgid "`mod`"
 msgstr ""
 
-#: src/reference/lexical-structure.md:55
+#: src/reference/lexical-structure.md:62
 msgid ""
 "the module introducer (`mod state;` — a `.rut` sibling in the package, see "
 "[Modules and visibility](modules-and-visibility.md))"
 msgstr ""
 
-#: src/reference/lexical-structure.md:56
+#: src/reference/lexical-structure.md:63
 msgid "`entry`"
 msgstr ""
 
-#: src/reference/lexical-structure.md:56
+#: src/reference/lexical-structure.md:63
 msgid "`entry fn` at module scope publishes the function to the embedder"
 msgstr ""
 
-#: src/reference/lexical-structure.md:57
+#: src/reference/lexical-structure.md:64
 msgid "`self`"
 msgstr ""
 
-#: src/reference/lexical-structure.md:57
+#: src/reference/lexical-structure.md:64
 msgid "the explicit receiver, first parameter of an instance method"
 msgstr ""
 
-#: src/reference/lexical-structure.md:58
+#: src/reference/lexical-structure.md:65
 msgid "`Self`"
 msgstr ""
 
-#: src/reference/lexical-structure.md:58
+#: src/reference/lexical-structure.md:65
 msgid ""
 "names the enclosing class inside its body; the class-private literal `Self { "
 ".. }`"
 msgstr ""
 
-#: src/reference/lexical-structure.md:59 src/reference/cli.md:92
+#: src/reference/lexical-structure.md:66 src/reference/cli.md:92
 msgid "`new`"
 msgstr ""
 
-#: src/reference/lexical-structure.md:59
+#: src/reference/lexical-structure.md:66
 msgid "not special — the conventional construction-method name (`Rect::new(..)`)"
 msgstr ""
 
-#: src/reference/lexical-structure.md:60
+#: src/reference/lexical-structure.md:67
 msgid "`as`"
 msgstr ""
 
-#: src/reference/lexical-structure.md:60
+#: src/reference/lexical-structure.md:67
 msgid "the numeric cast (`x as u32`)"
 msgstr ""
 
-#: src/reference/lexical-structure.md:61
+#: src/reference/lexical-structure.md:68
 msgid "`super`"
 msgstr ""
 
-#: src/reference/lexical-structure.md:61
+#: src/reference/lexical-structure.md:68
 msgid "only inside `pub(super)`"
 msgstr ""
 
-#: src/reference/lexical-structure.md:62
+#: src/reference/lexical-structure.md:69
 msgid "`break` / `continue`"
 msgstr ""
 
-#: src/reference/lexical-structure.md:62
+#: src/reference/lexical-structure.md:69
 msgid ""
 "loop control — exit the loop / next iteration (see [Control flow and "
 "when](control-flow.md))"
 msgstr ""
 
-#: src/reference/lexical-structure.md:63
+#: src/reference/lexical-structure.md:70
 msgid "`builtin`"
 msgstr ""
 
-#: src/reference/lexical-structure.md:63
+#: src/reference/lexical-structure.md:70
 msgid ""
 "declaration modes of the engine's own surface — spelled `prelude builtin` "
 "(ambient) or `pub builtin` (import-gated); see [Host fns and declaration "
 "files](host-fns.md)"
 msgstr ""
 
-#: src/reference/lexical-structure.md:64
+#: src/reference/lexical-structure.md:71
 msgid "`prelude`"
 msgstr ""
 
-#: src/reference/lexical-structure.md:64
+#: src/reference/lexical-structure.md:71
 msgid ""
 "only directly before `builtin` — the AMBIENT engine surface head (`prelude "
 "builtin`, [host fns](host-fns.md))"
 msgstr ""
 
-#: src/reference/lexical-structure.md:65
+#: src/reference/lexical-structure.md:72
 msgid "`primitive`"
 msgstr ""
 
-#: src/reference/lexical-structure.md:65
+#: src/reference/lexical-structure.md:72
 msgid ""
 "only directly after `builtin` — the engine's primitive decl (`builtin "
 "primitive <name> { .. }`)"
 msgstr ""
 
-#: src/reference/lexical-structure.md:66
+#: src/reference/lexical-structure.md:73
 msgid "`disposal` / `iterable` / `constructor`"
 msgstr ""
 
-#: src/reference/lexical-structure.md:66
+#: src/reference/lexical-structure.md:73
 msgid ""
 "the bracket markers — `[disposal] fn` / `[iterable] fn` / `[constructor] fn` "
 "designate an inherent impl member as a designated surface (before "
@@ -10456,70 +10478,73 @@ msgid ""
 "([interfaces](interfaces.md))"
 msgstr ""
 
-#: src/reference/lexical-structure.md:68
+#: src/reference/lexical-structure.md:75
 msgid "`panic(msg)` is a prelude function, not a keyword."
 msgstr ""
 
-#: src/reference/lexical-structure.md:70
+#: src/reference/lexical-structure.md:77
 msgid ""
 "There is NO reserved-word hard-ban left: every word the lexer scans is an "
 "identifier token, and the parser's own keyword table decides what a word "
 "means. Words that are keywords in JavaScript or Rust — `switch`, `match`, "
-"`null`, `var`, `const`, `delete`, `new`, `void`, `in`, `private`, `extern`, "
-"`where`, … — are ordinary identifiers here: `let null = 5;` and `fn match()` "
-"are legal rut — and so is `trait`: an ordinary identifier (name your pet "
-"snake `trait` if you like; it carries no meaning)."
+"`null`, `var`, `delete`, `new`, `void`, `in`, `private`, `extern`, `where`, "
+"… — are ordinary identifiers here: `let null = 5;` and `fn match()` are "
+"legal rut — and so is `trait`: an ordinary identifier (name your pet snake "
+"`trait` if you like; it carries no meaning). The parser-table words above "
+"(`const` included — it heads a binding) keep their meaning only in the "
+"positions that expect one; `const` in expression position degrades to an "
+"unresolved-name error at resolution, not a parse diag."
 msgstr ""
 
-#: src/reference/lexical-structure.md:79
+#: src/reference/lexical-structure.md:89
 msgid "Punctuation: `::` and `.`"
 msgstr ""
 
-#: src/reference/lexical-structure.md:81
+#: src/reference/lexical-structure.md:91
 msgid "Two separators, one law:"
 msgstr ""
 
-#: src/reference/lexical-structure.md:83
+#: src/reference/lexical-structure.md:93
 msgid "token"
 msgstr ""
 
-#: src/reference/lexical-structure.md:83 src/reference/host-fns.md:329
+#: src/reference/lexical-structure.md:93 src/reference/host-fns.md:329
 #: src/reference/symbol-stripping.md:26
 msgid "role"
 msgstr ""
 
-#: src/reference/lexical-structure.md:83
+#: src/reference/lexical-structure.md:93
 msgid "spells"
 msgstr ""
 
-#: src/reference/lexical-structure.md:85
+#: src/reference/lexical-structure.md:95
 msgid "`::`"
 msgstr ""
 
-#: src/reference/lexical-structure.md:85
+#: src/reference/lexical-structure.md:95
 msgid "the path separator — segments of any **name-resolution** path"
 msgstr ""
 
-#: src/reference/lexical-structure.md:85
+#: src/reference/lexical-structure.md:95
 msgid ""
 "use paths, module positions, enum members, statics/associated fns, dep "
 "module paths: `use pkg::a::b::{ C }`, `Light::Green`, `Rect::new(..)`, "
 "`math::sqrt(..)`"
 msgstr ""
 
-#: src/reference/lexical-structure.md:86
+#: src/reference/lexical-structure.md:96
 msgid "`.`"
 msgstr ""
 
-#: src/reference/lexical-structure.md:86
+#: src/reference/lexical-structure.md:96
 msgid "**value access** on an expression"
 msgstr ""
 
-#: src/reference/lexical-structure.md:86
+#: src/reference/lexical-structure.md:96
 msgid "fields, instance methods, tuple indices: `p.x`, `v.push(..)`, `t.0`"
 msgstr ""
 
-#: src/reference/lexical-structure.md:88
+#: src/reference/lexical-structure.md:98
 msgid ""
 "A path never spells `.`; a value access never spells `::`. Qualified "
 "positions resolve names inside one package, `use` paths cross packages (see "
@@ -10528,11 +10553,11 @@ msgid ""
 "through the ordinary value-access postfix)."
 msgstr ""
 
-#: src/reference/lexical-structure.md:94
+#: src/reference/lexical-structure.md:104
 msgid "The async block"
 msgstr ""
 
-#: src/reference/lexical-structure.md:96
+#: src/reference/lexical-structure.md:106
 msgid ""
 "`async { .. }` — keyword before a block — is the async primitive: one "
 "expression form whose evaluation mints the frame (pure; legal in sync code) "
@@ -10540,11 +10565,11 @@ msgid ""
 "`fn` is the declaration sugar over it."
 msgstr ""
 
-#: src/reference/lexical-structure.md:102
+#: src/reference/lexical-structure.md:112
 msgid "Naming conventions (enforced)"
 msgstr ""
 
-#: src/reference/lexical-structure.md:104
+#: src/reference/lexical-structure.md:114
 msgid ""
 "**Types are PascalCase** — user types and parameterized builtins: `Vec<T>`, "
 "`[T]`, `Weak<T>`, `opaque`, `LaunchedFutureHandle<T>`, `Point`, `Drawable`. "
@@ -10552,13 +10577,13 @@ msgid ""
 "`str`, `bytes`."
 msgstr ""
 
-#: src/reference/lexical-structure.md:109
+#: src/reference/lexical-structure.md:119
 msgid ""
 "**Functions and methods are lower_snake_case** — `unwrap_or(d)`, `push(v)`, "
 "`checked_add(y)`, `string_len(s)`."
 msgstr ""
 
-#: src/reference/lexical-structure.md:111
+#: src/reference/lexical-structure.md:121
 msgid ""
 "**Construction is a method call; the call form binds by designation.** User "
 "classes construct through their own class methods: `Rect::new(3, 4)`, "
@@ -10574,7 +10599,7 @@ msgid ""
 "types](builtin-generic-types.md))."
 msgstr ""
 
-#: src/reference/lexical-structure.md:124
+#: src/reference/lexical-structure.md:134
 msgid ""
 "The trailing-`$` marker is kept meaningful by this style rule alone; the "
 "compiler attaches no semantics to it."
@@ -10601,7 +10626,7 @@ msgstr ""
 
 #: src/reference/modules-and-visibility.md:11
 #: src/reference/builtin-generic-types.md:54
-#: src/reference/by-reference-and-nullable.md:63
+#: src/reference/by-reference-and-nullable.md:64
 #: src/reference/launched-futures.md:10
 msgid "Spelling"
 msgstr ""
@@ -10954,12 +10979,12 @@ msgstr ""
 msgid ""
 "The engine's builtin names — the primitives, `opaque`, `panic`, "
 "`type_id<T>()`, `str(x)` — are **ambient**: no `use` is needed for them. The "
-"gated names resolve only through `use core::{ .. }`: the const `NAN`, the "
-"disposal context `DisposalContext`, the weak reference `Weak<T>`, and the "
-"closed async pair (`Future<T>`, `RunContext`) — the engine's weave never "
-"needs the import, only source that spells one of the names does. The bracket "
-"markers (`[disposal]`/`[iterable]`/`[constructor]`) need no import — the "
-"marker word is the designation, not a name ([Host fns and declaration "
+"gated names resolve only through `use core::{ .. }`: the surface const "
+"`NAN`, the disposal context `DisposalContext`, the weak reference `Weak<T>`, "
+"and the closed async pair (`Future<T>`, `RunContext`) — the engine's weave "
+"never needs the import, only source that spells one of the names does. The "
+"bracket markers (`[disposal]`/`[iterable]`/`[constructor]`) need no import — "
+"the marker word is the designation, not a name ([Host fns and declaration "
 "files](host-fns.md)). Package code (`pouch`, `ink`, `nmapset`, ...) mounts "
 "only through `use`."
 msgstr ""
@@ -11032,8 +11057,9 @@ msgid ""
 "Initializers must be **load-time expressions**: literals, enum members, "
 "builtin operators over load-time expressions, struct literals whose fields "
 "are load-time expressions, fixed-array literals whose elements are, "
-"`type_id<T>()`, and builtin zero allocations (`[nil; n]` with a const `n`). "
-"Calls to user functions are not load-time expressions."
+"`type_id<T>()`, and builtin zero allocations (`[nil; n]` with a "
+"load-time-constant `n`). Calls to user functions are not load-time "
+"expressions."
 msgstr ""
 
 #: src/reference/modules-and-visibility.md:286
@@ -11057,73 +11083,99 @@ msgid ""
 msgstr ""
 
 #: src/reference/modules-and-visibility.md:299
-msgid "Bindings: `let` vs `let mut`"
+msgid "Bindings: `let` and `const`"
 msgstr ""
 
 #: src/reference/modules-and-visibility.md:301
 msgid ""
-"`let x = e;` binds immutably — no reassignment, no field assignment through "
-"`x`, and no `mut self` method calls on it. It is a **read-only view of the "
-"shared object**."
+"Mutability is the **default**. A `let` binding may be reassigned (`x = e`), "
+"written through (`p.x = 3`, `xs[0] = 7`), and passed where a writer is "
+"expected — including every method call: parameters are mutable too, so `fn "
+"step(p: Point)` may write the caller's point, and there is no `mut` "
+"parameter spelling to grant it."
 msgstr ""
 
-#: src/reference/modules-and-visibility.md:304
+#: src/reference/modules-and-visibility.md:307
+msgid "`let x = e;` — a **mutable binding**, the ordinary shape."
+msgstr ""
+
+#: src/reference/modules-and-visibility.md:308
 msgid ""
-"`let mut x = e;` may be reassigned and grants write access **to the object "
-"it holds**. Every non-primitive is a shared cell (see [By-reference and "
-"nullable](by-reference-and-nullable.md)), so that write is visible through "
-"every other handle: `mut` is _permission_, never a copy. Every assignment "
-"path must run through a `mut` binding."
+"`const x = e;` — the **opt-out**: a _const binding_ refuses the binding's "
+"own reassignment, diagnosing `cannot reassign 'x' — a 'const' binding is not "
+"reassignable`."
 msgstr ""
 
-#: src/reference/modules-and-visibility.md:309
+#: src/reference/modules-and-visibility.md:312
 msgid ""
-"Parameters may declare `mut name` — the callee's permission to mutate **the "
-"caller's object**: `fn step(mut p: Point)` moves the caller's point; `fn "
-"area(p: Point)` promises not to."
+"**The const opt-out is shallow — reassignment only.** It gates the one "
+"operation that rebinds the name: `x = ...` on a const binding errors. It is "
+"_not_ deep immutability — writes through the binding stay legal, so `p.x = "
+"3` on a `const p` compiles and mutates the shared object, exactly as on a "
+"`let`. Nothing in rut freezes a record; if you need a value no one can write "
+"through, build a fresh one (a literal, or a copy of the fields you need) "
+"rather than expecting `const` to guard it."
 msgstr ""
 
-#: src/reference/modules-and-visibility.md:315
+#: src/reference/modules-and-visibility.md:320
+msgid ""
+"Sharing is not gated at all: every non-primitive is a shared cell (see "
+"[By-reference and nullable](by-reference-and-nullable.md)), writes are "
+"visible through every handle, and a const binding shares like any other — "
+"`const` is _about the name_, never a copy or a fence."
+msgstr ""
+
+#: src/reference/modules-and-visibility.md:325
+msgid ""
+"**Two meanings of \"const\".** This page's `const` is the _const binding_ — "
+"the statement head `const x = e;` in rut source. The **surface const** is a "
+"different animal: the load-time constants a dependency's `.d.rut` interface "
+"(or a host package) exports, bound bare by a `use` — spelled `let` in the "
+"interface, never `const` (see [Host fns and declaration "
+"files](host-fns.md#the-surface-grammar))."
+msgstr ""
+
+#: src/reference/modules-and-visibility.md:334
 msgid ""
 "Modules form a tree per package (the package root is the root module "
 "`mod.rut`; each declared child is a module file). Every declaration — and "
 "every class member — carries a visibility:"
 msgstr ""
 
-#: src/reference/modules-and-visibility.md:321
+#: src/reference/modules-and-visibility.md:340
 msgid "**public** — nameable by any rut module (other packages included)"
 msgstr ""
 
-#: src/reference/modules-and-visibility.md:322
+#: src/reference/modules-and-visibility.md:341
 msgid "visible everywhere inside this **package** (its whole module tree)"
 msgstr ""
 
-#: src/reference/modules-and-visibility.md:323
+#: src/reference/modules-and-visibility.md:342
 msgid "visible to the **parent module's subtree** only"
 msgstr ""
 
-#: src/reference/modules-and-visibility.md:324
+#: src/reference/modules-and-visibility.md:343
 msgid "_(unannotated)_"
 msgstr ""
 
-#: src/reference/modules-and-visibility.md:324
+#: src/reference/modules-and-visibility.md:343
 msgid ""
 "module-private — visible in this module and its descendants; **the default**"
 msgstr ""
 
-#: src/reference/modules-and-visibility.md:326
+#: src/reference/modules-and-visibility.md:345
 msgid ""
 "Unannotated = private to the declaring module _and its descendants_ (a child "
 "module sees its ancestors' privates, never a sibling's)."
 msgstr ""
 
-#: src/reference/modules-and-visibility.md:328
+#: src/reference/modules-and-visibility.md:347
 msgid ""
 "The paren forms `pub(mod)` / `pub(self)` are gone — a paren scope other than "
 "`super`/`pkg` is the ordinary `pub(..)` error."
 msgstr ""
 
-#: src/reference/modules-and-visibility.md:330
+#: src/reference/modules-and-visibility.md:349
 msgid ""
 "Applies uniformly: `let`, `enum`, `struct`, `class`, `interface`, `impl` (an "
 "impl exports with its target type), `fn`, `type` aliases, the `mod` edge "
@@ -11133,14 +11185,14 @@ msgid ""
 "it means the _type name_ is visible."
 msgstr ""
 
-#: src/reference/modules-and-visibility.md:337
+#: src/reference/modules-and-visibility.md:356
 msgid ""
 "**Class members take the same forms**: an unannotated field or method is "
 "module-private; `pub` (optionally scoped) exposes it. See [Classes and "
 "constructors](classes.md)."
 msgstr ""
 
-#: src/reference/modules-and-visibility.md:340
+#: src/reference/modules-and-visibility.md:359
 msgid ""
 "**Struct fields are always public** — the field law has no dial (see "
 "[Structs](structs.md)). **Impl-block methods take the `pub` dial** — `pub "
@@ -11151,7 +11203,7 @@ msgid ""
 "members (see [Interfaces and dispatch](interfaces.md))."
 msgstr ""
 
-#: src/reference/modules-and-visibility.md:348
+#: src/reference/modules-and-visibility.md:367
 msgid ""
 "Visibility is checked at compile time; it has no runtime representation. "
 "Only `pub` names enter a module's export table; a non-exported declaration "
@@ -11223,7 +11275,7 @@ msgstr ""
 
 #: src/reference/primitive-types.md:17
 #: src/reference/builtin-generic-types.md:56
-#: src/reference/by-reference-and-nullable.md:65 src/reference/stdlib.md:345
+#: src/reference/by-reference-and-nullable.md:66 src/reference/stdlib.md:345
 msgid "`?T`"
 msgstr ""
 
@@ -11328,7 +11380,7 @@ msgid ""
 "a refcounted heap cell handle**: assignment shares, and mutation through any "
 "alias is visible through all of them — struct and class instances, `str`, "
 "`bytes`, `Vec`, `[T]`, enums, `opaque` boxes, interface-typed values, `?T` "
-"boxes alike. Writing is gated by the `mut`\\-binding law (see [Modules and "
+"boxes alike. Writing is gated by the const-binding law (see [Modules and "
 "visibility](modules-and-visibility.md)), never by the sharing."
 msgstr ""
 
@@ -11515,62 +11567,62 @@ msgstr ""
 
 #: src/reference/builtin-generic-types.md:54
 #: src/reference/literals-and-inference.md:206
-#: src/reference/by-reference-and-nullable.md:63
+#: src/reference/by-reference-and-nullable.md:64
 msgid "Type"
 msgstr ""
 
 #: src/reference/builtin-generic-types.md:54
-#: src/reference/by-reference-and-nullable.md:63
+#: src/reference/by-reference-and-nullable.md:64
 msgid "Reading"
 msgstr ""
 
 #: src/reference/builtin-generic-types.md:56
-#: src/reference/by-reference-and-nullable.md:65
+#: src/reference/by-reference-and-nullable.md:66
 msgid "`T \\| nil`"
 msgstr ""
 
 #: src/reference/builtin-generic-types.md:56
-#: src/reference/by-reference-and-nullable.md:65
+#: src/reference/by-reference-and-nullable.md:66
 msgid "the nullable"
 msgstr ""
 
 #: src/reference/builtin-generic-types.md:57
-#: src/reference/by-reference-and-nullable.md:66
+#: src/reference/by-reference-and-nullable.md:67
 msgid "`[?T]`"
 msgstr ""
 
 #: src/reference/builtin-generic-types.md:57
-#: src/reference/by-reference-and-nullable.md:66
+#: src/reference/by-reference-and-nullable.md:67
 msgid "`[T \\| nil]`"
 msgstr ""
 
 #: src/reference/builtin-generic-types.md:57
-#: src/reference/by-reference-and-nullable.md:66
+#: src/reference/by-reference-and-nullable.md:67
 msgid "array of nullables"
 msgstr ""
 
 #: src/reference/builtin-generic-types.md:58
-#: src/reference/by-reference-and-nullable.md:67
+#: src/reference/by-reference-and-nullable.md:68
 msgid "`?[T]`"
 msgstr ""
 
 #: src/reference/builtin-generic-types.md:58
-#: src/reference/by-reference-and-nullable.md:67
+#: src/reference/by-reference-and-nullable.md:68
 msgid "`[T] \\| nil`"
 msgstr ""
 
 #: src/reference/builtin-generic-types.md:58
-#: src/reference/by-reference-and-nullable.md:67
+#: src/reference/by-reference-and-nullable.md:68
 msgid "nullable array"
 msgstr ""
 
 #: src/reference/builtin-generic-types.md:59
-#: src/reference/by-reference-and-nullable.md:68
+#: src/reference/by-reference-and-nullable.md:69
 msgid "`??T`"
 msgstr ""
 
 #: src/reference/builtin-generic-types.md:59
-#: src/reference/by-reference-and-nullable.md:68
+#: src/reference/by-reference-and-nullable.md:69
 msgid "chained"
 msgstr ""
 
@@ -11587,7 +11639,7 @@ msgid ""
 msgstr ""
 
 #: src/reference/builtin-generic-types.md:65
-#: src/reference/by-reference-and-nullable.md:82
+#: src/reference/by-reference-and-nullable.md:83
 msgid ""
 "Auto-deref covers every value position: `p.x`, `p.m(..)`, `p[i]`, `for (x of "
 "p)`, arithmetic on `p`'s payload."
@@ -11602,13 +11654,14 @@ msgstr ""
 #: src/reference/builtin-generic-types.md:69
 msgid ""
 "A `?T` binding IS the cell reference — writes through it hit the shared cell "
-"(gated by `mut`, see [Modules and visibility](modules-and-visibility.md))."
+"(gated only by the `const` opt-out, see [Modules and "
+"visibility](modules-and-visibility.md))."
 msgstr ""
 
 #: src/reference/builtin-generic-types.md:72
 msgid ""
 "When the cell's refcount reaches zero, the engine runs the type's "
-"`[disposal]` member (`<free>(mut self, cx)`) — the cell-death hook, not a "
+"`[disposal]` member (`<free>(self, cx)`) — the cell-death hook, not a "
 "per-value attach ([the Rc heap](rc-heap.md))."
 msgstr ""
 
@@ -12276,7 +12329,7 @@ msgid ""
 msgstr ""
 
 #: src/reference/literals-and-inference.md:129
-#: src/reference/control-flow.md:186
+#: src/reference/control-flow.md:189
 msgid "Example"
 msgstr ""
 
@@ -12662,8 +12715,8 @@ msgstr ""
 #: src/reference/control-flow.md:116
 msgid ""
 "```rut\n"
-"for (let x of expr) { .. }         // plain `let`: a read-only view\n"
-"for (let x of expr) { .. }     // `mut`: the body may assign x\n"
+"for (let x of expr) { .. }         // mutable: the body may assign x\n"
+"for (const x of expr) { .. }       // `const`: reassigning x is refused\n"
 "```"
 msgstr ""
 
@@ -12680,12 +12733,13 @@ msgstr ""
 
 #: src/reference/control-flow.md:131
 msgid ""
-"Both headers declare a **normal binding**, and the mut-binding law gates "
-"them like any `let`: assigning the loop variable — in the body, or in the "
-"indexed form's update clause — requires `mut` in the header:"
+"Both headers declare a **normal binding**, and the binding law gates them "
+"like any `let`: the loop variable is mutable by default, and spelling "
+"`const` opts out — assigning the loop variable — in the body, or in the "
+"indexed form's update clause — is refused on a `const` header:"
 msgstr ""
 
-#: src/reference/control-flow.md:135
+#: src/reference/control-flow.md:137
 msgid ""
 "```rut\n"
 "use ink::{ Logger };\n"
@@ -12696,8 +12750,9 @@ msgid ""
 "    for (let i = 0; i < 5; i += 1) {   // the update clause assigns i\n"
 "        total += i;\n"
 "    }\n"
-"    // for (let i = 0; i < 5; i += 1) { }  // ERROR: assignment to `i` "
-"requires `mut`\n"
+"    // for (const i = 0; i < 5; i += 1) { }\n"
+"    // ERROR: a `const` induction variable is reassigned by the loop — spell "
+"`let`\n"
 "    let rows = [[1, 2], [3, 4]];\n"
 "    for (let row of rows) {            // the body assigns the element\n"
 "        row[0] = 99;                       // the write reaches the "
@@ -12708,13 +12763,13 @@ msgid ""
 "```"
 msgstr ""
 
-#: src/reference/control-flow.md:159
+#: src/reference/control-flow.md:162
 msgid ""
 "`when (x) { pattern -> body, ... }` is an **expression**: the first matching "
 "arm's body produces its value. No fallthrough; exactly one arm runs."
 msgstr ""
 
-#: src/reference/control-flow.md:163
+#: src/reference/control-flow.md:166
 msgid ""
 "```rut\n"
 "use ink::{ Logger };\n"
@@ -12734,62 +12789,62 @@ msgid ""
 "```"
 msgstr ""
 
-#: src/reference/control-flow.md:186
+#: src/reference/control-flow.md:189
 msgid "Pattern"
 msgstr ""
 
-#: src/reference/control-flow.md:188
+#: src/reference/control-flow.md:191
 msgid "enum member (path)"
 msgstr ""
 
-#: src/reference/control-flow.md:188
+#: src/reference/control-flow.md:191
 msgid "`Light::Green`"
 msgstr ""
 
-#: src/reference/control-flow.md:189
+#: src/reference/control-flow.md:192
 msgid "literal"
 msgstr ""
 
-#: src/reference/control-flow.md:189
+#: src/reference/control-flow.md:192
 msgid "`0`, `3.5`, `true`, `\"text\"`"
 msgstr ""
 
-#: src/reference/control-flow.md:190
+#: src/reference/control-flow.md:193
 msgid "negative literal"
 msgstr ""
 
-#: src/reference/control-flow.md:190
+#: src/reference/control-flow.md:193
 msgid "`-1`"
 msgstr ""
 
-#: src/reference/control-flow.md:191
+#: src/reference/control-flow.md:194
 msgid "alternatives (comma list)"
 msgstr ""
 
-#: src/reference/control-flow.md:191
+#: src/reference/control-flow.md:194
 msgid "`1, 2, 3`"
 msgstr ""
 
-#: src/reference/control-flow.md:192
+#: src/reference/control-flow.md:195
 msgid "wildcard `else` / `_`"
 msgstr ""
 
-#: src/reference/control-flow.md:192
+#: src/reference/control-flow.md:195
 msgid "`else -> ..`"
 msgstr ""
 
-#: src/reference/control-flow.md:194
+#: src/reference/control-flow.md:197
 msgid ""
 "Ranges, destructuring, binding patterns, and guards (`x if cond`) do not "
 "exist; patterns are enum members, literals, alternatives, and the wildcards "
 "only."
 msgstr ""
 
-#: src/reference/control-flow.md:198 src/reference/opaque.md:45
+#: src/reference/control-flow.md:201 src/reference/opaque.md:45
 msgid "The laws"
 msgstr ""
 
-#: src/reference/control-flow.md:200
+#: src/reference/control-flow.md:203
 msgid ""
 "**Exhaustiveness is always enforced.** An enum-typed scrutinee must cover "
 "every member (then `else` is optional) or add `else` — a partial `when` is a "
@@ -12797,7 +12852,7 @@ msgid ""
 "`else` is **mandatory**."
 msgstr ""
 
-#: src/reference/control-flow.md:204
+#: src/reference/control-flow.md:207
 msgid ""
 "**All arms must agree on one type** — that is the `when`'s type. Block arms "
 "are value blocks: a block arm's tail is the arm's value, and expression and "
@@ -12806,23 +12861,23 @@ msgid ""
 "block arms written for effect stay tail-less."
 msgstr ""
 
-#: src/reference/control-flow.md:210
+#: src/reference/control-flow.md:213
 msgid ""
 "Duplicate patterns, and arms made unreachable by earlier ones, are compile "
 "errors."
 msgstr ""
 
-#: src/reference/control-flow.md:212
+#: src/reference/control-flow.md:215
 msgid ""
 "Arms use `->`. Expression arms are comma-separated; block arms may omit the "
 "trailing comma (the corpus writes it)."
 msgstr ""
 
-#: src/reference/control-flow.md:214
+#: src/reference/control-flow.md:217
 msgid "`when` literal patterns match compile-time values, never runtime `==`."
 msgstr ""
 
-#: src/reference/control-flow.md:216
+#: src/reference/control-flow.md:219
 msgid ""
 "```rut\n"
 "use ink::{ Logger };\n"
@@ -12844,11 +12899,11 @@ msgid ""
 "```"
 msgstr ""
 
-#: src/reference/control-flow.md:239
+#: src/reference/control-flow.md:242
 msgid "A `when` is also the idiomatic nullable guard, together with `!= nil`:"
 msgstr ""
 
-#: src/reference/control-flow.md:241
+#: src/reference/control-flow.md:244
 msgid ""
 "```rut\n"
 "use ink::{ Logger };\n"
@@ -12926,15 +12981,15 @@ msgstr ""
 
 #: src/reference/structs.md:57
 msgid ""
-"Writing is gated by the `mut`\\-binding law (see [Modules and "
-"visibility](modules-and-visibility.md)): field stores and `mut self` methods "
-"need a `let mut` binding (or a `mut` parameter). Parameters declare their "
-"intent: `fn nudge(mut pt: Point)` may write the caller's point; `fn "
-"length(pt: Point) -> f64` promises not to, and returns a fresh record "
-"instead:"
+"Writing is gated by the const-binding law (see [Modules and "
+"visibility](modules-and-visibility.md)): field stores are legal through any "
+"`let` binding — `const` opts out, refusing only the binding's own "
+"reassignment, never the write-through. Parameters are mutable like any "
+"`let`: `fn nudge(pt: Point)` may write the caller's point; `fn length(pt: "
+"Point) -> f64` promises not to, and returns a fresh record instead:"
 msgstr ""
 
-#: src/reference/structs.md:64
+#: src/reference/structs.md:65
 msgid ""
 "```rut\n"
 "use ink::{ Logger };\n"
@@ -12953,7 +13008,7 @@ msgid ""
 "```"
 msgstr ""
 
-#: src/reference/structs.md:84
+#: src/reference/structs.md:85
 msgid ""
 "`==` on two struct values is a **cell-identity test** — `q == p` is true "
 "exactly when they name one cell; two separately built literals are never "
@@ -12962,11 +13017,11 @@ msgid ""
 "dispatch](interfaces.md))."
 msgstr ""
 
-#: src/reference/structs.md:90
+#: src/reference/structs.md:91
 msgid "Construction — the literal, everywhere"
 msgstr ""
 
-#: src/reference/structs.md:92
+#: src/reference/structs.md:93
 msgid ""
 "`Name { field: expr, .. }` is the **only** construction. There is no `new`, "
 "no class methods, no type-call. The literal is available everywhere — "
@@ -12974,11 +13029,11 @@ msgid ""
 "the cell."
 msgstr ""
 
-#: src/reference/structs.md:97
+#: src/reference/structs.md:98
 msgid "Fields may be given in any order, by name."
 msgstr ""
 
-#: src/reference/structs.md:98
+#: src/reference/structs.md:99
 msgid ""
 "**The every-field-covered law**: a literal must cover **every** field — "
 "spelled in the literal, or covered by the field's declared initializer "
@@ -12987,26 +13042,26 @@ msgid ""
 "every-field-covered law)`` — the silent zero-fill default is gone."
 msgstr ""
 
-#: src/reference/structs.md:104
+#: src/reference/structs.md:105
 msgid ""
 "A field spelled twice is a compile error — ``duplicate field `a` in the `P` "
 "literal`` — there is no last-wins."
 msgstr ""
 
-#: src/reference/structs.md:106
+#: src/reference/structs.md:107
 msgid ""
 "An omitted field with an initializer takes it; `{}` with all-initialized "
 "fields is legal."
 msgstr ""
 
-#: src/reference/structs.md:108
+#: src/reference/structs.md:109
 msgid ""
 "**Field-init shorthand**: a bare field name takes its value from the "
 "like-named binding in scope — `Name { x, y }` is exactly `Name { x: x, y: y "
 "}`."
 msgstr ""
 
-#: src/reference/structs.md:112
+#: src/reference/structs.md:113
 msgid ""
 "```rut\n"
 "use ink::{ Logger };\n"
@@ -13027,7 +13082,7 @@ msgid ""
 "```"
 msgstr ""
 
-#: src/reference/structs.md:132
+#: src/reference/structs.md:133
 msgid ""
 "```rut\n"
 "use ink::{ Logger };\n"
@@ -13044,11 +13099,11 @@ msgid ""
 "```"
 msgstr ""
 
-#: src/reference/structs.md:149
+#: src/reference/structs.md:150
 msgid "All fields public, always"
 msgstr ""
 
-#: src/reference/structs.md:151
+#: src/reference/structs.md:152
 msgid ""
 "A struct is an open data record: member visibility in a struct body is a "
 "compile error (privacy needs construction control, which is the class's job "
@@ -13056,18 +13111,18 @@ msgid ""
 "members."
 msgstr ""
 
-#: src/reference/structs.md:156
+#: src/reference/structs.md:157
 msgid "Methods live in impl blocks"
 msgstr ""
 
-#: src/reference/structs.md:158
+#: src/reference/structs.md:159
 msgid ""
 "A struct body is **fields only** — a `fn` member in the body is a hard parse "
 "error. Methods live in the inherent `impl S { .. }`, in the type's module "
 "only — the one impl form (see [Interfaces and dispatch](interfaces.md)):"
 msgstr ""
 
-#: src/reference/structs.md:163
+#: src/reference/structs.md:164
 msgid ""
 "```rut\n"
 "impl Point {\n"
@@ -13083,14 +13138,14 @@ msgid ""
 "```"
 msgstr ""
 
-#: src/reference/structs.md:174
+#: src/reference/structs.md:175
 msgid ""
 "Methods carry real visibility — the class rule: `pub fn` exports "
 "cross-module, plain `fn` is module-private. `Self` spells the struct, in "
 "signatures (`-> Self`) and the literal (`Self { x: 1, y: 2 }`) alike:"
 msgstr ""
 
-#: src/reference/structs.md:179
+#: src/reference/structs.md:180
 msgid ""
 "```rut\n"
 "use ink::{ Logger };\n"
@@ -13111,30 +13166,30 @@ msgid ""
 "```"
 msgstr ""
 
-#: src/reference/structs.md:201
+#: src/reference/structs.md:202
 msgid ""
 "Free functions over data remain the default idiom; methods are for tight "
 "helpers, impl blocks for the members other code observes."
 msgstr ""
 
-#: src/reference/structs.md:204
+#: src/reference/structs.md:205
 msgid "Limits, exhaustively:"
 msgstr ""
 
-#: src/reference/structs.md:206
+#: src/reference/structs.md:207
 msgid ""
 "**fields are always public** — no field-visibility dial (privacy needs "
 "construction control, which is the class's job — see [Classes and "
 "constructors](classes.md));"
 msgstr ""
 
-#: src/reference/structs.md:209
+#: src/reference/structs.md:210
 msgid ""
 "**construction is the literal** — `Point { x: 1, y: 2 }` everywhere (open "
 "literal vs class-method-gated _is_ the struct/class distinction)."
 msgstr ""
 
-#: src/reference/structs.md:213
+#: src/reference/structs.md:214
 msgid ""
 "Everything else class-shaped is allowed — `impl` blocks, `Self`, "
 "`[disposal]`. And the old \"no destructor\" limit is gone: a shared value "
@@ -13143,18 +13198,18 @@ msgid ""
 "at that moment (see [Rc, dispose, and identity](rc-dispose-identity.md))."
 msgstr ""
 
-#: src/reference/structs.md:220
+#: src/reference/structs.md:221
 msgid "Interfaces and representation"
 msgstr ""
 
-#: src/reference/structs.md:222
+#: src/reference/structs.md:223
 msgid ""
 "Widening a struct to an interface `I` **attaches the itable to the same "
 "handle** — no allocation, no copy: the interface-typed value aliases the "
 "record, and mutations through it are visible to every other handle."
 msgstr ""
 
-#: src/reference/structs.md:226
+#: src/reference/structs.md:227
 msgid ""
 "Representation: one slot per field inside the cell, in declaration order — "
 "primitive fields widened into their slot, composite fields as cell-handle "
@@ -13162,7 +13217,7 @@ msgid ""
 "(`next: ?Node`) are legal because composite fields are pointer-sized."
 msgstr ""
 
-#: src/reference/structs.md:231
+#: src/reference/structs.md:232
 msgid ""
 "Structs are for small data (points, rects, colors, configs), but any size is "
 "allowed."
@@ -13320,7 +13375,7 @@ msgid "the engine, at refcount zero"
 msgstr ""
 
 #: src/reference/classes.md:93
-msgid "the engine — `(mut self, cx: DisposalContext)`"
+msgid "the engine — `(self, cx: DisposalContext)`"
 msgstr ""
 
 #: src/reference/classes.md:93
@@ -13561,11 +13616,13 @@ msgstr ""
 msgid ""
 "**The receiver is explicit.** An instance method spells its receiver as the "
 "first parameter — `fn add(self, x: i32, y: i32)` — and the body reads fields "
-"through `self`. A method that mutates declares `mut self` and requires a "
-"`let mut` receiver (see [Modules and visibility](modules-and-visibility.md))."
+"through `self`. A method that mutates just writes through `self`: mutation "
+"is the default, gated only by the caller's const opt-out (a `const` binding "
+"refuses its own reassignment, never the write-through — see [Modules and "
+"visibility](modules-and-visibility.md))."
 msgstr ""
 
-#: src/reference/classes.md:233
+#: src/reference/classes.md:235
 msgid ""
 "A method **without** a `self` parameter is a **class method** — invoked on "
 "the class itself (`Rect::new(..)`, `Self.new(..)` inside the body). Presence "
@@ -13573,23 +13630,23 @@ msgid ""
 "functions: they validate, default, cache, register, or hand out singletons."
 msgstr ""
 
-#: src/reference/classes.md:238
+#: src/reference/classes.md:240
 msgid ""
 "**A computed property is a method** (`c.count()`), and a settable one takes "
 "an argument (`c.set_count(n)`). One member kind, one call convention."
 msgstr ""
 
-#: src/reference/classes.md:241
+#: src/reference/classes.md:243
 msgid ""
 "**Static fields** are declared `static name: T = init;` in the class body, "
 "with the same visibility forms as fields."
 msgstr ""
 
-#: src/reference/classes.md:244
+#: src/reference/classes.md:246
 msgid "Member visibility"
 msgstr ""
 
-#: src/reference/classes.md:246
+#: src/reference/classes.md:248
 msgid ""
 "Members follow the same visibility forms as declarations (see [Modules and "
 "visibility](modules-and-visibility.md)): an unannotated field or method is "
@@ -13598,11 +13655,11 @@ msgid ""
 "builds; unannotated members stay the class's own business within its module."
 msgstr ""
 
-#: src/reference/classes.md:253
+#: src/reference/classes.md:255
 msgid "Reference semantics and equality"
 msgstr ""
 
-#: src/reference/classes.md:255
+#: src/reference/classes.md:257
 msgid ""
 "A class value is a **heap cell handle** like every non-primitive (see "
 "[By-reference and nullable](by-reference-and-nullable.md)): assignment "
@@ -13610,17 +13667,17 @@ msgid ""
 "field-wise comparison is an interface you write for it."
 msgstr ""
 
-#: src/reference/classes.md:260
+#: src/reference/classes.md:262
 msgid "No inheritance"
 msgstr ""
 
-#: src/reference/classes.md:262
+#: src/reference/classes.md:264
 msgid ""
 "**No `extends` for classes** — no base-class constructors (`super(..)`), no "
 "method overriding, no `super.m()`, no `protected`."
 msgstr ""
 
-#: src/reference/classes.md:264
+#: src/reference/classes.md:266
 msgid ""
 "Code sharing is composition (hold a helper object or struct in a field) or "
 "free functions; polymorphism is only the structural kind — a type used "
@@ -13628,7 +13685,7 @@ msgid ""
 "dispatch](interfaces.md))."
 msgstr ""
 
-#: src/reference/classes.md:268
+#: src/reference/classes.md:270
 msgid ""
 "Layout stays trivial: fields at fixed offsets — identical inside every cell "
 "payload (see [Reified types and layout](reified-types.md)) — no prefix "
@@ -13661,7 +13718,7 @@ msgstr ""
 
 #: src/reference/rc-dispose-identity.md:15
 msgid ""
-"writing is gated by the `mut`\\-binding law (see [Modules and "
+"writing is gated by the const-binding law (see [Modules and "
 "visibility](modules-and-visibility.md)), never by the sharing."
 msgstr ""
 
@@ -13726,8 +13783,8 @@ msgstr ""
 msgid ""
 "A `[disposal]` member runs when the cell's refcount reaches **zero** — "
 "deterministic destruction, not a collector callback. The dying value arrives "
-"as `mut self`; the fields release after the body returns. The member's NAME "
-"IS FREE — the bracket designates, the spelling never does (one `[disposal]` "
+"as `self`; the fields release after the body returns. The member's NAME IS "
+"FREE — the bracket designates, the spelling never does (one `[disposal]` "
 "member per class)."
 msgstr ""
 
@@ -13817,22 +13874,22 @@ msgid ""
 msgstr ""
 
 #: src/reference/rc-dispose-identity.md:121
-#: src/reference/by-reference-and-nullable.md:101
+#: src/reference/by-reference-and-nullable.md:102
 msgid "Operand type"
 msgstr ""
 
 #: src/reference/rc-dispose-identity.md:121
-#: src/reference/by-reference-and-nullable.md:101
+#: src/reference/by-reference-and-nullable.md:102
 msgid "Lowering"
 msgstr ""
 
 #: src/reference/rc-dispose-identity.md:123
-#: src/reference/by-reference-and-nullable.md:103
+#: src/reference/by-reference-and-nullable.md:104
 msgid "numeric / `bool` primitives"
 msgstr ""
 
 #: src/reference/rc-dispose-identity.md:123
-#: src/reference/by-reference-and-nullable.md:103
+#: src/reference/by-reference-and-nullable.md:104
 msgid "value"
 msgstr ""
 
@@ -13841,19 +13898,19 @@ msgid "compare, IEEE 754 for floats (`NaN != NaN`, `-0.0 == 0.0`)"
 msgstr ""
 
 #: src/reference/rc-dispose-identity.md:124
-#: src/reference/by-reference-and-nullable.md:104
+#: src/reference/by-reference-and-nullable.md:105
 msgid "content (codepoints)"
 msgstr ""
 
 #: src/reference/rc-dispose-identity.md:124
 #: src/reference/rc-dispose-identity.md:125
-#: src/reference/by-reference-and-nullable.md:104
 #: src/reference/by-reference-and-nullable.md:105
+#: src/reference/by-reference-and-nullable.md:106
 msgid "content compare"
 msgstr ""
 
 #: src/reference/rc-dispose-identity.md:125
-#: src/reference/by-reference-and-nullable.md:105
+#: src/reference/by-reference-and-nullable.md:106
 msgid "content (octets)"
 msgstr ""
 
@@ -13864,12 +13921,12 @@ msgid ""
 msgstr ""
 
 #: src/reference/rc-dispose-identity.md:126
-#: src/reference/by-reference-and-nullable.md:106
+#: src/reference/by-reference-and-nullable.md:107
 msgid "**cell identity**"
 msgstr ""
 
 #: src/reference/rc-dispose-identity.md:126
-#: src/reference/by-reference-and-nullable.md:106
+#: src/reference/by-reference-and-nullable.md:107
 msgid "the raw slot compare"
 msgstr ""
 
@@ -14051,10 +14108,10 @@ msgstr ""
 
 #: src/reference/interfaces.md:76
 msgid ""
-"**Signatures must match**: receiver form (`self` vs `mut self` vs none), "
-"parameter types, return type, and `async` spelling — exactly, wherever both "
-"sides are locally visible. `Self` in the interface's signatures accepts the "
-"satisfying concrete type."
+"**Signatures must match**: receiver presence (`self` vs none), parameter "
+"types, return type, and `async` spelling — exactly, wherever both sides are "
+"locally visible. `Self` in the interface's signatures accepts the satisfying "
+"concrete type."
 msgstr ""
 
 #: src/reference/interfaces.md:80
@@ -14523,8 +14580,8 @@ msgstr ""
 
 #: src/reference/interfaces.md:372
 msgid ""
-"`[disposal]`'s contract: `fn <free>(mut self, cx: DisposalContext)` — the "
-"engine calls it when a value of the type reaches refcount zero ([the Rc "
+"`[disposal]`'s contract: `fn <free>(self, cx: DisposalContext)` — the engine "
+"calls it when a value of the type reaches refcount zero ([the Rc "
 "heap](rc-heap.md)); the target must be a CONCRETE struct or class (the row "
 "keys the cell's type id). `[iterable]`'s contract is the iteration protocol "
 "above. `[constructor]`'s contract: `fn <free>(..) -> Self` (or `?Self`) on a "
@@ -14621,8 +14678,8 @@ msgstr ""
 
 #: src/reference/functions-closures-generics.md:25
 msgid ""
-"Parameters are `name: Type`; a mutable parameter declares `mut name` — the "
-"callee's permission to mutate the caller's object (see [Modules and "
+"Parameters are `name: Type`; they are mutable like any `let` — `fn step(p: "
+"Point)` may write the caller's object (see [Modules and "
 "visibility](modules-and-visibility.md))."
 msgstr ""
 
@@ -14649,33 +14706,33 @@ msgstr ""
 
 #: src/reference/functions-closures-generics.md:42
 msgid ""
-"Methods are functions in impl blocks: the first parameter spelled `self` (or "
-"`mut self`) makes it an instance method; absence of `self` makes it a class "
-"method (see [Classes and constructors](classes.md))."
+"Methods are functions in impl blocks: the first parameter spelled `self` "
+"makes it an instance method; absence of `self` makes it a class method (see "
+"[Classes and constructors](classes.md))."
 msgstr ""
 
-#: src/reference/functions-closures-generics.md:46
+#: src/reference/functions-closures-generics.md:45
 msgid ""
 "`entry fn` publishes a function to the embedder (see [Modules and "
 "visibility](modules-and-visibility.md)); `async fn` declares a suspending "
 "function (see [Async and await](async.md))."
 msgstr ""
 
-#: src/reference/functions-closures-generics.md:49
+#: src/reference/functions-closures-generics.md:48
 msgid ""
 "Function types are first-class: `fn apply(f: fn(i32) -> i32, v: i32) -> i32`."
 msgstr ""
 
-#: src/reference/functions-closures-generics.md:51
+#: src/reference/functions-closures-generics.md:50
 msgid "Closures"
 msgstr ""
 
-#: src/reference/functions-closures-generics.md:53
+#: src/reference/functions-closures-generics.md:52
 msgid ""
 "The closure spelling is an **anonymous fn** — block bodies, no arrow form:"
 msgstr ""
 
-#: src/reference/functions-closures-generics.md:56
+#: src/reference/functions-closures-generics.md:55
 msgid ""
 "```rut\n"
 "use ink::{ Logger };\n"
@@ -14692,13 +14749,13 @@ msgid ""
 "```"
 msgstr ""
 
-#: src/reference/functions-closures-generics.md:74
+#: src/reference/functions-closures-generics.md:73
 msgid ""
 "An anonymous fn inhabits `fn(P..) -> R` directly — it is a value of the "
 "function type, copyable like a primitive."
 msgstr ""
 
-#: src/reference/functions-closures-generics.md:76
+#: src/reference/functions-closures-generics.md:75
 msgid ""
 "**The capture law**: primitives, `nil`, and `fn` values copy — a captured "
 "scalar is the closure's own slot, and reassigning it inside the closure "
@@ -14708,12 +14765,12 @@ msgid ""
 "captured-and-reassigned binding is promoted to a hidden shared-slot cell, so "
 "both frames stay linked for the binding's whole scope (a "
 "stash-then-reassign, a reassign inside the closure, and the `for..of` loop "
-"variable — one binding reassigned per iteration, its write access gated by "
-"the header's `mut` — all follow this one law). Refcounting keeps captures "
-"alive; a closure is itself a shared cell value."
+"variable — one binding reassigned per iteration, its reassignment gated by "
+"the header's `const` opt-out — all follow this one law). Refcounting keeps "
+"captures alive; a closure is itself a shared cell value."
 msgstr ""
 
-#: src/reference/functions-closures-generics.md:91
+#: src/reference/functions-closures-generics.md:90
 msgid ""
 "```rut\n"
 "use ink::{ Logger };\n"
@@ -14733,44 +14790,44 @@ msgid ""
 "```"
 msgstr ""
 
-#: src/reference/functions-closures-generics.md:111
+#: src/reference/functions-closures-generics.md:110
 msgid ""
 "**Generics monomorphize at compile time**: each instantiation emits its own "
 "typed code. `T` infers from the arguments; explicit type arguments may be "
 "spelled at call sites, including method calls: `self.st.get<T>(self)`."
 msgstr ""
 
-#: src/reference/functions-closures-generics.md:115
+#: src/reference/functions-closures-generics.md:114
 msgid ""
 "Interface-typed arguments are ordinary arguments: a `T` instantiated at an "
 "interface type becomes a handle slot, satisfying no bound."
 msgstr ""
 
-#: src/reference/functions-closures-generics.md:117
+#: src/reference/functions-closures-generics.md:116
 msgid ""
 "**Generic parameters are unconstrained by default** — you cannot call "
 "methods on a bare `T`. Pass values in, take an `I`\\-typed parameter, or "
 "spell the bound (`T requires I`)."
 msgstr ""
 
-#: src/reference/functions-closures-generics.md:120
+#: src/reference/functions-closures-generics.md:119
 msgid ""
 "There are no const-generic user parameters. The builtin surfaces fix their "
 "shapes (`[T]` is one type; lengths are runtime values)."
 msgstr ""
 
-#: src/reference/functions-closures-generics.md:123
+#: src/reference/functions-closures-generics.md:122
 msgid "Inline bounds — `requires`"
 msgstr ""
 
-#: src/reference/functions-closures-generics.md:130
+#: src/reference/functions-closures-generics.md:129
 msgid ""
 "`fn f<T requires A | B>(x: T)` — an **admission-only** bound on fn, method, "
 "and class generic parameters (struct and interface generic parameters reject "
 "`requires`):"
 msgstr ""
 
-#: src/reference/functions-closures-generics.md:134
+#: src/reference/functions-closures-generics.md:133
 msgid ""
 "The bound gates which instantiations compile: enforcement is at every "
 "substitution-completing site (free-fn calls, method instantiation, "
@@ -14778,7 +14835,7 @@ msgid ""
 "spelled out — \"`bool` does not satisfy `T` requires `i32 | str`\"."
 msgstr ""
 
-#: src/reference/functions-closures-generics.md:139
+#: src/reference/functions-closures-generics.md:138
 msgid ""
 "Members may be concrete type names (satisfied by exact type identity), "
 "aliases (expanded first — see [Type aliases and union "
@@ -14788,21 +14845,21 @@ msgid ""
 "interface bound stands alone."
 msgstr ""
 
-#: src/reference/functions-closures-generics.md:146
+#: src/reference/functions-closures-generics.md:145
 msgid ""
 "**Interface-typed values satisfy nothing**: a `T` instantiated at an "
 "interface type fails any bound — only a concrete type with the members "
 "admits."
 msgstr ""
 
-#: src/reference/functions-closures-generics.md:149
+#: src/reference/functions-closures-generics.md:148
 msgid ""
 "A non-union bound **proves the widening**: the body may widen a `T`\\-typed "
 "value into a bound-interface-typed slot (`let w: Labeled = x;`), but gains "
 "no method calls on bare `T`."
 msgstr ""
 
-#: src/reference/functions-closures-generics.md:152
+#: src/reference/functions-closures-generics.md:151
 msgid ""
 "A **union bound** carries the whole-bound contract: a method call on a "
 "union-bounded value requires **every** member to provide the method — even a "
@@ -14810,13 +14867,13 @@ msgid ""
 "instantiation still binds the concrete member's own method."
 msgstr ""
 
-#: src/reference/functions-closures-generics.md:157
+#: src/reference/functions-closures-generics.md:156
 msgid ""
 "Bounds may reference the item's other generics: `fn hold<T, U requires "
 "[T]>(x: U)`."
 msgstr ""
 
-#: src/reference/functions-closures-generics.md:159
+#: src/reference/functions-closures-generics.md:158
 msgid ""
 "Generic **classes** take bounds on their parameters — the bound records on "
 "the class descriptor and admits every instantiation: `pub class HashMap<K "
@@ -15786,59 +15843,61 @@ msgstr ""
 
 #: src/reference/by-reference-and-nullable.md:36
 msgid ""
-"Writing is gated by the **`mut`\\-binding law**, never by the sharing: a "
-"`let` binding is a read-only view; `let mut` grants write access to the "
-"object it holds (see [Modules and visibility](modules-and-visibility.md)). "
-"Parameters declare the same intent: `fn step(mut p: Point)` writes the "
-"caller's point; `fn area(p: Point)` promises not to."
+"Writing is gated by the **const-binding law**, never by the sharing: a `let` "
+"binding is mutable by default, and `const` opts out — it refuses only the "
+"binding's own reassignment, while writes through the value stay legal (see "
+"[Modules and visibility](modules-and-visibility.md)). Parameters are mutable "
+"like any `let`: `fn step(p: Point)` writes the caller's point; a callee that "
+"promises not to write simply doesn't."
 msgstr ""
 
-#: src/reference/by-reference-and-nullable.md:42
+#: src/reference/by-reference-and-nullable.md:43
 msgid ""
 "A `T` stored into a `?T` slot boxes once — the box **aliases** the payload's "
 "cell (a share); primitives and `nil` copy the bits. There is no "
 "deref-on-load/box-on-store special case anywhere."
 msgstr ""
 
-#: src/reference/by-reference-and-nullable.md:45
+#: src/reference/by-reference-and-nullable.md:46
 msgid ""
 "Primitive elements in a `[T]` stay flat slots; composite elements are handle "
 "slots. `for (let x of xs)` yields the **shared** element, not a per-element "
 "copy — a cell element writes through to the sequence, and writes through it "
-"are gated by the header's `mut`, like any binding."
+"are gated by the header exactly like any binding (`const` there refuses the "
+"loop variable's reassignment)."
 msgstr ""
 
-#: src/reference/by-reference-and-nullable.md:50
+#: src/reference/by-reference-and-nullable.md:51
 msgid ""
 "The repeat `[v; n]` retains the handle `n` times: every slot aliases the one "
 "cell. The repeat never copies."
 msgstr ""
 
-#: src/reference/by-reference-and-nullable.md:53
+#: src/reference/by-reference-and-nullable.md:54
 msgid ""
 "Copy-by-value is unobservable except through the two legal effects: "
 "**aliasing** (writes visible through every binding) and `==` (below)."
 msgstr ""
 
-#: src/reference/by-reference-and-nullable.md:56
+#: src/reference/by-reference-and-nullable.md:57
 msgid "`?T` — the nullable type"
 msgstr ""
 
-#: src/reference/by-reference-and-nullable.md:58
+#: src/reference/by-reference-and-nullable.md:59
 msgid ""
 "`?T` is a nil-able cell — a one-slot box. `nil` is the null literal; "
 "dereferencing it traps `NilDeref` — never a silent read."
 msgstr ""
 
-#: src/reference/by-reference-and-nullable.md:61
+#: src/reference/by-reference-and-nullable.md:62
 msgid "Grammar — prefix only, binds tightest"
 msgstr ""
 
-#: src/reference/by-reference-and-nullable.md:68
+#: src/reference/by-reference-and-nullable.md:69
 msgid "the same runtime box, unwrapped transitively"
 msgstr ""
 
-#: src/reference/by-reference-and-nullable.md:70
+#: src/reference/by-reference-and-nullable.md:71
 msgid ""
 "There is no postfix `T?` and no `*T` — each falls to the ordinary error "
 "ladder (in type position, \"expected a type name\"); the nullable spells "
@@ -15847,29 +15906,29 @@ msgid ""
 "itself (binary `*`/`&` operators are untouched)."
 msgstr ""
 
-#: src/reference/by-reference-and-nullable.md:77
+#: src/reference/by-reference-and-nullable.md:78
 msgid "Coercions and uses"
 msgstr ""
 
-#: src/reference/by-reference-and-nullable.md:79
+#: src/reference/by-reference-and-nullable.md:80
 msgid ""
 "**`T → ?T` boxes; `?T → T` derefs** — both implicit at the expected-type "
 "position, transitive through `??T`:"
 msgstr ""
 
-#: src/reference/by-reference-and-nullable.md:84
+#: src/reference/by-reference-and-nullable.md:85
 msgid ""
 "`p == nil` / `p != nil` compare against the null slot; guard before use. The "
 "trap is the bug-catcher, not the semantics."
 msgstr ""
 
-#: src/reference/by-reference-and-nullable.md:86
+#: src/reference/by-reference-and-nullable.md:87
 msgid ""
 "A `?T` binding IS the cell reference: writes through it hit the shared cell "
-"(a `nudge(mut pt: ?Point)` moves the caller's point)."
+"(a `nudge(pt: ?Point)` moves the caller's point)."
 msgstr ""
 
-#: src/reference/by-reference-and-nullable.md:88
+#: src/reference/by-reference-and-nullable.md:89
 msgid ""
 "`nil` typing: a context-free `nil` has type `nil`; in an expected-`?T` "
 "position it types as that `?T` — so `let p: ?Node = nil` and a `left: nil` "
@@ -15877,34 +15936,34 @@ msgid ""
 "and `nil` means \"not found\"."
 msgstr ""
 
-#: src/reference/by-reference-and-nullable.md:93
+#: src/reference/by-reference-and-nullable.md:94
 msgid ""
 "When the cell's refcount reaches zero, the engine runs the type's "
 "`[disposal]` member — the cell-death hook (see [Rc, dispose, and "
 "identity](rc-dispose-identity.md))."
 msgstr ""
 
-#: src/reference/by-reference-and-nullable.md:96
+#: src/reference/by-reference-and-nullable.md:97
 msgid ""
 "Across the host boundary `?T` crosses nil-flattened when its element crosses "
 "— an `entry fn -> (?T, err)` is a first-class host answer."
 msgstr ""
 
-#: src/reference/by-reference-and-nullable.md:99
+#: src/reference/by-reference-and-nullable.md:100
 msgid "`==` — identity for cells, content for text"
 msgstr ""
 
-#: src/reference/by-reference-and-nullable.md:103
+#: src/reference/by-reference-and-nullable.md:104
 msgid "IEEE 754 for floats (`NaN != NaN`, `-0.0 == 0.0`)"
 msgstr ""
 
-#: src/reference/by-reference-and-nullable.md:106
+#: src/reference/by-reference-and-nullable.md:107
 msgid ""
 "everything else — records, arrays, enums, closures, interface objects, "
 "`opaque`, `?T`"
 msgstr ""
 
-#: src/reference/by-reference-and-nullable.md:108
+#: src/reference/by-reference-and-nullable.md:109
 msgid ""
 "`[1, 2] == [1, 2]` is **false** — two cells. Identity is O(1) with no deep "
 "walk; compare content where content is the contract (a loop, or a hash/eq "
@@ -15914,12 +15973,12 @@ msgid ""
 "obviously-fresh composites."
 msgstr ""
 
-#: src/reference/by-reference-and-nullable.md:115
+#: src/reference/by-reference-and-nullable.md:116
 #: src/reference/typed-bytecode.md:121
 msgid "`bytes::clone()` — the one copy escape hatch"
 msgstr ""
 
-#: src/reference/by-reference-and-nullable.md:117
+#: src/reference/by-reference-and-nullable.md:118
 msgid ""
 "`b.clone() -> bytes` mints a fresh buffer with `b`'s octets — a one-shot "
 "deep copy, the **only copy syntax in the language**. `bytes::from(a)` also "
@@ -15927,7 +15986,7 @@ msgid ""
 "any other type is unreachable — build a new one instead."
 msgstr ""
 
-#: src/reference/by-reference-and-nullable.md:122
+#: src/reference/by-reference-and-nullable.md:123
 msgid ""
 "```rut\n"
 "use ink::{ Logger };\n"
@@ -15942,11 +16001,11 @@ msgid ""
 "```"
 msgstr ""
 
-#: src/reference/by-reference-and-nullable.md:138
+#: src/reference/by-reference-and-nullable.md:139
 msgid "Containers under sharing"
 msgstr ""
 
-#: src/reference/by-reference-and-nullable.md:140
+#: src/reference/by-reference-and-nullable.md:141
 msgid ""
 "`Vec<T>` backs on `buf: [?T]` — `[nil; cap]` is the generic zero (`nil` is "
 "the slot's zero); `push` takes the `T → ?T`\\-boxed handle; loads yield the "
@@ -15954,32 +16013,32 @@ msgid ""
 "types](builtin-generic-types.md)."
 msgstr ""
 
-#: src/reference/by-reference-and-nullable.md:144
+#: src/reference/by-reference-and-nullable.md:145
 msgid ""
 "Keyed collections: `get(k) -> ?V` — `nil` = absent, a hit answers the "
 "**stored cell** (the aliasing law: two gets of one key name one cell until a "
 "replace re-stores)."
 msgstr ""
 
-#: src/reference/by-reference-and-nullable.md:147
+#: src/reference/by-reference-and-nullable.md:148
 msgid ""
 "Array windows (`v.slice(a, b) -> ?Vec<T>`) are the shared cell: writes "
 "through the window hit the parent (see [String slicing and "
 "views](string-views.md))."
 msgstr ""
 
-#: src/reference/by-reference-and-nullable.md:150
+#: src/reference/by-reference-and-nullable.md:151
 msgid ""
 "Erasure rides the same laws: `opaque(v)` aliases the payload's cell, and "
 "`opaque::downcast<T>(o)`'s match is the box's own inner cell (see [opaque — "
 "erasure and downcast](opaque.md))."
 msgstr ""
 
-#: src/reference/by-reference-and-nullable.md:154
+#: src/reference/by-reference-and-nullable.md:155
 msgid "The answer channel"
 msgstr ""
 
-#: src/reference/by-reference-and-nullable.md:156
+#: src/reference/by-reference-and-nullable.md:157
 msgid ""
 "**`(?T, err)` — concretely `(value, ok)` / `(T, str)` — is THE answer "
 "channel.** The convention is law: empty err + a value = success; empty err + "
@@ -16122,9 +16181,9 @@ msgstr ""
 
 #: src/reference/rc-heap.md:79
 msgid ""
-"The engine calls `dispose(mut self, cx: DisposalContext)` exactly once per "
-"cell death — when the strong count reaches zero. Types without a "
-"`[disposal]` member release straight to the field walk."
+"The engine calls `dispose(self, cx: DisposalContext)` exactly once per cell "
+"death — when the strong count reaches zero. Types without a `[disposal]` "
+"member release straight to the field walk."
 msgstr ""
 
 #: src/reference/rc-heap.md:82
@@ -21227,10 +21286,10 @@ msgid ""
 "The builtin fns, primitives, and containers are in scope in every "
 "compilation unit; no `use` is needed. A `use core::{ … };` statement stays "
 "legal but is redundant for them. The exceptions — the **import-gated** "
-"spellings, resolving only through `use core::{ .. }`: the const `NAN`, the "
-"disposal context `DisposalContext`, the weak reference `Weak<T>`, and the "
-"closed async pair (`Future<T>`, `RunContext`) — the engine's weave itself "
-"never needs the import, only source that spells the names (a `cx: T` "
+"spellings, resolving only through `use core::{ .. }`: the surface const "
+"`NAN`, the disposal context `DisposalContext`, the weak reference `Weak<T>`, "
+"and the closed async pair (`Future<T>`, `RunContext`) — the engine's weave "
+"itself never needs the import, only source that spells the names (a `cx: T` "
 "parameter, a launcher's `f: Future<T>`, a `downcast<Future<..>>`). The "
 "bracket markers (`[disposal]`/`[iterable]`/`[constructor]`) need NO import — "
 "the marker word is the designation, not a name. The two builtin spellings "
@@ -21378,7 +21437,7 @@ msgid ""
 msgstr ""
 
 #: src/reference/stdlib.md:89
-msgid "`fn <free>(mut self, cx: DisposalContext)` on an inherent impl"
+msgid "`fn <free>(self, cx: DisposalContext)` on an inherent impl"
 msgstr ""
 
 #: src/reference/stdlib.md:89
@@ -21454,8 +21513,8 @@ msgstr ""
 
 #: src/reference/stdlib.md:112
 msgid ""
-"`NAN` (f64) — core's one const, behind `use core::{NAN}`. All other float "
-"constants are `calc_host`'s."
+"`NAN` (f64) — core's one surface const, behind `use core::{NAN}`. All other "
+"float constants are `calc_host`'s."
 msgstr ""
 
 #: src/reference/stdlib.md:115
@@ -21993,7 +22052,7 @@ msgstr ""
 msgid ""
 "**Satisfaction is structural**: your type satisfies "
 "`JsonSerialize`/`JsonDeserialize` by spelling the members on its own "
-"inherent impl — `impl Row { pub fn encode(self, mut w: JsonWriter) -> "
+"inherent impl — `impl Row { pub fn encode(self, w: JsonWriter) -> "
 "?EncodeJsonError { .. } }`. json owns the interfaces; user types satisfy "
 "them without asking."
 msgstr ""
@@ -22187,7 +22246,7 @@ msgid ""
 msgstr ""
 
 #: src/reference/stdlib.md:404
-msgid "`append(mut self, value: str)`"
+msgid "`append(self, value: str)`"
 msgstr ""
 
 #: src/reference/stdlib.md:404
@@ -22195,7 +22254,7 @@ msgid "amortized O(\\|s\\|), in place"
 msgstr ""
 
 #: src/reference/stdlib.md:405
-msgid "`append_code(mut self, cp: u32)`"
+msgid "`append_code(self, cp: u32)`"
 msgstr ""
 
 #: src/reference/stdlib.md:405
@@ -22216,8 +22275,8 @@ msgstr ""
 
 #: src/reference/stdlib.md:409
 msgid ""
-"Sharing is the default: appends through an alias (or a `mut` parameter) land "
-"in the caller's document; copies happen at exactly two engineered points — "
+"Sharing is the default: appends through an alias (or a parameter) land in "
+"the caller's document; copies happen at exactly two engineered points — "
 "`build`'s materialization and growth's prefix move. Growth consults the "
 "embedder's heap budget BEFORE growing (the geometric next-capacity is "
 "charged), so the wasm 4 MiB cap governs builder growth exactly as it governs "
@@ -23014,7 +23073,7 @@ msgid "instance vs class method"
 msgstr ""
 
 #: src/reference/frontend.md:137
-msgid "peek 4: `fn Ident ( <mut? self? …>`"
+msgid "peek 4: `fn Ident ( <self? …>`"
 msgstr ""
 
 #: src/reference/frontend.md:138
@@ -24817,7 +24876,7 @@ msgid ""
 "[Diagnostics, traces, and symbolication](diagnostics.md)."
 msgstr ""
 
-#: src/reference/module-binary.md:223 src/reference/symbol-stripping.md:151
+#: src/reference/module-binary.md:223 src/reference/symbol-stripping.md:152
 msgid "What is not here"
 msgstr ""
 
@@ -25078,18 +25137,19 @@ msgid ""
 "legal unconditionally: the consumer-spelled shapes monomorphize from the "
 "in-binary templates at link, never from source. The keep-set therefore "
 "preserves every name instantiation independence (the separate-compilation "
-"contract) consults — the exported surface's names (funcs, types, consts, "
-"interface and inherent methods), the generic parameter names (the consumer's "
-"substitution env spells `#{param}` against them), the template rows' bound "
-"names and bounds, the bound-member stubs' member texts, the instantiation "
-"ledger's owner specs, and the carried type block's row names (a mirror "
-"construction reads the target row's spelling). The mangle stays real where "
-"nothing consults: internal helpers, lambdas, and pre-surface temporaries "
-"rename to `%N` beside the sidecar. A consumer binding a stripped compiled "
-"group's surface later is still a loud unification miss, never a mislink."
+"contract) consults — the exported surface's names (funcs, types, surface "
+"consts, interface and inherent methods), the generic parameter names (the "
+"consumer's substitution env spells `#{param}` against them), the template "
+"rows' bound names and bounds, the bound-member stubs' member texts, the "
+"instantiation ledger's owner specs, and the carried type block's row names "
+"(a mirror construction reads the target row's spelling). The mangle stays "
+"real where nothing consults: internal helpers, lambdas, and pre-surface "
+"temporaries rename to `%N` beside the sidecar. A consumer binding a stripped "
+"compiled group's surface later is still a loud unification miss, never a "
+"mislink."
 msgstr ""
 
-#: src/reference/symbol-stripping.md:153
+#: src/reference/symbol-stripping.md:154
 msgid ""
 "`rut dump` on a `.rutc` with `--symbols`, and auto-keeping the shared "
 "surfaces of a mixed closure (so it could strip anyway), are natural "
@@ -25466,7 +25526,7 @@ msgstr ""
 
 #: src/reference/loading.md:24
 msgid ""
-"Module-local type/function/const ids rebase into the global tables; the "
+"Module-local type/function/const-pool ids rebase into the global tables; the "
 "shared boot prefix passes through; name tables merge; interface declarations "
 "merge by name and duplicate module names are link errors. Cyclic use is a "
 "compile-graph error, never a runtime event."

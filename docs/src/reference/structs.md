@@ -54,11 +54,12 @@ entry fn main() {
 4
 ```
 
-Writing is gated by the `mut`-binding law (see
-[Modules and visibility](modules-and-visibility.md)): field stores and
-`mut self` methods need a `let mut` binding (or a `mut` parameter).
-Parameters declare their intent: `fn nudge(mut pt: Point)` may write
-the caller's point; `fn length(pt: Point) -> f64` promises not to, and
+Writing is gated by the const-binding law (see
+[Modules and visibility](modules-and-visibility.md)): field stores are
+legal through any `let` binding — `const` opts out, refusing only the
+binding's own reassignment, never the write-through. Parameters are
+mutable like any `let`: `fn nudge(pt: Point)` may write the caller's
+point; `fn length(pt: Point) -> f64` promises not to, and
 returns a fresh record instead:
 
 ```rut

@@ -73,8 +73,8 @@ the language.
   *inherent* surface — the type's module's impl block. A third
   party's inherent block is refused; a used type's members live where
   the type was declared.
-- **Signatures must match**: receiver form (`self` vs `mut self` vs
-  none), parameter types, return type, and `async` spelling — exactly,
+- **Signatures must match**: receiver presence (`self` vs none),
+  parameter types, return type, and `async` spelling — exactly,
   wherever both sides are locally visible. `Self` in the interface's
   signatures accepts the satisfying concrete type.
 - **Failure names all three**: passing a `Point` without `area` to a
@@ -369,7 +369,7 @@ impl Point {
 }                                                               // binds this slot
 ```
 
-`[disposal]`'s contract: `fn <free>(mut self, cx: DisposalContext)` —
+`[disposal]`'s contract: `fn <free>(self, cx: DisposalContext)` —
 the engine calls it when a value of the type reaches refcount zero
 ([the Rc heap](rc-heap.md)); the target must be a CONCRETE struct or
 class (the row keys the cell's type id). `[iterable]`'s contract is

@@ -107,9 +107,10 @@ entry fn main() {
 remove(#1) = true, again = false, left: 1
 ```
 
-Note `mut self`: writing through a class handle requires a `mut`
-binding head, the same law [01 — Sort](01-sort.md) exercises on plain
-vecs — `add` and `remove` both declare it. `remove` filters through a
+Note `self`: writing through a class handle needs no header spelling —
+mutation is the default, the same law [01 — Sort](01-sort.md)
+exercises on plain vecs — `add` and `remove` both write through it.
+`remove` filters through a
 `when`: the matching row is dropped, everything else is kept, and the
 list is rewritten only if something was actually removed. The read
 side (not shown) is ordinary code — `len`, `title_of` (which returns

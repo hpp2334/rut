@@ -733,6 +733,37 @@ fn pub_mod_and_pub_self_are_the_ordinary_scope_error() {
 }
 
 #[test]
+fn mut_is_retired_an_ordinary_identifier_and_a_generic_error() {
+    // the `mut` retirement pin (phase 9): `mut` left the keyword table
+    // for `const`'s seat — the word is a PLAIN identifier now (a param,
+    // a binding, a use all parse clean), and the old `let mut x` shape
+    // degrades to the GENERIC head error (`expected =` — the parser
+    // reads `mut` as the binding name, then trips on `x`), which never
+    // names `mut` as a keyword or suggests removal. The const law pins
+    // live in `loop_const.rs` and `const_is_a_reserved_head_not_an_
+    // identifier` above.
+    for (label, src) in [
+        ("param named mut", "fn f(mut: i32) -> i32 { return mut; }"),
+        ("binding named mut", "fn f() -> nil { let mut = 5; }"),
+    ] {
+        let (_, diags) = parse(src, Mode::Impl);
+        assert!(diags.is_empty(), "{label}: `mut` drew a diag: {diags:?}");
+    }
+    let (_, diags) = parse("fn f() -> nil { let mut x = 1; }", Mode::Impl);
+    assert!(
+        !diags.is_empty(),
+        "`let mut x` must refuse — `x` is a stray token after the name"
+    );
+    for d in &diags {
+        assert!(
+            !d.msg.contains("mut"),
+            "the diag must stay generic, never name `mut`: {}",
+            d.msg
+        );
+    }
+}
+
+#[test]
 fn inf_is_the_infinity_float_literal() {
     // D2: ident `inf` in EXPRESSION position folds to the infinity
     // float literal (the `true`/`false` precedent — no lexer keyword),

@@ -6,7 +6,7 @@ insertion, bubble, and selection (loop-shaped), plus quicksort and
 merge sort (recursion, in-place vs. out-of-place) — driven from Rust
 through **one** `entry fn` dispatcher. Where 00 is about the boundary,
 this one is about the language: recursion, `when` on strings, the
-mut-binding law, wrapping arithmetic, and visible fuel budgets.
+const-binding law, wrapping arithmetic, and visible fuel budgets.
 
 ## Run it
 
@@ -180,11 +180,13 @@ fn quicksort(xs: ?Vec<i32>, lo: i32, hi: i32) {
 }
 ```
 
-Note the `mut xs` parameter heads: vecs are handles, so an in-place
-swap inside a call is shared with the bank — but **writing** through
-the handle requires the `mut` binding head, while mere reads (and
-`push`) do not. That asymmetry is the mut-binding law, and every
-algorithm in this file declares it
+Note the plain parameter heads: vecs are handles, so an in-place
+swap inside a call is shared with the bank — and **writing** through
+the handle is the default, no header spelling required. Parameters are
+mutable like any `let` binding; `const` is the only opt-out, and it
+gates a binding's own reassignment, never the write-through. That is
+the const-binding law, and every
+algorithm in this file rides it
 ([Modules and visibility](../reference/modules-and-visibility.md)).
 
 ### The embedder's sweep
@@ -212,7 +214,7 @@ for algo in ["insertion", "bubble", "selection", "quick", "merge"] {
   result one host-side compare.
 - Errors are values: an unknown algorithm comes back as a string, not
   a trap.
-- `mut` on a binding is a capability law, not a suggestion — and the
+- Mutation is the default and `const` is the shallow opt-out — and the
   wrapping arithmetic family is explicit about overflow.
 - Fuel budgets make algorithmic differences visible from the host,
   for free.

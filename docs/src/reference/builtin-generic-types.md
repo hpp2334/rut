@@ -67,10 +67,10 @@ type term that follows:
 - `p == nil` / `p != nil` compare against the null slot; `?T == ?T` is
   slot identity (see [Rc, dispose, and identity](rc-dispose-identity.md)).
 - A `?T` binding IS the cell reference — writes through it hit the
-  shared cell (gated by `mut`, see
+  shared cell (gated only by the `const` opt-out, see
   [Modules and visibility](modules-and-visibility.md)).
 - When the cell's refcount reaches zero, the engine runs the type's
-  `[disposal]` member (`<free>(mut self, cx)`) — the cell-death hook, not a
+  `[disposal]` member (`<free>(self, cx)`) — the cell-death hook, not a
   per-value attach ([the Rc heap](rc-heap.md)).
 - Across the host boundary `?T` crosses nil-flattened when its element
   crosses.

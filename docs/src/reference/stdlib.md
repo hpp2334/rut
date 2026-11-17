@@ -20,7 +20,7 @@ The builtin fns, primitives, and containers are in scope in every
 compilation unit; no `use` is needed. A `use core::{ … };` statement
 stays legal but is redundant for them. The exceptions — the
 **import-gated** spellings, resolving only through
-`use core::{ .. }`: the const `NAN`, the disposal context
+`use core::{ .. }`: the surface const `NAN`, the disposal context
 `DisposalContext`, the weak reference `Weak<T>`, and the closed async
 pair (`Future<T>`, `RunContext`) — the engine's weave itself never
 needs the import, only source that spells the names (a `cx: T`
@@ -86,7 +86,7 @@ interface machinery behind them:
 | contract | spelling | notes |
 |---|---|---|
 | `[iterable]` | `fn <free>(self, emit: fn(E) -> bool)` on an inherent impl | `for (x of it)` calls that ONE designated member; `emit` returning `false` stops; the element type falls out of the marked member's signature. No import — the marker IS the designation; the builtin sequences' fused loops never mark one |
-| `[disposal]` | `fn <free>(mut self, cx: DisposalContext)` on an inherent impl | the cell-death contract: the engine calls it at refcount zero ([the Rc heap](rc-heap.md)); `DisposalContext` is **import-gated** — `use core::{ DisposalContext }` |
+| `[disposal]` | `fn <free>(self, cx: DisposalContext)` on an inherent impl | the cell-death contract: the engine calls it at refcount zero ([the Rc heap](rc-heap.md)); `DisposalContext` is **import-gated** — `use core::{ DisposalContext }` |
 | `[constructor]` | `fn <free>(..) -> Self` (or `?Self`) on a class's inherent impl | the construction surface: the call form `Type(..)` binds to the ONE designated member — user-invoked, the lowering byte-identical to `Type.<name>(..)`; one per class, no receiver; newtypes are refused — their positional mint already IS `Name(v)` ([classes](classes.md)) |
 | `Future<T>` | `pub builtin class` — closed | every async producer's answer ([async and await](async.md)); **import-gated** — `use core::{ Future }` (a launcher's `f: Future<T>`, `downcast<Future<..>>`). No constructor, no impl lane — engine-minted only |
 | `RunContext` | `pub builtin class` — closed; `checkpoint() -> u32`, `cancelled() -> bool` | the cx the weave INJECTS into every async body; **import-gated** — `use core::{ RunContext }` (a `cx` probe's type). No constructor — engine-minted per async call |
@@ -109,7 +109,7 @@ Ambient like the primitives themselves: `x.wrapping_add(y)` needs no
 
 ### Constants
 
-`NAN` (f64) — core's one const, behind `use core::{NAN}`. All other float
+`NAN` (f64) — core's one surface const, behind `use core::{NAN}`. All other float
 constants are `calc_host`'s.
 
 ## The swappable set
@@ -330,7 +330,7 @@ pub interface JsonDeserialize { fn decode(r: JsonReader) -> (?Self, ?DecodeJsonE
   the program's values, once.
 - **Satisfaction is structural**: your type satisfies
   `JsonSerialize`/`JsonDeserialize` by spelling the members on its own
-  inherent impl — `impl Row { pub fn encode(self, mut w: JsonWriter)
+  inherent impl — `impl Row { pub fn encode(self, w: JsonWriter)
   -> ?EncodeJsonError { .. } }`. json owns the interfaces; user types
   satisfy them without asking.
 - **The wrapper law**: primitives and bare containers never satisfy —
@@ -401,12 +401,12 @@ name=!
 |---|---|
 | `new()` | grow from small — the designated `[constructor]`: `StringBuilder()` spells it |
 | `with_cap(cap: i32)` | pre-size to an octet hint (negative traps; the hint is advisory — identical behavior for every cap) |
-| `append(mut self, value: str)` | amortized O(\|s\|), in place |
-| `append_code(mut self, cp: u32)` | one codepoint; invalid scalars mint U+FFFD |
+| `append(self, value: str)` | amortized O(\|s\|), in place |
+| `append_code(self, cp: u32)` | one codepoint; invalid scalars mint U+FFFD |
 | `len() -> i32` | codepoints so far, O(1) |
 | `build() -> str` | fresh immutable str; the builder keeps its buffer |
 
-Sharing is the default: appends through an alias (or a `mut` parameter)
+Sharing is the default: appends through an alias (or a parameter)
 land in the caller's document; copies happen at exactly two engineered
 points — `build`'s materialization and growth's prefix move. Growth
 consults the embedder's heap budget BEFORE growing (the geometric
