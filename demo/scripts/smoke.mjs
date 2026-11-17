@@ -23,8 +23,10 @@
 //   5. THE GREP GATE (phase 2, survey §2): no dead-surface shapes
 //      anywhere under demo/src — dataclass-as-keyword, `where`
 //      clauses, `Ptr<`, `Hashable`, the removed `mapset` pkg, postfix
-//      `?T` — scanned over the WHOLE tree, comments included,
-//      whitelist nothing (the todolist app-law precedent);
+//      `?T`, the repealed `pub(mod)`/`pub(self)` scoping, the dead
+//      `&&=`/`||=` tokens, and the inline `mod NAME {` block (scoped
+//      to .rut sources) — scanned over the WHOLE tree, comments
+//      included, whitelist nothing (the todolist app-law precedent);
 //   6. THE HIGHLIGHT (phase 3, survey D3): through the SAME demo
 //      binding the editor uses (src/lsp/rut-lsp.ts bundled into the
 //      smoke entry) over the SHIPPED public/rut-lsp.wasm — the 14-type
@@ -321,7 +323,9 @@ console.log('\n[5] the grep gate: no dead-surface shapes anywhere under demo/src
   // (its replacement) passes; the postfix-`?` shape matches only
   // type position (`i32?`, `Node?)` — word char/`]`, then `?`, then a
   // type follower — so prefix `?T`, optional chaining, and ternaries
-  // never trip it.
+  // never trip it. A row may carry a third element — a rel-path filter —
+  // scoping it where prose could collide (the inline `mod` block:
+  // .rut sources only).
   const DEAD_SHAPES = [
     ['dataclass (the dead record keyword — records are spelled `struct`)', /\bdataclass/],
     ['`where` clause (removed — inline `requires`)', /\bwhere\b/],
@@ -329,6 +333,15 @@ console.log('\n[5] the grep gate: no dead-surface shapes anywhere under demo/src
     ['`Hashable` (the removed key contract — keys are admitted by the union bound)', /\bHashable\b/],
     ['`mapset` (the removed pkg — the lane is the mounted nmapset)', /\bmapset\b/],
     ['postfix `?T` (the nullable is prefix-only)', /[A-Za-z0-9_\]]\?(?=[;,=>)]|\s*$)/],
+    ['`pub(mod ..)` (the grammar refuses — pub(..) spells `super` or `pkg`)', /\bpub\(mod\b/],
+    ['`pub(self ..)` (the grammar refuses — the unannotated default is private)', /\bpub\(self\b/],
+    ['`&&=` (the dead token — the compound-assign family never spelled it)', /&&=/],
+    ['`||=` (the dead token — the compound-assign family never spelled it)', /\|\|=/],
+    [
+      'inline `mod NAME {` block (repealed — one mod grammar: the decl is `mod name;`)',
+      /\bmod\s+[A-Za-z]\w*\s*\{/,
+      /\.rut$/,
+    ],
   ];
 
   function walk(dir) {
@@ -353,7 +366,8 @@ console.log('\n[5] the grep gate: no dead-surface shapes anywhere under demo/src
   for (const file of files) {
     const text = readFileSync(file, 'utf8');
     const rel = file.slice(DEMO.length + 1);
-    for (const [label, re] of DEAD_SHAPES) {
+    for (const [label, re, only] of DEAD_SHAPES) {
+      if (only && !only.test(rel)) continue;
       const lines = text.split('\n');
       for (let i = 0; i < lines.length; i++) {
         if (re.test(lines[i])) {

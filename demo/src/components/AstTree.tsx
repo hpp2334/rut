@@ -4,8 +4,10 @@
  * derived: names/linkages verbatim, `vis`/`op` through small tables,
  * literal values sliced out of `source` by span.
  *
- * `rowsOf` is an exhaustive switch over the concrete node union — adding a
- * variant without a case fails `tsc`, not the UI.
+ * `rowsOf` is an exhaustive switch over the concrete node union — every
+ * kind word `dump.rs` can emit has a case. A kind word this file hasn't
+ * met yet (wire drift ahead of the d.ts) falls to the default, which
+ * renders the raw fields as text rows — the pane degrades, never throws.
  */
 
 import { memo, useEffect, useState } from "react";
@@ -39,13 +41,21 @@ const textOfSpan = (span: Span2, src: string): string =>
 const textOfSegs = (segs: AstSeg[]): string =>
   segs.map((s) => s.name + (s.generics ? "<..>" : "")).join(".");
 
-const textOfMember = (m: AstMember): string =>
-  m.int === undefined ? m.ident : `${m.ident} = ${m.int}`;
+const textOfMember = (m: AstMember): string => m.ident;
 
 const textOfBound = (w: AstBound): string => `${w.ident} requires`;
 
 const textOfFPart = (p: AstFPart): string =>
   "str" in p ? JSON.stringify(p.str) : `{expr}`;
+
+/** fallback text for a raw field value of an unmapped kind */
+const rawText = (v: unknown): string => {
+  if (typeof v === "string") return JSON.stringify(v);
+  if (typeof v === "number" || typeof v === "boolean") return String(v);
+  if (Array.isArray(v)) return `[${v.length} items]`;
+  if (v !== null && typeof v === "object") return "{..}";
+  return String(v);
+};
 
 // ---- renderer rows ----
 
@@ -61,9 +71,15 @@ function rowsOf(n: AstNode, src: string): Row[] {
   switch (n.kind) {
     case "Module":
       return [{ label: "items", list: n.items }];
+    case "ModDecl":
+      return [
+        { label: "vis", text: VIS_LABEL[n.vis] },
+        { label: "name", text: n.name },
+      ];
     case "Use":
       return [
-        { label: "pkg", text: n.pkg },
+        { label: "vis", text: VIS_LABEL[n.vis] },
+        { label: "path", items: n.path },
         { label: "names", items: n.names },
       ];
     case "Alias":
@@ -92,6 +108,8 @@ function rowsOf(n: AstNode, src: string): Row[] {
         ...(n.generics ? [{ label: "generics", items: n.generics }] : []),
         { label: "fields", list: n.fields },
         { label: "methods", list: n.methods },
+        ...(n.newtype ? [{ label: "newtype", text: "true" }] : []),
+        ...(n.bounds ? [{ label: "bounds", items: n.bounds.map(textOfBound) }] : []),
       ];
     case "Interface":
       return [
@@ -102,6 +120,7 @@ function rowsOf(n: AstNode, src: string): Row[] {
       ];
     case "Impl":
       return [
+        ...(n.generics ? [{ label: "generics", items: n.generics }] : []),
         { label: "target", node: n.target },
         { label: "methods", list: n.methods },
       ];
@@ -120,19 +139,39 @@ function rowsOf(n: AstNode, src: string): Row[] {
       return [
         { label: "vis", text: VIS_LABEL[n.vis] },
         { label: "linkage", text: n.linkage },
+        ...(n.is_async ? [{ label: "is_async", text: "true" }] : []),
         { label: "name", text: n.name },
         ...(n.generics ? [{ label: "generics", items: n.generics }] : []),
         { label: "params", list: n.params },
         ...(n.ret ? [{ label: "ret", node: n.ret }] : []),
       ];
-    case "SurfaceClass":
+    case "SurfaceStruct":
+      return [
+        { label: "vis", text: VIS_LABEL[n.vis] },
+        { label: "name", text: n.name },
+        { label: "fields", list: n.fields },
+      ];
+    case "BuiltinTy":
       return [
         { label: "vis", text: VIS_LABEL[n.vis] },
         { label: "linkage", text: n.linkage },
         { label: "name", text: n.name },
-        { label: "extparams", items: n.extparams.map((p) => p.ident + (p.ty ? " requires" : "")) },
+        ...(n.generics ? [{ label: "generics", items: n.generics }] : []),
         { label: "members", list: n.members },
       ];
+    case "BuiltinPrimitive":
+      return [
+        { label: "linkage", text: n.linkage },
+        { label: "name", text: n.name },
+        { label: "members", list: n.members },
+      ];
+    case "BuiltinImpl":
+      return [
+        { label: "prim", text: n.prim },
+        { label: "methods", list: n.methods },
+      ];
+    case "Error":
+      return n.diag ? [{ label: "diag", text: n.diag }] : [];
     case "FieldDecl":
       return [
         ...(n.vis ? [{ label: "vis", text: VIS_LABEL[n.vis] }] : []),
@@ -145,6 +184,7 @@ function rowsOf(n: AstNode, src: string): Row[] {
       return [
         ...(n.vis ? [{ label: "vis", text: VIS_LABEL[n.vis] }] : []),
         ...(n.async ? [{ label: "async", text: "true" }] : []),
+        ...(n.marker ? [{ label: "marker", text: n.marker }] : []),
         { label: "name", text: n.name },
         ...(n.generics ? [{ label: "generics", items: n.generics }] : []),
         { label: "params", list: n.params },
@@ -161,11 +201,15 @@ function rowsOf(n: AstNode, src: string): Row[] {
     case "SelfParam":
       return n.mut ? [{ label: "mut", text: "true" }] : [];
     case "Block":
-      return [{ label: "stmts", list: n.stmts }];
+      return [
+        { label: "stmts", list: n.stmts },
+        ...(n.tail ? [{ label: "tail", node: n.tail }] : []),
+      ];
     case "LetStmt":
       return [
         ...(n.mut ? [{ label: "mut", text: "true" }] : []),
         { label: "name", text: n.name },
+        ...(n.destructure ? [{ label: "destructure", text: n.destructure }] : []),
         ...(n.ty ? [{ label: "ty", node: n.ty }] : []),
         { label: "init", node: n.init },
       ];
@@ -219,11 +263,6 @@ function rowsOf(n: AstNode, src: string): Row[] {
       return [{ label: "expr", node: n.expr }];
     case "PatPath":
       return [{ label: "segs", items: [textOfSegs(n.segs)] }];
-    case "PatCtor":
-      return [
-        { label: "segs", items: [textOfSegs(n.segs)] },
-        { label: "args", items: n.args.map((x) => x ?? "_") },
-      ];
     case "TyPath":
       return [
         { label: "segs", items: [textOfSegs(n.segs)] },
@@ -233,8 +272,12 @@ function rowsOf(n: AstNode, src: string): Row[] {
         { label: "params", list: n.params },
         { label: "ret", node: n.ret },
       ];
-    case "TyConst":
-      return [{ label: "expr", node: n.expr }];
+    case "TyOpt":
+      return [{ label: "inner", node: n.inner }];
+    case "TyArray":
+      return [{ label: "elem", node: n.elem }];
+    case "TyTuple":
+      return [{ label: "elems", list: n.elems }];
     case "TyUnion":
       return [{ label: "elems", list: n.elems }];
     case "Lit":
@@ -287,7 +330,8 @@ function rowsOf(n: AstNode, src: string): Row[] {
         ...(n.ret ? [{ label: "ret", node: n.ret }] : []),
         { label: "body", node: n.body },
       ];
-    case "Try":
+    case "AsyncBlock":
+      return [{ label: "body", node: n.body }];
     case "Await":
       return [{ label: "expr", node: n.expr }];
     case "FStr":
@@ -310,16 +354,32 @@ function rowsOf(n: AstNode, src: string): Row[] {
       ];
     case "ArrayLit":
       return [{ label: "elems", list: n.elems }];
+    case "Tuple":
+      return [{ label: "elems", list: n.elems }];
+    case "ArrayRepeat":
+      return [
+        { label: "value", node: n.value },
+        { label: "count", node: n.count },
+      ];
     case "WhenExpr":
       return [
         { label: "scrut", node: n.scrut },
         { label: "arms", list: n.arms },
       ];
     case "Is":
+    case "Cast":
       return [
         { label: "expr", node: n.expr },
         { label: "ty", node: n.ty },
       ];
+    default: {
+      // a wire kind word this file hasn't met (drift ahead of the d.ts):
+      // render the raw fields as text rows — the pane degrades, never throws
+      const raw = n as unknown as Record<string, unknown>;
+      return Object.entries(raw)
+        .filter(([k]) => k !== "id" && k !== "kind" && k !== "span")
+        .map(([k, v]) => ({ label: k, text: rawText(v) }));
+    }
   }
 }
 
