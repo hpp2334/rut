@@ -208,16 +208,22 @@ misbehaving at runtime.
 
 ## The constant pool and load-time expressions
 
-Module-level `let` and `static` initializers are **folded at compile
-time**. The surviving forms are: literals, enum members, operators over
-constants, record literals (immortal constant-pool cells), fixed-array
-literals, `Vec<T>(n)` / `Vec::from([...])` blobs, the layout builtins, and
-`Array<T, N>.len()` with const-index bounds checks. A call to a user
-function in an initializer is a compile error — there is no deferred
-evaluation.
+Module-level `let` initializers must be **load-time literals** — the
+checker accepts an `Int`, `Float`, `Str`, or `Bool` literal only:
 
-`type_id<T>()` never executes: it folds to a constant from the type
-table. `debug` position folding and trace symbolication are covered in
+```text
+error: module `let` initializers must be load-time expressions — literals only in this build
+```
+
+An operator, an enum member, a record literal, a fixed-array literal,
+`type_id<T>()`, `[nil; n]`, or `Vec<T>(n)` is refused there; a call to a
+user function is the same compile error — there is no deferred
+evaluation. The literal that survives becomes a constant-pool entry at
+emit.
+
+`type_id<T>()`, wherever it is spelled, never executes: it folds to a
+constant from the type table. `debug` position folding and trace
+symbolication are covered in
 [Diagnostics, traces, and symbolication](diagnostics.md).
 
 ## What is not here

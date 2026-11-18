@@ -59,7 +59,7 @@ in front of a reader.
 | `maps` | the keyed-collection lane — `HashMap`/`HashSet`, keys admitted by the compile-time union bound | `rut=3 runs=1` |
 | `node-cycle` | strong cycles keep cells alive — the program's responsibility | `head.next alive: true` |
 | `tree` | recursive structs (`?Node` nullable fields), composite fields as handle slots | `nodes=15` |
-| `weak-cache` | the cache/observer shape, shown with today's strong refs | `held: true id=1` |
+| `weak-cache` | the cache/observer shape over strong refs — the cache retains every entry, so a hit lives as long as the cache (`Weak<T>` is the landed tool for dropping that retain) | `held: true id=1` |
 | `type-aliases` | transparent aliases, bound-only unions, inline `requires` at the call site | `trip=1500 plain=1500 ridge/trench kind=trench` |
 
 Output goes through `ink`'s `Logger` (the `log.info` lines above) —

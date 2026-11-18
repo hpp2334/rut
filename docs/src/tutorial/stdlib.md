@@ -162,9 +162,10 @@ entry fn main() {
 x=10 last=42 len-after-pop=0 filled=1024 total=6
 ```
 
-`Vec<u8>` is the mutable byte builder: `push` bytes, then `freeze()`
-into the immutable `bytes`. `xs.as_array()` copies the live elements
-into a fixed `[T]`. A `slice(from, to)` window is compiler-lowered —
+`Vec<u8>` is the mutable byte builder: `push` bytes, then call the
+module-level `freeze_bytes(v)` for the immutable `bytes`.
+`xs.as_array()` copies the live elements into a fixed `[T]`. A
+`slice(from, to)` window is compiler-lowered —
 an O(1) view that writes through to the parent vector.
 
 ## `nmapset` — keyed collections

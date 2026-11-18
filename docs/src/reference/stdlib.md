@@ -177,8 +177,10 @@ The growable sequence, written in rut over the fixed `[T]` array:
 | `push(v)` / `pop() -> T` | `pop` returns the removed element; **traps on empty** — guard with `len() > 0` |
 | `get`/`set` via `v[i]`, `for (x of v)` | compiler-lowered; element access aliases the stored cell |
 | `from([T])` / `as_array() -> [T]` | bridges to the fixed array |
-| `freeze() -> bytes` | the `Vec<u8>` → immutable `bytes` copy (exactly the live length) |
 | `slice(from, to) -> ?Vec<T>` | compiler-lowered O(1) fixed-length window; detaches on grow |
+
+`Vec<u8>` has no `freeze` member: the module-level `freeze_bytes(v)`
+copies exactly the live octets into the immutable `bytes`.
 
 ### `flow` — the push pipeline
 
@@ -234,11 +236,15 @@ picked=3
 **Import the interfaces you spell and the pipeline type**: `use flow::{
 Flow, IntoFlow, FromFlow }` — the use-both law names each one.
 
-**Deferred, documented**: `IntoFlow` for the mapset (nmapset ships no
-host-table walk — json's map encode grows with it) and a map sink
-(nmapset's `HashMap` has no wrapper family in flow yet — json's
-decode-only `JMap*` wrappers are the precedent such a family would
-follow).
+**Deferred, documented**: `IntoFlow` for the mapset — nmapset HAS the
+walk (its `[iterable] iterate` on both classes), but no `into_flow`
+member; the wrapper law puts that member on the type's own inherent
+impl, and growing it nmapset-side would point nmapset back at flow
+(inverting the flow → nmapset dependency direction). Until that call is
+made, a set enters a pipeline only through the sink
+(`SetFlow<T>::from_flow`). A map sink is also absent (nmapset's
+`HashMap` has no wrapper family in flow yet — json's decode-only
+`JMap*` wrappers are the precedent such a family would follow).
 
 ### `nmapset` — `HashMap`/`HashSet`
 
@@ -342,9 +348,9 @@ pub interface JsonDeserialize { fn decode(r: JsonReader) -> (?Self, ?DecodeJsonE
   |---|---|---|
   | `JsonI64` / `JsonF64` / `JsonBool` / `JsonStr` | `i64` / `f64` / `bool` / `str` | both directions; `get()` unwraps |
   | `JsonU64` | `u64` | decode-only — satisfaction is per-interface, so it satisfies `JsonDeserialize` alone (an out-of-`i64`-range producer has no encode row); `get()` unwraps |
-  | `SOpt<T requires JsonSerialize>` | `?T` | both; `nil` → `null`, `null` → `nil`; `get()` unwraps (the encode-direction bound means a decode-only `T` cannot ride it) |
-  | `JsonArr<T requires JsonSerialize>` | `[T]` | both; `to_arr()` unwraps |
-  | `JsonVec<T requires JsonSerialize>` | `Vec<T>` | both (over pouch's `Vec<T>`); `to_vec()` unwraps |
+  | `SOpt<T requires JsonSerialize \| JsonDeserialize>` | `?T` | both; `nil` → `null`, `null` → `nil`; `get()` unwraps (the union bound requires BOTH interfaces, so a decode-only `T` such as `JsonU64` cannot ride it) |
+  | `JsonArr<T requires JsonSerialize \| JsonDeserialize>` | `[T]` | both; `to_arr()` unwraps |
+  | `JsonVec<T requires JsonSerialize \| JsonDeserialize>` | `Vec<T>` | both (over pouch's `Vec<T>`); `to_vec()` unwraps |
   | `JMapStr<V>` / `JMapI64<V>` / `JMapBool<V>` / `JMapU64<V>` / `JMapBytes<V>` | `HashMap<K, V>` per key shape | decode-only (over nmapset's `HashMap`); `to_map()` unwraps — `JMapBytes` answers the bytes-keys disclosure |
   | `JSet<T requires JsonDeserialize>` | `HashSet<T>` | decode-only (over nmapset's `HashSet`); `to_set()` unwraps |
 

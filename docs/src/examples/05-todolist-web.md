@@ -34,7 +34,7 @@ cd examples/05-todolist-web
 cargo build -p todolist-web --target wasm32-unknown-unknown --release
 wasm-bindgen --target web --out-dir gen --out-name web_host \
   ../../target/wasm32-unknown-unknown/release/todolist_web.wasm
-python3 -m http::server        # then open http://localhost:8000/
+python3 -m http.server        # then open http://localhost:8000/
 ```
 
 What you'll see: type a title — the status line echoes the typing and

@@ -272,15 +272,18 @@ doors:
 
 ### Module-level `let`
 
-Initializers must be **load-time expressions**: literals, enum members,
-builtin operators over load-time expressions, struct literals whose
-fields are load-time expressions, fixed-array literals whose elements
-are, `type_id<T>()`, and builtin zero allocations (`[nil; n]` with a
-load-time-constant `n`). Calls to user functions are not load-time expressions.
+Initializers must be **load-time literals** — this build accepts an
+`Int`, `Float`, `Str`, or `Bool` literal and nothing else. An operator,
+an enum member, a record literal, `[nil; n]`, `type_id<T>()`, or any
+call is refused:
+
+```text
+error: module `let` initializers must be load-time expressions — literals only in this build
+```
 
 ```rut
-let KIND_ADD: i64 = 1;
-let ORIGIN = Point { x: 0, y: 0 };
+let KIND_ADD: i64 = 1;                 // fine: an Int literal
+let NAME: str = "app";                 // fine: a Str literal
 ```
 
 There is no mutable module state: program state is constructed in

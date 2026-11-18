@@ -11,7 +11,7 @@ vocabulary ([async and await](async.md)).
 |---|---|---|
 | launch | `launch_future(f)` | live |
 | cancel | `h.abort()` | live |
-| join | `await h` on a receipt | compile-gated — "not in this build" |
+| join | `await h` on a receipt | compile-gated — "the receipt is not a Future and cannot be re-launched" |
 | race | `select2(a, b)` (stdlib) | live |
 | first-of | `select_all(futs)` (stdlib) | live |
 | manual futures | `completer<T>()` (stdlib) | live |
@@ -27,10 +27,14 @@ pub class LaunchedFutureHandle<T> {
 
 Laws:
 
-- The receipt is **not a `Future`**: `await h` diagnoses — the type
-  system rejects it, never a runtime check.
-- It is **not re-launchable**: `launch_future(h)` is a type error for
-  the same reason. A future is consumed exactly once — by `await` or by
+- The receipt is **not a `Future`**: `await h` diagnoses — `` cannot
+  `await` a LaunchedFutureHandle — the receipt is not a Future and
+  cannot be re-launched `` — the type system rejects it, never a runtime
+  check.
+- It is **not re-launchable**: `launch_future` takes a `Future<T>`, and
+  a receipt is not one — `launch_future<nil>(h)` is the plain argument
+  mismatch `` argument 1 is `LaunchedFutureHandle<#T>`, `Future<nil>`
+  expected ``. A future is consumed exactly once — by `await` or by
   `launch_future`, never both, never twice.
 - One member: `abort()` — `true` if the frame was flagged and
   re-enqueued, `false` when it had already finished (a repeat abort is
@@ -79,8 +83,9 @@ async fn job() -> nil {
 
 The receipt is the join surface:
 `await h` joins the launched future and produces its completion value.
-Until the join tier lands, `await h` diagnoses with the join law and
-the receipt stays non-awaitable.
+Until the join tier lands, `await h` diagnoses with the join law —
+`` cannot `await` a LaunchedFutureHandle — the receipt is not a Future
+and cannot be re-launched `` — and the receipt stays non-awaitable.
 
 Planned laws: joining an already-cancelled receipt yields the cancelled
 case, never a trap; join re-enqueues the awaiter the same way an

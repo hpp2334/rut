@@ -166,7 +166,9 @@ an `Either2` (`is_a()`/`a_value()` or `is_b()`/`b_value()`); the losers
 are cancelled, their drop paths running at their next checkpoint.
 `select_all(futs)` extends the race to a cohort, answering `(i, v)`.
 Joining a launched future's value (`await handle`) is still spelled in
-the grammar but not in this build — the compiler gates it. See
+the grammar but rejected in this build — the compiler gates it with
+`` cannot `await` a LaunchedFutureHandle — the receipt is not a Future
+and cannot be re-launched ``. See
 [launched futures](../reference/launched-futures.md) for the race and
 completer surfaces.
 

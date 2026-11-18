@@ -69,7 +69,7 @@ rut_vm::verify::verify(compiled.graph.program.as_ref().unwrap())?;
 let limits = rut_vm::interp::Limits {
     fuel: Some(1_000_000),
     heap_limit_bytes: Some(64 * 1024 * 1024),
-    interrupt_every: 1024,
+    interrupt_every: 1024,       // construct-time; nothing gates on it today
 };
 let mut vm = rut_vm::interp::Vm::builder()
     .compiled(compiled)          // the run's product; also .limits/.hosts
@@ -380,8 +380,8 @@ contain those names.
 | `dir_pkgs(dir)` / `dir_pkgs_with(dir, &remote)` | the OFFER lane: a package directory walked for someone else's program (no dev pass, no gate) |
 | `tree_pkg(name)` | one toolchain-tree package (`rut/<name>`); a `[deps]` closure is refused |
 | `load_module_source(path)` | one `.rut` file's text — a loose file is a single module, no manifest |
-| `prefetch_urls(&src, &dir, &remote)` | collect a manifest's url rows and fetch them — the `_with` lanes' input step |
-| `pack_dir(dir)` / `pack_dir_with(dir, &remote)` / `pack_dir_opts(..)` family | pack a module directory into a deterministic `.rutbundle` — a **compiled** root for a lib pkg, a **decl** root for a host pkg (`type` routes; `format_version` is 13); returns the bytes ([module bundles](bundles.md)) |
+| `prefetch_urls(&src, &dir, &pins, &remote)` | collect a manifest's url rows and fetch them, gated by the lock's pins — the `_with` lanes' input step |
+| `pack_dir(dir)` / `pack_dir_opts(dir, &opts)` / `pack_dir_zip(dir)` (with the `*_fetched` cores and the async `pack_dir_opts_with` / `pack_dir_zip_with` lanes) | pack a module directory into a deterministic artifact — a **compiled** `.rutbundle` root for a lib pkg, a **decl** root for a host pkg (`type` routes; `format_version` is 13), or the source `.zip` through `pack_dir_zip`; returns the bytes ([module bundles](bundles.md)) |
 | `default_out_path(dir)` | the conventional pack output path |
 
 ## The run chain API (`rut-driver`)
@@ -455,13 +455,15 @@ never idles fails loudly instead of hanging.
 pub struct Limits {
     pub fuel: Option<u64>,          // ops per turn; None = unlimited
     pub heap_limit_bytes: Option<u64>,
-    pub interrupt_every: u32,       // ops between interrupt checks
+    pub interrupt_every: u32,       // construct-time cadence; nothing gates on it today
 }
 ```
 
-Exhaustion and interrupts surface as traps ([resource limits](resource-limits.md)).
-A trap inside re-entrant work propagates to the embedder parked at the host
-op; `vm.resume::<R>()` re-runs the turn.
+Exhaustion surfaces as a resumable trap ([resource limits](resource-limits.md)):
+fuel is ticked per op, the heap budget is charged at every allocation,
+and there is no separate interrupt lane. A trap inside re-entrant work
+propagates to the embedder parked at the host op; `vm.resume::<R>()`
+re-runs the turn.
 
 ## Native fn rules
 
@@ -481,7 +483,7 @@ op; `vm.resume::<R>()` re-runs the turn.
 |---|---|
 | `OutOfFuel` | budget exhaustion |
 | `OutOfMemory` | heap limit |
-| `Interrupted` | interrupt flag |
+| `Interrupted` | reserved — no producer in this build (the interrupt lane does not exist) |
 | `Overflow` / `DivByZero` | arithmetic |
 | `IndexOutOfBounds` | sequence access |
 | `Panic` | `panic` |

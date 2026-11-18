@@ -199,11 +199,12 @@ Why self-manage instead of using the host's allocator?
    VM's own headers everywhere.
 
 The budget check runs *before* any write — a failed allocation leaves
-the heap byte-identical — and traps resumably: raise the limit and
-continue, or drop references and retry. See the reference on
-[resource limits](../reference/resource-limits.md) for the full knob
-set, and [the bytecode VM](the-vm.md) for how budgets interleave with
-execution.
+the heap byte-identical — and traps resumably: drop references until
+the retry fits and resume; a larger budget means a rebuilt VM, since
+the limit is construct-time and the runtime budget is read-only. See
+the reference on [resource limits](../reference/resource-limits.md) for
+the full knob set, and [the bytecode VM](the-vm.md) for how budgets
+interleave with execution.
 
 ## What this buys you
 

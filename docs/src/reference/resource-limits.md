@@ -19,7 +19,7 @@ pub struct Limits {
 |---|---|
 | **What counts** | everything the VM heap tracks: cell headers + payloads, buffer blocks, string blocks, frames and register blocks, `opaque` store entries |
 | **What does not** | module binaries, the shared type table, host-side Rust state |
-| **Check points** | every `Heap::alloc` route: cell mint, `Vec` growth (`push` reallocation), string concat, frame-pool growth, host crossing mints |
+| **Check points** | every heap allocation route: cell mint, `Vec` growth (`push` reallocation), string concat, frame-pool growth, host crossing mints |
 | **On failure** | `Trap::OutOfMemory` — the check runs **before any write**, so the heap is byte-identical to its pre-op state; nothing is half-initialized |
 | **Resumption** | the frame is parked: a heap trap is cleared by dropping references so the retry fits, or by rebuilding the VM with a larger budget — the limit is construct-time, the runtime budget is read-only |
 | **Observability** | `vm.heap_usage()` (live), `vm.heap_peak()` (high-water) |
@@ -55,7 +55,7 @@ refunded (the accounting overcounts rather than undercounts).
 ```rust
 let limits = Limits { fuel: Some(1_000_000),
                       heap_limit_bytes: Some(64 * 1024 * 1024),
-                      interrupt_every: 1024 };
+                      interrupt_every: 1024 };  // no-op today — nothing gates on it
 let mut vm = Vm::builder().compiled(compiled).limits(limits).build()?;
 
 match vm.call::<_, ()>("main", ()) {

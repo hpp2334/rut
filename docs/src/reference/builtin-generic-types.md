@@ -102,7 +102,9 @@ Explicit type arguments may be spelled at the call:
 | `for (x of v)` | iteration; `x` is the shared element |
 | `slice(from, to) -> ?Vec<T>` | fixed-length window (compiler-lowered) — writes through it hit the parent |
 | `as_array() -> [T]` | copy the live elements into a fresh, exactly-sized array |
-| `freeze() -> bytes` | `Vec<u8>` only: copy the live octets into the immutable `bytes` |
+
+`Vec<u8>` has no `freeze` member: the module-level `freeze_bytes(v)`
+copies the live octets into the immutable `bytes`.
 
 `Vec<u8>` is the mutable binary builder; `bytes` is the binary type
 that crosses the host boundary (see

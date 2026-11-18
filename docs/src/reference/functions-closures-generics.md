@@ -49,8 +49,10 @@ entry fn main() {
 
 ## Closures
 
-The closure spelling is an **anonymous fn** — block bodies, no arrow
-form:
+The closure spellings are the **anonymous fn** — a block body — and the
+**arrow form**, `(params) => expr`, whose right-hand side is the body
+expression. Both mint the same closure value and obey the capture law
+below:
 
 ```rut
 use ink::{ Logger };
@@ -62,12 +64,13 @@ entry fn main() {
         let sq = r * r;
         return sq * 3.14159265f32;
     };
-    log.info(f"add={add(1, 2)} area={area_of(1)}");
+    let inc: fn(i32) -> i32 = (x: i32) => x + 1;   // the arrow form
+    log.info(f"add={add(1, 2)} area={area_of(1)} inc={inc(1)}");
 }
 ```
 
 ```text
-add=3 area=3.1415927
+add=3 area=3.1415927 inc=2
 ```
 
 - An anonymous fn inhabits `fn(P..) -> R` directly — it is a value of

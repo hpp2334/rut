@@ -11,8 +11,7 @@ One model serves every frontend and checking stage
 ([The frontend](frontend.md)):
 
 ```rust
-struct Diag { span: Span, msg: String, file: Option<String>,
-              labels: Vec<(Span, String)>, notes: Vec<String> }
+struct Diag { span: Span, msg: String, file: Option<String> }
 ```
 
 Byte-offset spans; `file` is the module the span indexes, as the
@@ -20,30 +19,32 @@ producer's module name — a pkg spec (`hello`), a mounted child under it
 (`hello/layout`), or a formatter's real path — never a filesystem path,
 since loaded pkgs deliberately carry none. `None` means there is no
 position to show (a graph-level structural refusal) or the producer did
-not label.
+not attribute a file.
 
 One renderer (`render_diags`) produces the caret form: a primary
-`error:` line, the `-->` arrow with the file and the 1-based line and
-char column, the offending source line with carets under the span,
-secondary labels, notes. With a file and its source text:
+`error:` line, the `-->` arrow with the 1-based line and char column,
+then the offending source line with carets under the span:
 
 ```text
-error: expected an expression, found `@`
-  --> hello:2:13
-   2 |     let x = @@;
-     |             ^
+error: cannot reassign `x` — a `const` binding is not reassignable
+  --> line 3, column 5
+   3 |     x = 2;
+     |     ^^^^^
 ```
 
-The fallbacks degrade honestly: a diag with no file spells the position
-alone (`--> line L, column C`), a file whose text is not loaded renders
-the bare arrow (`--> hello`), and a diag with neither is just the
-`error:` line. `rut run` renders the whole graph grouped by file — diags
-sort by (file, span start), the root labeled with its spec, each child
-with `spec/path`, each dep with its own spec — so output is stable
-across files and phases. The parser recovers at statement
-boundaries and keeps going, so a file yields many diagnostics, not one.
-Compilation stops before IR if any diagnostic exists; there is no
-warnings-only lane.
+That `--> line L, column C` spelling is the file-less fallback (the
+single-file lanes). When the diag names a file the arrow spells
+`--> <file>:<line>:<col>`: `rut run` labels the graph's root with its
+pkg spec (`--> hello:3:5`), and `rut dump` labels a semantic diag's
+file `main` (`--> main:3:5`). A file whose text is not loaded renders
+the bare arrow (`--> hello`), and a diag with neither a file nor source
+text is just the `error:` line. `rut run` renders the whole graph
+grouped by file — diags sort by (file, span start), the root labeled
+with its spec, each child with `spec/path`, each dep with its own spec
+— so output is stable across files and phases. The parser recovers at
+statement boundaries and keeps going, so a file yields many diagnostics,
+not one. Compilation stops before IR if any diagnostic exists; there is
+no warnings-only lane.
 
 A compile trap worth knowing: name-level misses are not all one shape.
 A name nothing offers is the bare *unresolved name*; a head that IS

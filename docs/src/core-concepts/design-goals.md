@@ -115,10 +115,11 @@ source ──► lexer/parser ──► typecheck ──► IR ──► typed b
 - **One thread per VM.** A `Vm` instance runs on one thread with one
   heap and no atomics.
 - **The host owns time.** The VM exposes stepping verbs — drain the
-  ready queue, expire timers, poll with a deadline — plus op budgets and
-  interrupt callbacks. A UI host drives script between frames and stays
-  responsive; a test host virtualizes the clock and gets fully
-  deterministic schedules.
+  ready queue, expire timers, poll with a deadline — plus
+  construction-time op and heap budgets (a per-op fuel tick and a
+  per-allocation heap charge; there is no interrupt lane). A UI host
+  drives script between frames and stays responsive; a test host
+  virtualizes the clock and gets fully deterministic schedules.
 - **Traps stop at the boundary.** A panic in script (overflow,
   nil deref) unwinds as a `Trap` value to the host call —
   rut code never catches one. Bugs become host-visible errors with a

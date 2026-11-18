@@ -191,6 +191,6 @@ are [Async and await](async.md).
 
 The only budget artifacts in the op stream are `LoopHead` markers: loop
 back-edges are natural checkpoints where fuel is accounted
-([Resource limits and fuel](resource-limits.md)). Everything else — fuel
-countdown, heap checks at allocation, interrupt slices — lives in the
+([Resource limits and fuel](resource-limits.md)). Everything else — the
+per-op fuel tick and the heap charge at every allocation — lives in the
 interpreter loop, not in the code.

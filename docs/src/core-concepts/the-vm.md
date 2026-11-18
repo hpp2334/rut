@@ -109,11 +109,11 @@ naming the module and function — **corrupted binaries never execute**.
 This is also where crossing rules are enforced for host-facing
 signatures, so a non-crossing shape is rejected before any script runs.
 
-Module-level initialization is folded at compile time: literals, enum
-members, constant expressions, and interned string literals become
-constants in the binary. A user function call in a module initializer
-is a compile error — there is no load-time execution at all. Loading a
-module runs nothing.
+Module-level `let` initialization is folded at compile time: an `Int`,
+`Float`, `Str`, or `Bool` literal becomes a constant in the binary, and
+any other initializer — an operator, an enum member, a record literal,
+a call — is a compile error at the checker. There is no load-time
+execution at all: loading a module runs nothing.
 
 ## The interpreter loop and traps
 

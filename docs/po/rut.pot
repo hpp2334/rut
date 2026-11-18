@@ -1029,7 +1029,7 @@ msgstr ""
 msgid "The formatter is the style — there is no configuration:"
 msgstr ""
 
-#: src/quick-start/first-program.md:154 src/reference/cli.md:281
+#: src/quick-start/first-program.md:154 src/reference/cli.md:286
 msgid "# rewrite in place\n"
 msgstr ""
 
@@ -1226,7 +1226,7 @@ msgid "Types"
 msgstr ""
 
 #: src/tutorial/values-and-variables.md:13 src/reference/primitive-types.md:7
-#: src/reference/native-containers.md:115 src/reference/cli.md:395
+#: src/reference/native-containers.md:115 src/reference/cli.md:400
 msgid "Notes"
 msgstr ""
 
@@ -1715,8 +1715,8 @@ msgstr ""
 #: src/tutorial/values-and-variables.md:307 src/tutorial/control-flow.md:400
 #: src/tutorial/functions.md:242 src/tutorial/types.md:284
 #: src/tutorial/interfaces.md:400 src/tutorial/errors.md:233
-#: src/tutorial/modules.md:300 src/tutorial/async.md:180
-#: src/tutorial/stdlib.md:408
+#: src/tutorial/modules.md:300 src/tutorial/async.md:182
+#: src/tutorial/stdlib.md:409
 msgid "Put it together"
 msgstr ""
 
@@ -2443,7 +2443,7 @@ msgid ""
 msgstr ""
 
 #: src/tutorial/functions.md:126
-#: src/reference/functions-closures-generics.md:88
+#: src/reference/functions-closures-generics.md:91
 msgid "Generics"
 msgstr ""
 
@@ -3982,7 +3982,7 @@ msgid ""
 "```"
 msgstr ""
 
-#: src/tutorial/modules.md:46 src/reference/modules-and-visibility.md:332
+#: src/tutorial/modules.md:46 src/reference/modules-and-visibility.md:335
 msgid "Visibility"
 msgstr ""
 
@@ -3992,12 +3992,12 @@ msgid ""
 "— the safe default. Nothing leaks unless it says `pub`:"
 msgstr ""
 
-#: src/tutorial/modules.md:52 src/reference/modules-and-visibility.md:338
+#: src/tutorial/modules.md:52 src/reference/modules-and-visibility.md:341
 #: src/reference/literals-and-inference.md:129
 msgid "Form"
 msgstr ""
 
-#: src/tutorial/modules.md:52 src/reference/modules-and-visibility.md:338
+#: src/tutorial/modules.md:52 src/reference/modules-and-visibility.md:341
 #: src/reference/primitive-types.md:25
 #: src/reference/builtin-generic-types.md:85
 #: src/reference/builtin-generic-types.md:96
@@ -4010,7 +4010,7 @@ msgstr ""
 msgid "Meaning"
 msgstr ""
 
-#: src/tutorial/modules.md:54 src/reference/modules-and-visibility.md:340
+#: src/tutorial/modules.md:54 src/reference/modules-and-visibility.md:343
 msgid "`pub fn ..`"
 msgstr ""
 
@@ -4018,7 +4018,7 @@ msgstr ""
 msgid "public — importable by any module, other packages included"
 msgstr ""
 
-#: src/tutorial/modules.md:55 src/reference/modules-and-visibility.md:341
+#: src/tutorial/modules.md:55 src/reference/modules-and-visibility.md:344
 msgid "`pub(pkg) fn ..`"
 msgstr ""
 
@@ -4026,7 +4026,7 @@ msgstr ""
 msgid "visible everywhere in this package's module tree"
 msgstr ""
 
-#: src/tutorial/modules.md:56 src/reference/modules-and-visibility.md:342
+#: src/tutorial/modules.md:56 src/reference/modules-and-visibility.md:345
 msgid "`pub(super) fn ..`"
 msgstr ""
 
@@ -4579,16 +4579,17 @@ msgid ""
 "cancelled, their drop paths running at their next checkpoint. "
 "`select_all(futs)` extends the race to a cohort, answering `(i, v)`. Joining "
 "a launched future's value (`await handle`) is still spelled in the grammar "
-"but not in this build — the compiler gates it. See [launched "
-"futures](../reference/launched-futures.md) for the race and completer "
-"surfaces."
-msgstr ""
-
-#: src/tutorial/async.md:173
-msgid "Parallelism"
+"but rejected in this build — the compiler gates it with ``cannot `await` a "
+"LaunchedFutureHandle — the receipt is not a Future and cannot be "
+"re-launched``. See [launched futures](../reference/launched-futures.md) for "
+"the race and completer surfaces."
 msgstr ""
 
 #: src/tutorial/async.md:175
+msgid "Parallelism"
+msgstr ""
+
+#: src/tutorial/async.md:177
 msgid ""
 "The language has none: a VM is single-threaded by construction (`!Send`, one "
 "heap — [the VM](../core-concepts/the-vm.md)); async is the whole concurrency "
@@ -4596,7 +4597,7 @@ msgid ""
 "surface for sharing between them."
 msgstr ""
 
-#: src/tutorial/async.md:182
+#: src/tutorial/async.md:184
 msgid ""
 "```rut\n"
 "use futures::{ launch_future, sleep };\n"
@@ -4619,7 +4620,7 @@ msgid ""
 "```"
 msgstr ""
 
-#: src/tutorial/async.md:209
+#: src/tutorial/async.md:211
 msgid "Next: [the standard library](stdlib.md)."
 msgstr ""
 
@@ -4830,17 +4831,17 @@ msgstr ""
 
 #: src/tutorial/stdlib.md:165
 msgid ""
-"`Vec<u8>` is the mutable byte builder: `push` bytes, then `freeze()` into "
-"the immutable `bytes`. `xs.as_array()` copies the live elements into a fixed "
-"`[T]`. A `slice(from, to)` window is compiler-lowered — an O(1) view that "
-"writes through to the parent vector."
+"`Vec<u8>` is the mutable byte builder: `push` bytes, then call the "
+"module-level `freeze_bytes(v)` for the immutable `bytes`. `xs.as_array()` "
+"copies the live elements into a fixed `[T]`. A `slice(from, to)` window is "
+"compiler-lowered — an O(1) view that writes through to the parent vector."
 msgstr ""
 
-#: src/tutorial/stdlib.md:170
+#: src/tutorial/stdlib.md:171
 msgid "`nmapset` — keyed collections"
 msgstr ""
 
-#: src/tutorial/stdlib.md:172
+#: src/tutorial/stdlib.md:173
 msgid ""
 "```rut\n"
 "use nmapset::{ HashMap, HashSet };\n"
@@ -4869,7 +4870,7 @@ msgid ""
 "```"
 msgstr ""
 
-#: src/tutorial/stdlib.md:200
+#: src/tutorial/stdlib.md:201
 msgid ""
 "Keys come from a fixed set — integers, `bool`, `str`, `bytes` (no floats: "
 "they have no stable equality contract) — hashed by the host; a user-defined "
@@ -4879,11 +4880,11 @@ msgid ""
 "/ `HashSet()` are the designated `new`; `with_capacity(n)` stays named."
 msgstr ""
 
-#: src/tutorial/stdlib.md:208 src/reference/stdlib.md:183
+#: src/tutorial/stdlib.md:209 src/reference/stdlib.md:185
 msgid "`flow` — the push pipeline"
 msgstr ""
 
-#: src/tutorial/stdlib.md:210
+#: src/tutorial/stdlib.md:211
 msgid ""
 "`Flow<E>` chains the push contract. A type is iterable when it marks an "
 "`[iterable]` member — `for (x of it)` calls that ONE designated member — and "
@@ -4893,7 +4894,7 @@ msgid ""
 "`ArrFlow(xs)`, `StrFlow(s)`) — and everything after is chaining:"
 msgstr ""
 
-#: src/tutorial/stdlib.md:218
+#: src/tutorial/stdlib.md:219
 msgid ""
 "```rut\n"
 "use pouch::{ Vec };\n"
@@ -4926,11 +4927,11 @@ msgid ""
 "```"
 msgstr ""
 
-#: src/tutorial/stdlib.md:249
+#: src/tutorial/stdlib.md:250
 msgid "Three laws to know:"
 msgstr ""
 
-#: src/tutorial/stdlib.md:251
+#: src/tutorial/stdlib.md:252
 msgid ""
 "**The entries and sinks are interfaces, satisfied structurally** — "
 "`IntoFlow<E>` is `fn into_flow(self) -> Flow<E>`: `Flow` itself carries the "
@@ -4943,14 +4944,14 @@ msgid ""
 "auto-inserted."
 msgstr ""
 
-#: src/tutorial/stdlib.md:260
+#: src/tutorial/stdlib.md:261
 msgid ""
 "**`map` introduces a new type variable.** Annotate the lambda, spell the "
 "type argument (`.map<i32>(..)`), or pass a fn path — a lambda that spells "
 "nothing diagnoses with the fix."
 msgstr ""
 
-#: src/tutorial/stdlib.md:263
+#: src/tutorial/stdlib.md:264
 msgid ""
 "**Stateful stages are single-shot.** `take`/`skip` hold their counter in a "
 "record the drive mutates; a drained stage stays drained. `take` answers "
@@ -4959,7 +4960,7 @@ msgid ""
 "start."
 msgstr ""
 
-#: src/tutorial/stdlib.md:269
+#: src/tutorial/stdlib.md:270
 msgid ""
 "Pipelines are the clarity tier: each stage costs one indirect call per "
 "element, and the fused builtin loops stay the perf tier. The full member "
@@ -4967,11 +4968,11 @@ msgid ""
 "reference](../reference/stdlib.md#flow-the-push-pipeline)."
 msgstr ""
 
-#: src/tutorial/stdlib.md:274
+#: src/tutorial/stdlib.md:275
 msgid "`strbuild` — the string builder"
 msgstr ""
 
-#: src/tutorial/stdlib.md:276
+#: src/tutorial/stdlib.md:277
 msgid ""
 "```rut\n"
 "use strbuild::{ StringBuilder };\n"
@@ -4991,23 +4992,23 @@ msgid ""
 "```"
 msgstr ""
 
-#: src/tutorial/stdlib.md:296
+#: src/tutorial/stdlib.md:297
 msgid ""
 "`StringBuilder()` is the designated `new`; `with_cap(n)` pre-sizes and stays "
 "named."
 msgstr ""
 
-#: src/tutorial/stdlib.md:299
+#: src/tutorial/stdlib.md:300
 msgid ""
 "Every `out = f\"{out}{chunk}\"` loop copies the whole prefix each time; the "
 "builder appends into one growable cell and copies once, at `build()`."
 msgstr ""
 
-#: src/tutorial/stdlib.md:303
+#: src/tutorial/stdlib.md:304
 msgid "`calc` — float math"
 msgstr ""
 
-#: src/tutorial/stdlib.md:305
+#: src/tutorial/stdlib.md:306
 msgid ""
 "```rut\n"
 "use calc::{ math };\n"
@@ -5031,7 +5032,7 @@ msgid ""
 "```"
 msgstr ""
 
-#: src/tutorial/stdlib.md:328
+#: src/tutorial/stdlib.md:329
 msgid ""
 "The surface is `calc`'s `math` module: bind it and reach the members "
 "qualified (`math::sqrt(x)`), or spell the path fully qualified "
@@ -5044,11 +5045,11 @@ msgid ""
 "available."
 msgstr ""
 
-#: src/tutorial/stdlib.md:338
+#: src/tutorial/stdlib.md:339
 msgid "`json` — encode and decode"
 msgstr ""
 
-#: src/tutorial/stdlib.md:340
+#: src/tutorial/stdlib.md:341
 msgid ""
 "```rut\n"
 "use json::{ decodeJson, encodeJson, JsonArr, JsonI64 };\n"
@@ -5067,7 +5068,7 @@ msgid ""
 "```"
 msgstr ""
 
-#: src/tutorial/stdlib.md:358
+#: src/tutorial/stdlib.md:359
 msgid ""
 "A bare `[i64]` never satisfies anything — the wrapper is the manufacture, "
 "spelled at the call (`JsonArr([JsonI64(1), ..])`), and the decode direction "
@@ -5076,7 +5077,7 @@ msgid ""
 "on its own inherent impl."
 msgstr ""
 
-#: src/tutorial/stdlib.md:365
+#: src/tutorial/stdlib.md:366
 msgid ""
 "Decode is direct and schema-driven: your type's `decode` member reads "
 "exactly the fields it expects, no intermediate tree. Your types opt in with "
@@ -5087,15 +5088,15 @@ msgid ""
 "optionality](errors.md)."
 msgstr ""
 
-#: src/tutorial/stdlib.md:374
+#: src/tutorial/stdlib.md:375
 msgid "`ink` — logging"
 msgstr ""
 
-#: src/tutorial/stdlib.md:376
+#: src/tutorial/stdlib.md:377
 msgid "All output goes through a logger:"
 msgstr ""
 
-#: src/tutorial/stdlib.md:378
+#: src/tutorial/stdlib.md:379
 msgid ""
 "```rut\n"
 "use ink::{ Logger };\n"
@@ -5109,7 +5110,7 @@ msgid ""
 "```"
 msgstr ""
 
-#: src/tutorial/stdlib.md:396
+#: src/tutorial/stdlib.md:397
 msgid ""
 "`Logger` is a plain rut class over a host-provided handle; the embedder "
 "chooses the sink (the `rut` CLI prints to stdout). The same pattern — "
@@ -5118,18 +5119,18 @@ msgid ""
 "modules](../reference/embedding.md)."
 msgstr ""
 
-#: src/tutorial/stdlib.md:402
+#: src/tutorial/stdlib.md:403
 msgid "`http`"
 msgstr ""
 
-#: src/tutorial/stdlib.md:404
+#: src/tutorial/stdlib.md:405
 msgid ""
 "The async HTTP client lives with the concurrency chapter — builder "
 "construction, `send(cx)` resolving at headers, body drains and byte streams "
 "— in [async: futures and await](async.md)."
 msgstr ""
 
-#: src/tutorial/stdlib.md:410
+#: src/tutorial/stdlib.md:411
 msgid ""
 "```rut\n"
 "use pouch::{ Vec };\n"
@@ -5177,7 +5178,7 @@ msgid ""
 "```"
 msgstr ""
 
-#: src/tutorial/stdlib.md:463
+#: src/tutorial/stdlib.md:464
 msgid ""
 "That completes the tutorial. From here, the [core "
 "concepts](../core-concepts/design-goals.md) explain _why_ the language is "
@@ -5357,25 +5358,27 @@ msgstr ""
 #: src/core-concepts/design-goals.md:117
 msgid ""
 "**The host owns time.** The VM exposes stepping verbs — drain the ready "
-"queue, expire timers, poll with a deadline — plus op budgets and interrupt "
-"callbacks. A UI host drives script between frames and stays responsive; a "
-"test host virtualizes the clock and gets fully deterministic schedules."
+"queue, expire timers, poll with a deadline — plus construction-time op and "
+"heap budgets (a per-op fuel tick and a per-allocation heap charge; there is "
+"no interrupt lane). A UI host drives script between frames and stays "
+"responsive; a test host virtualizes the clock and gets fully deterministic "
+"schedules."
 msgstr ""
 
-#: src/core-concepts/design-goals.md:122
+#: src/core-concepts/design-goals.md:123
 msgid ""
 "**Traps stop at the boundary.** A panic in script (overflow, nil deref) "
 "unwinds as a `Trap` value to the host call — rut code never catches one. "
 "Bugs become host-visible errors with a script backtrace, not corrupted state."
 msgstr ""
 
-#: src/core-concepts/design-goals.md:127 src/core-concepts/reified-types.md:139
+#: src/core-concepts/design-goals.md:128 src/core-concepts/reified-types.md:139
 #: src/core-concepts/interfaces-and-dispatch.md:288
-#: src/core-concepts/memory.md:208
+#: src/core-concepts/memory.md:209
 msgid "What this buys you"
 msgstr ""
 
-#: src/core-concepts/design-goals.md:129
+#: src/core-concepts/design-goals.md:130
 msgid ""
 "If you are **writing scripts**: assignments never deep-copy; cleanup runs "
 "when the last reference dies; a miss is `nil`, a failure is a returned `err` "
@@ -5386,7 +5389,7 @@ msgid ""
 "boilerplate to maintain."
 msgstr ""
 
-#: src/core-concepts/design-goals.md:137
+#: src/core-concepts/design-goals.md:138
 msgid ""
 "The rest of this section walks each pillar in depth; the tutorial shows the "
 "day-to-day syntax, and the reference pins down exact rules."
@@ -7015,26 +7018,27 @@ msgstr ""
 #: src/core-concepts/memory.md:201
 msgid ""
 "The budget check runs _before_ any write — a failed allocation leaves the "
-"heap byte-identical — and traps resumably: raise the limit and continue, or "
-"drop references and retry. See the reference on [resource "
-"limits](../reference/resource-limits.md) for the full knob set, and [the "
-"bytecode VM](the-vm.md) for how budgets interleave with execution."
+"heap byte-identical — and traps resumably: drop references until the retry "
+"fits and resume; a larger budget means a rebuilt VM, since the limit is "
+"construct-time and the runtime budget is read-only. See the reference on "
+"[resource limits](../reference/resource-limits.md) for the full knob set, "
+"and [the bytecode VM](the-vm.md) for how budgets interleave with execution."
 msgstr ""
 
-#: src/core-concepts/memory.md:210
+#: src/core-concepts/memory.md:211
 msgid ""
 "**Deterministic resource release** — the property the whole design is "
 "organized around. If your script opened something, the closing statement is "
 "knowable."
 msgstr ""
 
-#: src/core-concepts/memory.md:213
+#: src/core-concepts/memory.md:214
 msgid ""
 "**No pauses.** There is no collection pass; destruction happens inline at "
 "release-to-zero, so nothing ever interrupts a frame."
 msgstr ""
 
-#: src/core-concepts/memory.md:215
+#: src/core-concepts/memory.md:216
 msgid ""
 "**A small, honest mental model.** Sharing is by reference, copies are built "
 "explicitly (see [everything is a value](everything-is-a-value.md)), "
@@ -7447,11 +7451,11 @@ msgstr ""
 
 #: src/core-concepts/the-vm.md:112
 msgid ""
-"Module-level initialization is folded at compile time: literals, enum "
-"members, constant expressions, and interned string literals become constants "
-"in the binary. A user function call in a module initializer is a compile "
-"error — there is no load-time execution at all. Loading a module runs "
-"nothing."
+"Module-level `let` initialization is folded at compile time: an `Int`, "
+"`Float`, `Str`, or `Bool` literal becomes a constant in the binary, and any "
+"other initializer — an operator, an enum member, a record literal, a call — "
+"is a compile error at the checker. There is no load-time execution at all: "
+"loading a module runs nothing."
 msgstr ""
 
 #: src/core-concepts/the-vm.md:118
@@ -9976,7 +9980,10 @@ msgid "`weak-cache`"
 msgstr ""
 
 #: src/examples/playground-corpus.md:62
-msgid "the cache/observer shape, shown with today's strong refs"
+msgid ""
+"the cache/observer shape over strong refs — the cache retains every entry, "
+"so a hit lives as long as the cache (`Weak<T>` is the landed tool for "
+"dropping that retain)"
 msgstr ""
 
 #: src/examples/playground-corpus.md:62
@@ -10414,7 +10421,7 @@ msgid ""
 ".. }`"
 msgstr ""
 
-#: src/reference/lexical-structure.md:66 src/reference/cli.md:92
+#: src/reference/lexical-structure.md:66 src/reference/cli.md:97
 msgid "`new`"
 msgstr ""
 
@@ -11067,26 +11074,31 @@ msgstr ""
 
 #: src/reference/modules-and-visibility.md:275
 msgid ""
-"Initializers must be **load-time expressions**: literals, enum members, "
-"builtin operators over load-time expressions, struct literals whose fields "
-"are load-time expressions, fixed-array literals whose elements are, "
-"`type_id<T>()`, and builtin zero allocations (`[nil; n]` with a "
-"load-time-constant `n`). Calls to user functions are not load-time "
-"expressions."
+"Initializers must be **load-time literals** — this build accepts an `Int`, "
+"`Float`, `Str`, or `Bool` literal and nothing else. An operator, an enum "
+"member, a record literal, `[nil; n]`, `type_id<T>()`, or any call is refused:"
 msgstr ""
 
-#: src/reference/modules-and-visibility.md:286
+#: src/reference/modules-and-visibility.md:284
+msgid ""
+"```rut\n"
+"let KIND_ADD: i64 = 1;                 // fine: an Int literal\n"
+"let NAME: str = \"app\";                 // fine: a Str literal\n"
+"```"
+msgstr ""
+
+#: src/reference/modules-and-visibility.md:289
 msgid ""
 "There is no mutable module state: program state is constructed in `main`, or "
 "held by the embedder and passed across the boundary. **No user code runs at "
 "load.**"
 msgstr ""
 
-#: src/reference/modules-and-visibility.md:290
+#: src/reference/modules-and-visibility.md:293
 msgid "Entry points"
 msgstr ""
 
-#: src/reference/modules-and-visibility.md:292
+#: src/reference/modules-and-visibility.md:295
 msgid ""
 "The embedder loads a module and then explicitly calls an entry function — "
 "`entry fn main` for a script, sync or async. `entry fn` publishes a function "
@@ -11095,11 +11107,11 @@ msgid ""
 "ordering, no load-order bugs, deterministic and cheap loads."
 msgstr ""
 
-#: src/reference/modules-and-visibility.md:299
+#: src/reference/modules-and-visibility.md:302
 msgid "Bindings: `let` and `const`"
 msgstr ""
 
-#: src/reference/modules-and-visibility.md:301
+#: src/reference/modules-and-visibility.md:304
 msgid ""
 "Mutability is the **default**. A `let` binding may be reassigned (`x = e`), "
 "written through (`p.x = 3`, `xs[0] = 7`), and passed where a writer is "
@@ -11108,18 +11120,18 @@ msgid ""
 "parameter spelling to grant it."
 msgstr ""
 
-#: src/reference/modules-and-visibility.md:307
+#: src/reference/modules-and-visibility.md:310
 msgid "`let x = e;` — a **mutable binding**, the ordinary shape."
 msgstr ""
 
-#: src/reference/modules-and-visibility.md:308
+#: src/reference/modules-and-visibility.md:311
 msgid ""
 "`const x = e;` — the **opt-out**: a _const binding_ refuses the binding's "
 "own reassignment, diagnosing ``cannot reassign `x` — a `const` binding is "
 "not reassignable``."
 msgstr ""
 
-#: src/reference/modules-and-visibility.md:312
+#: src/reference/modules-and-visibility.md:315
 msgid ""
 "**The const opt-out is shallow — reassignment only.** It gates the one "
 "operation that rebinds the name: `x = ...` on a const binding errors. It is "
@@ -11130,7 +11142,7 @@ msgid ""
 "rather than expecting `const` to guard it."
 msgstr ""
 
-#: src/reference/modules-and-visibility.md:320
+#: src/reference/modules-and-visibility.md:323
 msgid ""
 "Sharing is not gated at all: every non-primitive is a shared cell (see "
 "[By-reference and nullable](by-reference-and-nullable.md)), writes are "
@@ -11138,7 +11150,7 @@ msgid ""
 "`const` is _about the name_, never a copy or a fence."
 msgstr ""
 
-#: src/reference/modules-and-visibility.md:325
+#: src/reference/modules-and-visibility.md:328
 msgid ""
 "**Two meanings of \"const\".** This page's `const` is the _const binding_ — "
 "the statement head `const x = e;` in rut source. The **surface const** is a "
@@ -11148,47 +11160,47 @@ msgid ""
 "files](host-fns.md#the-surface-grammar))."
 msgstr ""
 
-#: src/reference/modules-and-visibility.md:334
+#: src/reference/modules-and-visibility.md:337
 msgid ""
 "Modules form a tree per package (the package root is the root module "
 "`mod.rut`; each declared child is a module file). Every declaration — and "
 "every class member — carries a visibility:"
 msgstr ""
 
-#: src/reference/modules-and-visibility.md:340
+#: src/reference/modules-and-visibility.md:343
 msgid "**public** — nameable by any rut module (other packages included)"
 msgstr ""
 
-#: src/reference/modules-and-visibility.md:341
+#: src/reference/modules-and-visibility.md:344
 msgid "visible everywhere inside this **package** (its whole module tree)"
 msgstr ""
 
-#: src/reference/modules-and-visibility.md:342
+#: src/reference/modules-and-visibility.md:345
 msgid "visible to the **parent module's subtree** only"
 msgstr ""
 
-#: src/reference/modules-and-visibility.md:343
+#: src/reference/modules-and-visibility.md:346
 msgid "_(unannotated)_"
 msgstr ""
 
-#: src/reference/modules-and-visibility.md:343
+#: src/reference/modules-and-visibility.md:346
 msgid ""
 "module-private — visible in this module and its descendants; **the default**"
 msgstr ""
 
-#: src/reference/modules-and-visibility.md:345
+#: src/reference/modules-and-visibility.md:348
 msgid ""
 "Unannotated = private to the declaring module _and its descendants_ (a child "
 "module sees its ancestors' privates, never a sibling's)."
 msgstr ""
 
-#: src/reference/modules-and-visibility.md:347
+#: src/reference/modules-and-visibility.md:350
 msgid ""
 "The paren forms `pub(mod)` / `pub(self)` are gone — a paren scope other than "
 "`super`/`pkg` is the ordinary `pub(..)` error."
 msgstr ""
 
-#: src/reference/modules-and-visibility.md:349
+#: src/reference/modules-and-visibility.md:352
 msgid ""
 "Applies uniformly: `let`, `enum`, `struct`, `class`, `interface`, `impl` (an "
 "impl exports with its target type), `fn`, `type` aliases, the `mod` edge "
@@ -11198,14 +11210,14 @@ msgid ""
 "it means the _type name_ is visible."
 msgstr ""
 
-#: src/reference/modules-and-visibility.md:356
+#: src/reference/modules-and-visibility.md:359
 msgid ""
 "**Class members take the same forms**: an unannotated field or method is "
 "module-private; `pub` (optionally scoped) exposes it. See [Classes and "
 "constructors](classes.md)."
 msgstr ""
 
-#: src/reference/modules-and-visibility.md:359
+#: src/reference/modules-and-visibility.md:362
 msgid ""
 "**Struct fields are always public** — the field law has no dial (see "
 "[Structs](structs.md)). **Impl-block methods take the `pub` dial** — `pub "
@@ -11216,7 +11228,7 @@ msgid ""
 "members (see [Interfaces and dispatch](interfaces.md))."
 msgstr ""
 
-#: src/reference/modules-and-visibility.md:367
+#: src/reference/modules-and-visibility.md:370
 msgid ""
 "Visibility is checked at compile time; it has no runtime representation. "
 "Only `pub` names enter a module's export table; a non-exported declaration "
@@ -11264,7 +11276,7 @@ msgstr ""
 msgid "seq"
 msgstr ""
 
-#: src/reference/primitive-types.md:15 src/reference/stdlib.md:347
+#: src/reference/primitive-types.md:15 src/reference/stdlib.md:353
 msgid "`Vec<T>`"
 msgstr ""
 
@@ -11274,7 +11286,7 @@ msgid ""
 "generic types](builtin-generic-types.md))"
 msgstr ""
 
-#: src/reference/primitive-types.md:16 src/reference/stdlib.md:346
+#: src/reference/primitive-types.md:16 src/reference/stdlib.md:352
 msgid "`[T]`"
 msgstr ""
 
@@ -11288,7 +11300,7 @@ msgstr ""
 
 #: src/reference/primitive-types.md:17
 #: src/reference/builtin-generic-types.md:56
-#: src/reference/by-reference-and-nullable.md:66 src/reference/stdlib.md:345
+#: src/reference/by-reference-and-nullable.md:66 src/reference/stdlib.md:351
 msgid "`?T`"
 msgstr ""
 
@@ -11763,7 +11775,7 @@ msgstr ""
 msgid "element access; out-of-bounds traps"
 msgstr ""
 
-#: src/reference/builtin-generic-types.md:101 src/reference/stdlib.md:406
+#: src/reference/builtin-generic-types.md:101 src/reference/stdlib.md:412
 msgid "`len() -> i32`"
 msgstr ""
 
@@ -11779,7 +11791,7 @@ msgstr ""
 msgid "iteration; `x` is the shared element"
 msgstr ""
 
-#: src/reference/builtin-generic-types.md:103 src/reference/stdlib.md:181
+#: src/reference/builtin-generic-types.md:103 src/reference/stdlib.md:180
 msgid "`slice(from, to) -> ?Vec<T>`"
 msgstr ""
 
@@ -11795,25 +11807,23 @@ msgstr ""
 msgid "copy the live elements into a fresh, exactly-sized array"
 msgstr ""
 
-#: src/reference/builtin-generic-types.md:105 src/reference/stdlib.md:180
-msgid "`freeze() -> bytes`"
+#: src/reference/builtin-generic-types.md:106
+msgid ""
+"`Vec<u8>` has no `freeze` member: the module-level `freeze_bytes(v)` copies "
+"the live octets into the immutable `bytes`."
 msgstr ""
 
-#: src/reference/builtin-generic-types.md:105
-msgid "`Vec<u8>` only: copy the live octets into the immutable `bytes`"
-msgstr ""
-
-#: src/reference/builtin-generic-types.md:107
+#: src/reference/builtin-generic-types.md:109
 msgid ""
 "`Vec<u8>` is the mutable binary builder; `bytes` is the binary type that "
 "crosses the host boundary (see [Primitive types](primitive-types.md))."
 msgstr ""
 
-#: src/reference/builtin-generic-types.md:111
+#: src/reference/builtin-generic-types.md:113
 msgid "`Weak<T>` — the weak reference"
 msgstr ""
 
-#: src/reference/builtin-generic-types.md:113
+#: src/reference/builtin-generic-types.md:115
 msgid ""
 "`Weak<T>` is a builtin class whose box holds an _unretained_ word to a "
 "referent — a weak never keeps anything alive. The name is **import-gated**: "
@@ -11821,7 +11831,7 @@ msgid ""
 "scope — `use core::{ Weak }` ``."
 msgstr ""
 
-#: src/reference/builtin-generic-types.md:118
+#: src/reference/builtin-generic-types.md:120
 msgid ""
 "```rut\n"
 "use core::{ Weak };\n"
@@ -11839,30 +11849,30 @@ msgid ""
 "```"
 msgstr ""
 
-#: src/reference/builtin-generic-types.md:137
+#: src/reference/builtin-generic-types.md:139
 msgid ""
 "`Weak::new(v)` traps on a `nil` `v`; `T` must be a reference type "
 "(`Weak<i32>` diagnoses — primitives move by value). `Weak<?U>` is legal and "
 "`upgrade()` answers `??U`."
 msgstr ""
 
-#: src/reference/builtin-generic-types.md:140
+#: src/reference/builtin-generic-types.md:142
 msgid ""
 "The referent's death nulls every weak box before any user code runs; "
 "`upgrade()` answers `nil` deterministically from then on."
 msgstr ""
 
-#: src/reference/builtin-generic-types.md:142
+#: src/reference/builtin-generic-types.md:144
 msgid ""
 "A weak edge closes no cycle: strong cycles still leak — see [Rc, dispose, "
 "and identity](rc-dispose-identity.md)."
 msgstr ""
 
-#: src/reference/builtin-generic-types.md:145
+#: src/reference/builtin-generic-types.md:147
 msgid "Keyed collections"
 msgstr ""
 
-#: src/reference/builtin-generic-types.md:147
+#: src/reference/builtin-generic-types.md:149
 msgid ""
 "`HashMap<K, V>` and `HashSet<T>` (package `nmapset`) wrap a native key "
 "table. Admission is the compile-time **union bound** `K requires i8 | i16 | "
@@ -11874,7 +11884,7 @@ msgid ""
 "not a copy (the aliasing law)."
 msgstr ""
 
-#: src/reference/builtin-generic-types.md:157
+#: src/reference/builtin-generic-types.md:159
 msgid ""
 "**Iteration.** Both classes mark the engine's `[iterable]` contract: `for "
 "(let k of m)` walks a map's **keys** and `for (let x of s)` a set's "
@@ -11888,7 +11898,7 @@ msgid ""
 "are shared record cells (see [Control flow](control-flow.md))."
 msgstr ""
 
-#: src/reference/builtin-generic-types.md:169
+#: src/reference/builtin-generic-types.md:171
 msgid ""
 "```rut\n"
 "use nmapset::{ HashMap };\n"
@@ -11912,30 +11922,30 @@ msgid ""
 "```"
 msgstr ""
 
-#: src/reference/builtin-generic-types.md:194
+#: src/reference/builtin-generic-types.md:196
 msgid "Absence and errors"
 msgstr ""
 
-#: src/reference/builtin-generic-types.md:196
+#: src/reference/builtin-generic-types.md:198
 msgid ""
 "**Absence** is `nil` on a nullable: a lookup returns `?V`, and `nil` means "
 "\"not found\"."
 msgstr ""
 
-#: src/reference/builtin-generic-types.md:198
+#: src/reference/builtin-generic-types.md:200
 msgid ""
 "**Errors** are the answer channel: `(?T, err)` — see [Primitive "
 "types](primitive-types.md)."
 msgstr ""
 
-#: src/reference/builtin-generic-types.md:200
+#: src/reference/builtin-generic-types.md:202
 msgid ""
 "**Type-erased recovery** is `opaque::downcast<T>(o) -> ?T` — the checked "
 "lane, `nil` on a miss; `unopaque<T>(o) -> T` is the inverse, the bad-cast "
 "lane — see [opaque — erasure and downcast](opaque.md)."
 msgstr ""
 
-#: src/reference/builtin-generic-types.md:204
+#: src/reference/builtin-generic-types.md:206
 msgid ""
 "A nullable/enum value is not compared structurally with `==` — test it with "
 "`when`, a `nil`/`!= nil` guard, or the payload."
@@ -13359,7 +13369,7 @@ msgid "marker"
 msgstr ""
 
 #: src/reference/classes.md:91 src/reference/stdlib.md:122
-#: src/reference/stdlib.md:223
+#: src/reference/stdlib.md:225
 msgid "surface"
 msgstr ""
 
@@ -14742,10 +14752,12 @@ msgstr ""
 
 #: src/reference/functions-closures-generics.md:52
 msgid ""
-"The closure spelling is an **anonymous fn** — block bodies, no arrow form:"
+"The closure spellings are the **anonymous fn** — a block body — and the "
+"**arrow form**, `(params) => expr`, whose right-hand side is the body "
+"expression. Both mint the same closure value and obey the capture law below:"
 msgstr ""
 
-#: src/reference/functions-closures-generics.md:55
+#: src/reference/functions-closures-generics.md:57
 msgid ""
 "```rut\n"
 "use ink::{ Logger };\n"
@@ -14757,18 +14769,19 @@ msgid ""
 "        let sq = r * r;\n"
 "        return sq * 3.14159265f32;\n"
 "    };\n"
-"    log.info(f\"add={add(1, 2)} area={area_of(1)}\");\n"
+"    let inc: fn(i32) -> i32 = (x: i32) => x + 1;   // the arrow form\n"
+"    log.info(f\"add={add(1, 2)} area={area_of(1)} inc={inc(1)}\");\n"
 "}\n"
 "```"
 msgstr ""
 
-#: src/reference/functions-closures-generics.md:73
+#: src/reference/functions-closures-generics.md:76
 msgid ""
 "An anonymous fn inhabits `fn(P..) -> R` directly — it is a value of the "
 "function type, copyable like a primitive."
 msgstr ""
 
-#: src/reference/functions-closures-generics.md:75
+#: src/reference/functions-closures-generics.md:78
 msgid ""
 "**The capture law**: primitives, `nil`, and `fn` values copy — a captured "
 "scalar is the closure's own slot, and reassigning it inside the closure "
@@ -14783,7 +14796,7 @@ msgid ""
 "captures alive; a closure is itself a shared cell value."
 msgstr ""
 
-#: src/reference/functions-closures-generics.md:90
+#: src/reference/functions-closures-generics.md:93
 msgid ""
 "```rut\n"
 "use ink::{ Logger };\n"
@@ -14803,44 +14816,44 @@ msgid ""
 "```"
 msgstr ""
 
-#: src/reference/functions-closures-generics.md:110
+#: src/reference/functions-closures-generics.md:113
 msgid ""
 "**Generics monomorphize at compile time**: each instantiation emits its own "
 "typed code. `T` infers from the arguments; explicit type arguments may be "
 "spelled at call sites, including method calls: `self.st.get<T>(self)`."
 msgstr ""
 
-#: src/reference/functions-closures-generics.md:114
+#: src/reference/functions-closures-generics.md:117
 msgid ""
 "Interface-typed arguments are ordinary arguments: a `T` instantiated at an "
 "interface type becomes a handle slot, satisfying no bound."
 msgstr ""
 
-#: src/reference/functions-closures-generics.md:116
+#: src/reference/functions-closures-generics.md:119
 msgid ""
 "**Generic parameters are unconstrained by default** — you cannot call "
 "methods on a bare `T`. Pass values in, take an `I`\\-typed parameter, or "
 "spell the bound (`T requires I`)."
 msgstr ""
 
-#: src/reference/functions-closures-generics.md:119
+#: src/reference/functions-closures-generics.md:122
 msgid ""
 "There are no const-generic user parameters. The builtin surfaces fix their "
 "shapes (`[T]` is one type; lengths are runtime values)."
 msgstr ""
 
-#: src/reference/functions-closures-generics.md:122
+#: src/reference/functions-closures-generics.md:125
 msgid "Inline bounds — `requires`"
 msgstr ""
 
-#: src/reference/functions-closures-generics.md:129
+#: src/reference/functions-closures-generics.md:132
 msgid ""
 "`fn f<T requires A | B>(x: T)` — an **admission-only** bound on fn, method, "
 "and class generic parameters (struct and interface generic parameters reject "
 "`requires`):"
 msgstr ""
 
-#: src/reference/functions-closures-generics.md:133
+#: src/reference/functions-closures-generics.md:136
 msgid ""
 "The bound gates which instantiations compile: enforcement is at every "
 "substitution-completing site (free-fn calls, method instantiation, "
@@ -14848,7 +14861,7 @@ msgid ""
 "spelled out — \"`bool` does not satisfy `T` requires `i32 | str`\"."
 msgstr ""
 
-#: src/reference/functions-closures-generics.md:138
+#: src/reference/functions-closures-generics.md:141
 msgid ""
 "Members may be concrete type names (satisfied by exact type identity), "
 "aliases (expanded first — see [Type aliases and union "
@@ -14858,21 +14871,21 @@ msgid ""
 "interface bound stands alone."
 msgstr ""
 
-#: src/reference/functions-closures-generics.md:145
+#: src/reference/functions-closures-generics.md:148
 msgid ""
 "**Interface-typed values satisfy nothing**: a `T` instantiated at an "
 "interface type fails any bound — only a concrete type with the members "
 "admits."
 msgstr ""
 
-#: src/reference/functions-closures-generics.md:148
+#: src/reference/functions-closures-generics.md:151
 msgid ""
 "A non-union bound **proves the widening**: the body may widen a `T`\\-typed "
 "value into a bound-interface-typed slot (`let w: Labeled = x;`), but gains "
 "no method calls on bare `T`."
 msgstr ""
 
-#: src/reference/functions-closures-generics.md:151
+#: src/reference/functions-closures-generics.md:154
 msgid ""
 "A **union bound** carries the whole-bound contract: a method call on a "
 "union-bounded value requires **every** member to provide the method — even a "
@@ -14880,13 +14893,13 @@ msgid ""
 "instantiation still binds the concrete member's own method."
 msgstr ""
 
-#: src/reference/functions-closures-generics.md:156
+#: src/reference/functions-closures-generics.md:159
 msgid ""
 "Bounds may reference the item's other generics: `fn hold<T, U requires "
 "[T]>(x: U)`."
 msgstr ""
 
-#: src/reference/functions-closures-generics.md:158
+#: src/reference/functions-closures-generics.md:161
 msgid ""
 "Generic **classes** take bounds on their parameters — the bound records on "
 "the class descriptor and admits every instantiation: `pub class HashMap<K "
@@ -16932,7 +16945,7 @@ msgstr ""
 
 #: src/reference/resource-limits.md:22
 msgid ""
-"every `Heap::alloc` route: cell mint, `Vec` growth (`push` reallocation), "
+"every heap allocation route: cell mint, `Vec` growth (`push` reallocation), "
 "string concat, frame-pool growth, host crossing mints"
 msgstr ""
 
@@ -17025,7 +17038,7 @@ msgstr ""
 msgid "Resumption"
 msgstr ""
 
-#: src/reference/resource-limits.md:52 src/reference/embedding.md:483
+#: src/reference/resource-limits.md:52 src/reference/embedding.md:485
 msgid "`OutOfMemory`"
 msgstr ""
 
@@ -17042,7 +17055,7 @@ msgid ""
 "free refs → `resume()`; a larger limit means a rebuilt VM — no live setter"
 msgstr ""
 
-#: src/reference/resource-limits.md:53 src/reference/embedding.md:482
+#: src/reference/resource-limits.md:53 src/reference/embedding.md:484
 msgid "`OutOfFuel`"
 msgstr ""
 
@@ -17056,6 +17069,10 @@ msgstr ""
 
 #: src/reference/resource-limits.md:53
 msgid "`add_fuel(n)` → `resume()`"
+msgstr ""
+
+#: src/reference/resource-limits.md:58
+msgid "// no-op today — nothing gates on it\n"
 msgstr ""
 
 #: src/reference/resource-limits.md:62
@@ -17650,7 +17667,7 @@ msgid "`await h` on a receipt"
 msgstr ""
 
 #: src/reference/launched-futures.md:14
-msgid "compile-gated — \"not in this build\""
+msgid "compile-gated — \"the receipt is not a Future and cannot be re-launched\""
 msgstr ""
 
 #: src/reference/launched-futures.md:15
@@ -17695,53 +17712,56 @@ msgstr ""
 
 #: src/reference/launched-futures.md:30
 msgid ""
-"The receipt is **not a `Future`**: `await h` diagnoses — the type system "
-"rejects it, never a runtime check."
+"The receipt is **not a `Future`**: `await h` diagnoses — ``cannot `await` a "
+"LaunchedFutureHandle — the receipt is not a Future and cannot be "
+"re-launched`` — the type system rejects it, never a runtime check."
 msgstr ""
 
-#: src/reference/launched-futures.md:32
+#: src/reference/launched-futures.md:34
 msgid ""
-"It is **not re-launchable**: `launch_future(h)` is a type error for the same "
-"reason. A future is consumed exactly once — by `await` or by "
-"`launch_future`, never both, never twice."
+"It is **not re-launchable**: `launch_future` takes a `Future<T>`, and a "
+"receipt is not one — `launch_future<nil>(h)` is the plain argument mismatch "
+"``argument 1 is `LaunchedFutureHandle<#T>`, `Future<nil>` expected``. A "
+"future is consumed exactly once — by `await` or by `launch_future`, never "
+"both, never twice."
 msgstr ""
 
-#: src/reference/launched-futures.md:35
+#: src/reference/launched-futures.md:39
 msgid ""
 "One member: `abort()` — `true` if the frame was flagged and re-enqueued, "
 "`false` when it had already finished (a repeat abort is stable and harmless)."
 msgstr ""
 
-#: src/reference/launched-futures.md:39
+#: src/reference/launched-futures.md:43
 msgid "Cancellation"
 msgstr ""
 
-#: src/reference/launched-futures.md:41
+#: src/reference/launched-futures.md:45
 msgid ""
 "`abort()` flags the frame's cancellation and re-enqueues it. **The probe at "
 "its next checkpoint is the only place cancellation becomes observable** — it "
 "never interrupts mid-expression."
 msgstr ""
 
-#: src/reference/launched-futures.md:45
+#: src/reference/launched-futures.md:49
 msgid "At the probe, the frame runs its **drop path**:"
 msgstr ""
 
-#: src/reference/launched-futures.md:47
+#: src/reference/launched-futures.md:51
 msgid "the pending edge is cleared — a pending `sleep` dies with the frame;"
 msgstr ""
 
-#: src/reference/launched-futures.md:48
+#: src/reference/launched-futures.md:52
 msgid ""
 "every local releases **deterministically, in reverse declaration order** "
 "(`[disposal]` members run, [the Rc heap](rc-heap.md));"
 msgstr ""
 
-#: src/reference/launched-futures.md:50
+#: src/reference/launched-futures.md:54
 msgid "the state retires (null) — later `abort()` calls answer `false`."
 msgstr ""
 
-#: src/reference/launched-futures.md:52
+#: src/reference/launched-futures.md:56
 msgid ""
 "Inside an async body, the injected `cx.cancelled()` reads the same flag as "
 "data, so a frame can honor cancellation at its own pace. Cancellation is "
@@ -17749,7 +17769,7 @@ msgid ""
 "host future only observes the flag when the loop drives it again."
 msgstr ""
 
-#: src/reference/launched-futures.md:58
+#: src/reference/launched-futures.md:62
 msgid ""
 "```rut\n"
 "use core::{ DisposalContext };\n"
@@ -17772,18 +17792,20 @@ msgid ""
 "```"
 msgstr ""
 
-#: src/reference/launched-futures.md:78
+#: src/reference/launched-futures.md:82
 msgid "Join (specified)"
 msgstr ""
 
-#: src/reference/launched-futures.md:80
+#: src/reference/launched-futures.md:84
 msgid ""
 "The receipt is the join surface: `await h` joins the launched future and "
 "produces its completion value. Until the join tier lands, `await h` "
-"diagnoses with the join law and the receipt stays non-awaitable."
+"diagnoses with the join law — ``cannot `await` a LaunchedFutureHandle — the "
+"receipt is not a Future and cannot be re-launched`` — and the receipt stays "
+"non-awaitable."
 msgstr ""
 
-#: src/reference/launched-futures.md:85
+#: src/reference/launched-futures.md:90
 msgid ""
 "Planned laws: joining an already-cancelled receipt yields the cancelled "
 "case, never a trap; join re-enqueues the awaiter the same way an in-body "
@@ -17791,11 +17813,11 @@ msgid ""
 "callback."
 msgstr ""
 
-#: src/reference/launched-futures.md:90
+#: src/reference/launched-futures.md:95
 msgid "Racing — `select2` / `select_all` (stdlib)"
 msgstr ""
 
-#: src/reference/launched-futures.md:92
+#: src/reference/launched-futures.md:97
 msgid ""
 "```rut\n"
 "use ink::{ Logger };\n"
@@ -17827,7 +17849,7 @@ msgid ""
 "```"
 msgstr ""
 
-#: src/reference/launched-futures.md:119
+#: src/reference/launched-futures.md:124
 msgid ""
 "`select2(a, b)` races two futures; the call **mints the race** — nothing "
 "runs until `await` (or `launch_future`) drives it. The answer is `Either2<T, "
@@ -17836,7 +17858,7 @@ msgid ""
 "computed at the call site, never a cast."
 msgstr ""
 
-#: src/reference/launched-futures.md:125
+#: src/reference/launched-futures.md:130
 msgid ""
 "The **losers are cancelled** the moment a winner is settled: their drop "
 "paths run (pending sleeps die with them, `[disposal]` members fire). A "
@@ -17844,32 +17866,32 @@ msgid ""
 "children."
 msgstr ""
 
-#: src/reference/launched-futures.md:129
+#: src/reference/launched-futures.md:134
 msgid ""
 "`select_all<T>(futs)` races a whole `[Future<T>]` cohort and resolves with "
 "`(i, v)` — the winner's index and value — cancelling every other still-live "
 "member. Ties (two members already retired) break by index order."
 msgstr ""
 
-#: src/reference/launched-futures.md:134
+#: src/reference/launched-futures.md:139
 msgid ""
 "`Either2` is an ordinary generic class (`left: ?A; right: ?B`) — rut's enums "
 "are the C-style member set, so the two-sided answer is private fields plus "
 "accessors, not pattern arms."
 msgstr ""
 
-#: src/reference/launched-futures.md:138
+#: src/reference/launched-futures.md:143
 msgid "Manual futures — `completer<T>()`"
 msgstr ""
 
-#: src/reference/launched-futures.md:140
+#: src/reference/launched-futures.md:145
 msgid ""
 "`completer<T>()` mints a cold `Future<T>` **and** the resolution right "
 "beside it — the primitive that turns a plain callback into a future the "
 "whole `await`/`select2` vocabulary drives:"
 msgstr ""
 
-#: src/reference/launched-futures.md:144
+#: src/reference/launched-futures.md:149
 msgid ""
 "```rut\n"
 "use core::{ Future };\n"
@@ -17900,46 +17922,46 @@ msgid ""
 "```"
 msgstr ""
 
-#: src/reference/launched-futures.md:172
+#: src/reference/launched-futures.md:177
 msgid ""
 "`done.resolve(v)` settles the future and wakes its awaiter; it answers "
 "`false` when the future already retired — resolved, cancelled, or abandoned "
 "(the same stability `abort()` has). The right consumes itself: one resolve."
 msgstr ""
 
-#: src/reference/launched-futures.md:176
+#: src/reference/launched-futures.md:181
 msgid ""
 "`Completer<T>` is only the **right**, not the future — a "
 "`LaunchedFutureHandle` sibling. `await` diagnoses on it; the engine minted "
 "future it settles is the awaitable."
 msgstr ""
 
-#: src/reference/launched-futures.md:180
+#: src/reference/launched-futures.md:185
 msgid "Structure and fairness"
 msgstr ""
 
-#: src/reference/launched-futures.md:182
+#: src/reference/launched-futures.md:187
 msgid ""
 "Launched futures are **unstructured**: aborting a frame does not abort "
 "frames it awaits. Structured scopes — `scope { .. }` cancelling children on "
 "exit — are the specified remedy."
 msgstr ""
 
-#: src/reference/launched-futures.md:185
+#: src/reference/launched-futures.md:190
 msgid ""
 "The ready ring is **round-robin**: each drive runs a frame to its next park "
 "or completion, so one greedy future cannot starve the queue. Priorities are "
 "not in the model."
 msgstr ""
 
-#: src/reference/launched-futures.md:188
+#: src/reference/launched-futures.md:193
 msgid ""
 "`vm.pending_tasks()` counts ready frames, armed timers, and host futures "
 "parked on Completers — the embedder's idle test ([async and "
 "await](async.md))."
 msgstr ""
 
-#: src/reference/launched-futures.md:191
+#: src/reference/launched-futures.md:196
 msgid ""
 "A trap inside a launched future propagates out of `run_ready()` / `drive()`; "
 "the frame is retired either way, and its locals ran their drop path."
@@ -18378,6 +18400,10 @@ msgstr ""
 
 #: src/reference/embedding.md:67
 msgid "// 3. Boot and drive — `Vm::builder()` is the only construction door.\n"
+msgstr ""
+
+#: src/reference/embedding.md:72
+msgid "// construct-time; nothing gates on it today\n"
 msgstr ""
 
 #: src/reference/embedding.md:75
@@ -18824,8 +18850,8 @@ msgid ""
 msgstr ""
 
 #: src/reference/embedding.md:276 src/reference/templates.md:17
-#: src/reference/cli.md:65 src/reference/cli.md:108 src/reference/cli.md:228
-#: src/reference/cli.md:264
+#: src/reference/cli.md:65 src/reference/cli.md:113 src/reference/cli.md:233
+#: src/reference/cli.md:269
 msgid "behavior"
 msgstr ""
 
@@ -19071,24 +19097,28 @@ msgid "one `.rut` file's text — a loose file is a single module, no manifest"
 msgstr ""
 
 #: src/reference/embedding.md:383
-msgid "`prefetch_urls(&src, &dir, &remote)`"
+msgid "`prefetch_urls(&src, &dir, &pins, &remote)`"
 msgstr ""
 
 #: src/reference/embedding.md:383
 msgid ""
-"collect a manifest's url rows and fetch them — the `_with` lanes' input step"
+"collect a manifest's url rows and fetch them, gated by the lock's pins — the "
+"`_with` lanes' input step"
 msgstr ""
 
 #: src/reference/embedding.md:384
 msgid ""
-"`pack_dir(dir)` / `pack_dir_with(dir, &remote)` / `pack_dir_opts(..)` family"
+"`pack_dir(dir)` / `pack_dir_opts(dir, &opts)` / `pack_dir_zip(dir)` (with "
+"the `*_fetched` cores and the async `pack_dir_opts_with` / "
+"`pack_dir_zip_with` lanes)"
 msgstr ""
 
 #: src/reference/embedding.md:384
 msgid ""
-"pack a module directory into a deterministic `.rutbundle` — a **compiled** "
-"root for a lib pkg, a **decl** root for a host pkg (`type` routes; "
-"`format_version` is 13); returns the bytes ([module bundles](bundles.md))"
+"pack a module directory into a deterministic artifact — a **compiled** "
+"`.rutbundle` root for a lib pkg, a **decl** root for a host pkg (`type` "
+"routes; `format_version` is 13), or the source `.zip` through "
+"`pack_dir_zip`; returns the bytes ([module bundles](bundles.md))"
 msgstr ""
 
 #: src/reference/embedding.md:385
@@ -19437,124 +19467,126 @@ msgid "// ops per turn; None = unlimited\n"
 msgstr ""
 
 #: src/reference/embedding.md:458
-msgid "// ops between interrupt checks\n"
+msgid "// construct-time cadence; nothing gates on it today\n"
 msgstr ""
 
 #: src/reference/embedding.md:462
 msgid ""
-"Exhaustion and interrupts surface as traps ([resource "
-"limits](resource-limits.md)). A trap inside re-entrant work propagates to "
-"the embedder parked at the host op; `vm.resume::<R>()` re-runs the turn."
-msgstr ""
-
-#: src/reference/embedding.md:466
-msgid "Native fn rules"
+"Exhaustion surfaces as a resumable trap ([resource "
+"limits](resource-limits.md)): fuel is ticked per op, the heap budget is "
+"charged at every allocation, and there is no separate interrupt lane. A trap "
+"inside re-entrant work propagates to the embedder parked at the host op; "
+"`vm.resume::<R>()` re-runs the turn."
 msgstr ""
 
 #: src/reference/embedding.md:468
+msgid "Native fn rules"
+msgstr ""
+
+#: src/reference/embedding.md:470
 msgid ""
 "A body is `FnMut(&mut Vm, P…) -> R` or `-> Result<R, Trap>`; the Rust "
 "parameter types **are** the declared row (compile error at the register site "
 "for a type that does not cross — [value boundary](value-boundary.md))."
 msgstr ""
 
-#: src/reference/embedding.md:471
+#: src/reference/embedding.md:473
 msgid ""
 "Native fns run **outside** the op budget. The host is trusted to be fast — "
 "or to hand the work to a future ([async host fns](host-fns.md))."
 msgstr ""
 
-#: src/reference/embedding.md:473
+#: src/reference/embedding.md:475
 msgid ""
 "Re-entrancy: a body may call `vm.call` on rut exports. Nested calls draw the "
 "same fuel pool; borrows held by the outer body are guarded ([value "
 "boundary](value-boundary.md))."
 msgstr ""
 
-#: src/reference/embedding.md:476
+#: src/reference/embedding.md:478
 msgid ""
 "Failures are values: return `Err(Trap)` — `Trap { kind, msg }`. The fn traps "
 "cleanly and the error propagates as an `Err` to the embedder with the rut "
 "backtrace intact. Traps never unwind Rust."
 msgstr ""
 
-#: src/reference/embedding.md:480
+#: src/reference/embedding.md:482
 msgid "`TrapKind`"
 msgstr ""
 
-#: src/reference/embedding.md:480
+#: src/reference/embedding.md:482
 msgid "raised by"
 msgstr ""
 
-#: src/reference/embedding.md:482
+#: src/reference/embedding.md:484
 msgid "budget exhaustion"
 msgstr ""
 
-#: src/reference/embedding.md:483 src/reference/cli.md:70
+#: src/reference/embedding.md:485 src/reference/cli.md:70
 msgid "heap limit"
 msgstr ""
 
-#: src/reference/embedding.md:484
+#: src/reference/embedding.md:486
 msgid "`Interrupted`"
 msgstr ""
 
-#: src/reference/embedding.md:484
-msgid "interrupt flag"
+#: src/reference/embedding.md:486
+msgid "reserved — no producer in this build (the interrupt lane does not exist)"
 msgstr ""
 
-#: src/reference/embedding.md:485
+#: src/reference/embedding.md:487
 msgid "`Overflow` / `DivByZero`"
 msgstr ""
 
-#: src/reference/embedding.md:485
+#: src/reference/embedding.md:487
 msgid "arithmetic"
 msgstr ""
 
-#: src/reference/embedding.md:486
+#: src/reference/embedding.md:488
 msgid "`IndexOutOfBounds`"
 msgstr ""
 
-#: src/reference/embedding.md:486
+#: src/reference/embedding.md:488
 msgid "sequence access"
 msgstr ""
 
-#: src/reference/embedding.md:487
+#: src/reference/embedding.md:489
 msgid "`Panic`"
 msgstr ""
 
-#: src/reference/embedding.md:487
+#: src/reference/embedding.md:489
 msgid "`panic`"
 msgstr ""
 
-#: src/reference/embedding.md:488
+#: src/reference/embedding.md:490
 msgid "`BadUnbox`"
 msgstr ""
 
-#: src/reference/embedding.md:488
+#: src/reference/embedding.md:490
 msgid "a failed unbox"
 msgstr ""
 
-#: src/reference/embedding.md:489
+#: src/reference/embedding.md:491
 msgid "`NilDeref`"
 msgstr ""
 
-#: src/reference/embedding.md:489
+#: src/reference/embedding.md:491
 msgid "nil where a reference is required"
 msgstr ""
 
-#: src/reference/embedding.md:490
+#: src/reference/embedding.md:492
 msgid "`Invalid`"
 msgstr ""
 
-#: src/reference/embedding.md:490
+#: src/reference/embedding.md:492
 msgid "everything else, including boundary mismatches"
 msgstr ""
 
-#: src/reference/embedding.md:492
+#: src/reference/embedding.md:494
 msgid "The engine's own natives"
 msgstr ""
 
-#: src/reference/embedding.md:494
+#: src/reference/embedding.md:496
 msgid ""
 "The VM boots with internal native calls in the same dispatch family — the "
 "`str`/`bytes` members, the `f\"...\"` concatenation lowering, array "
@@ -19563,11 +19595,11 @@ msgid ""
 "registered modules."
 msgstr ""
 
-#: src/reference/embedding.md:500
+#: src/reference/embedding.md:502
 msgid "Host-side helpers (`rut-std`)"
 msgstr ""
 
-#: src/reference/embedding.md:502
+#: src/reference/embedding.md:504
 msgid ""
 "One `pkg()` builder per module; each rides the chain — "
 "`.pkg(rut_std::math::pkg())` — and installs at `.compile()` against the rows "
@@ -19575,61 +19607,61 @@ msgid ""
 "unmounted scope merges inert, so hosts blanket-install their subset):"
 msgstr ""
 
-#: src/reference/embedding.md:508
+#: src/reference/embedding.md:510
 msgid "builder"
 msgstr ""
 
-#: src/reference/embedding.md:508
+#: src/reference/embedding.md:510
 msgid "binds"
 msgstr ""
 
-#: src/reference/embedding.md:510 src/reference/cli.md:77
+#: src/reference/embedding.md:512 src/reference/cli.md:77
 msgid "`math::pkg()`"
 msgstr ""
 
-#: src/reference/embedding.md:510
+#: src/reference/embedding.md:512
 msgid "`calc`'s float functions, both widths"
 msgstr ""
 
-#: src/reference/embedding.md:511
+#: src/reference/embedding.md:513
 msgid "`logger::pkg(sink)`"
 msgstr ""
 
-#: src/reference/embedding.md:511
+#: src/reference/embedding.md:513
 msgid "`ink_host`'s two rows, routed to a `FnMut(&str)` sink"
 msgstr ""
 
-#: src/reference/embedding.md:512 src/reference/cli.md:79
+#: src/reference/embedding.md:514 src/reference/cli.md:79
 msgid "`nmap::pkg()`"
 msgstr ""
 
-#: src/reference/embedding.md:512
+#: src/reference/embedding.md:514
 msgid "the native key table behind `nmapset` ([stdlib](stdlib.md))"
 msgstr ""
 
-#: src/reference/embedding.md:513
+#: src/reference/embedding.md:515
 msgid "`strbuild::pkg()`"
 msgstr ""
 
-#: src/reference/embedding.md:513
+#: src/reference/embedding.md:515
 msgid ""
 "the string builder's rows behind `strbuild` ([stdlib](stdlib.md)) — growth "
 "is charged against the embedder's heap budget"
 msgstr ""
 
-#: src/reference/embedding.md:514 src/reference/cli.md:81
+#: src/reference/embedding.md:516 src/reference/cli.md:81
 msgid "`async_host::pkg()`"
 msgstr ""
 
-#: src/reference/embedding.md:514
+#: src/reference/embedding.md:516
 msgid "the launcher rows (`__launch`/`__abort`/`__sleep`/`__sleep_yield`)"
 msgstr ""
 
-#: src/reference/embedding.md:515 src/reference/cli.md:82
+#: src/reference/embedding.md:517 src/reference/cli.md:82
 msgid "`http::pkg()`"
 msgstr ""
 
-#: src/reference/embedding.md:515
+#: src/reference/embedding.md:517
 msgid ""
 "the std HTTP lanes (reqwest; native builds only); `http::pkg_with(f)` is the "
 "fixture twin, returning `(HostPkg, HttpFixture)`. The `http_host` surface is "
@@ -19637,26 +19669,26 @@ msgid ""
 "readbacks, `stream::http_body`/`http_stream_next`)"
 msgstr ""
 
-#: src/reference/embedding.md:516 src/reference/cli.md:80
+#: src/reference/embedding.md:518 src/reference/cli.md:80
 msgid "`bench_cross::pkg()`"
 msgstr ""
 
-#: src/reference/embedding.md:516 src/reference/stdlib.md:135
+#: src/reference/embedding.md:518 src/reference/stdlib.md:135
 msgid "the crossing-tax benchmark rows"
 msgstr ""
 
-#: src/reference/embedding.md:518
+#: src/reference/embedding.md:520
 msgid "In-tree examples"
 msgstr ""
 
-#: src/reference/embedding.md:520
+#: src/reference/embedding.md:522
 msgid ""
 "[03 — Plugin](../examples/03-plugin.md): a Rust chat server driving a rut "
 "moderator plugin, loaded from a module directory and from a packed "
 "`.rutbundle`; re-entrant `emit` crossings."
 msgstr ""
 
-#: src/reference/embedding.md:523
+#: src/reference/embedding.md:525
 msgid ""
 "[06 — GitHub viewer CLI](../examples/06-github-viewer-cli.md): walks the std "
 "packages, binds example-local I/O rows, launches an async entry fn, and "
@@ -19726,7 +19758,7 @@ msgstr ""
 msgid "direction"
 msgstr ""
 
-#: src/reference/value-boundary.md:30 src/reference/diagnostics.md:89
+#: src/reference/value-boundary.md:30 src/reference/diagnostics.md:90
 msgid "cost"
 msgstr ""
 
@@ -20394,7 +20426,7 @@ msgid ""
 msgstr ""
 
 #: src/reference/host-fns.md:146 src/reference/frontend.md:168
-#: src/reference/cli.md:374
+#: src/reference/cli.md:379
 msgid "Declaration mode"
 msgstr ""
 
@@ -20657,9 +20689,9 @@ msgid "emitted row"
 msgstr ""
 
 #: src/reference/host-fns.md:305 src/reference/stdlib.md:36
-#: src/reference/stdlib.md:174 src/reference/stdlib.md:223
-#: src/reference/stdlib.md:400 src/reference/typed-bytecode.md:101
-#: src/reference/project-structure.md:59 src/reference/cli.md:385
+#: src/reference/stdlib.md:174 src/reference/stdlib.md:225
+#: src/reference/stdlib.md:406 src/reference/typed-bytecode.md:101
+#: src/reference/project-structure.md:59 src/reference/cli.md:390
 #: src/reference/glossary.md:9
 msgid "meaning"
 msgstr ""
@@ -21402,7 +21434,7 @@ msgstr ""
 msgid "class"
 msgstr ""
 
-#: src/reference/stdlib.md:75 src/reference/stdlib.md:341
+#: src/reference/stdlib.md:75 src/reference/stdlib.md:347
 msgid "members"
 msgstr ""
 
@@ -21777,7 +21809,7 @@ msgstr ""
 msgid "The growable sequence, written in rut over the fixed `[T]` array:"
 msgstr ""
 
-#: src/reference/stdlib.md:174 src/reference/stdlib.md:400
+#: src/reference/stdlib.md:174 src/reference/stdlib.md:406
 msgid "member"
 msgstr ""
 
@@ -21816,14 +21848,16 @@ msgid "bridges to the fixed array"
 msgstr ""
 
 #: src/reference/stdlib.md:180
-msgid "the `Vec<u8>` → immutable `bytes` copy (exactly the live length)"
-msgstr ""
-
-#: src/reference/stdlib.md:181
 msgid "compiler-lowered O(1) fixed-length window; detaches on grow"
 msgstr ""
 
-#: src/reference/stdlib.md:185
+#: src/reference/stdlib.md:182
+msgid ""
+"`Vec<u8>` has no `freeze` member: the module-level `freeze_bytes(v)` copies "
+"exactly the live octets into the immutable `bytes`."
+msgstr ""
+
+#: src/reference/stdlib.md:187
 msgid ""
 "`Flow<E>` chains the push contract: a type is iterable when it marks an "
 "`[iterable]` member, and a Flow wraps one drive in adapter stages — a "
@@ -21831,7 +21865,7 @@ msgid ""
 "fused builtin loops stay the perf tier."
 msgstr ""
 
-#: src/reference/stdlib.md:190
+#: src/reference/stdlib.md:192
 msgid ""
 "Entry and sink are **interfaces, satisfied structurally**: `IntoFlow<E>` is "
 "`fn into_flow(self) -> Flow<E>` — `Flow` itself carries the identity member "
@@ -21844,7 +21878,7 @@ msgid ""
 "every time."
 msgstr ""
 
-#: src/reference/stdlib.md:201
+#: src/reference/stdlib.md:203
 msgid ""
 "```rut\n"
 "use pouch::{ Vec };\n"
@@ -21865,109 +21899,113 @@ msgid ""
 "```"
 msgstr ""
 
-#: src/reference/stdlib.md:225
+#: src/reference/stdlib.md:227
 msgid "`x.into_flow() -> Flow<E>`"
 msgstr ""
 
-#: src/reference/stdlib.md:225
+#: src/reference/stdlib.md:227
 msgid ""
 "the entry — `IntoFlow<E>`'s member; `Flow` carries the identity row, the "
 "wrappers `ArrFlow<T>` / `StrFlow` / `BytesFlow` / `VecFlow<T>` carry the rest"
 msgstr ""
 
-#: src/reference/stdlib.md:226
+#: src/reference/stdlib.md:228
 msgid "`VecFlow<T>(vec)` / `ArrFlow<T>(arr)` / `StrFlow(s)` / `BytesFlow(b)`"
 msgstr ""
 
-#: src/reference/stdlib.md:226
+#: src/reference/stdlib.md:228
 msgid ""
 "the adapters — newtype wrappers manufactured at the call site; a primitive "
 "or bare container cannot carry members, the wrapper does"
 msgstr ""
 
-#: src/reference/stdlib.md:227
+#: src/reference/stdlib.md:229
 msgid "`map<R>(f: fn(E) -> R) -> Flow<R>`"
 msgstr ""
 
-#: src/reference/stdlib.md:227
+#: src/reference/stdlib.md:229
 msgid ""
 "transform — introduces a new type variable, so annotate the lambda or spell "
 "the type argument; a fn path infers"
 msgstr ""
 
-#: src/reference/stdlib.md:228
+#: src/reference/stdlib.md:230
 msgid "`filter(p: fn(E) -> bool) -> Self`"
 msgstr ""
 
-#: src/reference/stdlib.md:228
+#: src/reference/stdlib.md:230
 msgid "keep the elements the predicate admits"
 msgstr ""
 
-#: src/reference/stdlib.md:229
+#: src/reference/stdlib.md:231
 msgid "`take(n)` / `skip(n)`"
 msgstr ""
 
-#: src/reference/stdlib.md:229
+#: src/reference/stdlib.md:231
 msgid ""
 "the first `n` / everything after the first `n` — the counter is a record the "
 "drive mutates, so a drained stage stays drained"
 msgstr ""
 
-#: src/reference/stdlib.md:230
+#: src/reference/stdlib.md:232
 msgid ""
 "`count() -> i32` / `for_each(f)` / `fold<R>(init, f) -> R` / `enumerate() -> "
 "Flow<(i32, E)>`"
 msgstr ""
 
-#: src/reference/stdlib.md:230
+#: src/reference/stdlib.md:232
 msgid "the one-drive consumers"
 msgstr ""
 
-#: src/reference/stdlib.md:231
+#: src/reference/stdlib.md:233
 msgid "`W<T>::from_flow(it: Flow<E>) -> W<T>`"
 msgstr ""
 
-#: src/reference/stdlib.md:231
+#: src/reference/stdlib.md:233
 msgid ""
 "the sink — `FromFlow<E>`'s no-self member, carried by `VecFlow<T>` and "
 "`SetFlow<T>`; `collected()` / `items()` unwrap the materialized container"
 msgstr ""
 
-#: src/reference/stdlib.md:232
+#: src/reference/stdlib.md:234
 msgid "`for (x of chain)`"
 msgstr ""
 
-#: src/reference/stdlib.md:232
+#: src/reference/stdlib.md:234
 msgid ""
 "chains are iterable — the `[iterable]` member on `Flow<E>` feeds the "
 "ordinary desugar"
 msgstr ""
 
-#: src/reference/stdlib.md:234
+#: src/reference/stdlib.md:236
 msgid ""
 "**Import the interfaces you spell and the pipeline type**: `use flow::{ "
 "Flow, IntoFlow, FromFlow }` — the use-both law names each one."
 msgstr ""
 
-#: src/reference/stdlib.md:237
+#: src/reference/stdlib.md:239
 msgid ""
-"**Deferred, documented**: `IntoFlow` for the mapset (nmapset ships no "
-"host-table walk — json's map encode grows with it) and a map sink (nmapset's "
-"`HashMap` has no wrapper family in flow yet — json's decode-only `JMap*` "
-"wrappers are the precedent such a family would follow)."
+"**Deferred, documented**: `IntoFlow` for the mapset — nmapset HAS the walk "
+"(its `[iterable] iterate` on both classes), but no `into_flow` member; the "
+"wrapper law puts that member on the type's own inherent impl, and growing it "
+"nmapset-side would point nmapset back at flow (inverting the flow → nmapset "
+"dependency direction). Until that call is made, a set enters a pipeline only "
+"through the sink (`SetFlow<T>::from_flow`). A map sink is also absent "
+"(nmapset's `HashMap` has no wrapper family in flow yet — json's decode-only "
+"`JMap*` wrappers are the precedent such a family would follow)."
 msgstr ""
 
-#: src/reference/stdlib.md:243
+#: src/reference/stdlib.md:249
 msgid "`nmapset` — `HashMap`/`HashSet`"
 msgstr ""
 
-#: src/reference/stdlib.md:245
+#: src/reference/stdlib.md:251
 msgid ""
 "Thin wrappers over the native key table (`nmap_host` rows): the whole state "
 "is one `opaque` handle, every method one host call."
 msgstr ""
 
-#: src/reference/stdlib.md:248
+#: src/reference/stdlib.md:254
 msgid ""
 "```rut\n"
 "pub class HashMap<K requires i8 | i16 | i32 | i64 | u8 | u16 | u32 | u64 | "
@@ -21986,13 +22024,13 @@ msgid ""
 "```"
 msgstr ""
 
-#: src/reference/stdlib.md:261
+#: src/reference/stdlib.md:267
 msgid ""
 "Both classes designate `new` — `HashMap()` / `HashSet()` spell the "
 "construction; `with_capacity` stays a named constructor."
 msgstr ""
 
-#: src/reference/stdlib.md:264
+#: src/reference/stdlib.md:270
 msgid ""
 "Laws: the key set is closed (no floats — no stable equality; encode a custom "
 "key canonically to `bytes`); `get` answers the stored cell, so two gets of "
@@ -22003,11 +22041,11 @@ msgid ""
 "views](string-views.md))."
 msgstr ""
 
-#: src/reference/stdlib.md:272
+#: src/reference/stdlib.md:278
 msgid "`calc` — the generic float surface"
 msgstr ""
 
-#: src/reference/stdlib.md:274
+#: src/reference/stdlib.md:280
 msgid ""
 "```rut\n"
 "use calc::{ math };\n"
@@ -22026,7 +22064,7 @@ msgid ""
 "```"
 msgstr ""
 
-#: src/reference/stdlib.md:293
+#: src/reference/stdlib.md:299
 msgid ""
 "The surface is `calc`'s `math` module — bind it (`use calc::{ math }`) and "
 "reach the members qualified (`math::sqrt(x)`), or spell the path fully "
@@ -22044,11 +22082,11 @@ msgid ""
 "Integer numeric methods are core's, not `calc`'s."
 msgstr ""
 
-#: src/reference/stdlib.md:309
+#: src/reference/stdlib.md:315
 msgid "`json` — the serde package"
 msgstr ""
 
-#: src/reference/stdlib.md:311
+#: src/reference/stdlib.md:317
 msgid ""
 "Pure rut, zero host fns — offering json adds no host bindings. Its container "
 "wrapper families are json's OWN source, and `strbuild`, `pouch`, and "
@@ -22056,21 +22094,21 @@ msgid ""
 "kinds](dependency-kinds.md))."
 msgstr ""
 
-#: src/reference/stdlib.md:325
+#: src/reference/stdlib.md:331
 msgid ""
 "**The pair law**: `(?T, ?E)` with exactly one nil — success = `(value, "
 "nil)`, failure = `(nil, err)`. Encode returns `?EncodeJsonError` because a "
 "cyclic structure is expected, recoverable data, not a trap."
 msgstr ""
 
-#: src/reference/stdlib.md:328
+#: src/reference/stdlib.md:334
 msgid ""
 "**Direct decode**: no intermediate document; a type's `decode` reads its "
 "expectations straight off the cursor. A `Vec<Row>` decode mints exactly the "
 "program's values, once."
 msgstr ""
 
-#: src/reference/stdlib.md:331
+#: src/reference/stdlib.md:337
 msgid ""
 "**Satisfaction is structural**: your type satisfies "
 "`JsonSerialize`/`JsonDeserialize` by spelling the members on its own "
@@ -22079,7 +22117,7 @@ msgid ""
 "them without asking."
 msgstr ""
 
-#: src/reference/stdlib.md:336
+#: src/reference/stdlib.md:342
 msgid ""
 "**The wrapper law**: primitives and bare containers never satisfy — no "
 "inherent members to have. The wrapper families are the spelled, per-call "
@@ -22087,95 +22125,96 @@ msgid ""
 "auto-inserted, forever."
 msgstr ""
 
-#: src/reference/stdlib.md:341
+#: src/reference/stdlib.md:347
 msgid "wrapper"
 msgstr ""
 
-#: src/reference/stdlib.md:341
+#: src/reference/stdlib.md:347
 msgid "wraps"
 msgstr ""
 
-#: src/reference/stdlib.md:343
+#: src/reference/stdlib.md:349
 msgid "`JsonI64` / `JsonF64` / `JsonBool` / `JsonStr`"
 msgstr ""
 
-#: src/reference/stdlib.md:343
+#: src/reference/stdlib.md:349
 msgid "`i64` / `f64` / `bool` / `str`"
 msgstr ""
 
-#: src/reference/stdlib.md:343
+#: src/reference/stdlib.md:349
 msgid "both directions; `get()` unwraps"
 msgstr ""
 
-#: src/reference/stdlib.md:344
+#: src/reference/stdlib.md:350
 msgid "`JsonU64`"
 msgstr ""
 
-#: src/reference/stdlib.md:344
+#: src/reference/stdlib.md:350
 msgid "`u64`"
 msgstr ""
 
-#: src/reference/stdlib.md:344
+#: src/reference/stdlib.md:350
 msgid ""
 "decode-only — satisfaction is per-interface, so it satisfies "
 "`JsonDeserialize` alone (an out-of-`i64`\\-range producer has no encode "
 "row); `get()` unwraps"
 msgstr ""
 
-#: src/reference/stdlib.md:345
-msgid "`SOpt<T requires JsonSerialize>`"
+#: src/reference/stdlib.md:351
+msgid "`SOpt<T requires JsonSerialize \\| JsonDeserialize>`"
 msgstr ""
 
-#: src/reference/stdlib.md:345
+#: src/reference/stdlib.md:351
 msgid ""
-"both; `nil` → `null`, `null` → `nil`; `get()` unwraps (the encode-direction "
-"bound means a decode-only `T` cannot ride it)"
+"both; `nil` → `null`, `null` → `nil`; `get()` unwraps (the union bound "
+"requires BOTH interfaces, so a decode-only `T` such as `JsonU64` cannot ride "
+"it)"
 msgstr ""
 
-#: src/reference/stdlib.md:346
-msgid "`JsonArr<T requires JsonSerialize>`"
+#: src/reference/stdlib.md:352
+msgid "`JsonArr<T requires JsonSerialize \\| JsonDeserialize>`"
 msgstr ""
 
-#: src/reference/stdlib.md:346
+#: src/reference/stdlib.md:352
 msgid "both; `to_arr()` unwraps"
 msgstr ""
 
-#: src/reference/stdlib.md:347
-msgid "`JsonVec<T requires JsonSerialize>`"
+#: src/reference/stdlib.md:353
+msgid "`JsonVec<T requires JsonSerialize \\| JsonDeserialize>`"
 msgstr ""
 
-#: src/reference/stdlib.md:347
+#: src/reference/stdlib.md:353
 msgid "both (over pouch's `Vec<T>`); `to_vec()` unwraps"
 msgstr ""
 
-#: src/reference/stdlib.md:348
+#: src/reference/stdlib.md:354
 msgid ""
 "`JMapStr<V>` / `JMapI64<V>` / `JMapBool<V>` / `JMapU64<V>` / `JMapBytes<V>`"
 msgstr ""
 
-#: src/reference/stdlib.md:348
+#: src/reference/stdlib.md:354
 msgid "`HashMap<K, V>` per key shape"
 msgstr ""
 
-#: src/reference/stdlib.md:348
+#: src/reference/stdlib.md:354
 msgid ""
 "decode-only (over nmapset's `HashMap`); `to_map()` unwraps — `JMapBytes` "
 "answers the bytes-keys disclosure"
 msgstr ""
 
-#: src/reference/stdlib.md:349
+#: src/reference/stdlib.md:355
 msgid "`JSet<T requires JsonDeserialize>`"
 msgstr ""
 
-#: src/reference/stdlib.md:349
+#: src/reference/stdlib.md:355
 msgid "`HashSet<T>`"
 msgstr ""
 
-#: src/reference/stdlib.md:349
+#: src/reference/stdlib.md:355
 msgid "decode-only (over nmapset's `HashSet`); `to_set()` unwraps"
 msgstr ""
 
-#: src/reference/stdlib.md:351
+#: src/reference/stdlib.md:357
 msgid ""
 "**Numbers**: `i64` accepts integer lexemes only (overflow/decimal lexeme = "
 "`WrongType`, never a silent wrap); `f64` parses IEEE-exact in the common "
@@ -22183,13 +22222,13 @@ msgid ""
 "decimal."
 msgstr ""
 
-#: src/reference/stdlib.md:355
+#: src/reference/stdlib.md:361
 msgid ""
 "**Depth**: capped at 128 both directions, recoverable "
 "(`DecodeErrorKind::Depth` / `EncodeErrorKind::Depth`)."
 msgstr ""
 
-#: src/reference/stdlib.md:357
+#: src/reference/stdlib.md:363
 msgid ""
 "**Errors**: payloadless kind enums + fixed-field structs — `DecodeErrorKind "
 "{ Unexpected, Truncated, InvalidUtf8, WrongType, Depth, Trailing }`, "
@@ -22198,11 +22237,11 @@ msgid ""
 "`$.rows[3].name` path."
 msgstr ""
 
-#: src/reference/stdlib.md:362
+#: src/reference/stdlib.md:368
 msgid "`decodeJsonBytes` is strict UTF-8 (`InvalidUtf8`), never lossy."
 msgstr ""
 
-#: src/reference/stdlib.md:363
+#: src/reference/stdlib.md:369
 msgid ""
 "**Ownership**: json owns everything — the interfaces AND the container "
 "wrapper families (json's own source); `pouch` and `nmapset` are plain "
@@ -22210,17 +22249,17 @@ msgid ""
 "([dependency kinds](dependency-kinds.md))."
 msgstr ""
 
-#: src/reference/stdlib.md:368
+#: src/reference/stdlib.md:374
 msgid ""
 "The writer accumulates through `strbuild`'s `StringBuilder`; the reader "
 "rides the core `str::scan`/`starts_with` primitives and O(1) string views."
 msgstr ""
 
-#: src/reference/stdlib.md:372
+#: src/reference/stdlib.md:378
 msgid "`strbuild` — the builder"
 msgstr ""
 
-#: src/reference/stdlib.md:374
+#: src/reference/stdlib.md:380
 msgid ""
 "The builder is a host package now (the `ink`/`Logger` pattern): the "
 "`strbuild_host` decl pkg declares the five rows (`sb_new` / `sb_push` / "
@@ -22230,7 +22269,7 @@ msgid ""
 "bodies:"
 msgstr ""
 
-#: src/reference/stdlib.md:381
+#: src/reference/stdlib.md:387
 msgid ""
 "```rut\n"
 "use ink::{ Logger };\n"
@@ -22248,54 +22287,54 @@ msgid ""
 "```"
 msgstr ""
 
-#: src/reference/stdlib.md:402
+#: src/reference/stdlib.md:408
 msgid "`new()`"
 msgstr ""
 
-#: src/reference/stdlib.md:402
+#: src/reference/stdlib.md:408
 msgid ""
 "grow from small — the designated `[constructor]`: `StringBuilder()` spells it"
 msgstr ""
 
-#: src/reference/stdlib.md:403
+#: src/reference/stdlib.md:409
 msgid "`with_cap(cap: i32)`"
 msgstr ""
 
-#: src/reference/stdlib.md:403
+#: src/reference/stdlib.md:409
 msgid ""
 "pre-size to an octet hint (negative traps; the hint is advisory — identical "
 "behavior for every cap)"
 msgstr ""
 
-#: src/reference/stdlib.md:404
+#: src/reference/stdlib.md:410
 msgid "`append(self, value: str)`"
 msgstr ""
 
-#: src/reference/stdlib.md:404
+#: src/reference/stdlib.md:410
 msgid "amortized O(\\|s\\|), in place"
 msgstr ""
 
-#: src/reference/stdlib.md:405
+#: src/reference/stdlib.md:411
 msgid "`append_code(self, cp: u32)`"
 msgstr ""
 
-#: src/reference/stdlib.md:405
+#: src/reference/stdlib.md:411
 msgid "one codepoint; invalid scalars mint U+FFFD"
 msgstr ""
 
-#: src/reference/stdlib.md:406
+#: src/reference/stdlib.md:412
 msgid "codepoints so far, O(1)"
 msgstr ""
 
-#: src/reference/stdlib.md:407
+#: src/reference/stdlib.md:413
 msgid "`build() -> str`"
 msgstr ""
 
-#: src/reference/stdlib.md:407
+#: src/reference/stdlib.md:413
 msgid "fresh immutable str; the builder keeps its buffer"
 msgstr ""
 
-#: src/reference/stdlib.md:409
+#: src/reference/stdlib.md:415
 msgid ""
 "Sharing is the default: appends through an alias (or a parameter) land in "
 "the caller's document; copies happen at exactly two engineered points — "
@@ -22305,25 +22344,25 @@ msgid ""
 "engine allocations."
 msgstr ""
 
-#: src/reference/stdlib.md:416
+#: src/reference/stdlib.md:422
 msgid ""
 "Embedder side: `.pkg(rut_std::strbuild::pkg())` on the run chain. Offering "
 "`strbuild` pulls `strbuild_host` along (`deps`); offering `json` pulls both "
 "(its writer rides the builder)."
 msgstr ""
 
-#: src/reference/stdlib.md:420
+#: src/reference/stdlib.md:426
 msgid ""
 "For the common accumulator shape no builder is needed at all: `out = "
 "f\"{out}{t}\"` appends in place, linear in the total output "
 "([f-strings](literals-and-inference.md))."
 msgstr ""
 
-#: src/reference/stdlib.md:424
+#: src/reference/stdlib.md:430
 msgid "`calc`'s company: `async` and `http`"
 msgstr ""
 
-#: src/reference/stdlib.md:426
+#: src/reference/stdlib.md:432
 msgid ""
 "`async_host` declares the engine rows (`__launch`, `__abort`, `__sleep`, "
 "`__sleep_yield`); `futures` restores the typed surface: `launch_future(f: "
@@ -22334,7 +22373,7 @@ msgid ""
 "futures](launched-futures.md), [host futures](host-futures.md))."
 msgstr ""
 
-#: src/reference/stdlib.md:434
+#: src/reference/stdlib.md:440
 msgid ""
 "`http_host` declares the transport rows (three async, five sync readbacks) "
 "as a surface tree — `net/` carries the send + the response readbacks, "
@@ -22344,7 +22383,7 @@ msgid ""
 "constructs through the designated `new`:"
 msgstr ""
 
-#: src/reference/stdlib.md:442
+#: src/reference/stdlib.md:448
 msgid ""
 "```rut\n"
 "use http::{ HttpClient, ClientQueryMethod };\n"
@@ -22359,18 +22398,18 @@ msgid ""
 "```"
 msgstr ""
 
-#: src/reference/stdlib.md:454
+#: src/reference/stdlib.md:460
 msgid ""
 "`send` resolves at headers; `body(cx)` drains the wire; "
 "`byte_stream()`/`next(cx)` walk it in chunks. Status `0` is reserved for "
 "transport failure. The reqwest lane is native-only."
 msgstr ""
 
-#: src/reference/stdlib.md:458
+#: src/reference/stdlib.md:464
 msgid "Offering"
 msgstr ""
 
-#: src/reference/stdlib.md:460
+#: src/reference/stdlib.md:466
 msgid ""
 "`core` auto-rides — every run's `.compile()` offers the core prelude unless "
 "a pkg named `core` was offered. `calc` and the async pair are ordinary tree "
@@ -22381,7 +22420,7 @@ msgid ""
 "CLI](cli.md))."
 msgstr ""
 
-#: src/reference/stdlib.md:468
+#: src/reference/stdlib.md:474
 msgid ""
 "The rut packages over host rows (`ink`, `strbuild`, `nmapset`, `futures`, "
 "`http`) pull their decl pkg along (`deps`) — the embedder pairs the mount "
@@ -22391,7 +22430,7 @@ msgid ""
 "pipeline](compiler.md))."
 msgstr ""
 
-#: src/reference/stdlib.md:474
+#: src/reference/stdlib.md:480
 msgid ""
 "Generic exports link on their own: instantiation happens where the body "
 "lives, consumers request it, and `Vec<i64>` is one type program-wide ([the "
@@ -24474,9 +24513,9 @@ msgstr ""
 msgid ""
 "The only budget artifacts in the op stream are `LoopHead` markers: loop "
 "back-edges are natural checkpoints where fuel is accounted ([Resource limits "
-"and fuel](resource-limits.md)). Everything else — fuel countdown, heap "
-"checks at allocation, interrupt slices — lives in the interpreter loop, not "
-"in the code."
+"and fuel](resource-limits.md)). Everything else — the per-op fuel tick and "
+"the heap charge at every allocation — lives in the interpreter loop, not in "
+"the code."
 msgstr ""
 
 #: src/reference/module-binary.md:3
@@ -24883,26 +24922,31 @@ msgstr ""
 
 #: src/reference/module-binary.md:211
 msgid ""
-"Module-level `let` and `static` initializers are **folded at compile time**. "
-"The surviving forms are: literals, enum members, operators over constants, "
-"record literals (immortal constant-pool cells), fixed-array literals, "
-"`Vec<T>(n)` / `Vec::from([...])` blobs, the layout builtins, and `Array<T, "
-"N>.len()` with const-index bounds checks. A call to a user function in an "
-"initializer is a compile error — there is no deferred evaluation."
+"Module-level `let` initializers must be **load-time literals** — the checker "
+"accepts an `Int`, `Float`, `Str`, or `Bool` literal only:"
 msgstr ""
 
-#: src/reference/module-binary.md:219
+#: src/reference/module-binary.md:218
 msgid ""
-"`type_id<T>()` never executes: it folds to a constant from the type table. "
-"`debug` position folding and trace symbolication are covered in "
-"[Diagnostics, traces, and symbolication](diagnostics.md)."
+"An operator, an enum member, a record literal, a fixed-array literal, "
+"`type_id<T>()`, `[nil; n]`, or `Vec<T>(n)` is refused there; a call to a "
+"user function is the same compile error — there is no deferred evaluation. "
+"The literal that survives becomes a constant-pool entry at emit."
 msgstr ""
 
-#: src/reference/module-binary.md:223 src/reference/symbol-stripping.md:152
+#: src/reference/module-binary.md:224
+msgid ""
+"`type_id<T>()`, wherever it is spelled, never executes: it folds to a "
+"constant from the type table. `debug` position folding and trace "
+"symbolication are covered in [Diagnostics, traces, and "
+"symbolication](diagnostics.md)."
+msgstr ""
+
+#: src/reference/module-binary.md:229 src/reference/symbol-stripping.md:152
 msgid "What is not here"
 msgstr ""
 
-#: src/reference/module-binary.md:225
+#: src/reference/module-binary.md:231
 msgid ""
 "A `.d.rut` declaration surface does not produce a binary — it has no bodies, "
 "so it compiles to a signature surface only ([Host fns and declaration "
@@ -24941,7 +24985,7 @@ msgstr ""
 msgid "Two files leave the build:"
 msgstr ""
 
-#: src/reference/symbol-stripping.md:26 src/reference/cli.md:378
+#: src/reference/symbol-stripping.md:26 src/reference/cli.md:383
 msgid "file"
 msgstr ""
 
@@ -25807,37 +25851,40 @@ msgid ""
 "frontend](frontend.md)):"
 msgstr ""
 
-#: src/reference/diagnostics.md:18
+#: src/reference/diagnostics.md:17
 msgid ""
 "Byte-offset spans; `file` is the module the span indexes, as the producer's "
 "module name — a pkg spec (`hello`), a mounted child under it "
 "(`hello/layout`), or a formatter's real path — never a filesystem path, "
 "since loaded pkgs deliberately carry none. `None` means there is no position "
-"to show (a graph-level structural refusal) or the producer did not label."
+"to show (a graph-level structural refusal) or the producer did not attribute "
+"a file."
 msgstr ""
 
-#: src/reference/diagnostics.md:25
+#: src/reference/diagnostics.md:24
 msgid ""
 "One renderer (`render_diags`) produces the caret form: a primary `error:` "
-"line, the `-->` arrow with the file and the 1-based line and char column, "
-"the offending source line with carets under the span, secondary labels, "
-"notes. With a file and its source text:"
+"line, the `-->` arrow with the 1-based line and char column, then the "
+"offending source line with carets under the span:"
 msgstr ""
 
-#: src/reference/diagnostics.md:37
+#: src/reference/diagnostics.md:35
 msgid ""
-"The fallbacks degrade honestly: a diag with no file spells the position "
-"alone (`--> line L, column C`), a file whose text is not loaded renders the "
-"bare arrow (`--> hello`), and a diag with neither is just the `error:` line. "
-"`rut run` renders the whole graph grouped by file — diags sort by (file, "
-"span start), the root labeled with its spec, each child with `spec/path`, "
-"each dep with its own spec — so output is stable across files and phases. "
-"The parser recovers at statement boundaries and keeps going, so a file "
-"yields many diagnostics, not one. Compilation stops before IR if any "
+"That `--> line L, column C` spelling is the file-less fallback (the "
+"single-file lanes). When the diag names a file the arrow spells `--> "
+"<file>:<line>:<col>`: `rut run` labels the graph's root with its pkg spec "
+"(`--> hello:3:5`), and `rut dump` labels a semantic diag's file `main` (`--> "
+"main:3:5`). A file whose text is not loaded renders the bare arrow (`--> "
+"hello`), and a diag with neither a file nor source text is just the `error:` "
+"line. `rut run` renders the whole graph grouped by file — diags sort by "
+"(file, span start), the root labeled with its spec, each child with "
+"`spec/path`, each dep with its own spec — so output is stable across files "
+"and phases. The parser recovers at statement boundaries and keeps going, so "
+"a file yields many diagnostics, not one. Compilation stops before IR if any "
 "diagnostic exists; there is no warnings-only lane."
 msgstr ""
 
-#: src/reference/diagnostics.md:48
+#: src/reference/diagnostics.md:49
 msgid ""
 "A compile trap worth knowing: name-level misses are not all one shape. A "
 "name nothing offers is the bare _unresolved name_; a head that IS mounted "
@@ -25845,43 +25892,43 @@ msgid ""
 "mount edge and the fix ([Dependency kinds](dependency-kinds.md))."
 msgstr ""
 
-#: src/reference/diagnostics.md:54
+#: src/reference/diagnostics.md:55
 msgid "Runtime traces"
 msgstr ""
 
-#: src/reference/diagnostics.md:56
+#: src/reference/diagnostics.md:57
 msgid "Capture — raw pcs, nothing else"
 msgstr ""
 
-#: src/reference/diagnostics.md:58
+#: src/reference/diagnostics.md:59
 msgid ""
 "`capture_stacktrace() -> StackTrace` (a builtin: the engine itself "
 "implements it, compiler-lowered) walks the frame stack and stores raw frames:"
 msgstr ""
 
-#: src/reference/diagnostics.md:62
+#: src/reference/diagnostics.md:63
 msgid ""
 "the active frame innermost, then every saved frame outward, as `(func, "
 "call-site pc)` pairs — about 8 bytes per frame;"
 msgstr ""
 
-#: src/reference/diagnostics.md:64
+#: src/reference/diagnostics.md:65
 msgid ""
 "**no name lookup, no source access, no symbolication at capture** — capture "
 "is cheap enough for any error path;"
 msgstr ""
 
-#: src/reference/diagnostics.md:66
+#: src/reference/diagnostics.md:67
 msgid ""
 "saved-frame pcs are resume points, so symbolication backs one op to the call "
 "site;"
 msgstr ""
 
-#: src/reference/diagnostics.md:68
+#: src/reference/diagnostics.md:69
 msgid "target-independent by construction — the same walk runs on wasm."
 msgstr ""
 
-#: src/reference/diagnostics.md:70
+#: src/reference/diagnostics.md:71
 msgid ""
 "The result lives in a dedicated immutable trace cell: a snapshot, shared by "
 "handle, safe to store in error tuples. It takes no user impls and **never "
@@ -25889,7 +25936,7 @@ msgid ""
 "host boundary](../core-concepts/host-boundary.md))."
 msgstr ""
 
-#: src/reference/diagnostics.md:75
+#: src/reference/diagnostics.md:76
 msgid ""
 "```rut\n"
 "builtin class StackTrace {\n"
@@ -25902,112 +25949,112 @@ msgid ""
 "```"
 msgstr ""
 
-#: src/reference/diagnostics.md:85
+#: src/reference/diagnostics.md:86
 msgid "Out-of-range `i` traps `IndexOutOfBounds` — the index is a bug, not data."
 msgstr ""
 
-#: src/reference/diagnostics.md:87
+#: src/reference/diagnostics.md:88
 msgid "The tiers"
 msgstr ""
 
-#: src/reference/diagnostics.md:89
+#: src/reference/diagnostics.md:90
 msgid "tier"
 msgstr ""
 
-#: src/reference/diagnostics.md:89
+#: src/reference/diagnostics.md:90
 msgid "when it exists"
 msgstr ""
 
-#: src/reference/diagnostics.md:91
+#: src/reference/diagnostics.md:92
 msgid "`StackTrace` capture"
 msgstr ""
 
-#: src/reference/diagnostics.md:91
+#: src/reference/diagnostics.md:92
 msgid "explicit; a depth-proportional frame walk (~30 ns base + ~0.2 ns/frame)"
 msgstr ""
 
-#: src/reference/diagnostics.md:91
+#: src/reference/diagnostics.md:92
 msgid ""
 "opt-in at raise sites — a rich err carries `trace: ?StackTrace` only where "
 "the producer decides the cost is worth it"
 msgstr ""
 
-#: src/reference/diagnostics.md:92
+#: src/reference/diagnostics.md:93
 msgid "`Trap`"
 msgstr ""
 
-#: src/reference/diagnostics.md:92
+#: src/reference/diagnostics.md:93
 msgid "automatic at trap unwind"
 msgstr ""
 
-#: src/reference/diagnostics.md:92
+#: src/reference/diagnostics.md:93
 msgid "bugs, overflow, `panic` — the loud channel carries `kind` + message"
 msgstr ""
 
-#: src/reference/diagnostics.md:93
+#: src/reference/diagnostics.md:94
 msgid "`?` / err propagation"
 msgstr ""
 
-#: src/reference/diagnostics.md:93
+#: src/reference/diagnostics.md:94
 msgid "zero cost — no auto-capture on propagation"
 msgstr ""
 
-#: src/reference/diagnostics.md:93
+#: src/reference/diagnostics.md:94
 msgid "always"
 msgstr ""
 
-#: src/reference/diagnostics.md:95
+#: src/reference/diagnostics.md:96
 msgid ""
 "Opt-in is the design: the cheap error path stays cheap, and capture is "
 "pay-per-capture."
 msgstr ""
 
-#: src/reference/diagnostics.md:98
+#: src/reference/diagnostics.md:99
 msgid "Symbolication — lazy, per index"
 msgstr ""
 
-#: src/reference/diagnostics.md:100
+#: src/reference/diagnostics.md:101
 msgid "Members symbolicate **on access**, against the loaded program:"
 msgstr ""
 
-#: src/reference/diagnostics.md:102
+#: src/reference/diagnostics.md:103
 msgid "`name(i)` — one interner lookup for frame _i_'s function name."
 msgstr ""
 
-#: src/reference/diagnostics.md:103
+#: src/reference/diagnostics.md:104
 msgid ""
 "`line(i)` / `col(i)` — one direct read of the function's position table (pc "
 "→ `(line, col)`, parallel to the pc → byte-offset span table; [Module binary "
 "and verification](module-binary.md))."
 msgstr ""
 
-#: src/reference/diagnostics.md:106
+#: src/reference/diagnostics.md:107
 msgid "`render()` — the only whole-trace pass, innermost first:"
 msgstr ""
 
-#: src/reference/diagnostics.md:113
+#: src/reference/diagnostics.md:114
 msgid ""
 "There is no eager symbolication and no frames array — a frame array would "
 "mint rut-side data per access and fix the representation into the surface."
 msgstr ""
 
-#: src/reference/diagnostics.md:117
+#: src/reference/diagnostics.md:118
 msgid "Restoration paths"
 msgstr ""
 
-#: src/reference/diagnostics.md:119
+#: src/reference/diagnostics.md:120
 msgid ""
 "A trace is captured against whatever is loaded — possibly a stripped, "
 "published artifact. Four ways back to names:"
 msgstr ""
 
-#: src/reference/diagnostics.md:122
+#: src/reference/diagnostics.md:123
 msgid ""
 "**In-VM (the default).** The loaded program carries its interner and "
 "position tables; every member call symbolicates from them."
 msgstr ""
 
-#: src/reference/diagnostics.md:124
+#: src/reference/diagnostics.md:125
 msgid ""
 "**Recompile by determinism.** Serialization is deterministic — same source + "
 "same compiler version ⇒ byte-identical binary ⇒ identical pcs — so tooling "
@@ -26015,13 +26062,13 @@ msgid ""
 "compiler pipeline](compiler.md))."
 msgstr ""
 
-#: src/reference/diagnostics.md:128
+#: src/reference/diagnostics.md:129
 msgid ""
 "**Stripped, no artifact.** Traces still _work_: they degrade to the pc-only "
 "render form above, and stay restorable via path 2 later."
 msgstr ""
 
-#: src/reference/diagnostics.md:130
+#: src/reference/diagnostics.md:131
 msgid ""
 "**The stripped artifact's private symbol table.** Name resolution and "
 "position lookup follow the loaded program — so supplying a `.rutsym` sidecar "
@@ -26031,11 +26078,11 @@ msgid ""
 "refusal — is [Symbol stripping and `.rutsym` sidecars](symbol-stripping.md)."
 msgstr ""
 
-#: src/reference/diagnostics.md:138
+#: src/reference/diagnostics.md:139
 msgid "Trap messages"
 msgstr ""
 
-#: src/reference/diagnostics.md:140
+#: src/reference/diagnostics.md:141
 msgid ""
 "A trap renders as its kind plus message, e.g. `IndexOutOfBounds: index 9, "
 "len 3`, `OutOfFuel: fuel exhausted — the frame is parked; add fuel and "
@@ -26045,23 +26092,23 @@ msgid ""
 "([VM core](vm-core.md))."
 msgstr ""
 
-#: src/reference/diagnostics.md:147
+#: src/reference/diagnostics.md:148
 msgid "Where the surfaces live"
 msgstr ""
 
-#: src/reference/diagnostics.md:149
+#: src/reference/diagnostics.md:150
 msgid ""
 "`panic(msg)` — the core builtin that raises; the `[disposal]` marker is the "
 "cleanup surface ([The Rc heap and destructors](rc-heap.md))."
 msgstr ""
 
-#: src/reference/diagnostics.md:152
+#: src/reference/diagnostics.md:153
 msgid ""
 "`capture_stacktrace()` and the `StackTrace` class — ambient builtin names, "
 "no `use` required ([core and the swappable packages](stdlib.md))."
 msgstr ""
 
-#: src/reference/diagnostics.md:155
+#: src/reference/diagnostics.md:156
 msgid ""
 "The web runner surfaces the same data in its envelope: `\"trap\"` beside "
 "`\"err\"` ([Loading and the embed loop](loading.md))."
@@ -27956,7 +28003,7 @@ msgid ""
 "with clap's message. The usage sketch above stays the quick map."
 msgstr ""
 
-#: src/reference/cli.md:36 src/reference/cli.md:378
+#: src/reference/cli.md:36 src/reference/cli.md:383
 msgid "`run`"
 msgstr ""
 
@@ -28026,7 +28073,7 @@ msgstr ""
 msgid "Flags and defaults:"
 msgstr ""
 
-#: src/reference/cli.md:65 src/reference/cli.md:108 src/reference/cli.md:264
+#: src/reference/cli.md:65 src/reference/cli.md:113 src/reference/cli.md:269
 msgid "item"
 msgstr ""
 
@@ -28068,15 +28115,18 @@ msgid ""
 msgstr ""
 
 #: src/reference/cli.md:70
-msgid "fixed at 64 MiB"
+msgid "fixed at 64 MiB, charged at every heap allocation"
 msgstr ""
 
 #: src/reference/cli.md:71
-msgid "interrupt check"
+msgid "interrupts"
 msgstr ""
 
 #: src/reference/cli.md:71
-msgid "every 1024 ops"
+msgid ""
+"no interrupt lane: `interrupt_every` is construct-time config that gates "
+"nothing today — a runaway program is stopped by the per-op fuel tick, never "
+"preempted"
 msgstr ""
 
 #: src/reference/cli.md:73
@@ -28113,23 +28163,27 @@ msgstr ""
 
 #: src/reference/cli.md:84
 msgid ""
-"Execution: `main` is called with no arguments; then the async driving loop "
-"runs — drain the ready queue, advance the virtual clock to the next timer "
-"deadline, repeat until no frames and no pending work remain. The loop is "
-"capped, so a program that never idles fails loudly instead of hanging."
+"Execution: the **designated entry fn** is called once with no arguments and "
+"a `()` expectation — an entry fn that declares parameters or a result arrow "
+"traps at the boundary instead of running. There is no `main` convention: the "
+"entry's name is whatever it declares, and without `--entry` exactly one "
+"`entry fn` must exist. Then the async driving loop runs — drain the ready "
+"queue, advance the virtual clock to the next timer deadline, repeat until no "
+"frames and no pending work remain. The loop is capped, so a program that "
+"never idles fails loudly instead of hanging."
 msgstr ""
 
-#: src/reference/cli.md:89
+#: src/reference/cli.md:94
 msgid ""
 "A `.d.rut` input is refused: a declaration file is a surface, not a runnable "
 "module ([host fns and declaration files](host-fns.md))."
 msgstr ""
 
-#: src/reference/cli.md:95
+#: src/reference/cli.md:100
 msgid "# scaffold a hello-world module directory\n"
 msgstr ""
 
-#: src/reference/cli.md:98
+#: src/reference/cli.md:103
 msgid ""
 "Scaffolds a hello-world module directory in **three files**: the manifest "
 "with the full swappable std set as **unpinned** url deps, the matching "
@@ -28139,43 +28193,43 @@ msgid ""
 "`rut run hello` prints `hello, rut!`."
 msgstr ""
 
-#: src/reference/cli.md:106
+#: src/reference/cli.md:111
 msgid "Behavior:"
 msgstr ""
 
-#: src/reference/cli.md:110
+#: src/reference/cli.md:115
 msgid "package name"
 msgstr ""
 
-#: src/reference/cli.md:110
+#: src/reference/cli.md:115
 msgid ""
 "derived from the target's basename — bare `[a-zA-Z0-9_]+`, non-empty (the "
 "manifest's law). An illegal name is refused, never sanitized (exit 2)"
 msgstr ""
 
-#: src/reference/cli.md:111
+#: src/reference/cli.md:116
 msgid "clobber refusal"
 msgstr ""
 
-#: src/reference/cli.md:111
+#: src/reference/cli.md:116
 msgid ""
 "a target already holding a `rut.jsonc`, a `src/mod.rut`, or a `rut.lock` is "
 "refused (exit 2, naming the file) — other pre-existing files are fine"
 msgstr ""
 
-#: src/reference/cli.md:112
+#: src/reference/cli.md:117
 msgid "parents"
 msgstr ""
 
-#: src/reference/cli.md:112
+#: src/reference/cli.md:117
 msgid "created as needed — `rut new a/b/hello` works"
 msgstr ""
 
-#: src/reference/cli.md:113
+#: src/reference/cli.md:118
 msgid "files written"
 msgstr ""
 
-#: src/reference/cli.md:113
+#: src/reference/cli.md:118
 msgid ""
 "`rut.jsonc` — the derived name plus the whole swappable std set (nine "
 "packages) as unpinned url deps at the `@std-v18` tag (source zips); "
@@ -28183,11 +28237,11 @@ msgid ""
 "([`install`](#install) is its re-writer); `src/mod.rut` — the ink hello"
 msgstr ""
 
-#: src/reference/cli.md:114
+#: src/reference/cli.md:119
 msgid "first run"
 msgstr ""
 
-#: src/reference/cli.md:114
+#: src/reference/cli.md:119
 msgid ""
 "**refuses**: `rut run`/`rut pack` never download — `rut install <dir>` "
 "fetches the std set (9 source zips) into the global dep store (with "
@@ -28195,11 +28249,11 @@ msgid ""
 "every run reads the store only"
 msgstr ""
 
-#: src/reference/cli.md:116
+#: src/reference/cli.md:121
 msgid "The three created files, for `rut new hello` — all verbatim:"
 msgstr ""
 
-#: src/reference/cli.md:118
+#: src/reference/cli.md:123
 msgid ""
 "```text\n"
 "{\n"
@@ -28255,35 +28309,35 @@ msgid ""
 "    { \"pkg\": \"flow\",     \"url\": "
 "\"https://cdn.jsdelivr.net/gh/hpp2334/rut@std-v18/dist/std/flow.zip\",     "
 "\"sha256\": "
-"\"19545c61748bffa057cf6e5bea29bab728417fbcc6b84759216f7f3f68bbebc1\" },\n"
+"\"5987d7691269ea5fbf4a4cdf79733b9339a55ee57daa2d7f9b761acc3999c980\" },\n"
 "    { \"pkg\": \"futures\",  \"url\": "
 "\"https://cdn.jsdelivr.net/gh/hpp2334/rut@std-v18/dist/std/futures.zip\",  "
 "\"sha256\": "
-"\"e143211a0a6e9ddb0a3ccb5e3e79796d85b2ee627ee4c63f046dc583a55eb711\" },\n"
+"\"c80977aa16abe61a7b7616703d688a1ae9100836f96806b70cd64e63aef7668e\" },\n"
 "    { \"pkg\": \"http\",     \"url\": "
 "\"https://cdn.jsdelivr.net/gh/hpp2334/rut@std-v18/dist/std/http.zip\",     "
 "\"sha256\": "
-"\"9c6855cd58d7d888515fff691787a42708cef512423dc6040f8e214dbd00cbac\" },\n"
+"\"e4b4f9d1e4fa3b105d01d949cc57f64b894ed59c1fbfe3d297b9484064fe7317\" },\n"
 "    { \"pkg\": \"ink\",      \"url\": "
 "\"https://cdn.jsdelivr.net/gh/hpp2334/rut@std-v18/dist/std/ink.zip\",      "
 "\"sha256\": "
-"\"eb2b568316efb77286cc5d94bec24a94f45d528cf244f54b91cb0d619dc53cc1\" },\n"
+"\"359a93a2e32f2ef09ae710b81b57ba0a691b588971dcf7110301b39a9ffba11e\" },\n"
 "    { \"pkg\": \"json\",     \"url\": "
 "\"https://cdn.jsdelivr.net/gh/hpp2334/rut@std-v18/dist/std/json.zip\",     "
 "\"sha256\": "
-"\"653867a4451d8eb991cfdd59c9196d95c92ecc7b3da530519cba15e68951b18a\" },\n"
+"\"50ac914f50c4903a4c4806381c24ddc7c54370edb7189512906fe01aa3135e15\" },\n"
 "    { \"pkg\": \"nmapset\",  \"url\": "
 "\"https://cdn.jsdelivr.net/gh/hpp2334/rut@std-v18/dist/std/nmapset.zip\",  "
 "\"sha256\": "
-"\"1a59e0e4cab803dcd176ac919160cb9dbbc305011fb563dcc1d8bcd82307f5dd\" },\n"
+"\"959ae7cc249b4b5ccb953487a917edf96b282c29c5a53943c2d060c361421eb5\" },\n"
 "    { \"pkg\": \"pouch\",    \"url\": "
 "\"https://cdn.jsdelivr.net/gh/hpp2334/rut@std-v18/dist/std/pouch.zip\",    "
 "\"sha256\": "
-"\"5740cb0b874a2c9a81f1e0d9534520fe4067e5ec48320b82cf7147e2d6b34d36\" },\n"
+"\"ce5f554cdf6f6dbfe758281e598e18b46158db7be26277b662c9ed3c1a5c71a7\" },\n"
 "    { \"pkg\": \"strbuild\", \"url\": "
 "\"https://cdn.jsdelivr.net/gh/hpp2334/rut@std-v18/dist/std/strbuild.zip\", "
 "\"sha256\": "
-"\"1eedb374bcb52419b9ec82d9ea6f23fb3534faa0a4c75e4d03afedc6d7dabe33\" }\n"
+"\"b1000f1752fd24970c9bb0e519a45fbf7184d98a54318c0a19edccae4a4c273c\" }\n"
 "  ]\n"
 "}\n"
 "\n"
@@ -28298,23 +28352,23 @@ msgid ""
 "```"
 msgstr ""
 
-#: src/reference/cli.md:177
+#: src/reference/cli.md:182
 msgid "`install`"
 msgstr ""
 
-#: src/reference/cli.md:180
+#: src/reference/cli.md:185
 msgid "# resolve the url deps of the working directory, write rut.lock\n"
 msgstr ""
 
-#: src/reference/cli.md:181
+#: src/reference/cli.md:186
 msgid "# resolve the url deps, write rut.lock\n"
 msgstr ""
 
-#: src/reference/cli.md:182
+#: src/reference/cli.md:187
 msgid "# CI: verify against rut.lock, write nothing\n"
 msgstr ""
 
-#: src/reference/cli.md:185
+#: src/reference/cli.md:190
 msgid ""
 "Resolves the closure's url deps and **pins them in `rut.lock`** — the pin "
 "ledger beside the walk root's `rut.jsonc`, one per root, **committed** (like "
@@ -28328,7 +28382,7 @@ msgid ""
 "nothing to install."
 msgstr ""
 
-#: src/reference/cli.md:196
+#: src/reference/cli.md:201
 msgid ""
 "The lock is machine-generated and **byte-deterministic** — rows sorted by "
 "url, fixed field order (`pkg`/`url`/`sha256`), a header comment, a trailing "
@@ -28341,11 +28395,11 @@ msgid ""
 "the record that the closure resolved to nothing."
 msgstr ""
 
-#: src/reference/cli.md:207
+#: src/reference/cli.md:212
 msgid "The streams: progress on **stderr**, summaries on **stdout** —"
 msgstr ""
 
-#: src/reference/cli.md:209
+#: src/reference/cli.md:214
 msgid ""
 "```text\n"
 "install: ink — downloading "
@@ -28357,14 +28411,14 @@ msgid ""
 "```"
 msgstr ""
 
-#: src/reference/cli.md:216
+#: src/reference/cli.md:221
 msgid ""
 "(a warm cache swaps the miss pair for one `install: ink — cache hit (2883 "
 "bytes)` line — no fake re-download flash; a re-run over an identical lock "
 "prints `rut.lock unchanged (1 rows, no drift)` and writes nothing)."
 msgstr ""
 
-#: src/reference/cli.md:221
+#: src/reference/cli.md:226
 msgid ""
 "`--locked` never writes and never evicts: it fetches the same closure and "
 "verifies every row against the existing lock — the CI gate. A store miss "
@@ -28373,71 +28427,71 @@ msgid ""
 "is up, and the later offline `run` hits only the store."
 msgstr ""
 
-#: src/reference/cli.md:228
+#: src/reference/cli.md:233
 msgid "`--locked` case"
 msgstr ""
 
-#: src/reference/cli.md:230
+#: src/reference/cli.md:235
 msgid "lock fresh"
 msgstr ""
 
-#: src/reference/cli.md:230
+#: src/reference/cli.md:235
 msgid ""
 "`install: 1 url deps verified against rut.lock — 0 downloaded, 1 cache hits, "
 "0 drift`, exit 0"
 msgstr ""
 
-#: src/reference/cli.md:231
+#: src/reference/cli.md:236
 msgid "no lock, non-empty closure"
 msgstr ""
 
-#: src/reference/cli.md:231
+#: src/reference/cli.md:236
 msgid ""
 "the install recipe, exit 2: ``install: no rut.lock in <dir> — run `rut "
 "install` first``"
 msgstr ""
 
-#: src/reference/cli.md:232
+#: src/reference/cli.md:237
 msgid "no lock, empty closure"
 msgstr ""
 
-#: src/reference/cli.md:232
+#: src/reference/cli.md:237
 msgid "passes lockless — a no-dep project needs no lock"
 msgstr ""
 
-#: src/reference/cli.md:233
+#: src/reference/cli.md:238
 msgid "a dep's url has no lock row"
 msgstr ""
 
-#: src/reference/cli.md:233
+#: src/reference/cli.md:238
 msgid "the `+` diff row, exit 2: ``+ <url> (dep `X` has no rut.lock row)``"
 msgstr ""
 
-#: src/reference/cli.md:234
+#: src/reference/cli.md:239
 msgid "fetched bytes break the lock's pin"
 msgstr ""
 
-#: src/reference/cli.md:234
+#: src/reference/cli.md:239
 msgid ""
 "the `~` row, exit 2 — it names the url and BOTH hashes: ``~ <url> (dep `X` "
 "pins <lock sha>, the fetched bytes hash to <served sha>)``"
 msgstr ""
 
-#: src/reference/cli.md:235
+#: src/reference/cli.md:240
 msgid "a lock row no dep names anymore"
 msgstr ""
 
-#: src/reference/cli.md:235
+#: src/reference/cli.md:240
 msgid "the `-` row, exit 2: `- <url> (no dep names this url anymore)`"
 msgstr ""
 
-#: src/reference/cli.md:237
+#: src/reference/cli.md:242
 msgid ""
 "Any drift prints `install: --locked found drift, rut.lock untouched:` and "
 "the diff block; the lock file on disk is byte-for-byte what it was."
 msgstr ""
 
-#: src/reference/cli.md:240
+#: src/reference/cli.md:245
 msgid ""
 "**Concurrent installs serialize per project.** Before touching anything — "
 "every mode, `--locked` included — `install` takes an exclusive, "
@@ -28447,7 +28501,7 @@ msgid ""
 "same project waits, announcing it on stderr —"
 msgstr ""
 
-#: src/reference/cli.md:252
+#: src/reference/cli.md:257
 msgid ""
 "— and proceeds when the holder finishes (a crashed or Ctrl-C'd holder "
 "releases automatically; the lock rides the file descriptor). A holder that "
@@ -28457,21 +28511,21 @@ msgid ""
 "reads safe by construction."
 msgstr ""
 
-#: src/reference/cli.md:259
+#: src/reference/cli.md:264
 msgid "The global dep store"
 msgstr ""
 
-#: src/reference/cli.md:261
+#: src/reference/cli.md:266
 msgid ""
 "`install` fills the store — the online lane; `run`/`pack` read the same "
 "store with the wire off:"
 msgstr ""
 
-#: src/reference/cli.md:266
+#: src/reference/cli.md:271
 msgid "store root"
 msgstr ""
 
-#: src/reference/cli.md:266
+#: src/reference/cli.md:271
 msgid ""
 "`$RUT_HOME/deps/<name>@<sha256[:16]>/` — the global dep store: `RUT_HOME` "
 "overrides the home (`~/.rut` the default), the pin IS the address (the "
@@ -28484,21 +28538,21 @@ msgid ""
 "[loading](loading.md))"
 msgstr ""
 
-#: src/reference/cli.md:267
+#: src/reference/cli.md:272
 msgid "run cache"
 msgstr ""
 
-#: src/reference/cli.md:267
+#: src/reference/cli.md:272
 msgid ""
 "`$RUT_HOME/run/<key>.rutbundle` — the whole-program archive cache `run` "
 "replays ([`run`](#run))"
 msgstr ""
 
-#: src/reference/cli.md:268
+#: src/reference/cli.md:273
 msgid "install locks"
 msgstr ""
 
-#: src/reference/cli.md:268
+#: src/reference/cli.md:273
 msgid ""
 "`$RUT_HOME/locks/<sha256(canonical project path)[:16]>.lock` — `install`'s "
 "per-project kernel-enforced mutex (stable files, created if missing; a "
@@ -28507,19 +28561,19 @@ msgid ""
 "concurrent installs on DIFFERENT projects safe in parallel"
 msgstr ""
 
-#: src/reference/cli.md:269
+#: src/reference/cli.md:274
 msgid "store-first"
 msgstr ""
 
-#: src/reference/cli.md:269
+#: src/reference/cli.md:274
 msgid "a hit never touches the network — offline reloads are the point"
 msgstr ""
 
-#: src/reference/cli.md:270
+#: src/reference/cli.md:275
 msgid "miss (install)"
 msgstr ""
 
-#: src/reference/cli.md:270
+#: src/reference/cli.md:275
 msgid ""
 "GET (redirects on) under hard timeouts (10 s connect, 60 s whole-request — a "
 "stalled host fails loudly, never hangs), non-2xx is a loud error, a size cap "
@@ -28528,19 +28582,19 @@ msgid ""
 "atomic rename, so a reader never sees a partial dep"
 msgstr ""
 
-#: src/reference/cli.md:271
+#: src/reference/cli.md:276
 msgid "miss (run/pack)"
 msgstr ""
 
-#: src/reference/cli.md:271
+#: src/reference/cli.md:276
 msgid "the loud install-first refusal — run and pack never download"
 msgstr ""
 
-#: src/reference/cli.md:272
+#: src/reference/cli.md:277
 msgid "poisoned entry"
 msgstr ""
 
-#: src/reference/cli.md:272
+#: src/reference/cli.md:277
 msgid ""
 "the pin is the loader's law at the mount door — the pin's source is the "
 "root's `rut.lock`; when the door refuses, the CLI deletes the store dir "
@@ -28548,100 +28602,100 @@ msgid ""
 "heals"
 msgstr ""
 
-#: src/reference/cli.md:274
+#: src/reference/cli.md:279
 msgid ""
 "The wire is `rut-native`'s `http` feature (default on) — a build with "
 "`default-features = false` (the wasm graphs) has no transport at all: a "
 "store miss on the download lane errors loudly instead of networking."
 msgstr ""
 
-#: src/reference/cli.md:278 src/reference/cli.md:378
+#: src/reference/cli.md:283 src/reference/cli.md:383
 msgid "`fmt`"
 msgstr ""
 
-#: src/reference/cli.md:285
+#: src/reference/cli.md:290
 msgid "The canonical formatter. Behavior:"
 msgstr ""
 
-#: src/reference/cli.md:287
+#: src/reference/cli.md:292
 msgid ""
 "a **directory** argument is walked recursively; every `.rut` file is "
 "collected (sorted) and formatted;"
 msgstr ""
 
-#: src/reference/cli.md:289
+#: src/reference/cli.md:294
 msgid ""
 "style comes from the nearest ancestor `rut.jsonc`'s `style` block; no "
 "manifest → defaults ([project structure](project-structure.md));"
 msgstr ""
 
-#: src/reference/cli.md:291
+#: src/reference/cli.md:296
 msgid "`.d.rut` files are formatted in declaration mode;"
 msgstr ""
 
-#: src/reference/cli.md:292
+#: src/reference/cli.md:297
 msgid ""
 "a file that does not parse clean is **refused** (diagnostics listed, nonzero "
 "exit) — fmt never reformats on a parse error;"
 msgstr ""
 
-#: src/reference/cli.md:294
+#: src/reference/cli.md:299
 msgid ""
 "default mode rewrites in place and prints `formatted: <path>` per changed "
 "file;"
 msgstr ""
 
-#: src/reference/cli.md:296
+#: src/reference/cli.md:301
 msgid ""
 "`--check` writes nothing: it prints `unformatted: <path>` for each "
 "would-change file and exits nonzero, or `fmt: N file(s) formatted` when "
 "everything is clean."
 msgstr ""
 
-#: src/reference/cli.md:300
+#: src/reference/cli.md:305
 msgid "`pack`"
 msgstr ""
 
-#: src/reference/cli.md:303
+#: src/reference/cli.md:308
 msgid "# --mode source is the default: the .zip\n"
 msgstr ""
 
-#: src/reference/cli.md:305
+#: src/reference/cli.md:310
 msgid "# packed plugins/server -> plugins/server.rutbundle (18304 bytes)\n"
 msgstr ""
 
-#: src/reference/cli.md:307
+#: src/reference/cli.md:312
 msgid ""
 "# packed plugins/server -> plugins/server.rutbundle (...) + symbol table\n"
 msgstr ""
 
-#: src/reference/cli.md:312
+#: src/reference/cli.md:317
 msgid ""
 "Packs a module directory into **one deterministic artifact** — same input, "
 "same bytes — in one of two modes:"
 msgstr ""
 
-#: src/reference/cli.md:315 src/reference/cli.md:378
+#: src/reference/cli.md:320 src/reference/cli.md:383
 msgid "mode"
 msgstr ""
 
-#: src/reference/cli.md:315
+#: src/reference/cli.md:320
 msgid "default out"
 msgstr ""
 
-#: src/reference/cli.md:315
+#: src/reference/cli.md:320
 msgid "what rides"
 msgstr ""
 
-#: src/reference/cli.md:317
+#: src/reference/cli.md:322
 msgid "`--mode source` (the default)"
 msgstr ""
 
-#: src/reference/cli.md:317
+#: src/reference/cli.md:322
 msgid "`<dir>.zip`"
 msgstr ""
 
-#: src/reference/cli.md:317
+#: src/reference/cli.md:322
 msgid ""
 "the **source zip** — the directory packed for travel: `rut.jsonc` at the "
 "archive root, the module tree under `src/`, and every dep embedded under "
@@ -28650,15 +28704,15 @@ msgid ""
 "zip](bundles.md#the-source-zip--the-source-transport))"
 msgstr ""
 
-#: src/reference/cli.md:318
+#: src/reference/cli.md:323
 msgid "`--mode bin`"
 msgstr ""
 
-#: src/reference/cli.md:318
+#: src/reference/cli.md:323
 msgid "`<dir>.rutbundle`"
 msgstr ""
 
-#: src/reference/cli.md:318
+#: src/reference/cli.md:323
 msgid ""
 "the **compiled wire** ([module bundles](bundles.md)): a **lib** pkg packs "
 "**compiled** (format_version 13) — the root and every source dep ride as "
@@ -28669,7 +28723,7 @@ msgid ""
 "onto its own numbering"
 msgstr ""
 
-#: src/reference/cli.md:320
+#: src/reference/cli.md:325
 msgid ""
 "`-o` overrides the default sibling output in both modes. A root that "
 "produces no compiled program — a `type = \"host\"` pkg — is refused in bin "
@@ -28686,7 +28740,7 @@ msgid ""
 "claim the compiled wire; the rows drop there)."
 msgstr ""
 
-#: src/reference/cli.md:335
+#: src/reference/cli.md:340
 msgid ""
 "**The source zip's manifest is rewritten at pack.** Every `[deps]` "
 "descriptor becomes `{ \"path\": \"deps/<name>@<fp16>\" }` — `url` fields and "
@@ -28699,7 +28753,7 @@ msgid ""
 "side."
 msgstr ""
 
-#: src/reference/cli.md:345
+#: src/reference/cli.md:350
 msgid ""
 "Pack-time tree gates: a `.rut` outside a `src/` shell refuses — ``rut code "
 "rides only under a `src/` shell — declare it (`mod …;`) and move it under "
@@ -28707,7 +28761,7 @@ msgid ""
 "``nothing declares this module — `mod …;` it from its parent or delete it``."
 msgstr ""
 
-#: src/reference/cli.md:351
+#: src/reference/cli.md:356
 msgid ""
 "`--strip` is a bin-mode lane: `rut pack <dir> --strip` without `--mode bin` "
 "refuses at the door — `pack: --strip is a --mode bin lane — a source zip "
@@ -28720,11 +28774,11 @@ msgid ""
 "`.rutsym` sidecars](symbol-stripping.md)."
 msgstr ""
 
-#: src/reference/cli.md:362 src/reference/cli.md:378
+#: src/reference/cli.md:367 src/reference/cli.md:383
 msgid "`dump`"
 msgstr ""
 
-#: src/reference/cli.md:368
+#: src/reference/cli.md:373
 msgid ""
 "Prints the compiler's view of one file: the `== AST ==` section followed by "
 "`== IR ==` (per-function typed register tables and op listings). Compilation "
@@ -28733,82 +28787,82 @@ msgid ""
 "inspecting a host surface's slots."
 msgstr ""
 
-#: src/reference/cli.md:376
+#: src/reference/cli.md:381
 msgid "The file extension selects the parser mode:"
 msgstr ""
 
-#: src/reference/cli.md:380
+#: src/reference/cli.md:385
 msgid "`*.rut`"
 msgstr ""
 
-#: src/reference/cli.md:380
+#: src/reference/cli.md:385
 msgid "implementation"
 msgstr ""
 
-#: src/reference/cli.md:380
-msgid "runs `main`"
-msgstr ""
-
-#: src/reference/cli.md:380
-msgid "formats impls"
-msgstr ""
-
-#: src/reference/cli.md:380
-msgid "AST + IR of the module"
-msgstr ""
-
-#: src/reference/cli.md:381
-msgid "`*.d.rut`"
-msgstr ""
-
-#: src/reference/cli.md:381
-msgid "declaration"
-msgstr ""
-
-#: src/reference/cli.md:381
-msgid "refused (exit 2)"
-msgstr ""
-
-#: src/reference/cli.md:381
-msgid "formats the surface"
-msgstr ""
-
-#: src/reference/cli.md:381
-msgid "the surface's AST + IR"
-msgstr ""
-
-#: src/reference/cli.md:383
-msgid "Exit codes"
+#: src/reference/cli.md:385
+msgid "runs the designated `entry fn`"
 msgstr ""
 
 #: src/reference/cli.md:385
+msgid "formats impls"
+msgstr ""
+
+#: src/reference/cli.md:385
+msgid "AST + IR of the module"
+msgstr ""
+
+#: src/reference/cli.md:386
+msgid "`*.d.rut`"
+msgstr ""
+
+#: src/reference/cli.md:386
+msgid "declaration"
+msgstr ""
+
+#: src/reference/cli.md:386
+msgid "refused (exit 2)"
+msgstr ""
+
+#: src/reference/cli.md:386
+msgid "formats the surface"
+msgstr ""
+
+#: src/reference/cli.md:386
+msgid "the surface's AST + IR"
+msgstr ""
+
+#: src/reference/cli.md:388
+msgid "Exit codes"
+msgstr ""
+
+#: src/reference/cli.md:390
 msgid "code"
 msgstr ""
 
-#: src/reference/cli.md:387
+#: src/reference/cli.md:392
 msgid "`0`"
 msgstr ""
 
-#: src/reference/cli.md:387
+#: src/reference/cli.md:392
 msgid "success"
 msgstr ""
 
-#: src/reference/cli.md:388
+#: src/reference/cli.md:393
 msgid "`1`"
 msgstr ""
 
-#: src/reference/cli.md:388
+#: src/reference/cli.md:393
 msgid ""
 "compile diagnostics; no binary emitted; binary decode or verify failure; VM "
 "boot failure; a trap at run; `fmt` refuses a file that does not parse; `fmt "
 "--check` found drift; a `pack` output-write failure"
 msgstr ""
 
-#: src/reference/cli.md:389
+#: src/reference/cli.md:394
 msgid "`2`"
 msgstr ""
 
-#: src/reference/cli.md:389
+#: src/reference/cli.md:394
 msgid ""
 "usage errors (missing arguments); unreadable input file; `run` on a "
 "`.d.rut`; `run` on an input that is neither a module directory nor a "
@@ -28824,13 +28878,13 @@ msgid ""
 "a host root in bin mode, a url dep the lock does not pin"
 msgstr ""
 
-#: src/reference/cli.md:391
+#: src/reference/cli.md:396
 msgid ""
 "Diagnostics go to stderr; the success summaries (`pack`'s packed line, "
 "`install`'s resolved/verified lines and lock reports) go to stdout."
 msgstr ""
 
-#: src/reference/cli.md:397
+#: src/reference/cli.md:402
 msgid ""
 "The CLI offers and binds on behalf of the program, but it never injects "
 "names the program did not declare: a program that never spells `use ink::` "
@@ -28839,12 +28893,12 @@ msgid ""
 "packages](stdlib.md))."
 msgstr ""
 
-#: src/reference/cli.md:402
+#: src/reference/cli.md:407
 msgid ""
 "The HTTP lane is native-only: the CLI build carries it, wasm builds do not."
 msgstr ""
 
-#: src/reference/cli.md:404
+#: src/reference/cli.md:409
 msgid ""
 "`run` on a module directory is the deployment path for development; `pack` + "
 "`run <bundle>` is the shipping path — both run the identical contract "
