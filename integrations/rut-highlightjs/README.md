@@ -1,7 +1,7 @@
 # rut-highlightjs
 
 [highlight.js](https://highlight.js.org) language definition for the
-[rut](../../README.md) language: keywords (reserved + contextual),
+[rut](https://rut.hpp2334.com) language: keywords (reserved + contextual),
 primitive types, suffixed number literals (`10u8`, `1.5f32`, `0xFFu64`),
 plain strings with escapes, raw strings `r"…"`, format strings
 `f"…{expr}…"` with the `{hole}` expression highlighted, `//` and

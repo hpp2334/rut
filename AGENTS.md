@@ -197,7 +197,7 @@ History: the `.rutbundle` bin lane is retired and old envelopes are
 GONE — the `dist/std-v8`…`std-v16/` dirs and the `dist/std/*.rutbundle`
 mirrors were purged. The only committed envelope is the current cut:
 `dist/std-vNN/` + the `dist/std/` zip mirror. Old tags serve their own
-immutable commits, but this toolchain reads wire 12 only — stale bytes
+immutable commits, but this toolchain reads wire 13 only — stale bytes
 re-pack, they never load back. The old pack script lives in git history.
 
 ## VS Code extension — `npm run release` (build → gates → pack)

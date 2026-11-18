@@ -18,7 +18,8 @@ pub struct Vm {
     ready:  Deque<Slot>,   // woken async frames
     timers: BTreeMap<u64, Vec<Slot>>,  // the virtual clock's wheel
     lim:    Limits,        // fuel, heap budget, interrupt interval
-    host:   HostRegistry,  // the host-fn bodies, joined at construction
+    host_slots: Vec<HostSlot>,  // the host-fn dispatch row (joined from
+                                // the HostRegistry at construction)
 }
 ```
 

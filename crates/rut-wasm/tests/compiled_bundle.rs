@@ -4,7 +4,7 @@
 //! (the bundle rides the JS boundary as bytes, the mount never touches
 //! a path). The pack side stays a native concern; this test only
 //! exercises the mount half: a decoded `.rutc` root, its compiled
-//! groups, and a run through the same Vm path `rut_run` drives.
+//! groups, and a run through the same `Vm` path `RutEngine::run` drives.
 
 use std::rc::Rc;
 

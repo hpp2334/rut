@@ -2,8 +2,7 @@
 msgid ""
 msgstr ""
 "Project-Id-Version: The rut Book\n"
-"POT-Creation-Date: 1970-01-01 00:00:00+00:00
-"
+"POT-Creation-Date: 1970-01-01 00:00:00+00:00\n"
 "PO-Revision-Date: \n"
 "Last-Translator: \n"
 "Language-Team: \n"
@@ -306,7 +305,7 @@ msgstr ""
 msgid "The compiler pipeline"
 msgstr ""
 
-#: src/SUMMARY.md:102 src/core-concepts/the-vm.md:32
+#: src/SUMMARY.md:102 src/core-concepts/the-vm.md:33
 #: src/reference/typed-bytecode.md:1
 msgid "Typed bytecode"
 msgstr ""
@@ -6612,7 +6611,7 @@ msgid "The VM owns the queues; the embedder owns the loop:"
 msgstr ""
 
 #: src/core-concepts/async-model.md:115 src/core-concepts/host-boundary.md:37
-#: src/reference/vm-heap.md:98 src/reference/resource-limits.md:60
+#: src/reference/vm-heap.md:103 src/reference/resource-limits.md:60
 #: src/reference/host-futures.md:122
 msgid "\"main\""
 msgstr ""
@@ -7325,10 +7324,12 @@ msgid "// fuel, heap budget, interrupt interval\n"
 msgstr ""
 
 #: src/core-concepts/the-vm.md:21
-msgid "// the host-fn bodies, joined at construction\n"
+msgid ""
+"// the host-fn dispatch row (joined from\n"
+"                                // the HostRegistry at construction)\n"
 msgstr ""
 
-#: src/core-concepts/the-vm.md:25
+#: src/core-concepts/the-vm.md:26
 msgid ""
 "A VM is single-threaded by construction (`!Send`). The host holds one and "
 "drives it with methods: `call` an entry point, `run_ready` to drain woken "
@@ -7337,7 +7338,7 @@ msgid ""
 "[the async model](async-model.md) for the queues' role in scheduling."
 msgstr ""
 
-#: src/core-concepts/the-vm.md:34
+#: src/core-concepts/the-vm.md:35
 msgid ""
 "The instruction set is register-based: operands are `u16` indices into a "
 "per-frame slot file, and **every register has a static type recorded in the "
@@ -7347,56 +7348,56 @@ msgid ""
 "for references, with no runtime tag checks."
 msgstr ""
 
-#: src/core-concepts/the-vm.md:41
+#: src/core-concepts/the-vm.md:42
 msgid ""
 "Ops are small and fixed-size, with variadic operand lists (call arguments, "
 "branch tables) living in per-function pools. A representative sample:"
 msgstr ""
 
-#: src/core-concepts/the-vm.md:59
+#: src/core-concepts/the-vm.md:60
 msgid "The type system also decides what is _not_ an op:"
 msgstr ""
 
-#: src/core-concepts/the-vm.md:61
+#: src/core-concepts/the-vm.md:62
 msgid ""
 "**Nothing static.** What the type table can answer at compile time becomes a "
 "constant — no \"get type id\" instruction, no length load for a fixed-size "
 "array."
 msgstr ""
 
-#: src/core-concepts/the-vm.md:64
+#: src/core-concepts/the-vm.md:65
 msgid ""
 "**Nothing polymorphic and nothing named.** An interface-typed receiver has "
 "exactly one op (the itable call); string concatenation is a native call, not "
 "an opcode."
 msgstr ""
 
-#: src/core-concepts/the-vm.md:67
+#: src/core-concepts/the-vm.md:68
 msgid ""
 "**Concrete memory, control flow, and two readbacks.** Ops touch memory only "
 "through compile-time-known layouts, plus the two reads reification needs: "
 "\"what is it\" (`tidof`) and the guarded payload extract behind a downcast."
 msgstr ""
 
-#: src/core-concepts/the-vm.md:72
+#: src/core-concepts/the-vm.md:73
 msgid "The module binary"
 msgstr ""
 
-#: src/core-concepts/the-vm.md:74
+#: src/core-concepts/the-vm.md:75
 msgid ""
 "Compilation produces a versioned, self-contained binary per module: types, "
 "constants, functions (with their typed register signatures), imports, and a "
 "symbol table for backtraces. Its properties matter more than its layout:"
 msgstr ""
 
-#: src/core-concepts/the-vm.md:79
+#: src/core-concepts/the-vm.md:80
 msgid ""
 "**Deterministic.** The same sources plus the same dependency versions "
 "produce byte-identical binaries, so artifacts are cacheable by content hash "
 "and shippable instead of sources."
 msgstr ""
 
-#: src/core-concepts/the-vm.md:82
+#: src/core-concepts/the-vm.md:83
 msgid ""
 "**Self-describing but strippable.** Names and source spans are retained for "
 "traces by default; a release build can strip them, and a sidecar map file "
@@ -7404,7 +7405,7 @@ msgid ""
 "on [diagnostics](../reference/diagnostics.md)."
 msgstr ""
 
-#: src/core-concepts/the-vm.md:87
+#: src/core-concepts/the-vm.md:88
 msgid ""
 "**Link-time identity.** Type ids are module-local at rest and rebased into "
 "the VM's global table at link, where the interface tables merge by name. "
@@ -7413,17 +7414,17 @@ msgid ""
 "dispatch](interfaces-and-dispatch.md) holds across module boundaries."
 msgstr ""
 
-#: src/core-concepts/the-vm.md:93
+#: src/core-concepts/the-vm.md:94
 msgid ""
 "**Little-endian everywhere**, by law — every serialized word, so artifacts "
 "are platform-independent by construction rather than by luck."
 msgstr ""
 
-#: src/core-concepts/the-vm.md:97
+#: src/core-concepts/the-vm.md:98
 msgid "Verification at load"
 msgstr ""
 
-#: src/core-concepts/the-vm.md:99
+#: src/core-concepts/the-vm.md:100
 msgid ""
 "Loading re-checks each function before anything executes: register operands "
 "against the signature, operand pools and jump targets in range, type "
@@ -7434,7 +7435,7 @@ msgid ""
 "rejected before any script runs."
 msgstr ""
 
-#: src/core-concepts/the-vm.md:107
+#: src/core-concepts/the-vm.md:108
 msgid ""
 "Module-level initialization is folded at compile time: literals, enum "
 "members, constant expressions, and interned string literals become constants "
@@ -7443,11 +7444,11 @@ msgid ""
 "nothing."
 msgstr ""
 
-#: src/core-concepts/the-vm.md:113
+#: src/core-concepts/the-vm.md:114
 msgid "The interpreter loop and traps"
 msgstr ""
 
-#: src/core-concepts/the-vm.md:115
+#: src/core-concepts/the-vm.md:116
 msgid ""
 "Execution is a decode-dispatch loop over frames. A frame is the function's "
 "code, a program counter, its typed register file, and (for async frames) the "
@@ -7456,7 +7457,7 @@ msgid ""
 "the itable."
 msgstr ""
 
-#: src/core-concepts/the-vm.md:121
+#: src/core-concepts/the-vm.md:122
 msgid ""
 "Failure is a **trap**, not an exception and not a Rust panic: integer "
 "overflow on the plain operators, a `nil` deref, an out-of-bounds index, a "
@@ -7467,29 +7468,29 @@ msgid ""
 "boundary](host-boundary.md))."
 msgstr ""
 
-#: src/core-concepts/the-vm.md:130 src/reference/vm-core.md:105
+#: src/core-concepts/the-vm.md:131 src/reference/vm-core.md:105
 msgid "Budgets and interrupts"
 msgstr ""
 
-#: src/core-concepts/the-vm.md:132
+#: src/core-concepts/the-vm.md:133
 msgid ""
 "Two knobs make it safe to run third-party code, both set at construction and "
 "mutable while running:"
 msgstr ""
 
-#: src/core-concepts/the-vm.md:136
+#: src/core-concepts/the-vm.md:137
 msgid "// one unit per op, counts down\n"
 msgstr ""
 
-#: src/core-concepts/the-vm.md:137
+#: src/core-concepts/the-vm.md:138
 msgid "// checked at every allocation\n"
 msgstr ""
 
-#: src/core-concepts/the-vm.md:138
+#: src/core-concepts/the-vm.md:139
 msgid "// default: check every 1024 ops\n"
 msgstr ""
 
-#: src/core-concepts/the-vm.md:141
+#: src/core-concepts/the-vm.md:142
 msgid ""
 "Exhaustion is **resumable**: the trap parks the frame exactly where it was — "
 "the frame _is_ the loop state — so the host can add fuel, raise the heap "
@@ -7498,24 +7499,24 @@ msgid ""
 "and gets a deterministic hang proof."
 msgstr ""
 
-#: src/core-concepts/the-vm.md:146
+#: src/core-concepts/the-vm.md:147
 msgid ""
 "The heap check runs _before_ any write, so an out-of-memory failure leaves "
 "the heap byte-identical (see [memory](memory.md))."
 msgstr ""
 
-#: src/core-concepts/the-vm.md:149
+#: src/core-concepts/the-vm.md:150
 msgid ""
 "Native functions run outside the fuel budget — a hanging native is a host "
 "bug by contract — and the interrupt hook is the host's lever at native "
 "return points."
 msgstr ""
 
-#: src/core-concepts/the-vm.md:153
+#: src/core-concepts/the-vm.md:154
 msgid "Why no JIT is viable"
 msgstr ""
 
-#: src/core-concepts/the-vm.md:155
+#: src/core-concepts/the-vm.md:156
 msgid ""
 "A JS engine's speed is its JIT, and the JIT exists to speculate about "
 "polymorphic property loads. rut has no polymorphic loads: field access is by "
@@ -7529,7 +7530,7 @@ msgid ""
 "bytecode alone."
 msgstr ""
 
-#: src/core-concepts/the-vm.md:167
+#: src/core-concepts/the-vm.md:168
 msgid ""
 "The full tables and laws live in the reference: [typed "
 "bytecode](../reference/typed-bytecode.md), [the module binary and "
@@ -7777,15 +7778,15 @@ msgid ""
 "```text\n"
 "added: #1, #2, #3\n"
 "set_done(#2, true)\n"
-"title_of(#2) = Opt(Some(Str(\"implement the VM\")))\n"
-"title_of(42) = Opt(None)\n"
-"remove(#1) = Res(Ok(Bool(true)))\n"
-"remove(#1) again = Res(Err(Str(\"no todo #1\")))\n"
+"title_of(#2) = \"implement the VM\"\n"
+"title_of(42) = \"\"\n"
+"remove(#1) = true\n"
+"remove(#1) again = false\n"
 "TodoList[2]\n"
 "  #2 [x] implement the VM\n"
 "  #3 [ ] ship the demo\n"
 "second list #1: 0 todos\n"
-"fuel used: 680 of Some(1000000)\n"
+"fuel used: 978 of Some(1000000)\n"
 "```"
 msgstr ""
 
@@ -7974,15 +7975,7 @@ msgid ""
 "and fuel](../reference/resource-limits.md)):"
 msgstr ""
 
-#: src/examples/00-todolist.md:188
-msgid ""
-"And the transcript's `remove(#1) again = Res(Err(...))` line is the VM's "
-"typed view of a `bool` answer — the second remove returns `false`, and the "
-"debug print shows the value shape the crossing produces ([Value boundary and "
-"borrows](../reference/value-boundary.md))."
-msgstr ""
-
-#: src/examples/00-todolist.md:193 src/examples/01-sort.md:208
+#: src/examples/00-todolist.md:188 src/examples/01-sort.md:208
 #: src/examples/02-digest.md:199 src/examples/03-plugin.md:216
 #: src/examples/04-custom-async.md:127 src/examples/05-todolist-web.md:245
 #: src/examples/06-github-viewer-cli.md:212
@@ -7990,36 +7983,36 @@ msgstr ""
 msgid "Takeaways"
 msgstr ""
 
-#: src/examples/00-todolist.md:195
+#: src/examples/00-todolist.md:190
 msgid ""
 "`entry fn` is the host-callable surface; its signatures are checked against "
 "the crossing rule at compile time, so a bad plan is a diagnostic, never a "
 "call-time surprise."
 msgstr ""
 
-#: src/examples/00-todolist.md:198
+#: src/examples/00-todolist.md:193
 msgid ""
 "State lives rut-side in one `opaque` container the host holds and re-passes; "
 "plain values cross, instances never do."
 msgstr ""
 
-#: src/examples/00-todolist.md:200
+#: src/examples/00-todolist.md:195
 msgid "Erasure is `opaque(v)`; recovery is `opaque::downcast<T> -> ?T`."
 msgstr ""
 
-#: src/examples/00-todolist.md:201
+#: src/examples/00-todolist.md:196
 msgid ""
 "Budgets (fuel + heap) are the embedder's call, and every embedder mistake "
 "comes back as a named trap."
 msgstr ""
 
-#: src/examples/00-todolist.md:203
+#: src/examples/00-todolist.md:198
 msgid ""
 "The same file works as a library: entries are compilation roots, so a module "
 "with no `main` still emits every entry."
 msgstr ""
 
-#: src/examples/00-todolist.md:206
+#: src/examples/00-todolist.md:201
 msgid ""
 "Next: [01 — Sort](01-sort.md) scales the pattern to five algorithms and "
 "shows what recursion costs in fuel. The crossing rules behind this page are "
@@ -8044,7 +8037,8 @@ msgstr ""
 #: src/examples/01-sort.md:18
 msgid ""
 "The run sorts a hand-picked input, then fills the bank with a deterministic "
-"pseudo-random vector and runs the full sweep, printing fuel per algorithm:"
+"pseudo-random vector and runs the full sweep, printing fuel per algorithm "
+"(abridged — the real rows carry all sixteen values):"
 msgstr ""
 
 #: src/examples/01-sort.md:22
@@ -8053,13 +8047,13 @@ msgid ""
 "pushed: [5, 2, 9, 2]\n"
 "after insertion: [2, 2, 5, 9]\n"
 "fill(16, seed=42), each algorithm:\n"
-"  insertion true  fuel   2335  [208, 320, 353, ..., 854, 893]\n"
-"  bubble    true  fuel   3895  [208, 320, 353, ..., 854, 893]\n"
-"  selection true  fuel   3353  [208, 320, 353, ..., 854, 893]\n"
-"  quick     true  fuel   2241  [208, 320, 353, ..., 854, 893]\n"
-"  merge     true  fuel   4358  [208, 320, 353, ..., 854, 893]\n"
-"sort(bogus) = Res(Err(Str(\"unknown algorithm: bogus\")))\n"
-"fuel used: 21142 of Some(5000000)\n"
+"  insertion true  fuel   2043  [208, 320, 353, ..., 854, 893]\n"
+"  bubble    true  fuel   3155  [208, 320, 353, ..., 854, 893]\n"
+"  selection true  fuel   2830  [208, 320, 353, ..., 854, 893]\n"
+"  quick     true  fuel   1803  [208, 320, 353, ..., 854, 893]\n"
+"  merge     true  fuel   5595  [208, 320, 353, ..., 854, 893]\n"
+"sort(bogus) = \"unknown algorithm: bogus\"\n"
+"fuel used: 21367 of Some(5000000)\n"
 "```"
 msgstr ""
 
@@ -16756,11 +16750,16 @@ msgstr ""
 msgid "// high-water mark: vm.heap_peak()\n"
 msgstr ""
 
-#: src/reference/vm-heap.md:42
-msgid "// live budget change\n"
+#: src/reference/vm-heap.md:45
+msgid ""
+"The heap limit is **construct-time**: `Heap::new(limits.heap_limit_bytes, "
+"…)` bakes it and the runtime budget is read-only — there is no live setter. "
+"Fuel is the one live budget (`Vm::add_fuel`); a heap-trap resumption means "
+"dropping references so the retry fits, or rebuilding the VM with a larger "
+"budget ([resource limits](resource-limits.md))."
 msgstr ""
 
-#: src/reference/vm-heap.md:46
+#: src/reference/vm-heap.md:51
 msgid ""
 "Every route that materializes a rut value goes through it: cell mint, `Vec` "
 "growth, string concatenation, frame-pool growth, `opaque` store inserts. "
@@ -16769,61 +16768,61 @@ msgid ""
 "`heap_usage` would lie, and the leak report would miss it."
 msgstr ""
 
-#: src/reference/vm-heap.md:53
+#: src/reference/vm-heap.md:58
 msgid ""
 "Accounting checks run **before any write**: a failed allocation leaves the "
 "heap byte-identical to its state before the op, and the trap is resumable "
 "([resource limits](resource-limits.md))."
 msgstr ""
 
-#: src/reference/vm-heap.md:57
+#: src/reference/vm-heap.md:62
 msgid "Allocation strategy"
 msgstr ""
 
-#: src/reference/vm-heap.md:59
+#: src/reference/vm-heap.md:64
 msgid ""
 "**Fixed-size cell slots in the arena.** Cells are one fixed-size record "
 "carved from 1024-slot chunks with a free list; a dead slot is reused by the "
 "next mint. Reuse is invisible except in `heap_usage`."
 msgstr ""
 
-#: src/reference/vm-heap.md:62
+#: src/reference/vm-heap.md:67
 msgid ""
 "**The block store.** Every _variable-size_ payload — string octets, array "
 "element runs — lives in a block carved from size-classed pages the VM owns:"
 msgstr ""
 
-#: src/reference/vm-heap.md:65
+#: src/reference/vm-heap.md:70
 msgid ""
 "Size classes 16 B … 2 KiB (multiples of 8); small blocks come from 32 KiB "
 "pages via per-class free lists plus a single-slot LIFO cache for the churn "
 "pattern (a temp dies, the same size is minted again)."
 msgstr ""
 
-#: src/reference/vm-heap.md:68
+#: src/reference/vm-heap.md:73
 msgid ""
 "In-place growth within a class keeps append-accumulation loops linear; the "
 "block header carries the class-rounded capacity, so free re-derives the "
 "class with no side table."
 msgstr ""
 
-#: src/reference/vm-heap.md:71
+#: src/reference/vm-heap.md:76
 msgid "Large blocks (> 2 KiB) get dedicated allocations, freed wholesale."
 msgstr ""
 
-#: src/reference/vm-heap.md:72
+#: src/reference/vm-heap.md:77
 msgid ""
 "Blocks are 1:1 with their cell (the cell is the counted unit) and **never "
 "move**, so a raw `&[u8]` into the store stays valid for the cell's life."
 msgstr ""
 
-#: src/reference/vm-heap.md:75
+#: src/reference/vm-heap.md:80
 msgid ""
 "**Immortal singletons.** Interned string literals and dataless enum variants "
 "live in a slab freed only at `Vm` drop; they carry the `rc == 0` sentinel."
 msgstr ""
 
-#: src/reference/vm-heap.md:78
+#: src/reference/vm-heap.md:83
 msgid ""
 "**The `opaque` store.** Every rut `opaque` value lives in a slab of two-kind "
 "entries (rut value / host payload) with its own borrow guards; entries "
@@ -16831,24 +16830,24 @@ msgid ""
 "receipts stay honest."
 msgstr ""
 
-#: src/reference/vm-heap.md:82
+#: src/reference/vm-heap.md:87
 msgid ""
 "**No compaction.** Non-moving keeps host borrows into `Vec` buffers sound "
 "and freelists trivial."
 msgstr ""
 
-#: src/reference/vm-heap.md:84
+#: src/reference/vm-heap.md:89
 msgid ""
 "**Cells are addressed by raw pointer** in the slot word. A 32-bit handle "
 "design was prototyped and reverted on measurement: ref-heavy workloads paid "
 "+8–15% for the decode chain per slot read."
 msgstr ""
 
-#: src/reference/vm-heap.md:88
+#: src/reference/vm-heap.md:93
 msgid "Deterministic teardown"
 msgstr ""
 
-#: src/reference/vm-heap.md:90
+#: src/reference/vm-heap.md:95
 msgid ""
 "Teardown mirrors the destruction rules: the host drops its references, "
 "releases run inline ([the Rc heap](rc-heap.md)), and `Vm::drop` frees the "
@@ -16857,11 +16856,11 @@ msgid ""
 "heap."
 msgstr ""
 
-#: src/reference/vm-heap.md:99
+#: src/reference/vm-heap.md:104
 msgid "\"used {} bytes (peak {})\""
 msgstr ""
 
-#: src/reference/vm-heap.md:99
+#: src/reference/vm-heap.md:104
 msgid "// dropping `vm` frees every remaining slab\n"
 msgstr ""
 
@@ -16933,8 +16932,9 @@ msgstr ""
 
 #: src/reference/resource-limits.md:24
 msgid ""
-"the frame is parked: raise the limit (`Heap::set_limit`), drop references "
-"and retry, or drop the VM"
+"the frame is parked: a heap trap is cleared by dropping references so the "
+"retry fits, or by rebuilding the VM with a larger budget — the limit is "
+"construct-time, the runtime budget is read-only"
 msgstr ""
 
 #: src/reference/resource-limits.md:25

@@ -17,19 +17,19 @@ cargo test -p sort         # every algorithm, edge cases, cross-agreement
 
 The run sorts a hand-picked input, then fills the bank with a
 deterministic pseudo-random vector and runs the full sweep, printing
-fuel per algorithm:
+fuel per algorithm (abridged — the real rows carry all sixteen values):
 
 ```text
 pushed: [5, 2, 9, 2]
 after insertion: [2, 2, 5, 9]
 fill(16, seed=42), each algorithm:
-  insertion true  fuel   2335  [208, 320, 353, ..., 854, 893]
-  bubble    true  fuel   3895  [208, 320, 353, ..., 854, 893]
-  selection true  fuel   3353  [208, 320, 353, ..., 854, 893]
-  quick     true  fuel   2241  [208, 320, 353, ..., 854, 893]
-  merge     true  fuel   4358  [208, 320, 353, ..., 854, 893]
-sort(bogus) = Res(Err(Str("unknown algorithm: bogus")))
-fuel used: 21142 of Some(5000000)
+  insertion true  fuel   2043  [208, 320, 353, ..., 854, 893]
+  bubble    true  fuel   3155  [208, 320, 353, ..., 854, 893]
+  selection true  fuel   2830  [208, 320, 353, ..., 854, 893]
+  quick     true  fuel   1803  [208, 320, 353, ..., 854, 893]
+  merge     true  fuel   5595  [208, 320, 353, ..., 854, 893]
+sort(bogus) = "unknown algorithm: bogus"
+fuel used: 21367 of Some(5000000)
 ```
 
 The fuel column is the demo's quiet joke: quick < insertion <

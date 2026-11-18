@@ -21,15 +21,15 @@ The run prints an abridged transcript like this:
 ```text
 added: #1, #2, #3
 set_done(#2, true)
-title_of(#2) = Opt(Some(Str("implement the VM")))
-title_of(42) = Opt(None)
-remove(#1) = Res(Ok(Bool(true)))
-remove(#1) again = Res(Err(Str("no todo #1")))
+title_of(#2) = "implement the VM"
+title_of(42) = ""
+remove(#1) = true
+remove(#1) again = false
 TodoList[2]
   #2 [x] implement the VM
   #3 [ ] ship the demo
 second list #1: 0 todos
-fuel used: 680 of Some(1000000)
+fuel used: 978 of Some(1000000)
 ```
 
 ## Code tour
@@ -184,11 +184,6 @@ let limits = rut_vm::interp::Limits {
     interrupt_every: 1024,
 };
 ```
-
-And the transcript's `remove(#1) again = Res(Err(...))` line is the
-VM's typed view of a `bool` answer — the second remove returns
-`false`, and the debug print shows the value shape the crossing
-produces ([Value boundary and borrows](../reference/value-boundary.md)).
 
 ## Takeaways
 

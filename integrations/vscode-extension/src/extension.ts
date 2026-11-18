@@ -1,11 +1,11 @@
 // rut-vscode — runs the language core as an in-process wasm module
-// (rut-lsp-wasm raw ABI, RFC 0041 §2): no server process, no per-platform
-// binaries — one .wasm serves every platform. Providers register directly
-// against vscode.languages. (An earlier native `rut-lsp` stdio server
-// served editors that speak LSP; that face is retired, its code in git
-// history.) Without
-// bin/rut-lsp.wasm the TextMate grammar still colors the basics and an
-// info message points at `npm run build:wasm`.
+// (the `RutLsp` delegation face, RFC 0041 §2): no server process, no
+// per-platform binaries — one .wasm serves every platform. Providers
+// register directly against vscode.languages. (An earlier native
+// `rut-lsp` stdio server served editors that speak LSP; that face is
+// retired, its code in git history.) Without bin/rut-lsp.wasm the
+// TextMate grammar still colors the basics and an info message points
+// at `npm run build:wasm`.
 //
 // Layout: `constants` (the budgets) → `util` (byte reads, the hint
 // gate) → `mapping` (LSP JSON → vscode values), `providers` (the nine

@@ -37,11 +37,16 @@ impl Heap {
     fn alloc(&mut self, size: u32, align: u8, ty: TypeId)
         -> Result<NonNull<Header>, Trap>;
 
-    fn usage_bytes(&self) -> u64;     // feeds vm.heap_usage()
+    fn used_bytes(&self) -> u64;      // feeds vm.heap_usage()
     fn peak_bytes(&self) -> u64;      // high-water mark: vm.heap_peak()
-    fn set_limit(&self, limit: Option<u64>);  // live budget change
 }
 ```
+
+The heap limit is **construct-time**: `Heap::new(limits.heap_limit_bytes, …)`
+bakes it and the runtime budget is read-only — there is no live setter.
+Fuel is the one live budget (`Vm::add_fuel`); a heap-trap resumption
+means dropping references so the retry fits, or rebuilding the VM with a
+larger budget ([resource limits](resource-limits.md)).
 
 Every route that materializes a rut value goes through it: cell mint,
 `Vec` growth, string concatenation, frame-pool growth, `opaque` store

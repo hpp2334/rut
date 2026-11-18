@@ -489,7 +489,7 @@ button {
   box-shadow: 0 4px 14px rgb(0 0 0 / 40%);
 }
 
-/* the token-class -> CSS map (survey D3): keyed by the rut_legend()
+/* the token-class -> CSS map (survey D3): keyed by the legend()
    NAMES through the `tok-<name>` class the overlay emits — never by a
    hardcoded legend order */
 

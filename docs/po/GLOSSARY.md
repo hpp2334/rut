@@ -167,7 +167,7 @@ context; after that, use the zh-CN rendering alone.
    English in parentheses to titles.
 | seeded fetcher | 预置取回器 | RETIRED — the seed shape is gone; the remote policy is named explicitly now（远程策略） |
 | builder | 构建器 | `HostPkg` builder → `HostPkg` 构建器（`HostPkg` stays code）；`Vm::builder()` stays code |
-| installer lane | 安装者车道 | 对照 the raw lane → 原生车道；宿主函数体经 `.host_pkg(..)` 上链安装 |
+| installer lane | 安装者车道 | 对照 the raw lane → 原生车道；宿主函数体经 `hosts.install_host_pkg(&ctx, pkg)` 安装（上下文来自 `rut_driver::host_pkg_ctx(pkgs)`；复用提供走 `RutRun::pkg(Offer::Host(..))`） |
 | rows snapshot | 行快照 | RETIRED as `mount snapshot` — the snapshot now reads off the offered pkgs（`rut_driver::host_pkg_ctx(pkgs)` stays code） |
 | first-mount-wins | 先挂载者胜 | |
 | inert merge | 惰性合并 | inert extras → 惰性额外物 |

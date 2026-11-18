@@ -1,6 +1,6 @@
 # rut-vscode
 
-VS Code support for the [rut](../../README.md) language: grammar
+VS Code support for the [rut](https://rut.hpp2334.com) language: grammar
 highlighting (TextMate + semantic tokens), diagnostics, the
 document-symbol outline, hover, completions (with auto-import),
 go-to-definition (plus type definition), references, inlay hints, and

@@ -196,7 +196,7 @@ fn book_blocks_compile_and_run() {
                 interrupt_every: 1024,
             };
             // the bindings BEFORE the Vm: the same set the wasm
-            // host's rut_run installs — the buttons' answers are the truth
+            // host's RutEngine::run installs — the buttons' answers are the truth
             let mut hosts = rut_vm::interp::HostRegistry::new();
             hosts.install_host_pkg(
                 &ctx,

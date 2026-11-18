@@ -102,7 +102,7 @@ impl HostSlot {
 /// checked against a registry by [`HostRegistry::verify_against`].
 pub type ExpectedHostFns = BTreeMap<String, (Vec<TypeId>, TypeId)>;
 
-/// The embedder's binding table, handed to `Vm::new` (fourth argument).
+/// The embedder's binding table, handed to `Vm::new` (third argument).
 pub struct HostRegistry {
     fns: HashMap<String, HostBinding>,
     /// the scopes an [`HostPkg`] installer already claimed — one

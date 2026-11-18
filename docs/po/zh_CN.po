@@ -366,7 +366,7 @@ msgid "The compiler pipeline"
 msgstr "编译器流水线"
 
 
-#: src/SUMMARY.md:102 src/core-concepts/the-vm.md:32
+#: src/SUMMARY.md:102 src/core-concepts/the-vm.md:33
 #: src/reference/typed-bytecode.md:1
 msgid "Typed bytecode"
 msgstr "类型化字节码"
@@ -6710,7 +6710,7 @@ msgstr "队列归 VM 所有；循环归嵌入方所有："
 
 
 #: src/core-concepts/async-model.md:115 src/core-concepts/host-boundary.md:37
-#: src/reference/vm-heap.md:98 src/reference/resource-limits.md:60
+#: src/reference/vm-heap.md:103 src/reference/resource-limits.md:60
 #: src/reference/host-futures.md:122
 msgid "\"main\""
 msgstr "\"main\""
@@ -7432,192 +7432,194 @@ msgstr ""
 
 #: src/core-concepts/the-vm.md:21
 msgid ""
-"// the host-fn bodies, joined at construction\n"
+"// the host-fn dispatch row (joined from\n"
+"                                // the HostRegistry at construction)\n"
 msgstr ""
-"// 宿主函数体，在构造时接入\n"
+"// 宿主函数分派行（在构造时从\n"
+"                                // HostRegistry 联结而来）\n"
 
 
-#: src/core-concepts/the-vm.md:25
+#: src/core-concepts/the-vm.md:26
 msgid ""
 "A VM is single-threaded by construction (`!Send`). The host holds one and drives it with methods: `call` an entry point, `run_ready` to drain woken frames, `next_deadline` for the timer wheel, `drive` for a single resumption. See [the host boundary](host-boundary.md) for the embed loop and [the async model](async-model.md) for the queues' role in scheduling."
 msgstr ""
 "VM 在构造上就是单线程的（`!Send`）。宿主持有一台并用方法驱动它：用 `call` 调入口点，用 `run_ready` 排空被唤醒的帧，用 `next_deadline` 查定时器轮盘，用 `drive` 做单次恢复。嵌入循环见[宿主边界](host-boundary.md)；队列在调度中的角色见[异步模型](async-model.md)。"
 
 
-#: src/core-concepts/the-vm.md:34
+#: src/core-concepts/the-vm.md:35
 msgid ""
 "The instruction set is register-based: operands are `u16` indices into a per-frame slot file, and **every register has a static type recorded in the function's signature**. That single decision is what lets the hot path stay tag-free (see [reified types](reified-types.md)) and what makes refcounting precise: the compiler emits plain moves for scalars and retain/release moves for references, with no runtime tag checks."
 msgstr ""
 "指令集基于寄存器：操作数是指向每帧槽位文件的 `u16` 索引，而**每个寄存器都有记录在函数签名中的静态类型**。正是这一个决定让热路径保持无标签（参见[具体化类型](reified-types.md)），也让引用计数精确：编译器为标量生成普通移动，为引用生成保留/释放移动，没有任何运行时标签检查。"
 
 
-#: src/core-concepts/the-vm.md:41
+#: src/core-concepts/the-vm.md:42
 msgid ""
 "Ops are small and fixed-size, with variadic operand lists (call arguments, branch tables) living in per-function pools. A representative sample:"
 msgstr "操作小而定长，变长的操作数列表（调用实参、分支表）放在每函数的池子里。一份代表性样本："
 
 
-#: src/core-concepts/the-vm.md:59
+#: src/core-concepts/the-vm.md:60
 msgid "The type system also decides what is _not_ an op:"
 msgstr "类型系统同样决定什么_不是_操作："
 
 
-#: src/core-concepts/the-vm.md:61
+#: src/core-concepts/the-vm.md:62
 msgid ""
 "**Nothing static.** What the type table can answer at compile time becomes a constant — no \"get type id\" instruction, no length load for a fixed-size array."
 msgstr "**没有静态之事。**类型表在编译期能回答的都会变成常量——没有\"取类型 id\"指令，定长数组也没有长度加载。"
 
 
-#: src/core-concepts/the-vm.md:64
+#: src/core-concepts/the-vm.md:65
 msgid ""
 "**Nothing polymorphic and nothing named.** An interface-typed receiver has exactly one op (the itable call); string concatenation is a native call, not an opcode."
 msgstr ""
 
 
-#: src/core-concepts/the-vm.md:67
+#: src/core-concepts/the-vm.md:68
 msgid ""
 "**Concrete memory, control flow, and two readbacks.** Ops touch memory only through compile-time-known layouts, plus the two reads reification needs: \"what is it\" (`tidof`) and the guarded payload extract behind a downcast."
 msgstr ""
 "**具体的内存、控制流，外加两个读回。**操作只透过编译期已知的布局触碰内存，再加上具体化需要的两次读取：\"它是什么\"（`tidof`）与向下转型背后带守卫的载荷提取。"
 
 
-#: src/core-concepts/the-vm.md:72
+#: src/core-concepts/the-vm.md:73
 msgid "The module binary"
 msgstr "模块二进制"
 
 
-#: src/core-concepts/the-vm.md:74
+#: src/core-concepts/the-vm.md:75
 msgid ""
 "Compilation produces a versioned, self-contained binary per module: types, constants, functions (with their typed register signatures), imports, and a symbol table for backtraces. Its properties matter more than its layout:"
 msgstr "编译为每个模块产出一个带版本、自包含的二进制：类型、常量、函数（带各自的类型化寄存器签名）、导入，以及用于回溯的符号表。它的性质比它的布局更重要："
 
 
-#: src/core-concepts/the-vm.md:79
+#: src/core-concepts/the-vm.md:80
 msgid ""
 "**Deterministic.** The same sources plus the same dependency versions produce byte-identical binaries, so artifacts are cacheable by content hash and shippable instead of sources."
 msgstr "**确定性。**同样的源码加同样的依赖版本产出逐字节相同的二进制，因此产物可以按内容哈希缓存，可以交付二进制而非源码。"
 
 
-#: src/core-concepts/the-vm.md:82
+#: src/core-concepts/the-vm.md:83
 msgid ""
 "**Self-describing but strippable.** Names and source spans are retained for traces by default; a release build can strip them, and a sidecar map file (keyed by content hash) can restore symbolication later. See the reference on [diagnostics](../reference/diagnostics.md)."
 msgstr ""
 "**自描述但可剥离。**名字与源码区间默认为追踪保留；release 构建可以剥离它们，而一个旁车 map 文件（按内容哈希为键）可以在日后恢复符号化。参见关于[诊断](../reference/diagnostics.md)的参考章节。"
 
 
-#: src/core-concepts/the-vm.md:87
+#: src/core-concepts/the-vm.md:88
 msgid ""
 "**Link-time identity.** Type ids are module-local at rest and rebased into the VM's global table at link, where the interface tables merge by name. Cross-module interface-typed calls specialize per concrete argument here too — the static-dispatch rule of [interfaces and dispatch](interfaces-and-dispatch.md) holds across module boundaries."
 msgstr ""
 
 
-#: src/core-concepts/the-vm.md:93
+#: src/core-concepts/the-vm.md:94
 msgid ""
 "**Little-endian everywhere**, by law — every serialized word, so artifacts are platform-independent by construction rather than by luck."
 msgstr "**处处小端**，依律而行——每个序列化的字都是——产物因此从构造上就平台无关，而不是靠运气。"
 
 
-#: src/core-concepts/the-vm.md:97
+#: src/core-concepts/the-vm.md:98
 msgid "Verification at load"
 msgstr "加载时校验"
 
 
-#: src/core-concepts/the-vm.md:99
+#: src/core-concepts/the-vm.md:100
 msgid ""
 "Loading re-checks each function before anything executes: register operands against the signature, operand pools and jump targets in range, type operands present in the type table, native slots declared, and async state tables closed. A failed verification is a load error naming the module and function — **corrupted binaries never execute**. This is also where crossing rules are enforced for host-facing signatures, so a non-crossing shape is rejected before any script runs."
 msgstr ""
 "加载会在任何东西执行之前重新检查每个函数：寄存器操作数对照签名、操作数池与跳转目标在范围内、类型操作数在类型表中存在、原生槽位已声明、异步状态表封闭。校验失败是一个指名模块与函数的加载错误——**损坏的二进制永不执行**。这里也是宿主向签名的跨越规则被强制之处，因此不可跨越的形状在任何脚本运行之前就被拒绝。"
 
 
-#: src/core-concepts/the-vm.md:107
+#: src/core-concepts/the-vm.md:108
 msgid ""
 "Module-level initialization is folded at compile time: literals, enum members, constant expressions, and interned string literals become constants in the binary. A user function call in a module initializer is a compile error — there is no load-time execution at all. Loading a module runs nothing."
 msgstr ""
 "模块级初始化在编译期折叠：字面量、枚举成员、常量表达式与驻留字符串字面量都成为二进制中的常量。模块初始化器里的用户函数调用是编译错误——根本不存在加载期执行。加载模块不运行任何东西。"
 
 
-#: src/core-concepts/the-vm.md:113
+#: src/core-concepts/the-vm.md:114
 msgid "The interpreter loop and traps"
 msgstr "解释器循环与陷阱"
 
 
-#: src/core-concepts/the-vm.md:115
+#: src/core-concepts/the-vm.md:116
 msgid ""
 "Execution is a decode-dispatch loop over frames. A frame is the function's code, a program counter, its typed register file, and (for async frames) the resume state. Calls push frames; returns pop them; direct calls are an index plus jump, and interface calls are two loads plus an indirect jump through the itable."
 msgstr ""
 
 
-#: src/core-concepts/the-vm.md:121
+#: src/core-concepts/the-vm.md:122
 msgid ""
 "Failure is a **trap**, not an exception and not a Rust panic: integer overflow on the plain operators, a `nil` deref, an out-of-bounds index, a `panic(..)`, or an exhausted budget. A trap captures the raw frame chain (rendered lazily — symbolication happens only if someone prints it), runs destructors on the way out, and unwinds as an `Err(Trap)` to the host call. Rut code cannot catch one; the boundary is the catch point (see [the host boundary](host-boundary.md))."
 msgstr ""
 "失败是**陷阱**，不是异常，也不是 Rust panic：普通运算符上的整数溢出、对 `nil` 解引用、越界索引、`panic(..)`，或者耗尽的预算。陷阱捕获原始帧链（惰性渲染——只有当有人打印它时才做符号化），在退出路上运行析构器，并以 `Err(Trap)` 的形式沿栈展开到宿主调用。Rut 代码无法捕获它；边界就是捕获点（参见[宿主边界](host-boundary.md)）。"
 
 
-#: src/core-concepts/the-vm.md:130 src/reference/vm-core.md:105
+#: src/core-concepts/the-vm.md:131 src/reference/vm-core.md:105
 msgid "Budgets and interrupts"
 msgstr "预算与中断"
 
 
-#: src/core-concepts/the-vm.md:132
+#: src/core-concepts/the-vm.md:133
 msgid ""
 "Two knobs make it safe to run third-party code, both set at construction and mutable while running:"
 msgstr "两个旋钮让运行第三方代码变得安全，两者都在构造时设置、运行期间可变："
 
 
-#: src/core-concepts/the-vm.md:136
+#: src/core-concepts/the-vm.md:137
 msgid ""
 "// one unit per op, counts down\n"
 msgstr ""
 "// 每操作一个单位，倒数\n"
 
 
-#: src/core-concepts/the-vm.md:137
+#: src/core-concepts/the-vm.md:138
 msgid ""
 "// checked at every allocation\n"
 msgstr ""
 "// 每次分配都检查\n"
 
 
-#: src/core-concepts/the-vm.md:138
+#: src/core-concepts/the-vm.md:139
 msgid ""
 "// default: check every 1024 ops\n"
 msgstr ""
 "// 默认：每 1024 个操作检查一次\n"
 
 
-#: src/core-concepts/the-vm.md:141
+#: src/core-concepts/the-vm.md:142
 msgid ""
 "Exhaustion is **resumable**: the trap parks the frame exactly where it was — the frame _is_ the loop state — so the host can add fuel, raise the heap limit, or flip the interrupt flag and resume. A UI host yields mid-frame; a wasm page grants finite fuel; a test sets finite fuel plus a virtual clock and gets a deterministic hang proof."
 msgstr ""
 "耗尽是**可恢复的**：陷阱把帧停在原地——帧_就是_循环状态——宿主因此可以加燃料、调高堆限额或翻转中断标志然后恢复。UI 宿主在帧中途让步；wasm 页面发放有限燃料；测试设有限燃料加虚拟时钟，得到一份确定性的挂起证明。"
 
 
-#: src/core-concepts/the-vm.md:146
+#: src/core-concepts/the-vm.md:147
 msgid ""
 "The heap check runs _before_ any write, so an out-of-memory failure leaves the heap byte-identical (see [memory](memory.md))."
 msgstr "堆检查在任何写入_之前_运行，所以内存耗尽的失败让堆保持逐字节相同（参见[内存](memory.md)）。"
 
 
-#: src/core-concepts/the-vm.md:149
+#: src/core-concepts/the-vm.md:150
 msgid ""
 "Native functions run outside the fuel budget — a hanging native is a host bug by contract — and the interrupt hook is the host's lever at native return points."
 msgstr "原生函数运行在燃料预算之外——挂死的原生函数按契约就是宿主的 bug——而中断钩子是宿主在原生返回点上的操纵杆。"
 
 
-#: src/core-concepts/the-vm.md:153
+#: src/core-concepts/the-vm.md:154
 msgid "Why no JIT is viable"
 msgstr "为什么无 JIT 是可行的"
 
 
-#: src/core-concepts/the-vm.md:155
+#: src/core-concepts/the-vm.md:156
 msgid ""
 "A JS engine's speed is its JIT, and the JIT exists to speculate about polymorphic property loads. rut has no polymorphic loads: field access is by known index, calls bind statically whenever the site names one concrete type, generics are monomorphized, and the remaining dynamic dispatch is an honest checked vtable hop. The optimizer's currency is **type stability** — what the checker proves is everything the optimizer gets — and its passes (constant folding, inlining, monomorphization, register-level cleanup) all run ahead of time. The result is a runtime with no warmup curve, no deoptimization asymmetries, and per-op costs you can reason about from the bytecode alone."
 msgstr ""
 "JS 引擎的速度就是它的 JIT，而 JIT 的存在是为了对多态属性加载做投机。rut 没有多态加载：字段访问按已知索引，调用点指名一个具体类型时调用就静态绑定，泛型被单态化，剩下的动态分派是一次如实且受检的 vtable 跳转。优化器的通货是**类型稳定性**——检查器证明的一切就是优化器得到的全部——而它的各个 pass（常量折叠、内联、单态化、寄存器级清理）全部提前运行。结果是一个没有预热曲线、没有反优化不对称性的运行时，每操作的成本可以从字节码本身推演。"
 
 
-#: src/core-concepts/the-vm.md:167
+#: src/core-concepts/the-vm.md:168
 msgid ""
 "The full tables and laws live in the reference: [typed bytecode](../reference/typed-bytecode.md), [the module binary and verification](../reference/module-binary.md), [VM core](../reference/vm-core.md), and [resource limits and fuel](../reference/resource-limits.md)."
 msgstr ""
@@ -7868,30 +7870,17 @@ msgid ""
 "```text\n"
 "added: #1, #2, #3\n"
 "set_done(#2, true)\n"
-"title_of(#2) = Opt(Some(Str(\"implement the VM\")))\n"
-"title_of(42) = Opt(None)\n"
-"remove(#1) = Res(Ok(Bool(true)))\n"
-"remove(#1) again = Res(Err(Str(\"no todo #1\")))\n"
+"title_of(#2) = \"implement the VM\"\n"
+"title_of(42) = \"\"\n"
+"remove(#1) = true\n"
+"remove(#1) again = false\n"
 "TodoList[2]\n"
 "  #2 [x] implement the VM\n"
 "  #3 [ ] ship the demo\n"
 "second list #1: 0 todos\n"
-"fuel used: 680 of Some(1000000)\n"
+"fuel used: 978 of Some(1000000)\n"
 "```"
 msgstr ""
-"```text\n"
-"added: #1, #2, #3\n"
-"set_done(#2, true)\n"
-"title_of(#2) = Opt(Some(Str(\"implement the VM\")))\n"
-"title_of(42) = Opt(None)\n"
-"remove(#1) = Res(Ok(Bool(true)))\n"
-"remove(#1) again = Res(Err(Str(\"no todo #1\")))\n"
-"TodoList[2]\n"
-"  #2 [x] implement the VM\n"
-"  #3 [ ] ship the demo\n"
-"second list #1: 0 todos\n"
-"fuel used: 680 of Some(1000000)\n"
-"```"
 
 
 #: src/examples/00-todolist.md:35 src/examples/01-sort.md:39
@@ -8092,14 +8081,7 @@ msgstr ""
 "运行在显式预算下执行——燃料与堆限额——所以失控的模块会响亮地失败，而不是把宿主吊死（[资源限制与燃料](../reference/resource-limits.md)）："
 
 
-#: src/examples/00-todolist.md:188
-msgid ""
-"And the transcript's `remove(#1) again = Res(Err(...))` line is the VM's typed view of a `bool` answer — the second remove returns `false`, and the debug print shows the value shape the crossing produces ([Value boundary and borrows](../reference/value-boundary.md))."
-msgstr ""
-"而对话记录里 `remove(#1) again = Res(Err(...))` 那一行，是 VM 对 `bool` 应答的带类型视图——第二次 remove 返回 `false`，调试打印展示的正是这次跨越产出的值形状（[值边界与借用](../reference/value-boundary.md)）。"
-
-
-#: src/examples/00-todolist.md:193 src/examples/01-sort.md:208
+#: src/examples/00-todolist.md:188 src/examples/01-sort.md:208
 #: src/examples/02-digest.md:199 src/examples/03-plugin.md:216
 #: src/examples/04-custom-async.md:127 src/examples/05-todolist-web.md:245
 #: src/examples/06-github-viewer-cli.md:212
@@ -8108,36 +8090,36 @@ msgid "Takeaways"
 msgstr "要点"
 
 
-#: src/examples/00-todolist.md:195
+#: src/examples/00-todolist.md:190
 msgid ""
 "`entry fn` is the host-callable surface; its signatures are checked against the crossing rule at compile time, so a bad plan is a diagnostic, never a call-time surprise."
 msgstr "`entry fn` 是宿主可调用接口；它的签名在编译期对照跨越规则检查，所以坏计划是一个诊断，绝不是调用时的意外。"
 
 
-#: src/examples/00-todolist.md:198
+#: src/examples/00-todolist.md:193
 msgid ""
 "State lives rut-side in one `opaque` container the host holds and re-passes; plain values cross, instances never do."
 msgstr "状态活在 rut 一侧的一个 `opaque` 容器里，宿主持有并反复回传它；普通值跨越，实例永不跨越。"
 
 
-#: src/examples/00-todolist.md:200
+#: src/examples/00-todolist.md:195
 msgid "Erasure is `opaque(v)`; recovery is `opaque::downcast<T> -> ?T`."
 msgstr "擦除是 `opaque(v)`；恢复是 `opaque::downcast<T> -> ?T`。"
 
 
-#: src/examples/00-todolist.md:201
+#: src/examples/00-todolist.md:196
 msgid ""
 "Budgets (fuel + heap) are the embedder's call, and every embedder mistake comes back as a named trap."
 msgstr "预算（燃料 + 堆）由嵌入方说了算，嵌入方的每个失误都会以一个指名道姓的陷阱回来。"
 
 
-#: src/examples/00-todolist.md:203
+#: src/examples/00-todolist.md:198
 msgid ""
 "The same file works as a library: entries are compilation roots, so a module with no `main` still emits every entry."
 msgstr "同一个文件也能当库用：入口是编译根，所以没有 `main` 的模块仍然产出每个入口。"
 
 
-#: src/examples/00-todolist.md:206
+#: src/examples/00-todolist.md:201
 msgid ""
 "Next: [01 — Sort](01-sort.md) scales the pattern to five algorithms and shows what recursion costs in fuel. The crossing rules behind this page are in [the host boundary](../core-concepts/host-boundary.md)."
 msgstr ""
@@ -8160,8 +8142,8 @@ msgstr ""
 
 #: src/examples/01-sort.md:18
 msgid ""
-"The run sorts a hand-picked input, then fills the bank with a deterministic pseudo-random vector and runs the full sweep, printing fuel per algorithm:"
-msgstr "运行先排序一个人工挑选的输入，然后用确定性伪随机向量填满银行并跑完整遍，逐算法打印燃料："
+"The run sorts a hand-picked input, then fills the bank with a deterministic pseudo-random vector and runs the full sweep, printing fuel per algorithm (abridged — the real rows carry all sixteen values):"
+msgstr "运行先排序一个人工挑选的输入，然后用确定性伪随机向量填满银行并跑完整遍，逐算法打印燃料（节选——真实行带全部十六个值）："
 
 
 #: src/examples/01-sort.md:22
@@ -8170,27 +8152,15 @@ msgid ""
 "pushed: [5, 2, 9, 2]\n"
 "after insertion: [2, 2, 5, 9]\n"
 "fill(16, seed=42), each algorithm:\n"
-"  insertion true  fuel   2335  [208, 320, 353, ..., 854, 893]\n"
-"  bubble    true  fuel   3895  [208, 320, 353, ..., 854, 893]\n"
-"  selection true  fuel   3353  [208, 320, 353, ..., 854, 893]\n"
-"  quick     true  fuel   2241  [208, 320, 353, ..., 854, 893]\n"
-"  merge     true  fuel   4358  [208, 320, 353, ..., 854, 893]\n"
-"sort(bogus) = Res(Err(Str(\"unknown algorithm: bogus\")))\n"
-"fuel used: 21142 of Some(5000000)\n"
+"  insertion true  fuel   2043  [208, 320, 353, ..., 854, 893]\n"
+"  bubble    true  fuel   3155  [208, 320, 353, ..., 854, 893]\n"
+"  selection true  fuel   2830  [208, 320, 353, ..., 854, 893]\n"
+"  quick     true  fuel   1803  [208, 320, 353, ..., 854, 893]\n"
+"  merge     true  fuel   5595  [208, 320, 353, ..., 854, 893]\n"
+"sort(bogus) = \"unknown algorithm: bogus\"\n"
+"fuel used: 21367 of Some(5000000)\n"
 "```"
 msgstr ""
-"```text\n"
-"pushed: [5, 2, 9, 2]\n"
-"after insertion: [2, 2, 5, 9]\n"
-"fill(16, seed=42), each algorithm:\n"
-"  insertion true  fuel   2335  [208, 320, 353, ..., 854, 893]\n"
-"  bubble    true  fuel   3895  [208, 320, 353, ..., 854, 893]\n"
-"  selection true  fuel   3353  [208, 320, 353, ..., 854, 893]\n"
-"  quick     true  fuel   2241  [208, 320, 353, ..., 854, 893]\n"
-"  merge     true  fuel   4358  [208, 320, 353, ..., 854, 893]\n"
-"sort(bogus) = Res(Err(Str(\"unknown algorithm: bogus\")))\n"
-"fuel used: 21142 of Some(5000000)\n"
-"```"
 
 
 #: src/examples/01-sort.md:35
@@ -16972,113 +16942,113 @@ msgstr ""
 "// high-water mark: vm.heap_peak()\n"
 
 
-#: src/reference/vm-heap.md:42
+#: src/reference/vm-heap.md:45
 msgid ""
-"// live budget change\n"
+"The heap limit is **construct-time**: `Heap::new(limits.heap_limit_bytes, …)` bakes it and the runtime budget is read-only — there is no live setter. Fuel is the one live budget (`Vm::add_fuel`); a heap-trap resumption means dropping references so the retry fits, or rebuilding the VM with a larger budget ([resource limits](resource-limits.md))."
 msgstr ""
-"// live budget change\n"
+"堆上限是**构造期**的：`Heap::new(limits.heap_limit_bytes, …)` 把它烤进去，运行时预算只读——没有在线上调的口子。燃料是唯一的线上预算（`Vm::add_fuel`）；堆陷阱后的恢复意味着丢弃引用让重试装得下，或以更大的预算重建 VM（[资源上限](resource-limits.md)）。"
 
 
-#: src/reference/vm-heap.md:46
+#: src/reference/vm-heap.md:51
 msgid ""
 "Every route that materializes a rut value goes through it: cell mint, `Vec` growth, string concatenation, frame-pool growth, `opaque` store inserts. **The contributor rule**: an allocation path that materializes a rut value and does not flow through `alloc` is a bug — the budget would not bind, `heap_usage` would lie, and the leak report would miss it."
 msgstr ""
 "每条实体化 rut 值的路径都经过它：单元铸造、`Vec` 增长、字符串拼接、帧池增长、`opaque` 存储插入。**贡献者法则**：一条实体化 rut 值却不流经 `alloc` 的分配路径是 bug —— 预算将不再约束，`heap_usage` 会说谎，泄漏报告会漏掉它。"
 
 
-#: src/reference/vm-heap.md:53
+#: src/reference/vm-heap.md:58
 msgid ""
 "Accounting checks run **before any write**: a failed allocation leaves the heap byte-identical to its state before the op, and the trap is resumable ([resource limits](resource-limits.md))."
 msgstr ""
 "记账检查**在任何写入之前**运行：一次失败的分配让堆与操作之前的状态字节级一致，且陷阱可恢复（[资源限制](resource-limits.md)）。"
 
 
-#: src/reference/vm-heap.md:57
+#: src/reference/vm-heap.md:62
 msgid "Allocation strategy"
 msgstr "分配策略"
 
 
-#: src/reference/vm-heap.md:59
+#: src/reference/vm-heap.md:64
 msgid ""
 "**Fixed-size cell slots in the arena.** Cells are one fixed-size record carved from 1024-slot chunks with a free list; a dead slot is reused by the next mint. Reuse is invisible except in `heap_usage`."
 msgstr ""
 "**arena 中的定长单元槽。** 单元是从 1024 槽的块中刻出的定长记录，带一个空闲列表；死槽被下一次铸造复用。除了在 `heap_usage` 之中，复用是不可见的。"
 
 
-#: src/reference/vm-heap.md:62
+#: src/reference/vm-heap.md:67
 msgid ""
 "**The block store.** Every _variable-size_ payload — string octets, array element runs — lives in a block carved from size-classed pages the VM owns:"
 msgstr "**块存储。** 每个可变大小载荷 —— 字符串字节、数组元素段 —— 都生活在从 VM 拥有的、按大小分类的页面中刻出的块里："
 
 
-#: src/reference/vm-heap.md:65
+#: src/reference/vm-heap.md:70
 msgid ""
 "Size classes 16 B … 2 KiB (multiples of 8); small blocks come from 32 KiB pages via per-class free lists plus a single-slot LIFO cache for the churn pattern (a temp dies, the same size is minted again)."
 msgstr ""
 "大小类别 16 B …… 2 KiB（8 的倍数）；小块来自 32 KiB 页，经由每类别空闲列表加上一个单槽 LIFO 缓存来服务反复创建的模式（一个临时值死亡，同样的大小再次被铸造）。"
 
 
-#: src/reference/vm-heap.md:68
+#: src/reference/vm-heap.md:73
 msgid ""
 "In-place growth within a class keeps append-accumulation loops linear; the block header carries the class-rounded capacity, so free re-derives the class with no side table."
 msgstr "类别内的就地增长让追加累加循环保持线性；块头部携带按类别取整的容量，因此 free 无需旁表即可重新推导类别。"
 
 
-#: src/reference/vm-heap.md:71
+#: src/reference/vm-heap.md:76
 msgid "Large blocks (> 2 KiB) get dedicated allocations, freed wholesale."
 msgstr "大块（> 2 KiB）获得专用分配，整体释放。"
 
 
-#: src/reference/vm-heap.md:72
+#: src/reference/vm-heap.md:77
 msgid ""
 "Blocks are 1:1 with their cell (the cell is the counted unit) and **never move**, so a raw `&[u8]` into the store stays valid for the cell's life."
 msgstr "块与其单元 1:1（单元是被计数的单位）且**绝不移动**，因此指向存储的裸 `&[u8]` 在单元的生命期内保持有效。"
 
 
-#: src/reference/vm-heap.md:75
+#: src/reference/vm-heap.md:80
 msgid ""
 "**Immortal singletons.** Interned string literals and dataless enum variants live in a slab freed only at `Vm` drop; they carry the `rc == 0` sentinel."
 msgstr "**不朽单例。** 驻留的字符串字面量与无数据枚举变体生活在一个只在 `Vm` 丢弃时释放的 slab 中；它们携带 `rc == 0` 哨兵。"
 
 
-#: src/reference/vm-heap.md:78
+#: src/reference/vm-heap.md:83
 msgid ""
 "**The `opaque` store.** Every rut `opaque` value lives in a slab of two-kind entries (rut value / host payload) with its own borrow guards; entries charge their bytes on insert and refund on death, so the budget and the receipts stay honest."
 msgstr ""
 "**`opaque` 存储。** 每个 rut `opaque` 值生活在一个两类条目（rut 值 / 宿主载荷）的 slab 中，带有自己的借用守卫；条目在插入时记入字节账、在死亡时退款，因此预算与回执保持诚实。"
 
 
-#: src/reference/vm-heap.md:82
+#: src/reference/vm-heap.md:87
 msgid ""
 "**No compaction.** Non-moving keeps host borrows into `Vec` buffers sound and freelists trivial."
 msgstr "**没有压缩。** 不移动让指向 `Vec` 缓冲的宿主借用保持健全，空闲列表保持平凡。"
 
 
-#: src/reference/vm-heap.md:84
+#: src/reference/vm-heap.md:89
 msgid ""
 "**Cells are addressed by raw pointer** in the slot word. A 32-bit handle design was prototyped and reverted on measurement: ref-heavy workloads paid +8–15% for the decode chain per slot read."
 msgstr ""
 "**单元以裸指针寻址**记录在槽字中。32 位句柄设计被原型化过，又因测量结果而回退：引用密集的工作负载在每次槽读取上为解码链付出 +8–15% 的代价。"
 
 
-#: src/reference/vm-heap.md:88
+#: src/reference/vm-heap.md:93
 msgid "Deterministic teardown"
 msgstr "确定性拆卸"
 
 
-#: src/reference/vm-heap.md:90
+#: src/reference/vm-heap.md:95
 msgid ""
 "Teardown mirrors the destruction rules: the host drops its references, releases run inline ([the Rc heap](rc-heap.md)), and `Vm::drop` frees the survivors wholesale — leaked cycles included — after emitting the leak report. The heap never outlives the `Vm`, and no rut cell can outlive the heap."
 msgstr ""
 "拆卸镜像销毁规则：宿主丢弃自己的引用，release 内联运行（[Rc 堆](rc-heap.md)），`Vm::drop` 在发出泄漏报告之后整体释放幸存者 —— 泄漏的循环也在内。堆的寿命绝不超过 `Vm`，也没有任何 rut 单元能比堆活得更久。"
 
 
-#: src/reference/vm-heap.md:99
+#: src/reference/vm-heap.md:104
 msgid "\"used {} bytes (peak {})\""
 msgstr "\"used {} bytes (peak {})\""
 
 
-#: src/reference/vm-heap.md:99
+#: src/reference/vm-heap.md:104
 msgid ""
 "// dropping `vm` frees every remaining slab\n"
 msgstr ""
@@ -17168,8 +17138,8 @@ msgstr "恢复"
 
 #: src/reference/resource-limits.md:24
 msgid ""
-"the frame is parked: raise the limit (`Heap::set_limit`), drop references and retry, or drop the VM"
-msgstr "帧被停放：提高上限（`Heap::set_limit`）、丢弃引用并重试，或丢弃 VM"
+"the frame is parked: a heap trap is cleared by dropping references so the retry fits, or by rebuilding the VM with a larger budget — the limit is construct-time, the runtime budget is read-only"
+msgstr "帧被停放：堆陷阱靠丢弃引用使重试装得下来解除，或以更大的预算重建 VM——上限是构造期的，运行时预算只读"
 
 
 #: src/reference/resource-limits.md:25

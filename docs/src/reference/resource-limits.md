@@ -21,7 +21,7 @@ pub struct Limits {
 | **What does not** | module binaries, the shared type table, host-side Rust state |
 | **Check points** | every `Heap::alloc` route: cell mint, `Vec` growth (`push` reallocation), string concat, frame-pool growth, host crossing mints |
 | **On failure** | `Trap::OutOfMemory` — the check runs **before any write**, so the heap is byte-identical to its pre-op state; nothing is half-initialized |
-| **Resumption** | the frame is parked: raise the limit (`Heap::set_limit`), drop references and retry, or drop the VM |
+| **Resumption** | the frame is parked: a heap trap is cleared by dropping references so the retry fits, or by rebuilding the VM with a larger budget — the limit is construct-time, the runtime budget is read-only |
 | **Observability** | `vm.heap_usage()` (live), `vm.heap_peak()` (high-water) |
 
 `Vec` growth charges the budget before the write; shrinking is never
