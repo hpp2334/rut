@@ -23,13 +23,11 @@
 //     kind 2  = EV_TIMER (subject = the tim_after tag, detail = "")
 //
 // Ten rows, not the survey's eleven: `ui_input_value(el) -> str` is
-// ABSENT — the engine's verified-return table cannot bind a `-> str`
-// host fn today (`Ret for String` reports the program-relative
-// `TY_ANY`, `verify_against` reads it as signature drift, and `Ret`
-// cannot be implemented outside rut-vm — `Slot` is crate-private).
-// Fixing that is an engine change, out of this phase's scope; the
-// event-carried detail above covers the read (recorded as a phase-1
-// deviation in the survey's terms).
+// ABSENT by design — the event row on an input element already carries
+// its current value as `detail`, so a separate read-back crossing has no
+// consumer (the event-carried value is thinner anyway — the thinness
+// law's own spirit). The event-carried detail above covers the read
+// (recorded as a phase-1 deviation in the survey's terms).
 //
 // Thinness law: no app names, no data shipping, no scheduler — the host
 // knows nothing about todos (survey §4.5).

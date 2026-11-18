@@ -63,10 +63,10 @@ fn share_vs_copy() {
     let s = Session::new("abc");
     let o = opaque(s);            // SHARES the Session cell (zero-copy):
                                   // mutation through s is visible in o
-    let o2 = opaque(s);    // a private copy, new identity
+    let o2 = opaque(s);    // a second BOX over the same payload cell
 
     log.info(f"same session: {opaque::downcast<Session>(o) != nil}");
-    log.info(f"distinct boxes: {o == o2}");     // false — two cells
+    log.info(f"distinct boxes: {o == o2}");     // false — two boxes, one shared payload
 }
 
 fn prim_value() {

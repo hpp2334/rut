@@ -12,7 +12,7 @@
 //! fresh-copy law is unobservable at prim/str/bytes (content equality)
 //! but the widths are NOT — an `i8` key reads `-5`, a `u64` key keeps
 //! its high bit (the mint's `type_id<K>()` law), empty tables walk zero
-//! times, the `mut` binding form compiles, and the aliasing law rides
+//! times, a loop variable is reassignable by default, and the aliasing law rides
 //! iteration end to end (writes through `get(k)` inside the loop hit
 //! the map's stored cell).
 

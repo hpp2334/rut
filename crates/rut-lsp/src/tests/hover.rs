@@ -257,7 +257,7 @@ fn surface_prefixes_render_verbatim() {
     // carries its spelled head
     let src = "\
 pub host async fn fetch(u: str) -> bytes;
-pub builtin fn own<T>(x: T) -> T;
+pub builtin fn echo<T>(x: T) -> T;
 prelude builtin fn keep<T>(x: T) -> T;
 prelude builtin class Result<T> {
 fn is_ok(self) -> bool;
@@ -274,7 +274,7 @@ fn is_ok(self) -> bool;
             .clone()
     };
     assert_eq!(src_of("fetch"), "pub host async fn fetch(u: str) -> bytes");
-    assert_eq!(src_of("own"), "pub builtin fn own<T>(x: T) -> T");
+    assert_eq!(src_of("echo"), "pub builtin fn echo<T>(x: T) -> T");
     assert_eq!(src_of("keep"), "prelude builtin fn keep<T>(x: T) -> T");
     let md = hover_decl_at(src, "Result").unwrap();
     assert!(md.contains("prelude builtin class Result<T> {"), "{md}");

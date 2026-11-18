@@ -649,10 +649,10 @@ entry fn digest(algo: str, data: bytes) -> (bytes, str) {
 
 // ---------------------------------------------------------------- JSON ---
 //
-// enums carry no data, and recursive structs are not
-// expressible — so the tree is a tagged union by hand (JTag + Json),
-// with children boxed in `opaque` to break the recursion:
-// `Json` contains `Vec<opaque>`, each opaque boxes another `Json`.
+// enums carry no data, so the tree is a tagged union by hand
+// (JTag + Json), with the children boxed in `opaque` to break the
+// recursion: `Json` holds `Vec<opaque>`, each opaque boxes another
+// `Json`.
 //
 // Since the rut-json batch's phase 2, the ENCODE half rides the std
 // json pkg (`impl Json { pub fn encode(..) }` below — this example now

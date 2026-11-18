@@ -2,8 +2,8 @@
 // surface (the crossing-fastpath plan, phase 0): `pub host fn` decls
 // only — the bodies live in rut-std's `bench_cross::pkg()`.
 //
-// This fixture mirrors the committed `rut/bench-cross` surface
-// byte-for-byte in content: update BOTH when the surface changes.
+// This fixture carries the committed `rut/bench-cross` surface's
+// contract (the same signatures): update BOTH when the surface changes.
 //
 // The bodies are deliberately empty (identity / four-way sum) so the
 // bench row that mounts the pkg measures the crossing, not the work.

@@ -1,5 +1,5 @@
 {
-  // node-cycle/ — strong cycles keep cells alive: no collector, no weak refs yet.
+  // node-cycle/ — strong cycles keep cells alive: no collector (a `Weak<T>` edge closes no cycle).
   "name": "node_cycle",
     "deps": {
     "ink": {

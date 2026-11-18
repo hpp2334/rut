@@ -15,24 +15,25 @@ use json::{EncodeErrorKind, EncodeJsonError};
 use json::{JsonReader, JsonWriter};
 use json::{JsonI64, JsonF64, JsonBool, JsonStr, JsonU64, JsonArr, SOpt};
 
-// equality chains — the enum name spells the member; a `when` select
-// over a used module's enum trips the completeness check's member probe
-// (an engine-side observation recorded in the commit body)
+// equality chains — the enum name spells the member; the exhaustive
+// `when` covers every member of the used module's enum
 fn dk_name(k: DecodeErrorKind) -> str {
-    if (k == DecodeErrorKind::Unexpected) { return "Unexpected"; }
-    if (k == DecodeErrorKind::Truncated) { return "Truncated"; }
-    if (k == DecodeErrorKind::InvalidUtf8) { return "InvalidUtf8"; }
-    if (k == DecodeErrorKind::WrongType) { return "WrongType"; }
-    if (k == DecodeErrorKind::Depth) { return "Depth"; }
-    if (k == DecodeErrorKind::Trailing) { return "Trailing"; }
-    return "Unknown";
+    return when (k) {
+        DecodeErrorKind::Unexpected -> "Unexpected",
+        DecodeErrorKind::Truncated -> "Truncated",
+        DecodeErrorKind::InvalidUtf8 -> "InvalidUtf8",
+        DecodeErrorKind::WrongType -> "WrongType",
+        DecodeErrorKind::Depth -> "Depth",
+        DecodeErrorKind::Trailing -> "Trailing",
+    };
 }
 
 fn ek_name(k: EncodeErrorKind) -> str {
-    if (k == EncodeErrorKind::Depth) { return "Depth"; }
-    if (k == EncodeErrorKind::NotFinite) { return "NotFinite"; }
-    if (k == EncodeErrorKind::KeyUnsupported) { return "KeyUnsupported"; }
-    return "Unknown";
+    return when (k) {
+        EncodeErrorKind::Depth -> "Depth",
+        EncodeErrorKind::NotFinite -> "NotFinite",
+        EncodeErrorKind::KeyUnsupported -> "KeyUnsupported",
+    };
 }
 
 fn dec_err(e: ?DecodeJsonError) -> str {

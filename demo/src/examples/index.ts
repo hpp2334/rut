@@ -117,7 +117,7 @@ export const EXAMPLES: RutCase[] = [
   {
     id: "ex-node-cycle",
     name: "node cycle",
-    blurb: "strong cycles keep cells alive — the program's responsibility; no collector, no weak refs yet",
+    blurb: "strong cycles keep cells alive — the program's responsibility; no collector (a weak edge is `Weak<T>`)",
     source: nodeCycleSrc,
   },
   {
@@ -129,7 +129,7 @@ export const EXAMPLES: RutCase[] = [
   {
     id: "ex-weak-cache",
     name: "weak cache",
-    blurb: "the cache/observer shape, shown with today's strong refs",
+    blurb: "the cache/observer shape, shown with strong refs (`Weak<T>` is the weak edge)",
     source: weakCacheSrc,
   },
   {

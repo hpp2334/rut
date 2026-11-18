@@ -4,11 +4,10 @@
 // (`rut/http_host` + `rut/http`, bodies in rut-std); a host pkg is
 // example-local only when the surface is example-local.
 //
-// One naming disclosure: the stdout row is `out`, not `print` — `print`
-// is a REMOVED core name whose use sites diagnose by symbol
-// (rut-core/src/binary.rs REMOVED_CORE + the lir's own sym::PRINT arm),
-// so a bare `print(..)` call can never compile. `out` is the same
-// crossing under an honest name.
+// One naming disclosure: the stdout row is `out`, not `print` — a bare
+// `print(..)` call is the ordinary unknown-name miss (there is no
+// package-declared `print`; the name simply resolves to nothing), so
+// `out` is the same crossing under an honest name.
 //
 // The `?str` answers cross the typed answer lane (the
 // legal-host-returns phase): nil is success, the text is the io error

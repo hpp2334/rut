@@ -12,8 +12,8 @@
   // own `encode` member (json's interface observes it structurally),
   // and
   // the shapes monomorphize from the bundles at the link. The embedder names
-  // its remote policy (Loader + HttpRemote::project_local) — a cold start
-  // networks on its misses, a warm start is pure cache; the TESTS prime
+  // its remote policy (`load_path_session_with` + `HttpRemote::online_local`)
+  // — a cold start networks on its misses, a warm start is pure cache; the TESTS prime
   // an offline remote from the committed artifacts (dist/std plays the
   // wire), so the gates never touch the network. json's container
   // wrappers are json's OWN source, and its `[deps]` pull

@@ -27,8 +27,9 @@
 // a mutation (the shape annotation is the fork's call-site law) —
 // deps DISCOVERED through the ctx, never declared. The store's own
 // verbs are ui-MODULE-PRIVATE and the handles' verbs belong to the
-// frozen test surface (entries.rut) and ui's resolver — neither
-// appears in the app code, and the law gate greps for both.
+// frozen test surface (`tests/store_probe`, driven by `tests/store.rs`)
+// and ui's resolver — neither appears in the app code, and the law gate
+// greps for both.
 //
 // THERE IS NO domain container. The store is a DECOUPLED-BIZ design (the ui
 // package's Store knows no todo); what biz owns is HANDLES — the

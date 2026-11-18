@@ -355,13 +355,39 @@ entry fn main() -> i32 {
     assert_eq!(out, 16, "both instantiations answered (7 + 7 + 2)");
 }
 
-// NOTE on the one shape this suite does NOT yet pin: boxing a
-// FOREIGN-OWNED concrete type in the consumer's unit (`let s: Shape =
-// foreign_point;`). The fill's member is extern there, and the
-// extern-fill mirror is still landing compiler-side (a nil-stub verify
-// failure, or a runtime "no impl for interface slot N"). Every crossing
-// above proves satisfaction in the members' own unit; when the mirror
-// lands, a consumer-side box of a foreign type belongs here as a test.
+#[test]
+fn foreign_owned_concrete_type_boxes_in_the_consumer() {
+    // the once-missing shape: the type is FOREIGN-owned (declared and
+    // membered in `shapes`), and the CONSUMER's unit is where the box is
+    // minted (`let s: Shape = p;`). The fill's member is extern there;
+    // it resolves through the payload's carried origin row, so the box
+    // dispatches without a nil stub.
+    let out = run_graph(&[
+        (
+            "shapes",
+            "\
+pub interface Shape { fn area(self) -> f64; }
+pub class Point { x: f64; }
+impl Point {
+  [constructor] pub fn of(x: f64) -> Self { return Self { x: x }; }
+  pub fn area(self) -> f64 { return self.x; }
+}
+",
+        ),
+        (
+            "app",
+            "\
+use shapes::{Shape, Point};
+entry fn main() -> i32 {
+    let p: Point = Point::of(3.0);
+    let s: Shape = p;
+    return s.area() as i32;
+}
+",
+        ),
+    ]);
+    assert_eq!(out, 3, "the foreign-owned box dispatched in the consumer");
+}
 
 // ---- the fill/dispatch identity law ---------------------------------------
 //

@@ -13,23 +13,7 @@
 //! feeding `for..of` (the `[iterable]` marker path), the identity row,
 //! and stop-propagation through `take`.
 //!
-//! BLOCKED-ON note (compile-state, not spelling): two out-of-lane gaps
-//! keep cases here red today —
-//! 1. the generic-newtype CONSTRUCTION check: a consumer-spelled
-//!    `VecFlow<i32>(nums)` diagnoses "`VecFlow`'s parameter `T` is not
-//!    determined by `Vec<T>`", and the same check fires on the bundled
-//!    `from_flow` instantiation — until the checker binds the
-//!    constructor's `T`, no Vec/Arr entry or `VecFlow` sink compiles;
-//! 2. the `nmap_host` sv trio (`map_hput_sv`/`map_hfind_sv`/
-//!    `map_hremove_sv`) is declared by the mounted pkg but not
-//!    registered by the `rut_std::nmap` installer — `install_host_pkg`
-//!    panics at boot for ANY session that mounts nmapset, and skipping
-//!    the install leaves `map_new` unbound at `Vm::new`. One
-//!    registration block in `crates/rut-std/src/nmap.rs` (the fused sv
-//!    helpers already sit beside it) unblocks every case.
-//!
-//! The spellings below are the target surface; when the two land, the
-//! suite goes green without further edits.
+//! The spellings below are the surface under test.
 
 use rut_vm::interp::{HostRegistry, Limits, Vm};
 use std::path::PathBuf;

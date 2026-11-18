@@ -8,9 +8,8 @@
   // (`__abort`/`__launch`) AND `futures` (`sleep`), so the manifest
   // names both — `core` stays off the list (engine-ambient). A run
   // resolves the rows and mounts the pkgs; binding the launcher rows
-  // (and running) rides in with the harness. There is no other lane
-  // here to declare in: nothing walks or parses this dir yet, so the
-  // manifest text is the example's only declaration surface.
+  // (and running) rides in with the harness. The entry is still parsed
+  // by the corpus; only a runnable harness is not there yet.
   "name": "custom_async",
     "deps": {
     "async_host": {

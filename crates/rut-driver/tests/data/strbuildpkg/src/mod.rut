@@ -111,7 +111,7 @@ fn sink(b: StringBuilder) {
 }
 
 entry fn param_shares_the_cell() -> str {
-    // the mut-non-nilable param law: the parameter shares the caller's
+    // the param-shares-the-cell law: the parameter is the caller's
     // instance cell — appends through it land in the caller's document
     let b = StringBuilder::new();
     b.append("a");

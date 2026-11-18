@@ -1,5 +1,5 @@
 {
-  // str-views/ — O(1) slice views (a slice IS a str), codepoints — s.code / str.from_code.
+  // str-views/ — O(1) slice views (a slice IS a str), codepoints — s.code / str::from_code.
   "name": "str_views",
     "deps": {
     "ink": {

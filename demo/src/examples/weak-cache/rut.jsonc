@@ -1,5 +1,5 @@
 {
-  // weak-cache/ — the cache/observer shape, shown with today's strong refs.
+  // weak-cache/ — the cache/observer shape, shown with strong refs (`Weak<T>` is the weak edge).
   "name": "weak_cache",
     "deps": {
     "pouch": {

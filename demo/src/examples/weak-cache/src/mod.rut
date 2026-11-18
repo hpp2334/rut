@@ -1,4 +1,4 @@
-// the cache/observer shape, shown with TODAY's strong
+// the cache/observer shape, shown with strong
 // refs: the cache holds its entries, so a hit's cell lives as long as
 // the cache does, and a lookup that finds nothing answers `nil` — the
 // nullable's absence — never a trap.
@@ -39,9 +39,10 @@ entry fn main() {
     log.info(f"held: {got != nil} id={got.id()}");
     // `alive` is still a strong handle, and the cache holds a second:
     // dropping one would NOT free the cell — the other still retains it.
-    // Breaking that coupling (a weak entry the cache does not retain) is
-    // exactly what a future batch plans; today the strong-held cache IS the
-    // story, and the memory law is the program's (see node-cycle).
+    // The weak-edge spelling is `Weak<T>` (import-gated: `use core::{
+    // Weak }`), but this example keeps the strong-held cache: the hit
+    // returns the stored cell, and the memory law stays the program's
+    // (see node-cycle).
 
     // and a lookup that finds nothing is just nil — no trap
     let miss = evict(cache, 99);

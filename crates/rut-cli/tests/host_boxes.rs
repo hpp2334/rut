@@ -2,8 +2,8 @@
 //! `'static` Rust value behind an `opaque`, borrows it back typed, and rut
 //! sees only the box. The erasure semantics must hold on the rut side —
 //! `o is opaque` is `true`, `opaque::downcast<T>` is `None` for every `T` (never a
-//! trap), `own` shares identity — and the payload's `Drop` runs when the
-//! box's rc hits 0.
+//! trap), a returned handle is the SAME handle (sharing, not a copy) — and
+//! the payload's `Drop` runs when the box's rc hits 0.
 //!
 //! The drop-timing flow drives the box through a wrapper-class record as
 //! well as direct host calls — the record's field retain releases with the
@@ -202,8 +202,8 @@ fn host_boxes_hold_any_rust_type() {
     let erased: bool = vm.call("erase_laws", (held.clone(),)).unwrap();
     assert!(erased, "erase_laws");
 
-    // own shares identity: writes through the copy are visible through
-    // the original, and the handles are `==`
+    // returning the handle shares identity: writes through the returned
+    // handle are visible through the original, and the handles are `==`
     let shared: OpaqueRef = vm.call("share", (held.clone(),)).unwrap();
     vm.call::<_, ()>("put", (shared.clone(), "via-own", 9i64))
         .unwrap();

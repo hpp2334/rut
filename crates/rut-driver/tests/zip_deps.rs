@@ -109,14 +109,14 @@ fn a_source_zip_dep_packs_mounts_and_runs() {
     );
     // the consumer: the zip by url, pinned, loaded from the fetched map
     let app = root.join("app");
-    let url = "https://cdn.example/std-v14/dist/std/util.zip";
+    let url = "https://cdn.example/std-v18/dist/std/util.zip";
     write(
         &app,
         "rut.jsonc",
         r#"{
   "name": "app",
   "deps": {
-    "util": { "url": "https://cdn.example/std-v14/dist/std/util.zip" }
+    "util": { "url": "https://cdn.example/std-v18/dist/std/util.zip" }
   }
 }"#,
     );
@@ -191,7 +191,7 @@ fn a_packed_zip_embeds_its_path_deps_and_the_consumer_sees_them() {
     // the consumer runs it (the embedded host surface mounts through
     // the identity dir)
     let app = root.join("app");
-    let url = "https://cdn.example/std-v14/dist/std/ink.zip";
+    let url = "https://cdn.example/std-v18/dist/std/ink.zip";
     write(
         &app,
         "rut.jsonc",

@@ -3,7 +3,7 @@
 // `#app` and exposes the t1 surface to the twin tests as probes —
 // scenario renders (the ordinary `t1_mount` + `t1_render` calls),
 // registry reads, and the trap shapes. NOT the todolist app (the app
-// package `rut/app/app` is); nothing here is test-only machinery
+// package `rut/biz` is); nothing here is test-only machinery
 // beyond naming the scenarios.
 //
 // The imports are the two-package shape: the framework's names from
