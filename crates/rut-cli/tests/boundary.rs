@@ -155,9 +155,14 @@ fn typed_wrong_shape_is_a_named_trap() {
         "{}",
         err.msg
     );
-    // arity: the raw call's check still guards the typed wrapper
+    // arity: the raw call's check still guards the typed wrapper —
+    // the full door message, not a keyword probe
     let err = vm.call::<_, (i32, bool)>("pair", ()).unwrap_err();
-    assert!(err.msg.contains("params"), "{}", err.msg);
+    assert_eq!(
+        err.msg, "`pair` takes 1 params, 0 given",
+        "the raw door's arity refusal: {}",
+        err.msg
+    );
 }
 
 // ---- the entry-err shape (err-channel phase 3): `(?T, err)` crosses

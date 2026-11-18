@@ -154,10 +154,7 @@ impl<'a> Ctx<'a> {
             // a local enum: concrete and non-generic — inherent
             // methods attach exactly as a struct's
             if !generics.is_empty() {
-                self.err(
-                    sp,
-                    format!("`{}` takes no generic arguments", self.name(name)),
-                );
+                self.err(sp, format!("`{}` takes no type arguments", self.name(name)));
                 return None;
             }
             Some((e.ty, None, name))

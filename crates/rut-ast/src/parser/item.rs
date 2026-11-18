@@ -1923,7 +1923,7 @@ impl SurfaceFrame {
                 self.name = name;
                 self.is_primitive = true;
                 if matches!(p.tok(), Tok::Lt) {
-                    p.err(p.span(), "a primitive takes no generic arguments");
+                    p.err(p.span(), "a primitive takes no type arguments");
                     while !matches!(p.tok(), Tok::LBrace | Tok::Semi | Tok::Eof) {
                         p.bump();
                     }

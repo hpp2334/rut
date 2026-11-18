@@ -797,7 +797,7 @@ fn enum_target_rejects_generic_arguments_and_foreign_names() {
     );
     assert!(
         ds.iter()
-            .any(|d| d.contains("`Light` takes no generic arguments")),
+            .any(|d| d.contains("`Light` takes no type arguments")),
         "an enum target is concrete: {ds:?}"
     );
 }

@@ -426,8 +426,8 @@ fn builtin_primitive_takes_no_generics() {
         Mode::Decl,
     );
     assert!(
-        diags.iter().any(|d| d.msg.contains("no generic arguments")),
-        "a primitive takes no generic arguments: {diags:?}"
+        diags.iter().any(|d| d.msg.contains("no type arguments")),
+        "a primitive takes no type arguments: {diags:?}"
     );
 }
 
