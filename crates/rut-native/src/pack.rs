@@ -15,6 +15,7 @@ use rut_driver::bundle::{
 };
 use rut_driver::pack::{PackError, PackOpts, PackWorld, PkgSource};
 
+use crate::remote::DepRemote;
 use crate::source::{FsSource, Source};
 use crate::walk::{mount_dev_table, read_manifest, walk_dir, Archive, World, MANIFEST_RETIRED};
 
@@ -88,8 +89,6 @@ pub async fn pack_dir_opts_with(
     pack_dir_opts_locked(dir, opts, &map, &lock)
 }
 
-use crate::remote::DepRemote;
-
 // ---------------------------------------------------------------------
 // the source-zip lane (`--mode source`, the default)
 // ---------------------------------------------------------------------
@@ -140,8 +139,7 @@ fn pack_dir_zip_locked(
     let manifest_path = dir.join(rut_driver::bundle::MANIFEST_NAME);
     let manifest_bytes = match std::fs::read(&manifest_path) {
         Ok(bytes) => bytes,
-        Err(e) if std::fs::read(dir.join(MANIFEST_RETIRED)).is_ok() => {
-            let _ = e;
+        Err(_) if std::fs::read(dir.join(MANIFEST_RETIRED)).is_ok() => {
             return Err(PackError::law(format!(
                 "{} found — the manifest is `{}` (JSONC: comments and trailing commas legal) \
                  since wire 9; re-name the file or re-pack the directory",
@@ -206,7 +204,7 @@ struct StagedNode {
 /// Collect one package's staged tree, post-order: its deps first
 /// (the rewritten manifest embeds their identities), then the
 /// rewrite, the fingerprint, the validation gates.
-#[allow(clippy::too_many_arguments)]
+#[allow(clippy::too_many_arguments)] // the staged walk threads exactly this state
 fn collect_tree(
     dir: &Path,
     dir_key: &str,
@@ -507,8 +505,7 @@ pub fn pack_dir_opts_fetched(
 }
 
 /// [`pack_dir_opts_fetched`] with the lock read — the pack lanes'
-/// resolved core (no separate pub resolved name: the pack has no
-/// install-side caller yet). The root manifest's gates, the walk, the
+/// resolved core. The root manifest's gates, the walk, the
 /// dev tables — then the driver's pure pack over the assembled world.
 fn pack_dir_opts_locked(
     dir: &Path,
@@ -519,10 +516,9 @@ fn pack_dir_opts_locked(
     let manifest_path = dir.join(rut_driver::bundle::MANIFEST_NAME);
     let manifest_bytes = match std::fs::read(&manifest_path) {
         Ok(bytes) => bytes,
-        Err(e) if std::fs::read(dir.join(MANIFEST_RETIRED)).is_ok() => {
+        Err(_) if std::fs::read(dir.join(MANIFEST_RETIRED)).is_ok() => {
             // the retired manifest name: the pointed cutover refusal —
             // no fallback lane reads it
-            let _ = e;
             return Err(PackError::law(format!(
                 "{} found — the manifest is `{}` (JSONC: comments and trailing commas legal) \
                  since wire 9; re-name the file or re-pack the directory",

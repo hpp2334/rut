@@ -29,7 +29,9 @@
 //! - [`default_out_path`] — the conventional pack output path.
 //!
 //! The wasm hosts (`rut-wasm`, the demo page) mount in memory and
-//! offer pkgs by hand — they depend on the driver alone, never here.
+//! offer pkgs by hand — in production they depend on the driver alone,
+//! never here. (This crate is a dev-dependency of `rut-wasm`: its
+//! tests pack a bundle host-side.)
 
 mod error;
 mod pack;

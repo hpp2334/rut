@@ -93,33 +93,17 @@ impl From<LoadError> for rut_driver::RunError {
 }
 
 /// A remote-policy failure — the [`crate::DepRemote`] trait's error
-/// currency: a message plus an optional boxed source (the transport's
-/// own error, when there is one).
+/// currency: one message (the transport's own error, when there is one,
+/// is rendered into it at the call site).
 #[derive(Debug, Error)]
 #[error("{msg}")]
 pub struct RemoteError {
     msg: String,
-    #[source]
-    source: Option<Box<dyn std::error::Error + Send + Sync + 'static>>,
 }
 
 impl RemoteError {
     /// A message-only failure.
     pub fn new(msg: impl Into<String>) -> Self {
-        RemoteError {
-            msg: msg.into(),
-            source: None,
-        }
-    }
-
-    /// A failure carrying the transport's own error as the source.
-    pub fn with_source(
-        msg: impl Into<String>,
-        source: impl std::error::Error + Send + Sync + 'static,
-    ) -> Self {
-        RemoteError {
-            msg: msg.into(),
-            source: Some(Box::new(source)),
-        }
+        RemoteError { msg: msg.into() }
     }
 }

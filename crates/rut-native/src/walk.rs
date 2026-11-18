@@ -42,8 +42,8 @@ use crate::source::{FsSource, Source};
 /// module re-exports it at its walk-side home.
 pub use rut_driver::pack::Archive;
 
-/// Where a walked pkg's files live — the D3 checks and the pack lanes'
-/// group reads dispatch on it: a `Dir` pkg reads from its directory,
+/// Where a walked pkg's files live — the pack lanes' group reads
+/// dispatch on it: a `Dir` pkg reads from its directory,
 /// an `Unpacked` pkg from the content-addressed directory a source-zip
 /// url dep unpacked to (the pack lanes read its tree like any dir's),
 /// an `Archive` pkg from the fetched archive's entries at its prefix.
@@ -228,7 +228,7 @@ pub(crate) fn read_manifest(src: &dyn Source, dir: &str) -> Result<Manifest, Loa
     let text = match read_source_text(src, &key) {
         Ok(text) => text,
         Err(missing) => {
-            let retired = src.resolve(dir, "rut.json").map_err(LoadError::law)?;
+            let retired = src.resolve(dir, MANIFEST_RETIRED).map_err(LoadError::law)?;
             if src.read(&retired).is_ok() {
                 return Err(LoadError::law(format!(
                     "{retired} found — the manifest is `{MANIFEST_NAME}` (JSONC: comments and \
@@ -396,7 +396,7 @@ pub fn url_dep_rows(dir: &Path) -> Result<Vec<(String, String)>, RunError> {
 /// can happen.
 fn no_fetcher(spec: &str, url: &str) -> LoadError {
     LoadError::law(format!(
-        "dep `{spec}` is declared by url (`{url}`) — this loader has no `dep_fetch`, so the \
+        "dep `{spec}` is declared by url (`{url}`) — this loader has no fetcher, so the \
          fetch and its rut.lock pin-check cannot run: call `load_dir_with` / `pack_dir_with` \
          (the CLI does), or vendor the dep"
     ))
@@ -404,16 +404,18 @@ fn no_fetcher(spec: &str, url: &str) -> LoadError {
 
 /// The url-dep context the sync core walks with: the fetched bytes
 /// (url → bytes), the LOCK's pins (url → sha256 — gate 0's law), and
-/// the archives those bytes opened (slot-ordered). The OLD sync
-/// wrappers pass an empty map — a url row there is the loud
-/// no-fetcher error, never a network call (the walk never fetches;
-/// bundles stay closed at load, url rows are leaves).
+/// the archives those bytes opened (slot-ordered). The sync wrappers
+/// pass an empty map — a url row there is the loud no-fetcher error,
+/// never a network call (the walk never fetches; bundles stay closed at
+/// load, url rows are leaves).
 struct Fetched<'a> {
     map: &'a BTreeMap<String, Vec<u8>>,
     lock: &'a BTreeMap<String, String>,
     /// defense-in-depth cycle guard: url deps are leaves, so no
     /// recursion can re-enter a url — the guard keeps that true even
-    /// if the walk ever grows one.
+    /// if the walk ever grows one. UNREACHABLE today (a url row is
+    /// mounted straight from the fetched map and never recursively
+    /// walked); it stays as the invariant's tripwire.
     visiting_urls: BTreeSet<String>,
 }
 
@@ -971,6 +973,9 @@ fn resolve_table(
         }
         if let Some(url) = desc.get("url") {
             let bytes = fetched.map.get(url).ok_or_else(|| no_fetcher(spec, url))?;
+            // UNREACHABLE today: a url row mounts from the fetched map
+            // and is never recursively walked, so the guard never trips
+            // — kept as the invariant's tripwire for a future walk.
             if !fetched.visiting_urls.insert(url.clone()) {
                 return Err(LoadError::law(format!(
                     "cyclic use: `{spec}` ({url}) is already being loaded"
@@ -1072,7 +1077,7 @@ fn mount_zip_dep(
         .map_err(|e| LoadError::law(format!("{url}: {e}")))?;
     if world.unpack_root.as_os_str().is_empty() {
         return Err(LoadError::law(format!(
-            "{url}: no unpack root — the walk entry seeds `<project>/.rut/unpacked`"
+            "{url}: no unpack root — the walk/offer entry seeds `<project>/.rut/unpacked`"
         )));
     }
     let dir = world.unpack_root.join(sha_hex);
@@ -1572,8 +1577,8 @@ pub(crate) fn dir_pkgs_fetched(
 }
 
 /// [`dir_pkgs_fetched`] with the pins injected — the offer lane's
-/// resolved core (mirrors [`load_dir_resolved`]; no separate pub name
-/// — the offer lane has no install-side caller yet).
+/// resolved core (mirrors [`load_dir_resolved`]; the pins ride in
+/// rather than being re-read, so the offer lane pins what it fetched).
 fn dir_pkgs_resolved(
     dir: &Path,
     map: &BTreeMap<String, Vec<u8>>,

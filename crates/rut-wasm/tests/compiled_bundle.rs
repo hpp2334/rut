@@ -1,10 +1,10 @@
-//! The wasm host's compiled-bundle mount: the session is built from
-//! BYTES — `load_bundle_bytes` over an in-memory archive, no
-//! filesystem at load — which is exactly the shape a wasm host drives
-//! (the bundle rides the JS boundary as bytes, the mount never touches
-//! a path). The pack side stays a native concern; this test only
-//! exercises the mount half: a decoded `.rutc` root, its compiled
-//! groups, and a run through the same `Vm` path `RutEngine::run` drives.
+//! The compiled-bundle mount from BYTES: the driver's bundle walk over
+//! an in-memory archive, no filesystem at load — a decoded `.rutc`
+//! root, its compiled groups, and a run through the same `Vm` path
+//! `RutEngine::run` drives. No rut-wasm API is exercised here: the
+//! test composes the driver's mount, the native pack (host-side — the
+//! wasm lane cannot pack) and the vm's verify/run shapes, which is the
+//! stack the wasm engine sits on.
 
 use std::rc::Rc;
 

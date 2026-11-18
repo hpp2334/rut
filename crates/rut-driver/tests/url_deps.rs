@@ -595,7 +595,7 @@ fn sync_wrapper_refuses_url_dep_loudly() {
     );
 
     let err = load_dir(&app).unwrap_err().to_string();
-    assert!(err.contains("this loader has no `dep_fetch`"), "{err}");
+    assert!(err.contains("this loader has no fetcher"), "{err}");
     assert!(err.contains("`load_dir_with`"), "{err}");
     assert!(err.contains("vendor the dep"), "{err}");
     assert!(err.contains(url), "{err}");

@@ -1,5 +1,9 @@
-//! rut-wasm — the demo page's compile/run surface, mirrored
-//! by `demo/src/wasm/rut-api.d.ts`.
+//! rut-wasm — the demo page's compile/run surface. `compile`, `run`,
+//! `resume` and `drop_frame` are mirrored by the page's typed face,
+//! `demo/src/wasm/rut-api.d.ts`; `compile_manifest` is not on that
+//! face — its consumer is this crate's native integration test
+//! (`tests/envelope_law.rs`), while the book lane
+//! (`docs/theme/rut-book.js`) rides `compile` / `run`.
 //!
 //! wasm-bindgen over the engine (the `rut-lsp-wasm` pattern): the
 //! module exports ONE class, [`RutEngine`]; the page constructs it
@@ -93,11 +97,14 @@ impl RutEngine {
         compile_envelope(out)
     }
 
-    /// The compile's manifest lane: the page may pass the program's own
-    /// consumer manifest (jsonc) beside the source — parsed at this door
-    /// into the structural form and stamped on the `main` pkg. A manifest
-    /// that does not parse comes back as a span-0 diagnostic (the loud
-    /// door); the plain `compile` keeps the offered-libs default.
+    /// The compile's manifest lane: the caller may pass the program's
+    /// own consumer manifest (jsonc) beside the source — parsed at this
+    /// door into the structural form and stamped on the `main` pkg. A
+    /// manifest that does not parse comes back as a span-0 diagnostic
+    /// (the loud door); the plain `compile` keeps the offered-libs
+    /// default. Not on the page's typed face (`rut-api.d.ts` mirrors
+    /// the plain door): this crate's integration test drives it, and it
+    /// stays for a host that carries its own manifest.
     pub fn compile_manifest(&self, src: &str, man: &str) -> String {
         let (out, ctx) = compile_playground(src, Some(man));
         *self.ctx.borrow_mut() = Some(ctx);

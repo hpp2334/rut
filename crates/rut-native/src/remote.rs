@@ -10,10 +10,12 @@
 //! cache back atomically, under hard timeouts (10 s connect, 60 s
 //! whole-request) — a stalled host fails loudly, never hangs.
 //!
-//! Layout law: `<root>/<sha256(url)>.rutbundle` — the filename never
-//! carries the url's syntax, only its identity. The `http` feature
-//! (default on) arms the wire for the online remotes; without it even
-//! they error loudly on a miss.
+//! Layout law: `<root>/<sha256(url)><ext>` — the filename never
+//! carries the url's syntax, only its identity; the extension is the
+//! artifact kind (`.zip` for source zips, `.rutbundle` otherwise — the
+//! same split the url's own tail names). The `http` feature (default
+//! on) arms the wire for the online remotes; without it even they error
+//! loudly on a miss.
 
 use std::future::Future;
 use std::path::PathBuf;
@@ -137,11 +139,10 @@ impl HttpRemote {
             .expect("http client")
     }
 
-    /// The cache path for a url: `<root>/<sha256(url)>.<ext>` — the
+    /// The cache path for a url: `<root>/<sha256(url)><ext>` — the
     /// extension follows the url's own artifact kind (`.zip` for
     /// source zips, `.rutbundle` otherwise), the hash the identity.
-    /// Concrete, so a host (or the CLI's eviction lane) can inspect or
-    /// delete one entry.
+    /// Concrete, so a host can inspect or delete one entry.
     pub fn path_for(&self, url: &str) -> PathBuf {
         self.root.join(format!(
             "{}{}",
@@ -158,8 +159,8 @@ impl HttpRemote {
     }
 
     /// The miss arm: the wire when this remote has one, the loud
-    /// refusal when it does not (an `offline()` remote, or a build
-    /// without the `http` feature).
+    /// refusal when it does not (an `at()`/`project_local()` remote, or
+    /// a build without the `http` feature).
     #[cfg(feature = "http")]
     fn fetch_miss(&self, url: &str) -> Result<Vec<u8>, RemoteError> {
         if self.wire {

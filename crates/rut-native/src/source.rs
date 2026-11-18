@@ -35,8 +35,9 @@ pub trait Source {
 
 /// The real filesystem — the CLI's and native hosts' [`Source`]. The
 /// root is baked at construction; every key is a path string, and the
-/// `Path` math lives here and nowhere else.
-#[derive(Clone, Debug, Default)]
+/// `Path` math lives here and nowhere else. No `Default`: a root-less
+/// source would resolve against the process CWD.
+#[derive(Clone, Debug)]
 pub struct FsSource {
     root: String,
 }
