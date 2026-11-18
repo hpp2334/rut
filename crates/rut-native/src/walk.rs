@@ -1604,6 +1604,13 @@ pub(crate) fn offer_dir(
 ) -> Result<String, LoadError> {
     let src = FsSource::at(dir);
     let dir_key = dir.to_string_lossy().into_owned();
+    // the source-zip unpack root: the same seed the load lane's
+    // `walk_dir` plants (`<project>/.rut/unpacked`) — an offer that
+    // meets a `.zip` url dep unpacks there; without it the zip mount
+    // dies on its internal-error branch
+    if world.unpack_root.as_os_str().is_empty() {
+        world.unpack_root = dir.join(".rut").join("unpacked");
+    }
     let manifest = read_manifest(&src, &dir_key)?;
     let name = manifest.name.clone().ok_or_else(|| {
         LoadError::law(format!(

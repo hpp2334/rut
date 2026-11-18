@@ -22,7 +22,9 @@
   },
   "files": [
     "src/",
-    "register.js"
+    "register.js",
+    "../../LICENSE-MIT",
+    "../../LICENSE-APACHE"
   ],
   "scripts": {
     "build": "node scripts/build.mjs",

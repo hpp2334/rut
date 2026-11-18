@@ -18,7 +18,7 @@ mod common;
 use common::{block_on, dep_dir, write_lock, Table};
 
 use rut_driver::sha256_hex;
-use rut_native::{load_dir, pack_dir};
+use rut_native::{load_dir, pack_dir, pack_dir_zip};
 
 // ------------------------------------------------------------------
 // the fixture world: real dirs, real packed bundles
@@ -414,6 +414,58 @@ fn embedder_mount_outranks_the_url_dep() {
         .compile()
         .expect("compile the offered world");
     assert!(g.graph.program.is_some(), "{:?}", g.graph.diags);
+}
+
+#[test]
+fn embedder_offer_unpacks_a_source_zip_url_dep() {
+    // the offer lane's SOURCE transport: `dir_pkgs_with` mounts a
+    // source-zip url dep exactly like the load lane — the walk seeds
+    // `<project>/.rut/unpacked` so the zip has a home. The compiled
+    // `.rutbundle` offer above hides the seed; this row proves it.
+    let root = leaf_world("zipoff", "util", UTIL_BODY);
+    let zip = pack_dir_zip(&root.join("util")).expect("pack util as a source zip");
+    let url = "https://fixtures.test/util.zip";
+    let app = root.join("app");
+    write(
+        &app,
+        "rut.jsonc",
+        &manifest(
+            "app",
+            "mod.rut",
+            &format!(r#", "deps": {{"util": {{"url": "{url}"}}}}"#),
+        ),
+    );
+    write(
+        &app,
+        "src/mod.rut",
+        "use util::{twice};\nentry fn go() -> i64 {\n    return twice(21);\n}\n",
+    );
+
+    let mut table = BTreeMap::new();
+    table.insert(url.to_string(), zip.clone());
+    write_lock(&app, &table);
+    let walked =
+        block_on(rut_native::dir_pkgs_with(&app, &Table::from(table))).expect("mount the zip dep");
+    assert_eq!(walked.root, "app");
+    assert!(
+        walked.pkgs.iter().any(|p| p.spec == "util"),
+        "the zip dep mounted (mounted: {:?})",
+        walked
+            .pkgs
+            .iter()
+            .map(|p| p.spec.clone())
+            .collect::<Vec<_>>()
+    );
+    // the offer lane's seed: the unpacked tree lives under the PROJECT
+    // (`<app>/.rut/unpacked`, content-addressed by the pin)
+    let unpacked = app.join(".rut").join("unpacked").join(sha256_hex(&zip));
+    assert!(
+        unpacked.join("src/mod.rut").is_file(),
+        "the zip unpacked under the project: {}",
+        unpacked.display()
+    );
+    let answer: i64 = run_entry(walked, "go");
+    assert_eq!(answer, 42);
 }
 
 /// The archive source-group world: `codec` (interface + entries,

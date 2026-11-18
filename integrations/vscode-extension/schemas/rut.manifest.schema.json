@@ -3,6 +3,7 @@
   "title": "rut manifest (rut.jsonc)",
   "description": "A rut module manifest: the module's identity, its entry sources, and its dependency rows. The file is JSONC — `//` and `/* */` comments and trailing commas are legal. One directory is one module; the manifest is the directory's identity card. The root module is `src/mod.rut` (the package's `src/` shell; file modules: `mod NAME;` in the root declares each `src/NAME/mod.rut` child); the repealed `entry.lib`/`entry.libs` keys are refused — rename the lib to `src/mod.rut` and drop the keys.",
   "type": "object",
+  "additionalProperties": false,
   "properties": {
     "name": {
       "type": "string",
@@ -22,6 +23,7 @@
     },
     "format_version": {
       "type": "integer",
+      "const": 13,
       "description": "The bundle layout version — 13, the ONE wire this toolchain reads. A bundle stamped with any other version is refused on load (the refusal names the re-pack): re-pack the directory with the current toolchain; there is no compatibility ladder."
     },
     "entry": {
@@ -53,31 +55,6 @@
         "type": "string"
       },
       "description": "The package's formatter knobs — flat `\"key\": \"value\"` rows (e.g. `\"indent\": \"2\"`). Keys and values are validated by the `rut fmt` tool, never the loader; unknown keys ride."
-    },
-    "namespace": {
-      "type": "string",
-      "description": "The qualified-access head (calc's `Math`): `use calc::{ Math }` binds it and member access routes qualified (`Math::sqrt`, `Math::PI`). The surface grammar has no spelling for this — the manifest is its only form."
-    },
-    "consts": {
-      "type": "object",
-      "additionalProperties": {
-        "anyOf": [
-          {
-            "type": "number",
-            "description": "The constant's f64 value."
-          },
-          {
-            "enum": [
-              "inf",
-              "+inf",
-              "-inf",
-              "nan"
-            ],
-            "description": "The non-finite pair has no JSON spelling — the string names it."
-          }
-        ]
-      },
-      "description": "The host body's compiler-materialized constants (name → f64; calc's `Math::PI` family). The surface grammar has no `static` field form, so the manifest is their only spelling."
     }
   },
   "definitions": {
