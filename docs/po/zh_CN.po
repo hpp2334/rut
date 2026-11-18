@@ -13302,50 +13302,50 @@ msgstr ""
 
 
 #: src/reference/structs.md:91
-msgid "Construction — the literal, everywhere"
-msgstr "构造 —— 字面量，无处不在"
+msgid "Construction — the literal form"
+msgstr "构造——字面量形式"
 
 
 #: src/reference/structs.md:93
 msgid ""
-"`Name { field: expr, .. }` is the **only** construction. There is no `new`, no class methods, no type-call. The literal is available everywhere — function bodies and module-level `let` initializers alike — and it allocates the cell."
+"`Name { field: expr, .. }` is the **only** construction. There is no `new`, no class methods, no type-call. The literal is available in every function body — and it allocates the cell."
 msgstr ""
-"`Name { field: expr, .. }` 是**唯一的**构造方式。没有 `new`，没有类方法，没有类型调用。字面量在任何地方都可用 —— 函数体和模块级 `let` 初始化式皆可 —— 并且它分配单元。"
+"`Name { field: expr, .. }` 是**唯一的**构造方式。没有 `new`，没有类方法，没有类型调用。字面量在每个函数体里都可用——并且它分配单元。"
 
 
-#: src/reference/structs.md:98
+#: src/reference/structs.md:97
 msgid "Fields may be given in any order, by name."
 msgstr "字段可以按名称以任意顺序给出。"
 
 
-#: src/reference/structs.md:99
+#: src/reference/structs.md:98
 msgid ""
 "**The every-field-covered law**: a literal must cover **every** field — spelled in the literal, or covered by the field's declared initializer (`tag: str = \"...\"`). Omitting a field that has no initializer is a compile error — ``missing field `b` in the `P` literal (the every-field-covered law)`` — the silent zero-fill default is gone."
 msgstr ""
 "**字段全覆盖法则**：字面量必须覆盖**每一个**字段——要么在字面量里写出，要么由该字段的声明初始化器（`tag: str = \"...\"`）覆盖。省略一个没有初始化器的字段是编译错误——``missing field `b` in the `P` literal (the every-field-covered law)``——悄无声息的零值填充默认已不复存在。"
 
 
-#: src/reference/structs.md:105
+#: src/reference/structs.md:104
 msgid ""
 "A field spelled twice is a compile error — ``duplicate field `a` in the `P` literal`` — there is no last-wins."
 msgstr ""
 "把一个字段写两遍是编译错误——``duplicate field `a` in the `P` literal``——不存在“后者胜”（last-wins）。"
 
 
-#: src/reference/structs.md:107
+#: src/reference/structs.md:106
 msgid ""
 "An omitted field with an initializer takes it; `{}` with all-initialized fields is legal."
 msgstr "带初始化器的字段被省略时取其初始化器；当所有字段都有初始化器时，`{}` 是合法的。"
 
 
-#: src/reference/structs.md:109
+#: src/reference/structs.md:108
 msgid ""
 "**Field-init shorthand**: a bare field name takes its value from the like-named binding in scope — `Name { x, y }` is exactly `Name { x: x, y: y }`."
 msgstr ""
 "**字段初始化简写（field-init shorthand）**：裸字段名从作用域中的同名绑定取值——`Name { x, y }` 恰为 `Name { x: x, y: y }`。"
 
 
-#: src/reference/structs.md:113
+#: src/reference/structs.md:112
 msgid ""
 "```rut\n"
 "use ink::{ Logger };\n"
@@ -13365,7 +13365,7 @@ msgid ""
 msgstr ""
 
 
-#: src/reference/structs.md:133
+#: src/reference/structs.md:132
 msgid ""
 "```rut\n"
 "use ink::{ Logger };\n"
@@ -13382,30 +13382,30 @@ msgid ""
 msgstr ""
 
 
-#: src/reference/structs.md:150
+#: src/reference/structs.md:149
 msgid "All fields public, always"
 msgstr "所有字段公开，始终如此"
 
 
-#: src/reference/structs.md:152
+#: src/reference/structs.md:151
 msgid ""
 "A struct is an open data record: member visibility in a struct body is a compile error (privacy needs construction control, which is the class's job — see [Classes and constructors](classes.md)). Structs also have no `static` members."
 msgstr ""
 "结构体是开放的数据记录：结构体体内出现成员可见性标注是编译错误（隐私需要控制构造，那是类的职责 —— 参见[类与构造器](classes.md)）。结构体也没有 `static` 成员。"
 
 
-#: src/reference/structs.md:157
+#: src/reference/structs.md:156
 msgid "Methods live in impl blocks"
 msgstr "方法位于 impl 块中"
 
 
-#: src/reference/structs.md:159
+#: src/reference/structs.md:158
 msgid ""
 "A struct body is **fields only** — a `fn` member in the body is a hard parse error. Methods live in the inherent `impl S { .. }`, in the type's module only — the one impl form (see [Interfaces and dispatch](interfaces.md)):"
 msgstr ""
 
 
-#: src/reference/structs.md:164
+#: src/reference/structs.md:163
 msgid ""
 "```rut\n"
 "impl Point {\n"
@@ -13420,14 +13420,14 @@ msgid ""
 msgstr ""
 
 
-#: src/reference/structs.md:175
+#: src/reference/structs.md:174
 msgid ""
 "Methods carry real visibility — the class rule: `pub fn` exports cross-module, plain `fn` is module-private. `Self` spells the struct, in signatures (`-> Self`) and the literal (`Self { x: 1, y: 2 }`) alike:"
 msgstr ""
 "方法带有真实可见性——类的法则：`pub fn` 跨模块导出，不带 `pub` 的 `fn` 只在模块内可见。`Self` 拼写的就是这个结构体，签名（`-> Self`）和字面量（`Self { x: 1, y: 2 }`）里都一样："
 
 
-#: src/reference/structs.md:180
+#: src/reference/structs.md:179
 msgid ""
 "```rut\n"
 "use ink::{ Logger };\n"
@@ -13449,54 +13449,54 @@ msgid ""
 msgstr ""
 
 
-#: src/reference/structs.md:202
+#: src/reference/structs.md:201
 msgid ""
 "Free functions over data remain the default idiom; methods are for tight helpers, impl blocks for the members other code observes."
 msgstr ""
 
 
-#: src/reference/structs.md:205
+#: src/reference/structs.md:204
 msgid "Limits, exhaustively:"
 msgstr "限制，穷尽列举："
 
 
-#: src/reference/structs.md:207
+#: src/reference/structs.md:206
 msgid ""
 "**fields are always public** — no field-visibility dial (privacy needs construction control, which is the class's job — see [Classes and constructors](classes.md));"
 msgstr "**字段永远公开**——字段可见性没有调节项（私有需要构造控制，那是类的职责——参见[类与构造器](classes.md)）；"
 
 
-#: src/reference/structs.md:210
+#: src/reference/structs.md:209
 msgid ""
 "**construction is the literal** — `Point { x: 1, y: 2 }` everywhere (open literal vs class-method-gated _is_ the struct/class distinction)."
 msgstr "**构造就是字面量**——`Point { x: 1, y: 2 }` 到处可用（开放字面量 vs 类方法门禁_正是_结构体/类的分界）。"
 
 
-#: src/reference/structs.md:214
+#: src/reference/structs.md:213
 msgid ""
 "Everything else class-shaped is allowed — `impl` blocks, `Self`, `[disposal]`. And the old \"no destructor\" limit is gone: a shared value dies exactly when its cell's refcount reaches zero, so cleanup is one `impl` away — mark a `[disposal]` member on the type and the engine calls `dispose` at that moment (see [Rc, dispose, and identity](rc-dispose-identity.md))."
 msgstr ""
 
 
-#: src/reference/structs.md:221
+#: src/reference/structs.md:220
 msgid "Interfaces and representation"
 msgstr ""
 
 
-#: src/reference/structs.md:223
+#: src/reference/structs.md:222
 msgid ""
 "Widening a struct to an interface `I` **attaches the itable to the same handle** — no allocation, no copy: the interface-typed value aliases the record, and mutations through it are visible to every other handle."
 msgstr ""
 
 
-#: src/reference/structs.md:227
+#: src/reference/structs.md:226
 msgid ""
 "Representation: one slot per field inside the cell, in declaration order — primitive fields widened into their slot, composite fields as cell-handle slots (see [Reified types and layout](reified-types.md)). Recursive shapes (`next: ?Node`) are legal because composite fields are pointer-sized."
 msgstr ""
 "表示：单元内每个字段一个槽，按声明顺序排列 —— 基本类型字段宽化进自己的槽，复合字段作为单元句柄槽（参见[具体化类型与布局](reified-types.md)）。递归形状（`next: ?Node`）是合法的，因为复合字段是指针大小的。"
 
 
-#: src/reference/structs.md:232
+#: src/reference/structs.md:231
 msgid ""
 "Structs are for small data (points, rects, colors, configs), but any size is allowed."
 msgstr "结构体用于小型数据（点、矩形、颜色、配置），但任意大小都允许。"
@@ -15401,103 +15401,103 @@ msgstr ""
 
 #: src/reference/reified-types.md:39
 msgid ""
-"It is a **compile-time constant** — a load-time expression (legal in module-level `let` initializers, see [Modules and visibility](modules-and-visibility.md)), folded from the type table, never executed."
+"It is a **compile-time constant** — folded from the type table at compile time, never executed — but it is **not accepted in a module-level `let`**: those initializers are literals only, so `let TID: u32 = type_id<Point>();` refuses like any other non-literal (see [Modules and visibility](modules-and-visibility.md))."
 msgstr ""
-"它是**编译期常量** —— 一个加载期表达式（可用于模块级 `let` 初始化式，参见[模块与可见性](modules-and-visibility.md)），从类型表折叠而来，从不执行。"
+"它是**编译期常量**——在编译期从类型表折叠而来，从不执行——但它**不被模块级 `let` 接受**：那些初始化式只接受字面量，因此 `let TID: u32 = type_id<Point>();` 会像任何其他非字面量一样被拒绝（参见[模块与可见性](modules-and-visibility.md)）。"
 
 
-#: src/reference/reified-types.md:43
+#: src/reference/reified-types.md:44
 msgid ""
 "Value size and alignment are implementation details, not a language surface."
 msgstr "值的大小与对齐是实现细节，不是语言接口面。"
 
 
-#: src/reference/reified-types.md:45
+#: src/reference/reified-types.md:46
 msgid ""
 "Constructing a value _from_ raw bytes is deliberately not provided: it could forge private fields and class invariants."
 msgstr "刻意不提供从原始字节 _构造_ 值的能力：它可能伪造私有字段和类不变量。"
 
 
-#: src/reference/reified-types.md:48
+#: src/reference/reified-types.md:49
 msgid "Value representation — slot arrays"
 msgstr "值表示 —— 槽数组"
 
 
-#: src/reference/reified-types.md:50
+#: src/reference/reified-types.md:51
 msgid ""
 "Every struct and class value lives in a heap **cell**: header + (vtable, when the type has impls) + the payload."
 msgstr "每个结构体和类值生活在堆**单元**中：头部 +（vtable，当该类型有 impl 时）+ 载荷。"
 
 
-#: src/reference/reified-types.md:53
+#: src/reference/reified-types.md:54
 msgid ""
 "The payload is a **slot array: one untagged 8-byte slot per field, in declaration order**. Primitive fields are widened into their slot (sign/zero-extended; a float is stored at the canonical 64-bit width); composite fields are cell-handle slots."
 msgstr ""
 "载荷是**槽数组：每个字段一个不带标签的 8 字节槽，按声明顺序**。基本类型字段宽化进自己的槽（符号/零扩展；浮点以规范的 64 位宽度存储）；复合字段是单元句柄槽。"
 
 
-#: src/reference/reified-types.md:57
+#: src/reference/reified-types.md:58
 msgid ""
 "Visibility, generic parameters, and impl blocks add **nothing** — the payload depends only on the field list. Field access is by index; heap accounting charges `fields × 8` bytes."
 msgstr "可见性、泛型参数和 impl 块不增加**任何东西** —— 载荷只取决于字段列表。字段访问按索引进行；堆记账记 `fields × 8` 字节。"
 
 
-#: src/reference/reified-types.md:60
+#: src/reference/reified-types.md:61
 msgid ""
 "Buffers of primitive elements (`Vec<f32>`, `[i32]`) stay **flat**, packed to the element's machine width; composite elements are one handle slot each — `Vec<Point>` stores one handle per element."
 msgstr ""
 "基本类型元素的缓冲（`Vec<f32>`、`[i32]`）保持**扁平**，按元素的机器宽度紧排；复合元素各占一个句柄槽 —— `Vec<Point>` 每个元素存储一个句柄。"
 
 
-#: src/reference/reified-types.md:63
+#: src/reference/reified-types.md:64
 msgid ""
 "Enums are tagged cells (a tag slot plus a payload slot); dataless enum variants are immortal singleton cells."
 msgstr "枚举是带标签的单元（一个标签槽加一个载荷槽）；无数据的枚举变体是不朽的单例单元。"
 
 
-#: src/reference/reified-types.md:65
+#: src/reference/reified-types.md:66
 msgid ""
 "Nullable `?prim` element storage inside sequence backings is the raw payload plus a one-byte nil tag — no per-element cell."
 msgstr "序列后备存储中的可空 `?prim` 元素存储是原始载荷加一个单字节 nil 标签 —— 没有逐元素单元。"
 
 
-#: src/reference/reified-types.md:67
+#: src/reference/reified-types.md:68
 msgid ""
 "`bytes` at the engine level is a `u8` array cell; a `str` is an immutable, COW-shared UTF-8 block, and a slice of it is a small view cell (see [String slicing and views](string-views.md))."
 msgstr ""
 "引擎层面的 `bytes` 是一个 `u8` 数组单元；`str` 是不可变、COW 共享的 UTF-8 块，它的切片是一个小视图单元（参见[字符串切片与视图](string-views.md)）。"
 
 
-#: src/reference/reified-types.md:71
+#: src/reference/reified-types.md:72
 msgid "Cells and vtables"
 msgstr "单元与 vtable"
 
 
-#: src/reference/reified-types.md:78
+#: src/reference/reified-types.md:79
 msgid ""
 "The **exact runtime type** lives in the cell (via the vtable when present, the header otherwise). Every cell is minted at construction with its vtable already attached."
 msgstr "**精确运行时类型**存放在单元中（有 vtable 时经由 vtable，否则经由头部）。每个单元在构造时铸造，vtable 已附上。"
 
 
-#: src/reference/reified-types.md:81
+#: src/reference/reified-types.md:82
 msgid ""
 "Interface member ids are assigned **globally per interface instantiation** at compile time (`Slice<Point>` ≠ `Slice<str>`); a type's vtable fills every slot of every interface instantiation it was satisfaction-boxed at — the fill is synthesized by the boxing site's boundary check, and a type that never crosses an interface-typed boundary fills nothing."
 msgstr ""
 
 
-#: src/reference/reified-types.md:87
+#: src/reference/reified-types.md:88
 msgid ""
 "Widening a composite to an interface `I` **reuses the same cell and vtable**: the interface-typed value is the handle plus the vtable pointer — no allocation, no copy. The vtable reserves no base-prefix room: there is no inheritance."
 msgstr ""
 
 
-#: src/reference/reified-types.md:91
+#: src/reference/reified-types.md:92
 msgid ""
 "A call through an interface object is two loads and an indirect jump (the receiver's vtable, the member slot). Interface members never devirtualize; inherent calls bind directly:"
 msgstr ""
 
 
-#: src/reference/reified-types.md:95
+#: src/reference/reified-types.md:96
 msgid ""
 "```text\n"
 "Op::CallI { recv, slot: 3, args }   // s.area() — itable slot 3\n"
@@ -15506,30 +15506,30 @@ msgid ""
 msgstr ""
 
 
-#: src/reference/reified-types.md:100
+#: src/reference/reified-types.md:101
 msgid "The type test"
 msgstr "类型测试"
 
 
-#: src/reference/reified-types.md:102
+#: src/reference/reified-types.md:103
 msgid ""
 "`is` with a concrete right-hand side lowers to: load the object's exact type id, compare — a compile-time constant comparison when the static type already answers. The interface-RHS capability probe is: exact-type compare, then a flat scan of the descriptor's filled itable slots — no inheritance chain to walk (see [Interfaces and dispatch](interfaces.md))."
 msgstr ""
 
 
-#: src/reference/reified-types.md:109
+#: src/reference/reified-types.md:110
 msgid ""
 "`opaque` interacts with exactly one of these reads: `is` reads the **box's** own type, so every payload probe misses; only `opaque::downcast<T>`'s match test keeps reading the payload — the one legitimate see-through."
 msgstr ""
 "`opaque` 与其中恰好一种读取交互：`is` 读取**盒**自身的类型，因此所有载荷探测都未命中；只有 `opaque::downcast<T>` 的匹配测试继续读取载荷 —— 这是唯一合法的看穿。"
 
 
-#: src/reference/reified-types.md:114
+#: src/reference/reified-types.md:115
 msgid "Boxing"
 msgstr "装盒"
 
 
-#: src/reference/reified-types.md:116
+#: src/reference/reified-types.md:117
 msgid ""
 "Storing a value into an erasure box widens by the slot discipline: an integer box stores the 64-bit sign/zero-extended value, a float the 64-bit width. A kind check plus `opaque::downcast<i64>()` / `downcast<f64>()` / `downcast<bool>()` / `downcast<str>()` is therefore total in-branch: within the successful branch the value's type is the exact concrete type, and everything downstream optimizes as if the value had never been erased."
 msgstr ""
@@ -16464,8 +16464,8 @@ msgstr "**复合元素缓冲存储句柄**：`[Point]` 与 `Vec<Point>` 每个�
 
 #: src/reference/rc-heap.md:131
 msgid ""
-"`[T]` is a fixed-length cell; `N` is a compile-time constant and part of the type's identity. Fixed-array literals that fold at compile time become immortal constant-pool cells."
-msgstr "`[T]` 是定长单元；`N` 是编译期常量，是类型同一性的一部分。在编译期折叠的定长数组字面量成为不朽的常量池单元。"
+"`[T]` is a fixed-length cell; `N` is a compile-time constant and part of the type's identity. A fixed-array literal allocates a fresh cell where it is written; nothing folds it into the constant pool."
+msgstr "`[T]` 是定长单元；`N` 是编译期常量，是类型同一性的一部分。定长数组字面量在写它的地方分配一个新的单元；没有任何东西把它折叠进常量池。"
 
 
 #: src/reference/rc-heap.md:134
@@ -18005,57 +18005,57 @@ msgstr ""
 
 #: src/reference/launched-futures.md:34
 msgid ""
-"It is **not re-launchable**: `launch_future` takes a `Future<T>`, and a receipt is not one — `launch_future<nil>(h)` is the plain argument mismatch ``argument 1 is `LaunchedFutureHandle<#T>`, `Future<nil>` expected``. A future is consumed exactly once — by `await` or by `launch_future`, never both, never twice."
+"It is **not re-launchable**: `launch_future` takes a `Future<T>`, and a receipt is not one — `launch_future<nil>(h)` on a `LaunchedFutureHandle<nil>` is the plain argument mismatch ``argument 1 is `LaunchedFutureHandle<nil>`, `Future<nil>` expected``. A future is consumed exactly once — by `await` or by `launch_future`, never both, never twice."
 msgstr ""
-"它**不可再次启动**：`launch_future` 接受 `Future<T>`，而回执不是——`launch_future<nil>(h)` 是普通的实参不匹配 ``argument 1 is `LaunchedFutureHandle<#T>`, `Future<nil>` expected``。一个 future 恰好被消费一次——被 `await` 或被 `launch_future`，绝不同时，绝不两次。"
+"它**不可再次启动**：`launch_future` 接受 `Future<T>`，而回执不是——对 `LaunchedFutureHandle<nil>` 调用 `launch_future<nil>(h)` 是普通的实参不匹配 ``argument 1 is `LaunchedFutureHandle<nil>`, `Future<nil>` expected``。一个 future 恰好被消费一次——被 `await` 或被 `launch_future`，绝不同时，绝不两次。"
 
 
-#: src/reference/launched-futures.md:39
+#: src/reference/launched-futures.md:40
 msgid ""
 "One member: `abort()` — `true` if the frame was flagged and re-enqueued, `false` when it had already finished (a repeat abort is stable and harmless)."
 msgstr ""
 "只有一个成员：`abort()`——如果帧被打了标志并重新入队则返回 `true`，已经结束则返回 `false`（重复 abort 是稳定且无害的）。"
 
 
-#: src/reference/launched-futures.md:43
+#: src/reference/launched-futures.md:44
 msgid "Cancellation"
 msgstr "取消"
 
 
-#: src/reference/launched-futures.md:45
+#: src/reference/launched-futures.md:46
 msgid ""
 "`abort()` flags the frame's cancellation and re-enqueues it. **The probe at its next checkpoint is the only place cancellation becomes observable** — it never interrupts mid-expression."
 msgstr "`abort()` 给帧打上取消标志并把它重新入队。**它的下一个检查点处的探针是取消变得可观察的唯一地点**——它绝不会在表达式中途打断。"
 
 
-#: src/reference/launched-futures.md:49
+#: src/reference/launched-futures.md:50
 msgid "At the probe, the frame runs its **drop path**:"
 msgstr "在探针处，帧运行自己的 **drop 路径**："
 
 
-#: src/reference/launched-futures.md:51
+#: src/reference/launched-futures.md:52
 msgid "the pending edge is cleared — a pending `sleep` dies with the frame;"
 msgstr "pending 边被清除——一个 pending 中的 `sleep` 随帧一同消亡；"
 
 
-#: src/reference/launched-futures.md:52
+#: src/reference/launched-futures.md:53
 msgid ""
 "every local releases **deterministically, in reverse declaration order** (`[disposal]` members run, [the Rc heap](rc-heap.md));"
 msgstr ""
 
 
-#: src/reference/launched-futures.md:54
+#: src/reference/launched-futures.md:55
 msgid "the state retires (null) — later `abort()` calls answer `false`."
 msgstr "状态退役（null）——之后的 `abort()` 调用应答 `false`。"
 
 
-#: src/reference/launched-futures.md:56
+#: src/reference/launched-futures.md:57
 msgid ""
 "Inside an async body, the injected `cx.cancelled()` reads the same flag as data, so a frame can honor cancellation at its own pace. Cancellation is synchronous at the engine level (flag + re-enqueue); a frame parked on a host future only observes the flag when the loop drives it again."
 msgstr ""
 
 
-#: src/reference/launched-futures.md:62
+#: src/reference/launched-futures.md:63
 msgid ""
 "```rut\n"
 "use core::{ DisposalContext };\n"
@@ -18079,31 +18079,31 @@ msgid ""
 msgstr ""
 
 
-#: src/reference/launched-futures.md:82
+#: src/reference/launched-futures.md:83
 msgid "Join (specified)"
 msgstr "join（已规定）"
 
 
-#: src/reference/launched-futures.md:84
+#: src/reference/launched-futures.md:85
 msgid ""
 "The receipt is the join surface: `await h` joins the launched future and produces its completion value. Until the join tier lands, `await h` diagnoses with the join law — ``cannot `await` a LaunchedFutureHandle — the receipt is not a Future and cannot be re-launched`` — and the receipt stays non-awaitable."
 msgstr ""
 "回执就是 join 表面：`await h` join 已启动的 future 并产出其完成值。在 join 层落地之前，`await h` 会以 join 法则被诊断——``cannot `await` a LaunchedFutureHandle — the receipt is not a Future and cannot be re-launched``——回执保持不可 await。"
 
 
-#: src/reference/launched-futures.md:90
+#: src/reference/launched-futures.md:91
 msgid ""
 "Planned laws: joining an already-cancelled receipt yields the cancelled case, never a trap; join re-enqueues the awaiter the same way an in-body `await` parks, so the value surfaces on the driving loop, not through a callback."
 msgstr ""
 "计划中的法则：join 一个已取消的回执得到的是已取消情形，绝不是陷阱；join 以体内 `await` 停放的同样方式重新入队 awaiter，因此值是在驱动循环上浮现的，而不是经由回调。"
 
 
-#: src/reference/launched-futures.md:95
+#: src/reference/launched-futures.md:96
 msgid "Racing — `select2` / `select_all` (stdlib)"
 msgstr "竞速——`select2` / `select_all`（标准库）"
 
 
-#: src/reference/launched-futures.md:97
+#: src/reference/launched-futures.md:98
 msgid ""
 "```rut\n"
 "use ink::{ Logger };\n"
@@ -18134,46 +18134,46 @@ msgid ""
 msgstr ""
 
 
-#: src/reference/launched-futures.md:124
+#: src/reference/launched-futures.md:125
 msgid ""
 "`select2(a, b)` races two futures; the call **mints the race** — nothing runs until `await` (or `launch_future`) drives it. The answer is `Either2<T, U>`: `is_a()`/`a_value()` read the first future's side, `is_b()`/`b_value()` the second's. The winner's type is the fn signature's `Either2<T, U>` — computed at the call site, never a cast."
 msgstr ""
 "`select2(a, b)` 对两个 future 竞速；这次调用**铸造竞速本身**——在被 `await`（或 `launch_future`）驱动之前什么都不会运行。应答是 `Either2<T, U>`：`is_a()`/`a_value()` 读第一个 future 一侧，`is_b()`/`b_value()` 读第二个。胜者的类型就是函数签名里的 `Either2<T, U>`——在调用点计算，绝不需要转换。"
 
 
-#: src/reference/launched-futures.md:130
+#: src/reference/launched-futures.md:131
 msgid ""
 "The **losers are cancelled** the moment a winner is settled: their drop paths run (pending sleeps die with them, `[disposal]` members fire). A cancelled race (`h.abort()` on the race future) cascades through its children."
 msgstr ""
 
 
-#: src/reference/launched-futures.md:134
+#: src/reference/launched-futures.md:135
 msgid ""
 "`select_all<T>(futs)` races a whole `[Future<T>]` cohort and resolves with `(i, v)` — the winner's index and value — cancelling every other still-live member. Ties (two members already retired) break by index order."
 msgstr ""
 "`select_all<T>(futs)` 对整组 `[Future<T>]` 竞速，应答 `(i, v)`——胜者的下标与值——并取消其余所有仍在运行的成员。平局（两个成员都已结束）按下标顺序裁决。"
 
 
-#: src/reference/launched-futures.md:139
+#: src/reference/launched-futures.md:140
 msgid ""
 "`Either2` is an ordinary generic class (`left: ?A; right: ?B`) — rut's enums are the C-style member set, so the two-sided answer is private fields plus accessors, not pattern arms."
 msgstr ""
 "`Either2` 是一个普通的泛型类（`left: ?A; right: ?B`）——rut 的枚举是 C 风格的成员集，所以这种两侧应答用的是私有字段加访问器，而不是模式分支。"
 
 
-#: src/reference/launched-futures.md:143
+#: src/reference/launched-futures.md:144
 msgid "Manual futures — `completer<T>()`"
 msgstr "手工 future——`completer<T>()`"
 
 
-#: src/reference/launched-futures.md:145
+#: src/reference/launched-futures.md:146
 msgid ""
 "`completer<T>()` mints a cold `Future<T>` **and** the resolution right beside it — the primitive that turns a plain callback into a future the whole `await`/`select2` vocabulary drives:"
 msgstr ""
 "`completer<T>()` 铸造一个冷的 `Future<T>`，并在旁边交出完成权——这个原语把普通回调变成整个 `await`/`select2` 词汇都能驱动的 future："
 
 
-#: src/reference/launched-futures.md:149
+#: src/reference/launched-futures.md:150
 msgid ""
 "```rut\n"
 "use core::{ Future };\n"
@@ -18205,47 +18205,47 @@ msgid ""
 msgstr ""
 
 
-#: src/reference/launched-futures.md:177
+#: src/reference/launched-futures.md:178
 msgid ""
 "`done.resolve(v)` settles the future and wakes its awaiter; it answers `false` when the future already retired — resolved, cancelled, or abandoned (the same stability `abort()` has). The right consumes itself: one resolve."
 msgstr ""
 "`done.resolve(v)` 落定 future 并唤醒其等待者；当该 future 已经结束——已完成、已取消或已被遗弃——它应答 `false`（与 `abort()` 同样的稳定性）。完成权自我消费：仅可 resolve 一次。"
 
 
-#: src/reference/launched-futures.md:181
+#: src/reference/launched-futures.md:182
 msgid ""
 "`Completer<T>` is only the **right**, not the future — a `LaunchedFutureHandle` sibling. `await` diagnoses on it; the engine minted future it settles is the awaitable."
 msgstr ""
 "`Completer<T>` 只是**完成权**，不是 future——它是 `LaunchedFutureHandle` 的同类。对它 `await` 会被诊断；它所落定的、由引擎铸造的 future 才是可等待的那个。"
 
 
-#: src/reference/launched-futures.md:185
+#: src/reference/launched-futures.md:186
 msgid "Structure and fairness"
 msgstr "结构与公平性"
 
 
-#: src/reference/launched-futures.md:187
+#: src/reference/launched-futures.md:188
 msgid ""
 "Launched futures are **unstructured**: aborting a frame does not abort frames it awaits. Structured scopes — `scope { .. }` cancelling children on exit — are the specified remedy."
 msgstr ""
 "已启动的 future 是**非结构化的**：abort 一个帧不会 abort 它所 await 的帧。结构化作用域——`scope { .. }` 在退出时取消子帧——是已规定的补救。"
 
 
-#: src/reference/launched-futures.md:190
+#: src/reference/launched-futures.md:191
 msgid ""
 "The ready ring is **round-robin**: each drive runs a frame to its next park or completion, so one greedy future cannot starve the queue. Priorities are not in the model."
 msgstr ""
 "就绪环是**轮转（round-robin）**的：每次驱动把一个帧运行到它的下一次停放或完成，因此一个贪婪的 future 无法饿死队列。优先级不在模型之中。"
 
 
-#: src/reference/launched-futures.md:193
+#: src/reference/launched-futures.md:194
 msgid ""
 "`vm.pending_tasks()` counts ready frames, armed timers, and host futures parked on Completers — the embedder's idle test ([async and await](async.md))."
 msgstr ""
 "`vm.pending_tasks()` 统计就绪帧、已布防定时器以及停放在 Completer 上的宿主 future——这是嵌入方的空闲判据（[异步与 await](async.md)）。"
 
 
-#: src/reference/launched-futures.md:196
+#: src/reference/launched-futures.md:197
 msgid ""
 "A trap inside a launched future propagates out of `run_ready()` / `drive()`; the frame is retired either way, and its locals ran their drop path."
 msgstr ""
@@ -22678,9 +22678,9 @@ msgstr ""
 
 #: src/reference/stdlib.md:239
 msgid ""
-"**Deferred, documented**: `IntoFlow` for the mapset — nmapset HAS the walk (its `[iterable] iterate` on both classes), but no `into_flow` member; the wrapper law puts that member on the type's own inherent impl, and growing it nmapset-side would point nmapset back at flow (inverting the flow → nmapset dependency direction). Until that call is made, a set enters a pipeline only through the sink (`SetFlow<T>::from_flow`). A map sink is also absent (nmapset's `HashMap` has no wrapper family in flow yet — json's decode-only `JMap*` wrappers are the precedent such a family would follow)."
+"**Deferred, documented**: `IntoFlow` for the mapset — nmapset HAS the walk (its `[iterable] iterate` on both classes), but no `into_flow` member; the wrapper law puts that member on the type's own inherent impl, and growing it nmapset-side would point nmapset back at flow (inverting the flow → nmapset dependency direction). Until that call is made, a set is materialized from a pipeline only through the sink (`SetFlow<T>::from_flow`). A map sink is also absent (nmapset's `HashMap` has no wrapper family in flow yet — json's decode-only `JMap*` wrappers are the precedent such a family would follow)."
 msgstr ""
-"**暂缓、已记录**：mapset 的 `IntoFlow`——nmapset **有**这条遍历（两个类上的 `[iterable] iterate`），但没有 `into_flow` 成员；包装器法则把该成员放在类型自己的固有 impl 上，而在 nmapset 一侧生长它会让 nmapset 反向指向 flow（颠倒今天 flow → nmapset 的依赖方向）。在这个决定做出之前，集合只能通过汇点（`SetFlow<T>::from_flow`）进入管道。映射汇点也缺席（nmapset 的 `HashMap` 在 flow 里还没有包装器家族——json 的只解码 `JMap*` 包装器是这类家族会遵循的先例）。"
+"**暂缓、已记录**：mapset 的 `IntoFlow`——nmapset **有**这条遍历（两个类上的 `[iterable] iterate`），但没有 `into_flow` 成员；包装器法则把该成员放在类型自己的固有 impl 上，而在 nmapset 一侧生长它会让 nmapset 反向指向 flow（颠倒今天 flow → nmapset 的依赖方向）。在这个决定做出之前，集合只能经由汇点（`SetFlow<T>::from_flow`）从管道物化。映射汇点也缺席（nmapset 的 `HashMap` 在 flow 里还没有包装器家族——json 的只解码 `JMap*` 包装器是这类家族会遵循的先例）。"
 
 
 #: src/reference/stdlib.md:249
@@ -24073,69 +24073,69 @@ msgid "Diagnostics"
 msgstr "诊断"
 
 
-#: src/reference/frontend.md:247
+#: src/reference/frontend.md:246
 msgid ""
-"One renderer serves every frontend stage: a primary `error:` line, the rustc-style `--> file:line:col` arrow (1-based line and char column; the label is the module name — a pkg spec, a `spec/path` child, a real path from `rut fmt`), the caret line under the span, secondary labels, and notes, all over byte offsets (`rut_lexer::diag::render_diags`). Rendering sorts by (file, span start) and groups by file, so multi-file output is stable; a diag with no file of its own spells the fallback `--> line L, column C`. Messages name their fixes: _expected `super` or `pkg` in pub(..)_ for an unknown visibility scope; _classes have no instance literal — construct through a class method (`Circle::new(..)`)_ for a struct literal on a class."
+"One renderer serves every frontend stage: a primary `error:` line, the rustc-style `--> file:line:col` arrow (1-based line and char column; the label is the module name — a pkg spec, a `spec/path` child, a real path from `rut fmt`), and the caret line under the span, all over byte offsets (`rut_lexer::diag::render_diags`). Rendering sorts by (file, span start) and groups by file, so multi-file output is stable; a diag with no file of its own spells the fallback `--> line L, column C`. Messages name their fixes: _expected `super` or `pkg` in pub(..)_ for an unknown visibility scope; _classes have no instance literal — construct through a class method (`Circle::new(..)`)_ for a struct literal on a class."
 msgstr ""
-"一个渲染器服务所有前端阶段：主 `error:` 行、rustc 风格的`--> file:line:col` 箭头（行号与字符列均从 1 起计；标签是模块名——pkg 的 spec、`spec/path` 子模块，或 `rut fmt` 的真实路径）、span 之下的插入符行、次级标签和附注，全部基于字节偏移（`rut_lexer::diag::render_diags`）。渲染按（文件，span 起点）排序并按文件分组，因此多文件输出是稳定的；自身没有文件的诊断退回到 `--> line L, column C` 形式。消息会指明修法：未知可见性作用域提示 _expected `super` or`pkg` in pub(..)_；类上的结构体字面量提示 _classes have noinstance literal — construct through a class method (`Circle::new(..)`)_。"
+"一个渲染器服务所有前端阶段：主 `error:` 行、rustc 风格的 `--> file:line:col` 箭头（行号与字符列均从 1 起计；标签是模块名——pkg 的 spec、`spec/path` 子模块，或 `rut fmt` 的真实路径）、span 之下的插入符行，全部基于字节偏移（`rut_lexer::diag::render_diags`）。渲染按（文件，span 起点）排序并按文件分组，因此多文件输出是稳定的；自身没有文件的诊断退回到 `--> line L, column C` 形式。消息会指明修法：未知可见性作用域提示 _expected `super` or `pkg` in pub(..)_；类上的结构体字面量提示 _classes have no instance literal — construct through a class method (`Circle::new(..)`)_。"
 
 
-#: src/reference/frontend.md:259
+#: src/reference/frontend.md:258
 msgid ""
 "The compile stops before IR if any diagnostic exists — a module with diagnostics never produces bytecode. See [Diagnostics, traces, and symbolication](diagnostics.md) for the runtime half of the story."
 msgstr "只要存在任何诊断，编译就在 IR 之前停止——带诊断的模块绝不产出字节码。运行时的那一半故事见[诊断、追踪与符号化](diagnostics.md)。"
 
 
-#: src/reference/frontend.md:264
+#: src/reference/frontend.md:263
 msgid "The formatter"
 msgstr "格式化器"
 
 
-#: src/reference/frontend.md:266
+#: src/reference/frontend.md:265
 msgid ""
 "`rut fmt` (crate `rut-fmt`, CLI subcommand) reprints a parsed-clean module from the AST:"
 msgstr "`rut fmt`（crate `rut-fmt`，CLI 子命令）从 AST 重排一个解析干净的模块："
 
 
-#: src/reference/frontend.md:269
+#: src/reference/frontend.md:268
 msgid ""
 "**Comment gap-scan** — comments live in the byte gaps between token spans, so the formatter recovers every `//` and block comment with zero lexer/parser changes: trailing runs go on their element's line, own-line runs at the enclosing indent."
 msgstr ""
 "**注释间隙扫描**——注释住在记号 span 之间的字节间隙里，因此格式化器在不改动词法/语法分析器的前提下找回每一条 `//` 与块注释：尾随的注释归到所属元素那一行，独占一行的注释按外围缩进放置。"
 
 
-#: src/reference/frontend.md:273
+#: src/reference/frontend.md:272
 msgid ""
 "**Parens and literals re-derived** — the printer re-parens only where flat precedence would invert the tree, re-spells floats shortest round-trip from their bits, and re-quotes strings by the exact inverse of the lexer's escape set (`0xff` legitimately becomes `255`)."
 msgstr ""
 "**括号与字面量重新推导**——打印器只在扁平优先级会颠倒树的地方重新加括号，从比特重新以最短往返形式书写浮点数，并按词法分析器转义集合的精确逆运算重新给字符串加引号（`0xff` 名正言顺地变成 `255`）。"
 
 
-#: src/reference/frontend.md:277
+#: src/reference/frontend.md:276
 msgid ""
 "**Tested invariants** — every corpus file formats, reparses clean, and is idempotent (`fmt(fmt(x)) == fmt(x)`); probe programs run through the full pipeline before and after formatting and log identical output."
 msgstr ""
 "**经受测试的不变式**——每个语料文件都能格式化、重新解析干净，并且幂等（`fmt(fmt(x)) == fmt(x)`）；探针程序在格式化前后各跑一遍完整流水线，并记录到相同的输出。"
 
 
-#: src/reference/frontend.md:280
+#: src/reference/frontend.md:279
 msgid ""
 "**Refusal law** — a source with diagnostics is refused: rendered diagnostics, exit 1, nothing rewritten. The formatter never guesses."
 msgstr "**拒绝法则**——带诊断的源码会被拒绝：渲染诊断、以 1 退出、不重写任何东西。格式化器从不猜测。"
 
 
-#: src/reference/frontend.md:282
+#: src/reference/frontend.md:281
 msgid ""
 "**Style is the package's** — the nearest ancestor `rut.jsonc`'s `style` block sets `indent_width` (1–8, default 4) and `max_width` (≥ 20, default 100); no manifest means defaults. See [Project structure and rut.jsonc](project-structure.md)."
 msgstr ""
 
 
-#: src/reference/frontend.md:287
+#: src/reference/frontend.md:286
 msgid "Testing"
 msgstr "测试"
 
 
-#: src/reference/frontend.md:289
+#: src/reference/frontend.md:288
 msgid ""
 "The corpus is the conformance suite: every `examples/**/*.rut`, `examples/**/*.d.rut`, and playground classic must parse with zero diagnostics. Parser invariant tests include 100k-deep `((((`, `[[[[`, `{{{{`, unary chains, and nested generic arguments — each yields exactly one _nesting too deep_ diagnostic — and fuzz targets assert no host stack overflow and no cursor rollback. Formatter tests pin the round-trip and idempotence laws above."
 msgstr ""
@@ -28589,8 +28589,8 @@ msgstr "中断"
 
 #: src/reference/cli.md:71
 msgid ""
-"no interrupt lane: `interrupt_every` is construct-time config that gates nothing today — a runaway program is stopped by the per-op fuel tick, never preempted"
-msgstr "没有中断车道：`interrupt_every` 是构造期配置，今天不约束任何东西——失控程序由逐操作的燃料一跳止住，绝不会被抢占"
+"no interrupt lane: `interrupt_every` is construct-time config that gates nothing today — a runaway program is bounded by the opt-in fuel budget (the per-op tick), never preempted"
+msgstr "没有中断车道：`interrupt_every` 是构造期配置，今天不约束任何东西——失控程序由可选的燃料预算（逐操作一跳）限定，绝不会被抢占"
 
 
 #: src/reference/cli.md:73

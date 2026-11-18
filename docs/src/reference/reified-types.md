@@ -36,10 +36,11 @@ entry fn main() {
 - `type_id<T>() -> u32` — the identity of the **instantiated** type:
   unique per VM run, stable across modules, comparable only.
   `Vec<f32>` ≠ `Vec<f64>`; `Point` = `Point` wherever declared.
-- It is a **compile-time constant** — a load-time expression (legal in
-  module-level `let` initializers, see
-  [Modules and visibility](modules-and-visibility.md)), folded from the
-  type table, never executed.
+- It is a **compile-time constant** — folded from the type table at
+  compile time, never executed — but it is **not accepted in a
+  module-level `let`**: those initializers are literals only, so
+  `let TID: u32 = type_id<Point>();` refuses like any other non-literal
+  (see [Modules and visibility](modules-and-visibility.md)).
 - Value size and alignment are implementation details, not a language
   surface.
 - Constructing a value *from* raw bytes is deliberately not provided:

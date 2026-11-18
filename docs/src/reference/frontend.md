@@ -240,15 +240,14 @@ There are no paren nodes either: the parse's grouping *is* the tree.
 ## Diagnostics
 
 ```rust
-struct Diag { span: Span, msg: String, file: Option<String>,
-              labels: Vec<(Span, String)>, notes: Vec<String> }
+struct Diag { span: Span, msg: String, file: Option<String> }
 ```
 
 One renderer serves every frontend stage: a primary `error:` line, the
 rustc-style `--> file:line:col` arrow (1-based line and char column; the
 label is the module name — a pkg spec, a `spec/path` child, a real path
-from `rut fmt`), the caret line under the span, secondary labels, and
-notes, all over byte offsets (`rut_lexer::diag::render_diags`).
+from `rut fmt`), and the caret line under the span, all over byte
+offsets (`rut_lexer::diag::render_diags`).
 Rendering sorts by (file, span start) and groups by file, so multi-file
 output is stable; a diag with no file of its own spells the fallback
 `--> line L, column C`. Messages name their fixes: *expected `super` or

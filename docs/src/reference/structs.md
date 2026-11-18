@@ -88,12 +88,11 @@ never equal. Field-wise comparison is an interface-shaped contract of
 your own (spell a member that compares — see
 [Interfaces and dispatch](interfaces.md)).
 
-## Construction — the literal, everywhere
+## Construction — the literal form
 
 `Name { field: expr, .. }` is the **only** construction. There is no
-`new`, no class methods, no type-call. The literal is available
-everywhere — function bodies and module-level `let` initializers alike
-— and it allocates the cell.
+`new`, no class methods, no type-call. The literal is available in
+every function body — and it allocates the cell.
 
 - Fields may be given in any order, by name.
 - **The every-field-covered law**: a literal must cover **every** field

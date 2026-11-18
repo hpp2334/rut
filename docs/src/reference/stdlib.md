@@ -241,7 +241,7 @@ walk (its `[iterable] iterate` on both classes), but no `into_flow`
 member; the wrapper law puts that member on the type's own inherent
 impl, and growing it nmapset-side would point nmapset back at flow
 (inverting the flow → nmapset dependency direction). Until that call is
-made, a set enters a pipeline only through the sink
+made, a set is materialized from a pipeline only through the sink
 (`SetFlow<T>::from_flow`). A map sink is also absent (nmapset's
 `HashMap` has no wrapper family in flow yet — json's decode-only
 `JMap*` wrappers are the precedent such a family would follow).

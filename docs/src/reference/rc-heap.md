@@ -129,8 +129,8 @@ When a cell's strong count reaches zero:
   hold one cell pointer per element; the buffer itself is the counted
   unit.
 - `[T]` is a fixed-length cell; `N` is a compile-time constant and part
-  of the type's identity. Fixed-array literals that fold at compile time
-  become immortal constant-pool cells.
+  of the type's identity. A fixed-array literal allocates a fresh cell
+  where it is written; nothing folds it into the constant pool.
 - **`Slice<T>` view cells** hold a handle to their owner plus `off`/`len`
   — never a pointer into the data block. Views dispatch through the
   owner, so growth keeps existing views valid; indexing bounds-checks

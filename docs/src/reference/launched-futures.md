@@ -32,8 +32,9 @@ Laws:
   cannot be re-launched `` — the type system rejects it, never a runtime
   check.
 - It is **not re-launchable**: `launch_future` takes a `Future<T>`, and
-  a receipt is not one — `launch_future<nil>(h)` is the plain argument
-  mismatch `` argument 1 is `LaunchedFutureHandle<#T>`, `Future<nil>`
+  a receipt is not one — `launch_future<nil>(h)` on a
+  `LaunchedFutureHandle<nil>` is the plain argument
+  mismatch `` argument 1 is `LaunchedFutureHandle<nil>`, `Future<nil>`
   expected ``. A future is consumed exactly once — by `await` or by
   `launch_future`, never both, never twice.
 - One member: `abort()` — `true` if the frame was flagged and

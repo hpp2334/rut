@@ -13041,22 +13041,21 @@ msgid ""
 msgstr ""
 
 #: src/reference/structs.md:91
-msgid "Construction — the literal, everywhere"
+msgid "Construction — the literal form"
 msgstr ""
 
 #: src/reference/structs.md:93
 msgid ""
 "`Name { field: expr, .. }` is the **only** construction. There is no `new`, "
-"no class methods, no type-call. The literal is available everywhere — "
-"function bodies and module-level `let` initializers alike — and it allocates "
-"the cell."
+"no class methods, no type-call. The literal is available in every function "
+"body — and it allocates the cell."
 msgstr ""
 
-#: src/reference/structs.md:98
+#: src/reference/structs.md:97
 msgid "Fields may be given in any order, by name."
 msgstr ""
 
-#: src/reference/structs.md:99
+#: src/reference/structs.md:98
 msgid ""
 "**The every-field-covered law**: a literal must cover **every** field — "
 "spelled in the literal, or covered by the field's declared initializer "
@@ -13065,26 +13064,26 @@ msgid ""
 "every-field-covered law)`` — the silent zero-fill default is gone."
 msgstr ""
 
-#: src/reference/structs.md:105
+#: src/reference/structs.md:104
 msgid ""
 "A field spelled twice is a compile error — ``duplicate field `a` in the `P` "
 "literal`` — there is no last-wins."
 msgstr ""
 
-#: src/reference/structs.md:107
+#: src/reference/structs.md:106
 msgid ""
 "An omitted field with an initializer takes it; `{}` with all-initialized "
 "fields is legal."
 msgstr ""
 
-#: src/reference/structs.md:109
+#: src/reference/structs.md:108
 msgid ""
 "**Field-init shorthand**: a bare field name takes its value from the "
 "like-named binding in scope — `Name { x, y }` is exactly `Name { x: x, y: y "
 "}`."
 msgstr ""
 
-#: src/reference/structs.md:113
+#: src/reference/structs.md:112
 msgid ""
 "```rut\n"
 "use ink::{ Logger };\n"
@@ -13105,7 +13104,7 @@ msgid ""
 "```"
 msgstr ""
 
-#: src/reference/structs.md:133
+#: src/reference/structs.md:132
 msgid ""
 "```rut\n"
 "use ink::{ Logger };\n"
@@ -13122,11 +13121,11 @@ msgid ""
 "```"
 msgstr ""
 
-#: src/reference/structs.md:150
+#: src/reference/structs.md:149
 msgid "All fields public, always"
 msgstr ""
 
-#: src/reference/structs.md:152
+#: src/reference/structs.md:151
 msgid ""
 "A struct is an open data record: member visibility in a struct body is a "
 "compile error (privacy needs construction control, which is the class's job "
@@ -13134,18 +13133,18 @@ msgid ""
 "members."
 msgstr ""
 
-#: src/reference/structs.md:157
+#: src/reference/structs.md:156
 msgid "Methods live in impl blocks"
 msgstr ""
 
-#: src/reference/structs.md:159
+#: src/reference/structs.md:158
 msgid ""
 "A struct body is **fields only** — a `fn` member in the body is a hard parse "
 "error. Methods live in the inherent `impl S { .. }`, in the type's module "
 "only — the one impl form (see [Interfaces and dispatch](interfaces.md)):"
 msgstr ""
 
-#: src/reference/structs.md:164
+#: src/reference/structs.md:163
 msgid ""
 "```rut\n"
 "impl Point {\n"
@@ -13161,14 +13160,14 @@ msgid ""
 "```"
 msgstr ""
 
-#: src/reference/structs.md:175
+#: src/reference/structs.md:174
 msgid ""
 "Methods carry real visibility — the class rule: `pub fn` exports "
 "cross-module, plain `fn` is module-private. `Self` spells the struct, in "
 "signatures (`-> Self`) and the literal (`Self { x: 1, y: 2 }`) alike:"
 msgstr ""
 
-#: src/reference/structs.md:180
+#: src/reference/structs.md:179
 msgid ""
 "```rut\n"
 "use ink::{ Logger };\n"
@@ -13189,30 +13188,30 @@ msgid ""
 "```"
 msgstr ""
 
-#: src/reference/structs.md:202
+#: src/reference/structs.md:201
 msgid ""
 "Free functions over data remain the default idiom; methods are for tight "
 "helpers, impl blocks for the members other code observes."
 msgstr ""
 
-#: src/reference/structs.md:205
+#: src/reference/structs.md:204
 msgid "Limits, exhaustively:"
 msgstr ""
 
-#: src/reference/structs.md:207
+#: src/reference/structs.md:206
 msgid ""
 "**fields are always public** — no field-visibility dial (privacy needs "
 "construction control, which is the class's job — see [Classes and "
 "constructors](classes.md));"
 msgstr ""
 
-#: src/reference/structs.md:210
+#: src/reference/structs.md:209
 msgid ""
 "**construction is the literal** — `Point { x: 1, y: 2 }` everywhere (open "
 "literal vs class-method-gated _is_ the struct/class distinction)."
 msgstr ""
 
-#: src/reference/structs.md:214
+#: src/reference/structs.md:213
 msgid ""
 "Everything else class-shaped is allowed — `impl` blocks, `Self`, "
 "`[disposal]`. And the old \"no destructor\" limit is gone: a shared value "
@@ -13221,18 +13220,18 @@ msgid ""
 "at that moment (see [Rc, dispose, and identity](rc-dispose-identity.md))."
 msgstr ""
 
-#: src/reference/structs.md:221
+#: src/reference/structs.md:220
 msgid "Interfaces and representation"
 msgstr ""
 
-#: src/reference/structs.md:223
+#: src/reference/structs.md:222
 msgid ""
 "Widening a struct to an interface `I` **attaches the itable to the same "
 "handle** — no allocation, no copy: the interface-typed value aliases the "
 "record, and mutations through it are visible to every other handle."
 msgstr ""
 
-#: src/reference/structs.md:227
+#: src/reference/structs.md:226
 msgid ""
 "Representation: one slot per field inside the cell, in declaration order — "
 "primitive fields widened into their slot, composite fields as cell-handle "
@@ -13240,7 +13239,7 @@ msgid ""
 "(`next: ?Node`) are legal because composite fields are pointer-sized."
 msgstr ""
 
-#: src/reference/structs.md:232
+#: src/reference/structs.md:231
 msgid ""
 "Structs are for small data (points, rects, colors, configs), but any size is "
 "allowed."
@@ -15234,34 +15233,35 @@ msgstr ""
 
 #: src/reference/reified-types.md:39
 msgid ""
-"It is a **compile-time constant** — a load-time expression (legal in "
-"module-level `let` initializers, see [Modules and "
-"visibility](modules-and-visibility.md)), folded from the type table, never "
-"executed."
+"It is a **compile-time constant** — folded from the type table at compile "
+"time, never executed — but it is **not accepted in a module-level `let`**: "
+"those initializers are literals only, so `let TID: u32 = type_id<Point>();` "
+"refuses like any other non-literal (see [Modules and "
+"visibility](modules-and-visibility.md))."
 msgstr ""
 
-#: src/reference/reified-types.md:43
+#: src/reference/reified-types.md:44
 msgid ""
 "Value size and alignment are implementation details, not a language surface."
 msgstr ""
 
-#: src/reference/reified-types.md:45
+#: src/reference/reified-types.md:46
 msgid ""
 "Constructing a value _from_ raw bytes is deliberately not provided: it could "
 "forge private fields and class invariants."
 msgstr ""
 
-#: src/reference/reified-types.md:48
+#: src/reference/reified-types.md:49
 msgid "Value representation — slot arrays"
 msgstr ""
 
-#: src/reference/reified-types.md:50
+#: src/reference/reified-types.md:51
 msgid ""
 "Every struct and class value lives in a heap **cell**: header + (vtable, "
 "when the type has impls) + the payload."
 msgstr ""
 
-#: src/reference/reified-types.md:53
+#: src/reference/reified-types.md:54
 msgid ""
 "The payload is a **slot array: one untagged 8-byte slot per field, in "
 "declaration order**. Primitive fields are widened into their slot "
@@ -15269,51 +15269,51 @@ msgid ""
 "composite fields are cell-handle slots."
 msgstr ""
 
-#: src/reference/reified-types.md:57
+#: src/reference/reified-types.md:58
 msgid ""
 "Visibility, generic parameters, and impl blocks add **nothing** — the "
 "payload depends only on the field list. Field access is by index; heap "
 "accounting charges `fields × 8` bytes."
 msgstr ""
 
-#: src/reference/reified-types.md:60
+#: src/reference/reified-types.md:61
 msgid ""
 "Buffers of primitive elements (`Vec<f32>`, `[i32]`) stay **flat**, packed to "
 "the element's machine width; composite elements are one handle slot each — "
 "`Vec<Point>` stores one handle per element."
 msgstr ""
 
-#: src/reference/reified-types.md:63
+#: src/reference/reified-types.md:64
 msgid ""
 "Enums are tagged cells (a tag slot plus a payload slot); dataless enum "
 "variants are immortal singleton cells."
 msgstr ""
 
-#: src/reference/reified-types.md:65
+#: src/reference/reified-types.md:66
 msgid ""
 "Nullable `?prim` element storage inside sequence backings is the raw payload "
 "plus a one-byte nil tag — no per-element cell."
 msgstr ""
 
-#: src/reference/reified-types.md:67
+#: src/reference/reified-types.md:68
 msgid ""
 "`bytes` at the engine level is a `u8` array cell; a `str` is an immutable, "
 "COW-shared UTF-8 block, and a slice of it is a small view cell (see [String "
 "slicing and views](string-views.md))."
 msgstr ""
 
-#: src/reference/reified-types.md:71
+#: src/reference/reified-types.md:72
 msgid "Cells and vtables"
 msgstr ""
 
-#: src/reference/reified-types.md:78
+#: src/reference/reified-types.md:79
 msgid ""
 "The **exact runtime type** lives in the cell (via the vtable when present, "
 "the header otherwise). Every cell is minted at construction with its vtable "
 "already attached."
 msgstr ""
 
-#: src/reference/reified-types.md:81
+#: src/reference/reified-types.md:82
 msgid ""
 "Interface member ids are assigned **globally per interface instantiation** "
 "at compile time (`Slice<Point>` ≠ `Slice<str>`); a type's vtable fills every "
@@ -15322,7 +15322,7 @@ msgid ""
 "never crosses an interface-typed boundary fills nothing."
 msgstr ""
 
-#: src/reference/reified-types.md:87
+#: src/reference/reified-types.md:88
 msgid ""
 "Widening a composite to an interface `I` **reuses the same cell and "
 "vtable**: the interface-typed value is the handle plus the vtable pointer — "
@@ -15330,14 +15330,14 @@ msgid ""
 "inheritance."
 msgstr ""
 
-#: src/reference/reified-types.md:91
+#: src/reference/reified-types.md:92
 msgid ""
 "A call through an interface object is two loads and an indirect jump (the "
 "receiver's vtable, the member slot). Interface members never devirtualize; "
 "inherent calls bind directly:"
 msgstr ""
 
-#: src/reference/reified-types.md:95
+#: src/reference/reified-types.md:96
 msgid ""
 "```text\n"
 "Op::CallI { recv, slot: 3, args }   // s.area() — itable slot 3\n"
@@ -15345,11 +15345,11 @@ msgid ""
 "```"
 msgstr ""
 
-#: src/reference/reified-types.md:100
+#: src/reference/reified-types.md:101
 msgid "The type test"
 msgstr ""
 
-#: src/reference/reified-types.md:102
+#: src/reference/reified-types.md:103
 msgid ""
 "`is` with a concrete right-hand side lowers to: load the object's exact type "
 "id, compare — a compile-time constant comparison when the static type "
@@ -15358,18 +15358,18 @@ msgid ""
 "chain to walk (see [Interfaces and dispatch](interfaces.md))."
 msgstr ""
 
-#: src/reference/reified-types.md:109
+#: src/reference/reified-types.md:110
 msgid ""
 "`opaque` interacts with exactly one of these reads: `is` reads the **box's** "
 "own type, so every payload probe misses; only `opaque::downcast<T>`'s match "
 "test keeps reading the payload — the one legitimate see-through."
 msgstr ""
 
-#: src/reference/reified-types.md:114
+#: src/reference/reified-types.md:115
 msgid "Boxing"
 msgstr ""
 
-#: src/reference/reified-types.md:116
+#: src/reference/reified-types.md:117
 msgid ""
 "Storing a value into an erasure box widens by the slot discipline: an "
 "integer box stores the 64-bit sign/zero-extended value, a float the 64-bit "
@@ -16316,8 +16316,8 @@ msgstr ""
 #: src/reference/rc-heap.md:131
 msgid ""
 "`[T]` is a fixed-length cell; `N` is a compile-time constant and part of the "
-"type's identity. Fixed-array literals that fold at compile time become "
-"immortal constant-pool cells."
+"type's identity. A fixed-array literal allocates a fresh cell where it is "
+"written; nothing folds it into the constant pool."
 msgstr ""
 
 #: src/reference/rc-heap.md:134
@@ -17720,48 +17720,48 @@ msgstr ""
 #: src/reference/launched-futures.md:34
 msgid ""
 "It is **not re-launchable**: `launch_future` takes a `Future<T>`, and a "
-"receipt is not one — `launch_future<nil>(h)` is the plain argument mismatch "
-"``argument 1 is `LaunchedFutureHandle<#T>`, `Future<nil>` expected``. A "
-"future is consumed exactly once — by `await` or by `launch_future`, never "
-"both, never twice."
+"receipt is not one — `launch_future<nil>(h)` on a "
+"`LaunchedFutureHandle<nil>` is the plain argument mismatch ``argument 1 is "
+"`LaunchedFutureHandle<nil>`, `Future<nil>` expected``. A future is consumed "
+"exactly once — by `await` or by `launch_future`, never both, never twice."
 msgstr ""
 
-#: src/reference/launched-futures.md:39
+#: src/reference/launched-futures.md:40
 msgid ""
 "One member: `abort()` — `true` if the frame was flagged and re-enqueued, "
 "`false` when it had already finished (a repeat abort is stable and harmless)."
 msgstr ""
 
-#: src/reference/launched-futures.md:43
+#: src/reference/launched-futures.md:44
 msgid "Cancellation"
 msgstr ""
 
-#: src/reference/launched-futures.md:45
+#: src/reference/launched-futures.md:46
 msgid ""
 "`abort()` flags the frame's cancellation and re-enqueues it. **The probe at "
 "its next checkpoint is the only place cancellation becomes observable** — it "
 "never interrupts mid-expression."
 msgstr ""
 
-#: src/reference/launched-futures.md:49
+#: src/reference/launched-futures.md:50
 msgid "At the probe, the frame runs its **drop path**:"
 msgstr ""
 
-#: src/reference/launched-futures.md:51
+#: src/reference/launched-futures.md:52
 msgid "the pending edge is cleared — a pending `sleep` dies with the frame;"
 msgstr ""
 
-#: src/reference/launched-futures.md:52
+#: src/reference/launched-futures.md:53
 msgid ""
 "every local releases **deterministically, in reverse declaration order** "
 "(`[disposal]` members run, [the Rc heap](rc-heap.md));"
 msgstr ""
 
-#: src/reference/launched-futures.md:54
+#: src/reference/launched-futures.md:55
 msgid "the state retires (null) — later `abort()` calls answer `false`."
 msgstr ""
 
-#: src/reference/launched-futures.md:56
+#: src/reference/launched-futures.md:57
 msgid ""
 "Inside an async body, the injected `cx.cancelled()` reads the same flag as "
 "data, so a frame can honor cancellation at its own pace. Cancellation is "
@@ -17769,7 +17769,7 @@ msgid ""
 "host future only observes the flag when the loop drives it again."
 msgstr ""
 
-#: src/reference/launched-futures.md:62
+#: src/reference/launched-futures.md:63
 msgid ""
 "```rut\n"
 "use core::{ DisposalContext };\n"
@@ -17792,11 +17792,11 @@ msgid ""
 "```"
 msgstr ""
 
-#: src/reference/launched-futures.md:82
+#: src/reference/launched-futures.md:83
 msgid "Join (specified)"
 msgstr ""
 
-#: src/reference/launched-futures.md:84
+#: src/reference/launched-futures.md:85
 msgid ""
 "The receipt is the join surface: `await h` joins the launched future and "
 "produces its completion value. Until the join tier lands, `await h` "
@@ -17805,7 +17805,7 @@ msgid ""
 "non-awaitable."
 msgstr ""
 
-#: src/reference/launched-futures.md:90
+#: src/reference/launched-futures.md:91
 msgid ""
 "Planned laws: joining an already-cancelled receipt yields the cancelled "
 "case, never a trap; join re-enqueues the awaiter the same way an in-body "
@@ -17813,11 +17813,11 @@ msgid ""
 "callback."
 msgstr ""
 
-#: src/reference/launched-futures.md:95
+#: src/reference/launched-futures.md:96
 msgid "Racing — `select2` / `select_all` (stdlib)"
 msgstr ""
 
-#: src/reference/launched-futures.md:97
+#: src/reference/launched-futures.md:98
 msgid ""
 "```rut\n"
 "use ink::{ Logger };\n"
@@ -17849,7 +17849,7 @@ msgid ""
 "```"
 msgstr ""
 
-#: src/reference/launched-futures.md:124
+#: src/reference/launched-futures.md:125
 msgid ""
 "`select2(a, b)` races two futures; the call **mints the race** — nothing "
 "runs until `await` (or `launch_future`) drives it. The answer is `Either2<T, "
@@ -17858,7 +17858,7 @@ msgid ""
 "computed at the call site, never a cast."
 msgstr ""
 
-#: src/reference/launched-futures.md:130
+#: src/reference/launched-futures.md:131
 msgid ""
 "The **losers are cancelled** the moment a winner is settled: their drop "
 "paths run (pending sleeps die with them, `[disposal]` members fire). A "
@@ -17866,32 +17866,32 @@ msgid ""
 "children."
 msgstr ""
 
-#: src/reference/launched-futures.md:134
+#: src/reference/launched-futures.md:135
 msgid ""
 "`select_all<T>(futs)` races a whole `[Future<T>]` cohort and resolves with "
 "`(i, v)` — the winner's index and value — cancelling every other still-live "
 "member. Ties (two members already retired) break by index order."
 msgstr ""
 
-#: src/reference/launched-futures.md:139
+#: src/reference/launched-futures.md:140
 msgid ""
 "`Either2` is an ordinary generic class (`left: ?A; right: ?B`) — rut's enums "
 "are the C-style member set, so the two-sided answer is private fields plus "
 "accessors, not pattern arms."
 msgstr ""
 
-#: src/reference/launched-futures.md:143
+#: src/reference/launched-futures.md:144
 msgid "Manual futures — `completer<T>()`"
 msgstr ""
 
-#: src/reference/launched-futures.md:145
+#: src/reference/launched-futures.md:146
 msgid ""
 "`completer<T>()` mints a cold `Future<T>` **and** the resolution right "
 "beside it — the primitive that turns a plain callback into a future the "
 "whole `await`/`select2` vocabulary drives:"
 msgstr ""
 
-#: src/reference/launched-futures.md:149
+#: src/reference/launched-futures.md:150
 msgid ""
 "```rut\n"
 "use core::{ Future };\n"
@@ -17922,46 +17922,46 @@ msgid ""
 "```"
 msgstr ""
 
-#: src/reference/launched-futures.md:177
+#: src/reference/launched-futures.md:178
 msgid ""
 "`done.resolve(v)` settles the future and wakes its awaiter; it answers "
 "`false` when the future already retired — resolved, cancelled, or abandoned "
 "(the same stability `abort()` has). The right consumes itself: one resolve."
 msgstr ""
 
-#: src/reference/launched-futures.md:181
+#: src/reference/launched-futures.md:182
 msgid ""
 "`Completer<T>` is only the **right**, not the future — a "
 "`LaunchedFutureHandle` sibling. `await` diagnoses on it; the engine minted "
 "future it settles is the awaitable."
 msgstr ""
 
-#: src/reference/launched-futures.md:185
+#: src/reference/launched-futures.md:186
 msgid "Structure and fairness"
 msgstr ""
 
-#: src/reference/launched-futures.md:187
+#: src/reference/launched-futures.md:188
 msgid ""
 "Launched futures are **unstructured**: aborting a frame does not abort "
 "frames it awaits. Structured scopes — `scope { .. }` cancelling children on "
 "exit — are the specified remedy."
 msgstr ""
 
-#: src/reference/launched-futures.md:190
+#: src/reference/launched-futures.md:191
 msgid ""
 "The ready ring is **round-robin**: each drive runs a frame to its next park "
 "or completion, so one greedy future cannot starve the queue. Priorities are "
 "not in the model."
 msgstr ""
 
-#: src/reference/launched-futures.md:193
+#: src/reference/launched-futures.md:194
 msgid ""
 "`vm.pending_tasks()` counts ready frames, armed timers, and host futures "
 "parked on Completers — the embedder's idle test ([async and "
 "await](async.md))."
 msgstr ""
 
-#: src/reference/launched-futures.md:196
+#: src/reference/launched-futures.md:197
 msgid ""
 "A trap inside a launched future propagates out of `run_ready()` / `drive()`; "
 "the frame is retired either way, and its locals ran their drop path."
@@ -21989,10 +21989,10 @@ msgid ""
 "(its `[iterable] iterate` on both classes), but no `into_flow` member; the "
 "wrapper law puts that member on the type's own inherent impl, and growing it "
 "nmapset-side would point nmapset back at flow (inverting the flow → nmapset "
-"dependency direction). Until that call is made, a set enters a pipeline only "
-"through the sink (`SetFlow<T>::from_flow`). A map sink is also absent "
-"(nmapset's `HashMap` has no wrapper family in flow yet — json's decode-only "
-"`JMap*` wrappers are the precedent such a family would follow)."
+"dependency direction). Until that call is made, a set is materialized from a "
+"pipeline only through the sink (`SetFlow<T>::from_flow`). A map sink is also "
+"absent (nmapset's `HashMap` has no wrapper family in flow yet — json's "
+"decode-only `JMap*` wrappers are the precedent such a family would follow)."
 msgstr ""
 
 #: src/reference/stdlib.md:249
@@ -23327,38 +23327,38 @@ msgstr ""
 msgid "Diagnostics"
 msgstr ""
 
-#: src/reference/frontend.md:247
+#: src/reference/frontend.md:246
 msgid ""
 "One renderer serves every frontend stage: a primary `error:` line, the "
 "rustc-style `--> file:line:col` arrow (1-based line and char column; the "
 "label is the module name — a pkg spec, a `spec/path` child, a real path from "
-"`rut fmt`), the caret line under the span, secondary labels, and notes, all "
-"over byte offsets (`rut_lexer::diag::render_diags`). Rendering sorts by "
-"(file, span start) and groups by file, so multi-file output is stable; a "
-"diag with no file of its own spells the fallback `--> line L, column C`. "
-"Messages name their fixes: _expected `super` or `pkg` in pub(..)_ for an "
-"unknown visibility scope; _classes have no instance literal — construct "
-"through a class method (`Circle::new(..)`)_ for a struct literal on a class."
+"`rut fmt`), and the caret line under the span, all over byte offsets "
+"(`rut_lexer::diag::render_diags`). Rendering sorts by (file, span start) and "
+"groups by file, so multi-file output is stable; a diag with no file of its "
+"own spells the fallback `--> line L, column C`. Messages name their fixes: "
+"_expected `super` or `pkg` in pub(..)_ for an unknown visibility scope; "
+"_classes have no instance literal — construct through a class method "
+"(`Circle::new(..)`)_ for a struct literal on a class."
 msgstr ""
 
-#: src/reference/frontend.md:259
+#: src/reference/frontend.md:258
 msgid ""
 "The compile stops before IR if any diagnostic exists — a module with "
 "diagnostics never produces bytecode. See [Diagnostics, traces, and "
 "symbolication](diagnostics.md) for the runtime half of the story."
 msgstr ""
 
-#: src/reference/frontend.md:264
+#: src/reference/frontend.md:263
 msgid "The formatter"
 msgstr ""
 
-#: src/reference/frontend.md:266
+#: src/reference/frontend.md:265
 msgid ""
 "`rut fmt` (crate `rut-fmt`, CLI subcommand) reprints a parsed-clean module "
 "from the AST:"
 msgstr ""
 
-#: src/reference/frontend.md:269
+#: src/reference/frontend.md:268
 msgid ""
 "**Comment gap-scan** — comments live in the byte gaps between token spans, "
 "so the formatter recovers every `//` and block comment with zero "
@@ -23366,7 +23366,7 @@ msgid ""
 "runs at the enclosing indent."
 msgstr ""
 
-#: src/reference/frontend.md:273
+#: src/reference/frontend.md:272
 msgid ""
 "**Parens and literals re-derived** — the printer re-parens only where flat "
 "precedence would invert the tree, re-spells floats shortest round-trip from "
@@ -23374,20 +23374,20 @@ msgid ""
 "set (`0xff` legitimately becomes `255`)."
 msgstr ""
 
-#: src/reference/frontend.md:277
+#: src/reference/frontend.md:276
 msgid ""
 "**Tested invariants** — every corpus file formats, reparses clean, and is "
 "idempotent (`fmt(fmt(x)) == fmt(x)`); probe programs run through the full "
 "pipeline before and after formatting and log identical output."
 msgstr ""
 
-#: src/reference/frontend.md:280
+#: src/reference/frontend.md:279
 msgid ""
 "**Refusal law** — a source with diagnostics is refused: rendered "
 "diagnostics, exit 1, nothing rewritten. The formatter never guesses."
 msgstr ""
 
-#: src/reference/frontend.md:282
+#: src/reference/frontend.md:281
 msgid ""
 "**Style is the package's** — the nearest ancestor `rut.jsonc`'s `style` "
 "block sets `indent_width` (1–8, default 4) and `max_width` (≥ 20, default "
@@ -23395,11 +23395,11 @@ msgid ""
 "rut.jsonc](project-structure.md)."
 msgstr ""
 
-#: src/reference/frontend.md:287
+#: src/reference/frontend.md:286
 msgid "Testing"
 msgstr ""
 
-#: src/reference/frontend.md:289
+#: src/reference/frontend.md:288
 msgid ""
 "The corpus is the conformance suite: every `examples/**/*.rut`, "
 "`examples/**/*.d.rut`, and playground classic must parse with zero "
@@ -28125,8 +28125,8 @@ msgstr ""
 #: src/reference/cli.md:71
 msgid ""
 "no interrupt lane: `interrupt_every` is construct-time config that gates "
-"nothing today — a runaway program is stopped by the per-op fuel tick, never "
-"preempted"
+"nothing today — a runaway program is bounded by the opt-in fuel budget (the "
+"per-op tick), never preempted"
 msgstr ""
 
 #: src/reference/cli.md:73

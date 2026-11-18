@@ -68,7 +68,7 @@ Flags and defaults:
 | `--fuel N` | cap the op budget per turn. Fuel is opt-in: without the flag the run is uncapped; a missing or unparsable value is a loud error (exit 2) — no silent default |
 | `--symbols <file.rutsym>` | restore a [stripped artifact's](symbol-stripping.md) private symbol table — legal only against a compiled `.rutbundle` (the directory lane compiles fresh and needs no map; anything else is a usage error, exit 2). The table restores before the graph compiles, so linking and every trace see real names; sections naming modules the bundle does not carry warn |
 | heap limit | fixed at 64 MiB, charged at every heap allocation |
-| interrupts | no interrupt lane: `interrupt_every` is construct-time config that gates nothing today — a runaway program is stopped by the per-op fuel tick, never preempted |
+| interrupts | no interrupt lane: `interrupt_every` is construct-time config that gates nothing today — a runaway program is bounded by the opt-in fuel budget (the per-op tick), never preempted |
 
 Bodies bound by `run` (each rides the chain as `pkg(Offer::Host(..))`):
 
