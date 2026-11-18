@@ -27,11 +27,10 @@
 //! span-0 diags, which skip.
 
 use std::collections::BTreeMap;
-use std::str::FromStr;
 
 use crate::hover::DefIndex;
 use crate::semantic::Diag;
-use ls_types::{Diagnostic, Uri};
+use ls_types::Diagnostic;
 use rut_ast::Vis;
 use rut_driver::{lower_decl_module, Manifest, ModSource, Mounted, RutRun};
 
@@ -232,23 +231,7 @@ pub fn check_doc(
         }
         // the index builds per text — the rows name DIFFERENT files
         let index = crate::semantic::LineIndex::new(text);
-        // stamped at construction with the document's URI; a degenerate
-        // uri can't name a location — related info drops rather than
-        // guesses
-        let diag = match Uri::from_str(uri) {
-            Ok(u) => crate::query::analysis::to_diagnostic_parts(d, text, &index, &u),
-            Err(_) => {
-                let mut dg = crate::query::analysis::to_diagnostic_parts(
-                    d,
-                    text,
-                    &index,
-                    &crate::query::analysis::placeholder_uri(),
-                );
-                dg.related_information = None;
-                dg
-            }
-        };
-        out.push(diag);
+        out.push(crate::query::analysis::to_diagnostic_parts(d, text, &index));
     }
     out
 }

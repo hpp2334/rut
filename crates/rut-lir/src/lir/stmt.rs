@@ -672,7 +672,7 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                             self.ctx.err(
                                 sp,
                                 format!(
-                                    "destructuring needs a tuple —got `{}`",
+                                    "destructuring needs a tuple — got `{}`",
                                     self.ctx.type_name(ty)
                                 ),
                             );
@@ -1909,7 +1909,7 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                         self.ctx.err(
                             sp,
                             format!(
-                                "`when` over an enum must be exhaustive —`{mtext}` is not covered and there is no `else` arm"
+                                "`when` over an enum must be exhaustive — `{mtext}` is not covered and there is no `else` arm"
                             ),
                         );
                         return Err(());
@@ -1919,7 +1919,7 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                 self.ctx.err(
                     sp,
                     format!(
-                        "`when` over `{}` needs an `else` arm —only enums are enumerable",
+                        "`when` over `{}` needs an `else` arm — only enums are enumerable",
                         self.ctx.type_name(scrut_ty)
                     ),
                 );

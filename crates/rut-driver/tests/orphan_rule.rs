@@ -249,7 +249,7 @@ entry fn main() -> i32 { return 0; }
     ]);
     assert!(g.program.is_none(), "the trait-impl spelling must refuse");
     let ds = diags_of(&g);
-    assert!(ds.contains("expected {, found `for`"), "{ds}");
+    assert!(ds.contains("expected `{`, found `for`"), "{ds}");
 }
 
 #[test]

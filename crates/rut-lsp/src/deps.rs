@@ -601,13 +601,13 @@ pub fn bundle_sources(bytes: &[u8]) -> Result<BundleIndex, String> {
     })
 }
 
-/// The compiled bundle's DECLARATION FACE (v22 — the delivery law's
-/// editor half): the decoded program's exported surface rendered back
+/// The compiled bundle's DECLARATION FACE (the delivery law's editor
+/// half): the decoded program's exported surface rendered back
 /// as Impl-mode rut source — the exported classes with their fields,
 /// the inherent method signatures (empty bodies — bodies are the link
 /// lane's business, never source), and the exported free fns. The
 /// interfaces ride as comments (the surface carries a generic COUNT,
-/// not parameter names, so a faithful trait re-spelling is impossible
+/// not parameter names, so a faithful interface re-spelling is impossible
 /// here). This is the indexed answer for a compiled-only url dep — a
 /// consumer's `use pouch::{ Vec }` resolves against the bundle's own bytes.
 #[allow(dead_code)] // test-pinned: production mounts the store trees pre-unpacked — only the tests unpack
@@ -621,7 +621,7 @@ fn decl_face(prog: &rut_core::binary::Program) -> String {
         prog.interner.name(id).trim_start_matches('#').to_string()
     };
     let mut out = String::from(
-        "// the compiled bundle's declaration face (v22 — the delivery law):\n\
+        "// the compiled bundle's declaration face (the delivery law):\n\
          // rendered from the binary's surface; the bodies are the link\n\
          // lane's business, never source.\n",
     );
@@ -717,7 +717,7 @@ fn decl_face(prog: &rut_core::binary::Program) -> String {
         ));
     }
     // the interfaces, as comments — the surface carries a generics
-    // COUNT, not parameter names, so a faithful trait re-spelling is
+    // COUNT, not parameter names, so a faithful interface re-spelling is
     // impossible here; the names still document the surface
     for i in &s.ifaces {
         let ms: Vec<String> = i
@@ -726,7 +726,7 @@ fn decl_face(prog: &rut_core::binary::Program) -> String {
             .map(|m| prog.interner.name(m.name).to_string())
             .collect();
         out.push_str(&format!(
-            "// trait {}<{} generic params>: {}\n",
+            "// interface {}<{} generic params>: {}\n",
             prog.interner.name(i.name),
             i.generics,
             ms.join(", ")

@@ -249,7 +249,7 @@ fn mount_row(ctx: &mut WalkCtx, state: &mut SessionState, dir: &str, row: &DepRo
                     ctx.io,
                     &format!("path:{dir}:{}", row.name),
                     &format!(
-                        "rut: dep '{}' — {rel} has no rut.jsonc; a path dep is a module \
+                        "rut: dep `{}` — {rel} has no rut.jsonc; a path dep is a module \
                          directory (one manifest per module)",
                         row.name
                     ),
@@ -446,7 +446,7 @@ fn mount_url_dep(ctx: &mut WalkCtx, state: &mut SessionState, row: &DepRow, dept
             ctx.io,
             &format!("unpinned:{url}"),
             &format!(
-                "rut: dep '{}' has no sha256 pin in rut.lock — the editor never mounts \
+                "rut: dep `{}` has no sha256 pin in rut.lock — the editor never mounts \
                  unpinned url bytes; run `rut install` in the project to (re)pin, then \
                  reload the window",
                 row.name
@@ -469,7 +469,7 @@ fn mount_url_dep(ctx: &mut WalkCtx, state: &mut SessionState, row: &DepRow, dept
             ctx.io,
             &format!("store:{url}"),
             &format!(
-                "rut: dep '{}' ({url}) is not in the dep store — run `rut install` in the \
+                "rut: dep `{}` ({url}) is not in the dep store — run `rut install` in the \
                  project, then reload the window",
                 row.name
             ),
@@ -495,7 +495,7 @@ fn mount_url_dep(ctx: &mut WalkCtx, state: &mut SessionState, row: &DepRow, dept
             ctx.io,
             &format!("meta:{url}"),
             &format!(
-                "rut: dep '{}' — the store entry at {dir} does not verify against the \
+                "rut: dep `{}` — the store entry at {dir} does not verify against the \
                  rut.lock pin; run `rut install` in the project, then reload the window",
                 row.name
             ),

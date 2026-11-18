@@ -30,7 +30,7 @@ pub(crate) struct RunArgs {
     symbols: Option<String>,
     /// force the miss path — recompile the whole program from source
     /// even on a cache hit; the fresh archive still refreshes the run
-    /// cache entry (alias: --repack)
+    /// cache entry
     #[arg(long, visible_alias = "repack")]
     no_cache: bool,
 }

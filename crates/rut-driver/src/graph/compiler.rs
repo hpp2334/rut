@@ -866,9 +866,9 @@ pub(crate) fn mod_inputs_of(
 /// spans index the COMBINED text — the pkg's root file and its mod
 /// children concatenated — so each diag reads its
 /// file module off the layout (`ModInputs::file_of`: root file → the
-/// spec, a child → `spec/path`) and rebases its span and label spans
-/// to file-local bytes. A span-0 diag has no position to show and
-/// stays unattributed (the graph-level refusals' shape).
+/// spec, a child → `spec/path`) and rebases its span to file-local
+/// bytes. A span-0 diag has no position to show and stays unattributed
+/// (the graph-level refusals' shape).
 pub(super) fn attribute_diags(
     diags: impl IntoIterator<Item = Diag>,
     spec: &str,
@@ -888,13 +888,10 @@ pub(super) fn attribute_diags(
                 .find(|(s, _)| *s <= d.span.lo)
                 .map(|(s, _)| *s)
                 .unwrap_or(0);
-            let rebase =
-                |s: Span| Span::new(s.lo.saturating_sub(start), s.hi.saturating_sub(start));
-            d.span = rebase(d.span);
-            d.labels = std::mem::take(&mut d.labels)
-                .into_iter()
-                .map(|(s, m)| (rebase(s), m))
-                .collect();
+            d.span = Span::new(
+                d.span.lo.saturating_sub(start),
+                d.span.hi.saturating_sub(start),
+            );
             if path.is_empty() {
                 d.in_file(spec)
             } else {

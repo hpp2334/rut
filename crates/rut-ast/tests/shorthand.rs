@@ -149,7 +149,7 @@ fn dotted_field_name_stays_on_the_colon_error() {
                fn f(id: i32) -> Task { let t = Task { id.x }; t }";
     let (_, diags) = parse(src, Mode::Impl);
     assert!(
-        diags.iter().any(|d| d.msg.contains("expected :")),
+        diags.iter().any(|d| d.msg.contains("expected `:`")),
         "`Task {{ id.x }}` must stay on the expected-`:` error: {diags:?}"
     );
 }
@@ -159,7 +159,7 @@ fn bare_name_at_eof_stays_on_the_colon_error() {
     let src = "struct Task { id: i32 }\nfn f() -> Task { let t = Task { id";
     let (_, diags) = parse(src, Mode::Impl);
     assert!(
-        diags.iter().any(|d| d.msg.contains("expected :")),
+        diags.iter().any(|d| d.msg.contains("expected `:`")),
         "`Task {{ id` at EOF must stay on the expected-`:` error: {diags:?}"
     );
 }

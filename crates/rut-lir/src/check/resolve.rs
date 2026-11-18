@@ -198,7 +198,9 @@ impl<'a> Ctx<'a> {
 
     /// The impl-head / naming-position diagnostic for a spelled engine
     /// contract: the `builtin trait` row kind is gone, and each of the
-    /// four names has exactly one replacement.
+    /// two gated names has exactly one replacement. `Future` and
+    /// `RunContext` are closed builtin CLASSES, not gated traits — an
+    /// unbound spelling of either falls to the ordinary use-gate.
     pub fn engine_contract_head_error(&self, name: IdentId) -> Option<String> {
         if name == sym::ITERABLE {
             return Some(
@@ -208,16 +210,6 @@ impl<'a> Ctx<'a> {
         if name == sym::DISPOSAL {
             return Some(
                 "`Disposal` is gone — mark the member: `impl T { [disposal] fn dispose_db(self, cx: DisposalContext) { .. } }` (the engine calls it at refcount zero; the name is free, the bracket designates)".to_string(),
-            );
-        }
-        if name == sym::FUTURE {
-            return Some(
-                "`Future` is a closed builtin class — futures are engine-minted (an `async fn` call, an `async { }` block, `sleep`, the select/completer mints); a user type cannot be one".to_string(),
-            );
-        }
-        if name == sym::RUN_CONTEXT {
-            return Some(
-                "`RunContext` is a closed builtin class — the weave injects it as `cx` into every async body; a user type cannot be one".to_string(),
             );
         }
         None
@@ -427,7 +419,7 @@ impl<'a> Ctx<'a> {
                             self.err(
                                 sp,
                                 format!(
-                                    "`{}` takes {} generic argument(s), {} given",
+                                    "`{}` takes {} type argument(s), {} given",
                                     self.name(name),
                                     d.generics.len(),
                                     seg.generics.len()
@@ -565,7 +557,7 @@ impl<'a> Ctx<'a> {
                                 self.err(
                                     sp,
                                     format!(
-                                        "`{}` takes {} generic argument(s), {} given",
+                                        "`{}` takes {} type argument(s), {} given",
                                         self.name(name),
                                         g.params.len(),
                                         seg.generics.len()
@@ -790,7 +782,7 @@ impl<'a> Ctx<'a> {
                 self.err(
                     sp,
                     format!(
-                        "`{}` takes {} generic argument(s), {} given",
+                        "`{}` takes {} type argument(s), {} given",
                         self.name(name),
                         d.generics.len(),
                         generics.len()

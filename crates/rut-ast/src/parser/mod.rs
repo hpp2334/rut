@@ -254,7 +254,6 @@ impl Parser {
                 span: Span::new(0, 0),
             }
             .describe();
-            let want = want.trim_matches('`').to_string();
             self.err_here(format!("expected {want}, found {found}"));
             None
         }

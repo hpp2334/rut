@@ -279,7 +279,7 @@ fn method_generic_arity_mismatch_is_one_clean_diagnostic() {
     );
     assert_eq!(ds.len(), 1, "one diagnostic, not a cascade: {ds:?}");
     assert!(
-        ds[0].contains("takes 1 generic argument(s), 2 given"),
+        ds[0].contains("takes 1 type argument(s), 2 given"),
         "{ds:?}"
     );
 }

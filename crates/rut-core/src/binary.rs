@@ -1243,7 +1243,9 @@ pub fn decode(bytes: &[u8]) -> Result<Program, String> {
     }
     let ver = d.u32()?;
     if ver != VERSION {
-        return Err(format!("unsupported module binary version {ver}"));
+        return Err(format!(
+            "unsupported module binary version {ver} — this toolchain reads {VERSION} only; re-pack the directory"
+        ));
     }
     let name = d.str()?;
     // the name table: rebuild the interner — well-known range implied,

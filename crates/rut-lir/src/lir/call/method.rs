@@ -630,7 +630,7 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
         if self.ctx.types.kind(rt).clone() == TyKind::Opaque {
             self.ctx.err(
                 sp,
-                "`opaque` has no methods in this build —recover with `opaque::downcast<T>(o)`",
+                "`opaque` has no methods in this build — recover with `opaque::downcast<T>(o)`",
             );
             return Err(());
         }
@@ -943,7 +943,7 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
             self.ctx.err(
                 sp,
                 format!(
-                    "`{}` values reach only `{}`'s methods —`{}` is not one of them",
+                    "`{}` values reach only `{}`'s methods — `{}` is not one of them",
                     self.ctx.name(tdesc.name),
                     self.ctx.name(tdesc.name),
                     self.ctx.name(name)

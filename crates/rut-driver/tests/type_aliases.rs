@@ -407,7 +407,7 @@ fn alias_head_params_are_a_parse_error_again() {
     );
     assert!(
         ds.iter()
-            .any(|d| d.contains("expected =") && d.contains("found `<`")),
+            .any(|d| d.contains("expected `=`") && d.contains("found `<`")),
         "a generic alias head is a parse error again: {ds:?}"
     );
     // the empty head died with the same seam
@@ -416,7 +416,7 @@ fn alias_head_params_are_a_parse_error_again() {
          entry fn main() -> i32 { return 0; }\n",
     );
     assert!(
-        ds.iter().any(|d| d.contains("expected =")),
+        ds.iter().any(|d| d.contains("expected `=`")),
         "`<>` is no special grammar: {ds:?}"
     );
 }

@@ -1,4 +1,4 @@
-//! Style — the `[style]` manifest block, resolved. The manifest layer
+//! Style — the `style` manifest object, resolved. The manifest layer
 //! stays schema-free (rows are strings); THIS is where keys are known
 //! and values are parsed, so an unknown-but-manifest-legal key never
 //! traps the loader and a malformed value only trips the formatter
@@ -28,7 +28,7 @@ impl Default for Style {
     }
 }
 
-/// Parse a `[style]` manifest block. Unknown keys are IGNORED (the
+/// Parse the `style` manifest object. Unknown keys are IGNORED (the
 /// forward-compatibility rule the top-level manifest keys already
 /// hold); known keys with malformed values are a formatter error
 /// naming the key — never a loader error.
@@ -37,12 +37,12 @@ pub fn from_manifest(map: &BTreeMap<String, String>) -> Result<Style, String> {
     for (k, v) in map {
         match k.as_str() {
             "indent_width" => {
-                let n: u64 = v.parse().map_err(|_| {
-                    format!("[style] `indent_width` must be an integer, found `{v}`")
-                })?;
+                let n: u64 = v
+                    .parse()
+                    .map_err(|_| format!("`style.indent_width` must be an integer, found `{v}`"))?;
                 if !(1..=8).contains(&n) {
                     return Err(format!(
-                        "[style] `indent_width` must be 1..=8 (spaces per level), found {n}"
+                        "`style.indent_width` must be 1..=8 (spaces per level), found {n}"
                     ));
                 }
                 s.indent_width = n as usize;
@@ -50,10 +50,10 @@ pub fn from_manifest(map: &BTreeMap<String, String>) -> Result<Style, String> {
             "max_width" => {
                 let n: u64 = v
                     .parse()
-                    .map_err(|_| format!("[style] `max_width` must be an integer, found `{v}`"))?;
+                    .map_err(|_| format!("`style.max_width` must be an integer, found `{v}`"))?;
                 if n < 20 {
                     return Err(format!(
-                        "[style] `max_width` must be at least 20 columns, found {n}"
+                        "`style.max_width` must be at least 20 columns, found {n}"
                     ));
                 }
                 s.max_width = n as usize;

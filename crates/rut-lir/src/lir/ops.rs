@@ -87,7 +87,7 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
             self.ctx.err(
                 sp,
                 format!(
-                    "operands must have equal width: `{}` vs `{}` —convert first",
+                    "operands must have equal width: `{}` vs `{}` — convert first",
                     self.ctx.type_name(lt),
                     self.ctx.type_name(rt_)
                 ),
@@ -154,7 +154,7 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                     self.ctx.err(
                         sp,
                         format!(
-                            "ordering comparisons need numbers —`{}` has none",
+                            "ordering comparisons need numbers — `{}` has none",
                             self.ctx.type_name(ty)
                         ),
                     );
@@ -180,7 +180,7 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                     self.ctx.err(
                         sp,
                         format!(
-                            "arithmetic needs numbers —found `{}`",
+                            "arithmetic needs numbers — found `{}`",
                             self.ctx.type_name(ty)
                         ),
                     );
@@ -207,7 +207,7 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                     self.ctx.err(
                         sp,
                         format!(
-                            "bit operations need integers —found `{}`",
+                            "bit operations need integers — found `{}`",
                             self.ctx.type_name(ty)
                         ),
                     );
@@ -718,7 +718,7 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                     self.ctx.err(
                         sp,
                         format!(
-                            "arithmetic needs numbers —found `{}`",
+                            "arithmetic needs numbers — found `{}`",
                             self.ctx.type_name(ty)
                         ),
                     );
@@ -738,7 +738,7 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                     self.ctx.err(
                         sp,
                         format!(
-                            "bit operations need integers —found `{}`",
+                            "bit operations need integers — found `{}`",
                             self.ctx.type_name(ty)
                         ),
                     );
@@ -772,7 +772,7 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
             TyKind::Prim(_) | TyKind::Str | TyKind::Enum { .. } => Ok(()),
             _ => {
                 self.ctx.err(sp, format!(
-                    "`{}` is not formattable inside f\"...\" —use `debug.str(x)` or a `to_string()` method",
+                    "`{}` is not formattable inside f\"...\" — use `debug.str(x)` or a `to_string()` method",
                     self.ctx.type_name(ty)
                 ));
                 Err(())

@@ -35,17 +35,13 @@ pub struct Analysis {
 /// re-exported so the internal callers keep their spelling
 pub use crate::semantic::mode_of;
 
-/// one Document → the LSP `Analysis` envelope — related info + hover
-/// provenance stamped at construction from the document's URI (the
-/// degenerate twin below rides the placeholder)
+/// one Document → the LSP `Analysis` envelope — hover provenance
+/// stamped at construction from the document's URI (the degenerate
+/// twin below rides the placeholder)
 fn analysis_of(doc: &crate::semantic::Document, uri: &Uri) -> Analysis {
     let index = hover::index(doc, hover::Mount::doc(uri.as_str()));
     Analysis {
-        diags: doc
-            .diags()
-            .iter()
-            .map(|d| to_diagnostic(d, doc, uri))
-            .collect(),
+        diags: doc.diags().iter().map(|d| to_diagnostic(d, doc)).collect(),
         tokens: encode(doc),
         symbols: to_document_symbols(doc),
         index,
@@ -54,7 +50,7 @@ fn analysis_of(doc: &crate::semantic::Document, uri: &Uri) -> Analysis {
 
 /// the degenerate-URI fallback (a uri that fails to parse as `Uri`
 /// still analyzes — the MODE derives from the raw string, `mode_of`
-/// keeping the filename convention; related info + provenance ride the
+/// keeping the filename convention; the hover provenance rides the
 /// placeholder). `src` BY VALUE — it moves into the doc artifact.
 pub fn analyze_unstamped(uri: &str, src: String) -> Analysis {
     analysis_of(
@@ -132,42 +128,22 @@ pub fn encode(doc: &crate::semantic::Document) -> Vec<SemanticToken> {
 /// The doc-door diagnostic — the positions join through the
 /// document's own doors (the one builder, [`to_diagnostic_parts`],
 /// under a `Document`).
-pub(crate) fn to_diagnostic(d: &Diag, doc: &crate::semantic::Document, uri: &Uri) -> Diagnostic {
-    to_diagnostic_parts(d, doc.src(), doc.lines(), uri)
+pub(crate) fn to_diagnostic(d: &Diag, doc: &crate::semantic::Document) -> Diagnostic {
+    to_diagnostic_parts(d, doc.src(), doc.lines())
 }
 
 /// The diagnostic builder over PARTS — the check lane's shape: its
 /// compiler-diag rows name DIFFERENT files (one per-text `LineIndex`
 /// each), so they never hold one `Document` to ride its doors.
-pub(crate) fn to_diagnostic_parts(d: &Diag, src: &str, index: &LineIndex, uri: &Uri) -> Diagnostic {
-    let mut message = d.msg.clone();
-    for n in &d.notes {
-        message.push_str("\n\nnote: ");
-        message.push_str(n);
-    }
-    let related: Vec<DiagnosticRelatedInformation> = d
-        .labels
-        .iter()
-        .map(|(sp, label)| DiagnosticRelatedInformation {
-            location: Location {
-                uri: uri.clone(), // the document's identity — stamped at construction
-                range: range_of(index, src, *sp),
-            },
-            message: label.clone(),
-        })
-        .collect();
+pub(crate) fn to_diagnostic_parts(d: &Diag, src: &str, index: &LineIndex) -> Diagnostic {
     Diagnostic {
         range: range_of(index, src, d.span),
         severity: Some(DiagnosticSeverity::ERROR),
         code: None,
         code_description: None,
         source: Some("rut".to_string()),
-        message,
-        related_information: if related.is_empty() {
-            None
-        } else {
-            Some(related)
-        },
+        message: d.msg.clone(),
+        related_information: None,
         tags: None,
         data: None,
     }

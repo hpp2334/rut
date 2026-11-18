@@ -253,7 +253,7 @@ entry fn main() -> i32 { let a = A { n: 9 }; return a.n; }
     assert!(
         out.diags
             .iter()
-            .any(|d| d.msg.contains("expected {, found `for`")),
+            .any(|d| d.msg.contains("expected `{`, found `for`")),
         "the removed spelling dies at the parser: {:?}",
         out.diags
     );

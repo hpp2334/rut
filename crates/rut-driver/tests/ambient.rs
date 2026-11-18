@@ -146,7 +146,7 @@ fn the_gated_names_require_the_import() {
         // the `for` branch of the impl grammar is DELETED (`impl I for T`
         // is unparseable — satisfaction is having the members): the head
         // dies at the parser, naming the one inherent form
-        ("class C { }\nimpl Iterable<i32> for C { fn iterate(self, emit: fn(i32) -> bool) { } }\nentry fn main() -> i32 { for (let v of C { }) { } return 0; }\n", "expected {, found `for`"),
+        ("class C { }\nimpl Iterable<i32> for C { fn iterate(self, emit: fn(i32) -> bool) { } }\nentry fn main() -> i32 { for (let v of C { }) { } return 0; }\n", "expected `{`, found `for`"),
         ("fn f(cx: RunContext) -> i32 { return cx.checkpoint() as i32; }\nentry fn main() -> i32 { return f(nil); }\n", "`RunContext` is not in scope"),
         ("fn make() -> ?Future<nil> { return nil; }\nentry fn main() -> i32 { let f = make(); return 0; }\n", "`Future` is not in scope"),
         ("use core::{ Future };\nfn make() -> ?Future<nil> { return nil; }\nentry fn main() -> i32 { let f = make(); return 0; }\n", ""),

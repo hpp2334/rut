@@ -372,7 +372,7 @@ pub host fn legacy_ping() -> bool;
     assert!(
         doc.diags()
             .iter()
-            .any(|d| d.msg.contains("expected ;, found `{`")),
+            .any(|d| d.msg.contains("expected `;`, found `{`")),
         "the block form refuses: {:?}",
         doc.diags()
     );

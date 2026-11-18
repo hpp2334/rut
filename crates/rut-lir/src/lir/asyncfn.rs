@@ -987,7 +987,7 @@ pub(crate) fn compile_async_call(
         c.ctx.err(
             sp,
             format!(
-                "call arity: {} arg(s) for {} parameter(s)",
+                "call arity: {} args for {} params",
                 args.len(),
                 fd.params.len()
             ),

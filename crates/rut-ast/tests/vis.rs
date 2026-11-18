@@ -245,7 +245,7 @@ fn bodyless_impl_is_rejected() {
     // so `impl I for T;` is the missing-`{` shape
     let (_, diags) = parse("struct T { x: i32 } impl I for T;", Mode::Impl);
     assert!(
-        diags.iter().any(|d| d.msg.contains("expected {")),
+        diags.iter().any(|d| d.msg.contains("expected `{`")),
         "a bodyless impl must diagnose: {diags:?}"
     );
 }

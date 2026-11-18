@@ -1,5 +1,5 @@
-//! Diagnostics — `Diag { span, msg, labels, notes, file }`,
-//! one renderer for lexer/parser/resolve/typecheck, byte offsets.
+//! Diagnostics — `Diag { span, msg, file }`, one renderer for
+//! lexer/parser/resolve/typecheck, byte offsets.
 
 use crate::span::Span;
 
@@ -7,8 +7,6 @@ use crate::span::Span;
 pub struct Diag {
     pub span: Span,
     pub msg: String,
-    pub labels: Vec<(Span, String)>,
-    pub notes: Vec<String>,
     /// The file the span indexes, as the producer's module name — a pkg
     /// spec, `spec/mod-path`, or a formatter's real path; never a
     /// filesystem path (loaded pkgs deliberately carry none). `None` =
@@ -22,8 +20,6 @@ impl Diag {
         Diag {
             span,
             msg: msg.into(),
-            labels: Vec::new(),
-            notes: Vec::new(),
             file: None,
         }
     }
@@ -33,15 +29,11 @@ impl Diag {
         self.file = Some(f.into());
         self
     }
-    pub fn note(mut self, n: impl Into<String>) -> Diag {
-        self.notes.push(n.into());
-        self
-    }
 }
 
-/// Render a diag list against source text: primary line with a caret span,
-/// secondary labels, notes. Used by the CLI, tests, and the demo (the wasm
-/// surface returns structured diags; this is the pretty form).
+/// Render a diag list against source text: the primary line with its
+/// caret span. Used by the CLI, tests, and the demo (the wasm surface
+/// returns structured diags; this is the pretty form).
 pub fn render_diags(src: &str, diags: &[Diag]) -> String {
     let mut sources = std::collections::BTreeMap::new();
     sources.insert(String::new(), src);
@@ -85,10 +77,10 @@ pub fn render_diags_grouped(
         match sources.get(file).copied() {
             None => {
                 // no text for this file: position-only — the arrow
-                // names the file, no snippet/caret (labels would
-                // locate nowhere). A label-less diag has no position
-                // to show at all: the bare error line is the whole
-                // rendering (the graph-level refusals' shape).
+                // names the file, no snippet/caret. A file-less diag
+                // has no position to show at all: the bare error line
+                // is the whole rendering (the graph-level refusals'
+                // shape).
                 if !file.is_empty() {
                     out.push_str(&format!("  --> {file}\n"));
                 }
@@ -107,14 +99,7 @@ pub fn render_diags_grouped(
                     " ".repeat(col),
                     "^".repeat(caret_len.max(1))
                 ));
-                for (span, label) in &d.labels {
-                    let (l2, c2, _, _) = locate(src, *span);
-                    out.push_str(&format!("  note@line {} col {}: {}\n", l2, c2 + 1, label));
-                }
             }
-        }
-        for n in &d.notes {
-            out.push_str(&format!("  note: {}\n", n));
         }
     }
     out

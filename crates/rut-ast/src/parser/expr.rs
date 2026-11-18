@@ -210,7 +210,7 @@ impl ExprFrame {
                         _ => {
                             p.err(
                                 sp,
-                                "invalid assignment target —expected a path, field, or index",
+                                "invalid assignment target — expected a path, field, or index",
                             );
                         }
                     }
@@ -1303,7 +1303,7 @@ impl LambdaFrame {
         if self.anon {
             // anonymous closures are block-bodied: `fn (..) { .. }`
             if !matches!(p.tok(), Tok::LBrace) {
-                p.err_here("anonymous closures take a block —`fn (..) { .. }`");
+                p.err_here("anonymous closures take a block — `fn (..) { .. }`");
             }
         }
         if matches!(p.tok(), Tok::LBrace) {

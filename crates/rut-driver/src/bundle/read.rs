@@ -62,7 +62,7 @@ impl Bundle {
 // through the graph — boxing would churn every construction/match
 // for a size win the graph never sees
 pub enum GroupKind {
-    /// a source pkg's compiled group: its decoded `.rutc` (v17,
+    /// a source pkg's compiled group: its decoded `.rutc` (v23,
     /// decode-verified) rides `deps/<identity>/mod.rutc` — bodies +
     /// surface, the linking truth
     Compiled(Program),
@@ -132,7 +132,7 @@ impl Layout {
         };
         let manifest = parse_manifest(&manifest_text).map_err(|e| e.to_string())?;
         if manifest.format.as_deref() != Some("rutbundle") {
-            return Err("rut.jsonc has no `format = \"rutbundle\"` — not a rut bundle".into());
+            return Err("rut.jsonc has no `\"format\": \"rutbundle\"` — not a rut bundle".into());
         }
         match manifest.format_version {
             // ONE wire: 13 is the current wire — the manifest's `type`

@@ -15,7 +15,7 @@ enum PackMode {
     /// the source zip — `rut.jsonc` + `src/` + the closure embedded
     /// under `deps/<name>@<fp16>/` (the default)
     Source,
-    /// the compiled rutbundle — the root as IR, groups at
+    /// the compiled `.rutbundle` — the root as IR, groups at
     /// `deps/<name>@<fp16>/`
     Bin,
 }

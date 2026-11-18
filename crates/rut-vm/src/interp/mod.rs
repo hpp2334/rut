@@ -1,7 +1,7 @@
 //! The interpreter loop: one struct, one thread, one heap.
 //! Register frames, typed ops, traps as `Err(Trap)` (never Rust panics),
-//! fuel + heap budgets checked at loop back-edges and every allocation
-//!. Traps are catchable only at the host boundary.
+//! fuel ticking per op and the heap charged per allocation. Traps are
+//! catchable only at the host boundary.
 //!
 //! The ACTIVE frame lives directly on the `Vm` (`cur_*`); calls push it
 //! onto `frames` and rets pop — keeps register access borrow-friendly.
@@ -522,7 +522,7 @@ impl Vm {
         if args.len() != nparams {
             return Err(Trap::new(
                 TrapKind::Invalid,
-                format!("`{export}` takes {nparams} args, {} given", args.len()),
+                format!("`{export}` takes {nparams} params, {} given", args.len()),
             ));
         }
         let nregs = self.prog.funcs[func as usize].regs.len();
@@ -917,7 +917,11 @@ impl Vm {
         if args.len() != params.len() {
             return Err(Trap::new(
                 TrapKind::Invalid,
-                format!("`{row}` takes {} args, {} given", params.len(), args.len()),
+                format!(
+                    "`{row}` takes {} params, {} given",
+                    params.len(),
+                    args.len()
+                ),
             ));
         }
         let mut snapshot: Vec<Slot> = Vec::with_capacity(args.len());

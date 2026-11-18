@@ -157,7 +157,7 @@ pub(crate) fn install(args: &InstallArgs) {
     let p = Path::new(dir);
     if !p.is_dir() {
         eprintln!(
-            "install: {dir} is not a module directory (a .rutbundle is closed — nothing to install)"
+            "install: {dir} is not a module directory (a `.rutbundle` is closed — nothing to install)"
         );
         std::process::exit(2);
     }

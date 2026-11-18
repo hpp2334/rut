@@ -93,7 +93,7 @@ pub(crate) fn classify_item(p: &mut Parser) -> Option<Frame> {
             "if" | "while" | "for" | "return" | "when" | "break" | "continue" | "await" => {
                 p.err(
                     sp,
-                    "statements are not allowed at module scope —modules contain declarations only",
+                    "statements are not allowed at module scope — modules contain declarations only",
                 );
                 None
             }
@@ -936,7 +936,7 @@ impl ImplFrame {
         if p.mode == Mode::Decl {
             p.err(
                 Span::new(self.lo, self.lo + 4),
-                "implementation in a declaration file —`impl` blocks live in `.rut`",
+                "implementation in a declaration file — `impl` blocks live in `.rut`",
             );
         }
         if matches!(p.tok(), Tok::Lt) {
@@ -1053,7 +1053,7 @@ impl TypeBodyFrame {
             BodyMode::Interface => "interfaces declare method signatures",
             BodyMode::Inherent => "inherent impl blocks declare methods",
             BodyMode::HostStruct => "host structs declare fields",
-            BodyMode::Class { .. } => "type bodies declare fields —methods live in `impl` blocks",
+            BodyMode::Class { .. } => "type bodies declare fields — methods live in `impl` blocks",
         }
     }
 
@@ -1118,12 +1118,12 @@ impl TypeBodyFrame {
                                 let _ = pub_scope(p);
                                 p.err(
                                     lo,
-                                    "host struct fields carry no visibility —all fields are public",
+                                    "host struct fields carry no visibility — all fields are public",
                                 );
                             }
                             "static" | "async" => {
                                 p.bump();
-                                p.err(lo, format!("host struct fields carry no modifiers —`{m}` is not declarable here"));
+                                p.err(lo, format!("host struct fields carry no modifiers — `{m}` is not declarable here"));
                             }
                             _ => break,
                         }
@@ -1132,7 +1132,7 @@ impl TypeBodyFrame {
                         // parse (bodiless) to stay in sync; the methods are
                         // dropped — SurfaceStruct keeps fields only
                         Tok::Ident(kw) if kw == "fn" => {
-                            p.err(lo, "host structs declare fields only —methods live in rut wrapper classes");
+                            p.err(lo, "host structs declare fields only — methods live in rut wrapper classes");
                             self.stage = TbStage::Method;
                             return Step::Push(Frame::Method(MethodFrame::new(
                                 Vec::new(),
@@ -1181,7 +1181,7 @@ impl TypeBodyFrame {
                                 if !allow_pub {
                                     p.err(
                                         lo,
-                                        "structs have no field visibility —all fields are public",
+                                        "structs have no field visibility — all fields are public",
                                     );
                                 }
                             }
@@ -1198,7 +1198,7 @@ impl TypeBodyFrame {
                             }
                             "async" => {
                                 p.bump();
-                                p.err(lo, "unexpected `async` —type bodies declare fields only");
+                                p.err(lo, "unexpected `async` — type bodies declare fields only");
                             }
                             _ => break,
                         }
@@ -1208,13 +1208,13 @@ impl TypeBodyFrame {
                             if p.mode != Mode::Decl {
                                 p.err(
                                     lo,
-                                    "methods live in `impl` blocks —type bodies declare fields only",
+                                    "methods live in `impl` blocks — type bodies declare fields only",
                                 );
                             }
                             if mods.iter().any(|m| matches!(m.kind, ModKind::Static)) {
                                 p.err(
                                     lo,
-                                    "there is no `static fn` —a method without `self` IS a class method",
+                                    "there is no `static fn` — a method without `self` IS a class method",
                                 );
                             }
                             self.stage = TbStage::Method;
@@ -1252,7 +1252,7 @@ impl TypeBodyFrame {
                             "pub" => {
                                 p.bump();
                                 let _ = pub_scope(p);
-                                p.err(lo, "interface members carry no `pub` —the interface's visibility rules");
+                                p.err(lo, "interface members carry no `pub` — the interface's visibility rules");
                             }
                             "async" => {
                                 let sp = p.span();
@@ -1281,7 +1281,7 @@ impl TypeBodyFrame {
                         p.err(lo, "expected `fn` after `async`");
                     }
                     let (what, found) = (self.mode_noun(), p.peek(0).describe());
-                    p.err_here(format!("{what} —expected `fn`, found {found}"));
+                    p.err_here(format!("{what} — expected `fn`, found {found}"));
                     p.sync_stmt();
                 }
                 BodyMode::Inherent => {
@@ -1330,7 +1330,7 @@ impl TypeBodyFrame {
                         p.err(lo, "expected `fn` after `async`");
                     }
                     let (what, found) = (self.mode_noun(), p.peek(0).describe());
-                    p.err_here(format!("{what} —expected `fn`, found {found}"));
+                    p.err_here(format!("{what} — expected `fn`, found {found}"));
                     p.sync_stmt();
                 }
             }
@@ -1351,7 +1351,7 @@ impl TypeBodyFrame {
                     if matches!(self.mode, BodyMode::HostStruct) {
                         p.err(
                             p.span(),
-                            "host struct fields have no initializers —the host constructs the record",
+                            "host struct fields have no initializers — the host constructs the record",
                         );
                     }
                     self.stage = TbStage::FieldInit;
@@ -1784,7 +1784,7 @@ impl SurfaceFrame {
         if p.mode == Mode::Impl {
             p.err(
                 sp,
-                "declaration keyword in an implementation file —`host`/`builtin` belong in a `.d.rut`",
+                "declaration keyword in an implementation file — `host`/`builtin` belong in a `.d.rut`",
             );
         }
         // the linkage keyword — `host`, or the `builtin` of a builtin
@@ -1872,7 +1872,7 @@ impl SurfaceFrame {
         if matches!(p.tok(), Tok::Lt) {
             p.err(
                 p.span(),
-                "host fn signatures are concrete —generic parameters cannot cross the boundary",
+                "host fn signatures are concrete — generic parameters cannot cross the boundary",
             );
             let (gens, pending) = generic_params(p, false, "host fn");
             self.generics = gens;

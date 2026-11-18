@@ -665,7 +665,7 @@ pub host fn legacy() -> bool;
         assert!(
             diags
                 .iter()
-                .any(|d| d.msg.contains("expected ;, found `{`")),
+                .any(|d| d.msg.contains("expected `;`, found `{`")),
             "{mode:?} files refuse the block form with the ordinary error: {diags:?}"
         );
     }

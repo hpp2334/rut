@@ -185,7 +185,7 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                 self.ctx.err(
                     sp,
                     format!(
-                        "indexing needs a sequence (Vec, Array, or bytes) —found `{}`",
+                        "indexing needs a sequence (Vec, Array, or bytes) — found `{}`",
                         self.ctx.type_name(rt)
                     ),
                 );
@@ -431,7 +431,7 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                             self.ctx.err(
                                 sp,
                                 format!(
-                                "`is` needs a concrete (cell) or interface type —`{}` is by-value",
+                                "`is` needs a concrete (cell) or interface type — `{}` is by-value",
                                 self.ctx.type_name(want)
                             ),
                             );
@@ -506,7 +506,7 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                     self.ctx.err(
                         sp,
                         format!(
-                            "`as` converts between numeric primitives —`{}` is not one",
+                            "`as` converts between numeric primitives — `{}` is not one",
                             self.ctx.type_name(want)
                         ),
                     );
@@ -516,7 +516,7 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                     self.ctx.err(
                         sp,
                         format!(
-                            "`as` converts between numeric primitives —found `{}`",
+                            "`as` converts between numeric primitives — found `{}`",
                             self.ctx.type_name(from)
                         ),
                     );
@@ -590,12 +590,12 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                         if over_default {
                             let hint = match expected.map(|e| self.ctx.types.kind(e).clone()) {
                                 Some(TyKind::Prim(p)) if p.is_float() => {
-                                    format!(" —in a float position write `{v}.0`")
+                                    format!(" — in a float position write `{v}.0`")
                                 }
                                 _ => String::new(),
                             };
                             self.ctx.err(sp, format!(
-                                "integer literal {v} exceeds the `i32` default —add an explicit suffix like `u64`{hint}"
+                                "integer literal {v} exceeds the `i32` default — add an explicit suffix like `u64`{hint}"
                             ));
                         }
                         match self.numeric_hint(expected) {
@@ -672,7 +672,7 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                     let x = f64::from_bits(bits);
                     if !x.is_finite() || x.abs() > f32::MAX as f64 {
                         self.ctx.err(sp, format!(
-                            "float literal {:e} exceeds the `f32` default —add an explicit `f64` suffix",
+                            "float literal {:e} exceeds the `f32` default — add an explicit `f64` suffix",
                             x
                         ));
                     }
@@ -767,7 +767,7 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                 self.ctx.err(
                     sp,
                     format!(
-                        "`{}` is a function —call it: `{}(..)`",
+                        "`{}` is a function — call it: `{}(..)`",
                         self.ctx.name(name),
                         self.ctx.name(name)
                     ),
@@ -1316,7 +1316,7 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                 self.ctx.err(
                     sp,
                     format!(
-                        "`{}` is async —call it; async fns have no value in this build",
+                        "`{}` is async — call it; async fns have no value in this build",
                         self.ctx.name(name)
                     ),
                 );
@@ -1330,7 +1330,7 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
             self.ctx.err(
                 sp,
                 format!(
-                    "`{}` is generic —call it; generic fns have no value without type arguments",
+                    "`{}` is generic — call it; generic fns have no value without type arguments",
                     self.ctx.name(name)
                 ),
             );
@@ -1355,7 +1355,7 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
             self.ctx.err(
                 sp,
                 format!(
-                    "`{}` is async —call it; async fns have no value in this build",
+                    "`{}` is async — call it; async fns have no value in this build",
                     self.ctx.name(name)
                 ),
             );
@@ -1363,7 +1363,7 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
         }
         if !fd.generics.is_empty() {
             self.ctx.err(sp, format!(
-                "`{}` is generic —call it (spelling the type arguments there); a bare fn path has none to give",
+                "`{}` is generic — call it (spelling the type arguments there); a bare fn path has none to give",
                 self.ctx.name(name)
             ));
             return Err(());
@@ -1423,15 +1423,12 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
         _expected: Option<TypeId>,
         sp: rut_lexer::span::Span,
     ) -> TcResult<u16> {
+        // the shape gate is the CHECK layer's (`check::inst::compile_module_lets`,
+        // the message the book quotes) — this arm never fires on a program
+        // that reached codegen
         let lit = match init {
             ExprRef::Lit(lh) => lh.get(self.ctx.ast).lit.clone(),
-            _ => {
-                self.ctx.err(
-                    sp,
-                    "module `let` initializers must be literals in this build",
-                );
-                return Err(());
-            }
+            _ => return Err(()),
         };
         match lit {
             Lit::Int(v, sfx) => {
@@ -1439,7 +1436,7 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                 // gets no free pass
                 if sfx.is_none() && v > i32::MAX as u64 {
                     self.ctx.err(sp, format!(
-                        "integer literal {v} exceeds the `i32` default —add an explicit suffix like `u64`"
+                        "integer literal {v} exceeds the `i32` default — add an explicit suffix like `u64`"
                     ));
                 }
                 let reg = self.new_reg(ty);
@@ -1480,13 +1477,8 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                 );
                 Ok(reg)
             }
-            Lit::RawStr(_) | Lit::Nil => {
-                self.ctx.err(
-                    sp,
-                    "module `let` initializers must be literals in this build",
-                );
-                Err(())
-            }
+            // `RawStr`/`Nil` are rejected by the same check-layer gate
+            Lit::RawStr(_) | Lit::Nil => Err(()),
         }
     }
 }

@@ -229,23 +229,22 @@ fn try_ctor_yields_the_nullable() {
 // ---- the signature gates -----------------------------------------------
 
 #[test]
-fn arity_mismatch_names_the_member() {
-    // the sugar's arity refusal is the member call's — it names
-    // `Point::from_xy` (byte-identical diagnostics, like lowering)
+fn arity_mismatch_is_the_one_voice() {
+    // the sugar's arity refusal is the member call's — the dominant
+    // "call arity: N args for M params" form (byte-identical
+    // diagnostics, like lowering)
     let ds = diags_of(&format!(
         "{POINT}\nentry fn main() {{ let p = Point(1.0); }}\n"
     ));
     assert!(
-        ds.iter()
-            .any(|d| d == "call arity: `Point::from_xy` takes 2 parameters, 1 given"),
-        "the sugar's arity refusal names the member: {ds:?}"
+        ds.iter().any(|d| d == "call arity: 1 args for 2 params"),
+        "the sugar's arity refusal is the one voice: {ds:?}"
     );
     let ds = diags_of(&format!(
         "{POINT}\nentry fn main() {{ let p = Point::from_xy(1.0); }}\n"
     ));
     assert!(
-        ds.iter()
-            .any(|d| d == "call arity: `Point::from_xy` takes 2 parameters, 1 given"),
+        ds.iter().any(|d| d == "call arity: 1 args for 2 params"),
         "the explicit spelling answers identically: {ds:?}"
     );
 }
@@ -455,7 +454,7 @@ fn markers_outside_inherent_bodies_stay_parse_rejects() {
         p.ast()
             .errors()
             .iter()
-            .any(|d| d.msg.contains("expected {, found `for`")),
+            .any(|d| d.msg.contains("expected `{`, found `for`")),
         "the trait-impl spelling dies at the parser: {:?}",
         p.ast().errors()
     );

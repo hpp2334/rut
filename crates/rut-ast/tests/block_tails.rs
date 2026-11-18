@@ -57,7 +57,7 @@ fn let_still_demands_its_semicolon_before_another_statement() {
     assert!(
         diags
             .iter()
-            .any(|d| d.msg.contains("expected ;") && d.msg.contains("let")),
+            .any(|d| d.msg.contains("expected `;`") && d.msg.contains("let")),
         "the missing `;` must be diagnosed: {diags:?}"
     );
 }
@@ -66,7 +66,7 @@ fn let_still_demands_its_semicolon_before_another_statement() {
 fn let_still_demands_its_semicolon_before_the_brace() {
     let (_, diags) = parse("fn f() -> i32 { let x = 1 }", Mode::Impl);
     assert!(
-        diags.iter().any(|d| d.msg.contains("expected ;")),
+        diags.iter().any(|d| d.msg.contains("expected `;`")),
         "`let` never becomes a tail: {diags:?}"
     );
 }

@@ -287,7 +287,7 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                 if !sealed {
                     self.ctx.err(
                         sp,
-                        "`opaque` rejects interface objects —they are never boxed",
+                        "`opaque` rejects interface objects — they are never boxed",
                     );
                     return Err(());
                 }
@@ -417,7 +417,7 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                         self.ctx.err(
                             sp,
                             format!(
-                                "string_join expects `Array<str>` —found `{}`",
+                                "string_join expects `Array<str>` — found `{}`",
                                 self.ctx.type_name(at)
                             ),
                         );

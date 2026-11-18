@@ -157,7 +157,7 @@ fn typed_wrong_shape_is_a_named_trap() {
     );
     // arity: the raw call's check still guards the typed wrapper
     let err = vm.call::<_, (i32, bool)>("pair", ()).unwrap_err();
-    assert!(err.msg.contains("args"), "{}", err.msg);
+    assert!(err.msg.contains("params"), "{}", err.msg);
 }
 
 // ---- the entry-err shape (err-channel phase 3): `(?T, err)` crosses

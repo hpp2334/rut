@@ -54,7 +54,7 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
             return Err(());
         }
         if matches!(self.ctx.types.kind(rt), TyKind::IfaceObj { .. }) {
-            self.ctx.err(sp, "interface objects have no fields —`d.x` on an interface-typed value is a compile error");
+            self.ctx.err(sp, "interface objects have no fields — `d.x` on an interface-typed value is a compile error");
             return Err(());
         }
         self.ctx.err(

@@ -129,7 +129,7 @@ impl<'a> Ctx<'a> {
                     self.err(
                         sp,
                         format!(
-                            "`{}<..>` takes {} type parameter(s), {} given",
+                            "`{}<..>` takes {} type argument(s), {} given",
                             self.name(name),
                             d.generics.len(),
                             params.len()

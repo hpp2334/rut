@@ -158,7 +158,7 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                         self.ctx.err(
                             sp,
                             format!(
-                                "bytes.from expects `Array<u8>` —found `{}`",
+                                "bytes.from expects `Array<u8>` — found `{}`",
                                 self.ctx.type_name(at)
                             ),
                         );
@@ -315,7 +315,7 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                         _ => true,
                     };
                     if !downcastable {
-                        self.ctx.err(sp, "downcast needs a CONCRETE type —interface objects have no recovery path");
+                        self.ctx.err(sp, "downcast needs a CONCRETE type — interface objects have no recovery path");
                         return Err(());
                     }
                     let t = self.compile_expr(args[0], Some(TY_OPAQUE))?;

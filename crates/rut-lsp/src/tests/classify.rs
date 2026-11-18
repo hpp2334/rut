@@ -306,7 +306,7 @@ fn mod_decl_names_classify_as_namespace() {
     assert!(
         doc.diags()
             .iter()
-            .any(|d| d.msg.contains("expected ;, found `{`")),
+            .any(|d| d.msg.contains("expected `;`, found `{`")),
         "decl files refuse the block form with the ordinary error: {:?}",
         doc.diags()
     );
@@ -314,7 +314,7 @@ fn mod_decl_names_classify_as_namespace() {
     assert!(
         doc.diags()
             .iter()
-            .any(|d| d.msg.contains("expected ;, found `{`")),
+            .any(|d| d.msg.contains("expected `;`, found `{`")),
         "impl files keep the refusal: {:?}",
         doc.diags()
     );
