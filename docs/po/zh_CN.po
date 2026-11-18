@@ -121,7 +121,7 @@ msgstr "内存：Rc 堆、弱引用与循环引用"
 
 
 #: src/SUMMARY.md:33 src/core-concepts/host-boundary.md:1
-#: src/reference/vm-core.md:53
+#: src/reference/vm-core.md:55
 msgid "The host boundary"
 msgstr "宿主边界"
 
@@ -6710,7 +6710,7 @@ msgstr "队列归 VM 所有；循环归嵌入方所有："
 
 
 #: src/core-concepts/async-model.md:115 src/core-concepts/host-boundary.md:37
-#: src/reference/vm-heap.md:103 src/reference/resource-limits.md:60
+#: src/reference/vm-heap.md:105 src/reference/resource-limits.md:61
 #: src/reference/host-futures.md:122
 msgid "\"main\""
 msgstr "\"main\""
@@ -7390,9 +7390,9 @@ msgstr ""
 
 #: src/core-concepts/the-vm.md:15 src/reference/vm-core.md:12
 msgid ""
-"// the RC heap — [The VM heap](vm-heap.md)\n"
+"// the RC heap — refcounted, self-managed\n"
 msgstr ""
-"// Rc 堆——[VM 堆](vm-heap.md)\n"
+"// Rc 堆——引用计数、自管\n"
 
 
 #: src/core-concepts/the-vm.md:16 src/reference/vm-core.md:13
@@ -7416,11 +7416,13 @@ msgstr ""
 "// 每操作预算\n"
 
 
-#: src/core-concepts/the-vm.md:20 src/reference/vm-core.md:17
+#: src/core-concepts/the-vm.md:20 src/core-concepts/the-vm.md:144
+#: src/reference/resource-limits.md:12 src/reference/vm-core.md:17
+#: src/reference/vm-core.md:113
 msgid ""
-"// budget check cadence (default 1024)\n"
+"// cadence field; nothing gates on it today\n"
 msgstr ""
-"// 预算检查节奏（默认 1024）\n"
+"// 节奏字段；今天不约束任何东西\n"
 
 
 #: src/core-concepts/the-vm.md:21 src/reference/vm-core.md:18
@@ -7570,9 +7572,9 @@ msgstr ""
 "失败是**陷阱**，不是异常，也不是 Rust panic：普通运算符上的整数溢出、对 `nil` 解引用、越界索引、`panic(..)`，或者耗尽的预算。陷阱捕获原始帧链（惰性渲染——只有当有人打印它时才做符号化），在退出路上运行析构器，并以 `Err(Trap)` 的形式沿栈展开到宿主调用。Rut 代码无法捕获它；边界就是捕获点（参见[宿主边界](host-boundary.md)）。"
 
 
-#: src/core-concepts/the-vm.md:135 src/reference/vm-core.md:105
-msgid "Budgets and interrupts"
-msgstr "预算与中断"
+#: src/core-concepts/the-vm.md:135 src/reference/vm-core.md:107
+msgid "Budgets"
+msgstr "预算"
 
 
 #: src/core-concepts/the-vm.md:137
@@ -7595,53 +7597,45 @@ msgstr ""
 "// 每次分配都检查\n"
 
 
-#: src/core-concepts/the-vm.md:144
-msgid ""
-"// default: check every 1024 ops\n"
-msgstr ""
-"// 默认：每 1024 个操作检查一次\n"
-
-
 #: src/core-concepts/the-vm.md:147
 msgid ""
-"The heap limit has no live setter: a heap trap is cleared by dropping references so the retry fits, or by rebuilding the VM with a larger budget; the interrupt cadence is construct-time too ([resource limits](../reference/resource-limits.md))."
+"Fuel is a cheap per-op tick — one unit decremented and checked on every op — and the heap budget is charged per allocation. The heap limit has no live setter: a heap trap is cleared by dropping references so the retry fits, or by rebuilding the VM with a larger budget. `interrupt_every` is construct-time only and **today gates nothing**: there is no interrupt lane, and natives are never preempted ([resource limits](../reference/resource-limits.md))."
 msgstr ""
-"堆限额没有线上设置器：堆陷阱靠丢弃引用让重试装得下来解除，或以更大的预算重建 VM；中断节奏同样是构造期的（[资源上限](../reference/resource-limits.md)）。"
+"燃料是廉价的每操作一跳——每个 op 递减并检查一个单位——堆预算则按分配计费。堆上限没有线上设置器：丢弃引用让重试装得下，或以更大的预算重建 VM，即可解除堆陷阱。`interrupt_every` 只是构造期的字段，**今天不约束任何东西**：没有中断车道，原生函数也绝不会被抢占（[资源上限](../reference/resource-limits.md)）。"
 
 
-#: src/core-concepts/the-vm.md:152
+#: src/core-concepts/the-vm.md:155
 msgid ""
 "Exhaustion is **resumable**: the trap parks the frame exactly where it was — the frame _is_ the loop state — so the host can add fuel and resume; a heap stop needs references dropped so the retry fits, or a VM rebuilt with a larger budget. A UI host yields mid-frame; a wasm page grants finite fuel; a test sets finite fuel plus a virtual clock and gets a deterministic hang proof."
 msgstr ""
 "耗尽是**可恢复的**：陷阱把帧停在原地——帧_就是_循环状态——宿主因此可以加燃料然后恢复；堆停止需要丢弃引用让重试装得下，或以更大的预算重建 VM。UI 宿主在帧中途让步；wasm 页面发放有限燃料；测试设有限燃料加虚拟时钟，得到一份确定性的挂起证明。"
 
 
-#: src/core-concepts/the-vm.md:158
+#: src/core-concepts/the-vm.md:161
 msgid ""
 "The heap check runs _before_ any write, so an out-of-memory failure leaves the heap byte-identical (see [memory](memory.md))."
 msgstr "堆检查在任何写入_之前_运行，所以内存耗尽的失败让堆保持逐字节相同（参见[内存](memory.md)）。"
 
 
-#: src/core-concepts/the-vm.md:161
+#: src/core-concepts/the-vm.md:164
 msgid ""
-"Native functions run outside the fuel budget — a hanging native is a host bug by contract. The periodic budget check (`interrupt_every`) amortizes the fuller check; it never preempts a native mid-body."
-msgstr ""
-"原生函数在燃料预算之外运行——挂起的原生函数按契约是宿主 bug。周期性预算检查（`interrupt_every`）摊销更完整的检查；它绝不会在原生函数体中途抢占。"
+"Native functions run outside the fuel budget — a hanging native is a host bug by contract, so keep native bodies non-blocking (there is no interrupt lane to preempt one)."
+msgstr "原生函数在燃料预算之外运行——挂起的原生函数按契约是宿主 bug，所以请保持原生函数体非阻塞（没有中断车道会抢占它）。"
 
 
-#: src/core-concepts/the-vm.md:165
+#: src/core-concepts/the-vm.md:168
 msgid "Why no JIT is viable"
 msgstr "为什么无 JIT 是可行的"
 
 
-#: src/core-concepts/the-vm.md:167
+#: src/core-concepts/the-vm.md:170
 msgid ""
 "A JS engine's speed is its JIT, and the JIT exists to speculate about polymorphic property loads. rut has no polymorphic loads: field access is by known index, calls bind statically whenever the site names one concrete type, generics are monomorphized, and the remaining dynamic dispatch is an honest checked vtable hop. The optimizer's currency is **type stability** — what the checker proves is everything the optimizer gets — and its passes (constant folding, inlining, monomorphization, register-level cleanup) all run ahead of time. The result is a runtime with no warmup curve, no deoptimization asymmetries, and per-op costs you can reason about from the bytecode alone."
 msgstr ""
 "JS 引擎的速度就是它的 JIT，而 JIT 的存在是为了对多态属性加载做投机。rut 没有多态加载：字段访问按已知索引，调用点指名一个具体类型时调用就静态绑定，泛型被单态化，剩下的动态分派是一次如实且受检的 vtable 跳转。优化器的通货是**类型稳定性**——检查器证明的一切就是优化器得到的全部——而它的各个 pass（常量折叠、内联、单态化、寄存器级清理）全部提前运行。结果是一个没有预热曲线、没有反优化不对称性的运行时，每操作的成本可以从字节码本身推演。"
 
 
-#: src/core-concepts/the-vm.md:179
+#: src/core-concepts/the-vm.md:182
 msgid ""
 "The full tables and laws live in the reference: [typed bytecode](../reference/typed-bytecode.md), [the module binary and verification](../reference/module-binary.md), [VM core](../reference/vm-core.md), and [resource limits and fuel](../reference/resource-limits.md)."
 msgstr ""
@@ -16943,134 +16937,139 @@ msgstr "管理器接口面"
 
 #: src/reference/vm-heap.md:35
 msgid ""
-"/// The one allocation path for rut values.\n"
-"    /// Over budget -> Err(Trap::OutOfMemory); never aborts.\n"
+"/// The typed allocation routes (cell mint, strings, buffers, `opaque`\n"
+"    /// boxes) charge first: over budget -> Err(Trap::OutOfMemory); never\n"
+"    /// aborts.\n"
 msgstr ""
-"/// The one allocation path for rut values.\n"
-"    /// Over budget -> Err(Trap::OutOfMemory); never aborts.\n"
-
-
-#: src/reference/vm-heap.md:40
-msgid ""
-"// feeds vm.heap_usage()\n"
-msgstr ""
-"// feeds vm.heap_usage()\n"
 
 
 #: src/reference/vm-heap.md:41
 msgid ""
+"// feeds vm.heap_usage()\n"
+msgstr ""
+"// feeds vm.heap_usage()\n"
+
+
+#: src/reference/vm-heap.md:42
+msgid ""
 "// high-water mark: vm.heap_peak()\n"
 msgstr ""
 "// high-water mark: vm.heap_peak()\n"
 
 
-#: src/reference/vm-heap.md:45
+#: src/reference/vm-heap.md:43
+msgid ""
+"// `Vec` growth\n"
+msgstr ""
+
+
+#: src/reference/vm-heap.md:47
 msgid ""
 "The heap limit is **construct-time**: `Heap::new(limits.heap_limit_bytes, …)` bakes it and the runtime budget is read-only — there is no live setter. Fuel is the one live budget (`Vm::add_fuel`); a heap-trap resumption means dropping references so the retry fits, or rebuilding the VM with a larger budget ([resource limits](resource-limits.md))."
 msgstr ""
 "堆上限是**构造期**的：`Heap::new(limits.heap_limit_bytes, …)` 把它烤进去，运行时预算只读——没有在线上调的口子。燃料是唯一的线上预算（`Vm::add_fuel`）；堆陷阱后的恢复意味着丢弃引用让重试装得下，或以更大的预算重建 VM（[资源上限](resource-limits.md)）。"
 
 
-#: src/reference/vm-heap.md:51
+#: src/reference/vm-heap.md:53
 msgid ""
-"Every route that materializes a rut value goes through it: cell mint, `Vec` growth, string concatenation, frame-pool growth, `opaque` store inserts. **The contributor rule**: an allocation path that materializes a rut value and does not flow through `alloc` is a bug — the budget would not bind, `heap_usage` would lie, and the leak report would miss it."
+"Every route that materializes a rut value charges before the write: cell mint, `Vec` growth, string concatenation, frame-pool growth, `opaque` store inserts. **The contributor rule**: an allocation path that materializes a rut value and does not charge first is a bug — the budget would not bind, `heap_usage` would lie, and the leak report would miss it."
 msgstr ""
-"每条实体化 rut 值的路径都经过它：单元铸造、`Vec` 增长、字符串拼接、帧池增长、`opaque` 存储插入。**贡献者法则**：一条实体化 rut 值却不流经 `alloc` 的分配路径是 bug —— 预算将不再约束，`heap_usage` 会说谎，泄漏报告会漏掉它。"
+"每条实体化 rut 值的路径都先计费再写入：单元铸造、`Vec` 增长、字符串拼接、帧池增长、`opaque` 存储插入。**贡献者法则**：一条实体化 rut 值却没有先计费的分配路径是 bug——预算将不再约束，`heap_usage` 会说谎，泄漏报告会漏掉它。"
 
 
-#: src/reference/vm-heap.md:58
+#: src/reference/vm-heap.md:60
 msgid ""
 "Accounting checks run **before any write**: a failed allocation leaves the heap byte-identical to its state before the op, and the trap is resumable ([resource limits](resource-limits.md))."
 msgstr ""
 "记账检查**在任何写入之前**运行：一次失败的分配让堆与操作之前的状态字节级一致，且陷阱可恢复（[资源限制](resource-limits.md)）。"
 
 
-#: src/reference/vm-heap.md:62
+#: src/reference/vm-heap.md:64
 msgid "Allocation strategy"
 msgstr "分配策略"
 
 
-#: src/reference/vm-heap.md:64
+#: src/reference/vm-heap.md:66
 msgid ""
 "**Fixed-size cell slots in the arena.** Cells are one fixed-size record carved from 1024-slot chunks with a free list; a dead slot is reused by the next mint. Reuse is invisible except in `heap_usage`."
 msgstr ""
 "**arena 中的定长单元槽。** 单元是从 1024 槽的块中刻出的定长记录，带一个空闲列表；死槽被下一次铸造复用。除了在 `heap_usage` 之中，复用是不可见的。"
 
 
-#: src/reference/vm-heap.md:67
+#: src/reference/vm-heap.md:69
 msgid ""
 "**The block store.** Every _variable-size_ payload — string octets, array element runs — lives in a block carved from size-classed pages the VM owns:"
 msgstr "**块存储。** 每个可变大小载荷 —— 字符串字节、数组元素段 —— 都生活在从 VM 拥有的、按大小分类的页面中刻出的块里："
 
 
-#: src/reference/vm-heap.md:70
+#: src/reference/vm-heap.md:72
 msgid ""
 "Size classes 16 B … 2 KiB (multiples of 8); small blocks come from 32 KiB pages via per-class free lists plus a single-slot LIFO cache for the churn pattern (a temp dies, the same size is minted again)."
 msgstr ""
 "大小类别 16 B …… 2 KiB（8 的倍数）；小块来自 32 KiB 页，经由每类别空闲列表加上一个单槽 LIFO 缓存来服务反复创建的模式（一个临时值死亡，同样的大小再次被铸造）。"
 
 
-#: src/reference/vm-heap.md:73
+#: src/reference/vm-heap.md:75
 msgid ""
 "In-place growth within a class keeps append-accumulation loops linear; the block header carries the class-rounded capacity, so free re-derives the class with no side table."
 msgstr "类别内的就地增长让追加累加循环保持线性；块头部携带按类别取整的容量，因此 free 无需旁表即可重新推导类别。"
 
 
-#: src/reference/vm-heap.md:76
+#: src/reference/vm-heap.md:78
 msgid "Large blocks (> 2 KiB) get dedicated allocations, freed wholesale."
 msgstr "大块（> 2 KiB）获得专用分配，整体释放。"
 
 
-#: src/reference/vm-heap.md:77
+#: src/reference/vm-heap.md:79
 msgid ""
 "Blocks are 1:1 with their cell (the cell is the counted unit) and **never move**, so a raw `&[u8]` into the store stays valid for the cell's life."
 msgstr "块与其单元 1:1（单元是被计数的单位）且**绝不移动**，因此指向存储的裸 `&[u8]` 在单元的生命期内保持有效。"
 
 
-#: src/reference/vm-heap.md:80
+#: src/reference/vm-heap.md:82
 msgid ""
 "**Immortal singletons.** Interned string literals and dataless enum variants live in a slab freed only at `Vm` drop; they carry the `rc == 0` sentinel."
 msgstr "**不朽单例。** 驻留的字符串字面量与无数据枚举变体生活在一个只在 `Vm` 丢弃时释放的 slab 中；它们携带 `rc == 0` 哨兵。"
 
 
-#: src/reference/vm-heap.md:83
+#: src/reference/vm-heap.md:85
 msgid ""
 "**The `opaque` store.** Every rut `opaque` value lives in a slab of two-kind entries (rut value / host payload) with its own borrow guards; entries charge their bytes on insert and refund on death, so the budget and the receipts stay honest."
 msgstr ""
 "**`opaque` 存储。** 每个 rut `opaque` 值生活在一个两类条目（rut 值 / 宿主载荷）的 slab 中，带有自己的借用守卫；条目在插入时记入字节账、在死亡时退款，因此预算与回执保持诚实。"
 
 
-#: src/reference/vm-heap.md:87
+#: src/reference/vm-heap.md:89
 msgid ""
 "**No compaction.** Non-moving keeps host borrows into `Vec` buffers sound and freelists trivial."
 msgstr "**没有压缩。** 不移动让指向 `Vec` 缓冲的宿主借用保持健全，空闲列表保持平凡。"
 
 
-#: src/reference/vm-heap.md:89
+#: src/reference/vm-heap.md:91
 msgid ""
 "**Cells are addressed by raw pointer** in the slot word. A 32-bit handle design was prototyped and reverted on measurement: ref-heavy workloads paid +8–15% for the decode chain per slot read."
 msgstr ""
 "**单元以裸指针寻址**记录在槽字中。32 位句柄设计被原型化过，又因测量结果而回退：引用密集的工作负载在每次槽读取上为解码链付出 +8–15% 的代价。"
 
 
-#: src/reference/vm-heap.md:93
+#: src/reference/vm-heap.md:95
 msgid "Deterministic teardown"
 msgstr "确定性拆卸"
 
 
-#: src/reference/vm-heap.md:95
+#: src/reference/vm-heap.md:97
 msgid ""
 "Teardown mirrors the destruction rules: the host drops its references, releases run inline ([the Rc heap](rc-heap.md)), and `Vm::drop` frees the survivors wholesale — leaked cycles included — after emitting the leak report. The heap never outlives the `Vm`, and no rut cell can outlive the heap."
 msgstr ""
 "拆卸镜像销毁规则：宿主丢弃自己的引用，release 内联运行（[Rc 堆](rc-heap.md)），`Vm::drop` 在发出泄漏报告之后整体释放幸存者 —— 泄漏的循环也在内。堆的寿命绝不超过 `Vm`，也没有任何 rut 单元能比堆活得更久。"
 
 
-#: src/reference/vm-heap.md:104
+#: src/reference/vm-heap.md:106
 msgid "\"used {} bytes (peak {})\""
 msgstr "\"used {} bytes (peak {})\""
 
 
-#: src/reference/vm-heap.md:104
+#: src/reference/vm-heap.md:106
 msgid ""
 "// dropping `vm` frees every remaining slab\n"
 msgstr ""
@@ -17088,21 +17087,14 @@ msgstr ""
 msgid ""
 "// None = unbounded ops\n"
 msgstr ""
-"// None = unbounded ops\n"
+"// None = 无界操作\n"
 
 
 #: src/reference/resource-limits.md:11
 msgid ""
 "// None = host-enforced only\n"
 msgstr ""
-"// None = host-enforced only\n"
-
-
-#: src/reference/resource-limits.md:12
-msgid ""
-"// check period; default 1024\n"
-msgstr ""
-"// check period; default 1024\n"
+"// None = 仅由宿主强制\n"
 
 
 #: src/reference/resource-limits.md:16
@@ -17187,192 +17179,192 @@ msgstr "燃料"
 
 #: src/reference/resource-limits.md:32
 msgid ""
-"One unit per executed op; `fuel` counts **down**. The counter is decremented and checked on **every** op — `interrupt_every` is the periodic budget-check cadence, not a separate interrupt lane."
+"One unit per executed op; `fuel` counts **down**. The counter is decremented and checked on **every** op — a cheap per-op tick. `interrupt_every` is a construct-time cadence field that today gates nothing: there is no separate interrupt lane."
 msgstr ""
-"每执行一个 op 消耗一个单位；`fuel` 向**下**计数。计数器在**每个** op 上递减并检查——`interrupt_every` 是周期性预算检查的节奏，不是独立的燃料闸门。"
+"每执行一个 op 消耗一个单位；`fuel` 向**下**计数。计数器在**每个** op 上递减并检查——一次廉价的每操作跳。`interrupt_every` 是构造期的节奏字段，今天不约束任何东西：没有独立的中断车道。"
 
 
-#: src/reference/resource-limits.md:35
+#: src/reference/resource-limits.md:36
 msgid ""
 "`Trap::OutOfFuel` parks the frame exactly like any resumable stop: nothing is unwound. Resumption is `vm.add_fuel(n)` then `vm.resume()` — the frame _is_ the loop state. Fuel is chosen at construction: `add_fuel` is a no-op on an unbounded machine, and the runtime budget is read-only — by design."
 msgstr ""
 "`Trap::OutOfFuel` 像任何可恢复停止一样停放帧：没有任何东西被展开。恢复是 `vm.add_fuel(n)` 然后 `vm.resume()` —— 帧 _就是_ 循环状态。燃料在构造时选定：`add_fuel` 在无界机器上是空操作，且运行时预算只读——有意为之。"
 
 
-#: src/reference/resource-limits.md:40
+#: src/reference/resource-limits.md:41
 msgid ""
 "Fuel is the **deterministic** budget: the same program with the same fuel dies at the same op, every run — reproducible reports and hang proofs in tests."
 msgstr "燃料是**确定性**的预算：同样的程序带着同样的燃料在同一个操作处死亡，每次运行都如此 —— 测试中可复现的报告与挂起证明。"
 
 
-#: src/reference/resource-limits.md:43
+#: src/reference/resource-limits.md:44
 msgid ""
 "**Native fns run outside fuel.** A hanging native is a host bug: keep native bodies non-blocking, or push blocking work to a thread through the host-futures lane ([the host futures bridge](host-futures.md))."
 msgstr ""
 "**原生 fn 在燃料之外运行。** 挂起的原生函数是宿主 bug：保持原生函数体非阻塞，或透过宿主 future 链路把阻塞工作推给线程（[宿主 future 桥接](host-futures.md)）。"
 
 
-#: src/reference/resource-limits.md:47
+#: src/reference/resource-limits.md:48
 msgid "The trap contract"
 msgstr "陷阱契约"
 
 
-#: src/reference/resource-limits.md:49
+#: src/reference/resource-limits.md:50
 msgid "Trap"
 msgstr "陷阱"
 
 
-#: src/reference/resource-limits.md:49
+#: src/reference/resource-limits.md:50
 msgid "Raised by"
 msgstr "由谁触发"
 
 
-#: src/reference/resource-limits.md:49
+#: src/reference/resource-limits.md:50
 msgid "Frame state"
 msgstr "帧状态"
 
 
-#: src/reference/resource-limits.md:49
+#: src/reference/resource-limits.md:50
 msgid "Resumption"
 msgstr "恢复"
 
 
-#: src/reference/resource-limits.md:51 src/reference/embedding.md:483
+#: src/reference/resource-limits.md:52 src/reference/embedding.md:483
 msgid "`OutOfMemory`"
 msgstr "`OutOfMemory`"
 
 
-#: src/reference/resource-limits.md:51
+#: src/reference/resource-limits.md:52
 msgid "heap budget exceeded at an allocation check"
 msgstr "分配检查时超出堆预算"
 
 
-#: src/reference/resource-limits.md:51
+#: src/reference/resource-limits.md:52
 msgid "parked before the write"
 msgstr "在写入之前停放"
 
 
-#: src/reference/resource-limits.md:51
+#: src/reference/resource-limits.md:52
 msgid "free refs → `resume()`; a larger limit means a rebuilt VM — no live setter"
 msgstr "丢弃引用 → `resume()`；更大的限额意味着重建 VM——没有线上设置器"
 
 
-#: src/reference/resource-limits.md:52 src/reference/embedding.md:482
+#: src/reference/resource-limits.md:53 src/reference/embedding.md:482
 msgid "`OutOfFuel`"
 msgstr "`OutOfFuel`"
 
 
-#: src/reference/resource-limits.md:52
+#: src/reference/resource-limits.md:53
 msgid "fuel reached 0 at a check point"
 msgstr "检查点处燃料归 0"
 
 
-#: src/reference/resource-limits.md:52
+#: src/reference/resource-limits.md:53
 msgid "parked at the exact `pc`"
 msgstr "在精确的 `pc` 停放"
 
 
-#: src/reference/resource-limits.md:52
+#: src/reference/resource-limits.md:53
 msgid "`add_fuel(n)` → `resume()`"
 msgstr "`add_fuel(n)` → `resume()`"
 
 
-#: src/reference/resource-limits.md:61
+#: src/reference/resource-limits.md:62
 msgid "\"OutOfFuel\""
 msgstr "\"OutOfFuel\""
 
 
-#: src/reference/resource-limits.md:63
+#: src/reference/resource-limits.md:64
 msgid ""
 "// re-enters at the parked pc\n"
 msgstr ""
 "// re-enters at the parked pc\n"
 
 
-#: src/reference/resource-limits.md:69
+#: src/reference/resource-limits.md:70
 msgid ""
 "The async layer's resume granularity is the **checkpoint**, not the op: a drive that runs out of fuel parks the future's frame, and a re-drive re-enters at the frame's checkpoint state ([async and await](async.md))."
 msgstr ""
 "异步层的恢复粒度是**检查点**，不是操作：燃料耗尽的驱动会停放 future 的帧，重新驱动会从帧的检查点状态重新进入（[异步与 await](async.md)）。"
 
 
-#: src/reference/resource-limits.md:74
+#: src/reference/resource-limits.md:75
 msgid "Hang detection"
 msgstr "挂起检测"
 
 
-#: src/reference/resource-limits.md:76
+#: src/reference/resource-limits.md:77
 msgid "The host owns time; the recipes differ by embedder:"
 msgstr "时间由宿主管；配方因嵌入方而异："
 
 
-#: src/reference/resource-limits.md:78
+#: src/reference/resource-limits.md:79
 msgid "Host"
 msgstr "宿主"
 
 
-#: src/reference/resource-limits.md:78
+#: src/reference/resource-limits.md:79
 msgid "Recipe"
 msgstr "配方"
 
 
-#: src/reference/resource-limits.md:80
+#: src/reference/resource-limits.md:81
 msgid "UI / game"
 msgstr "UI / 游戏"
 
 
-#: src/reference/resource-limits.md:80
+#: src/reference/resource-limits.md:81
 msgid ""
 "drain the ready queue inside the frame loop; grant fuel per frame so a runaway script starves at the next check"
 msgstr "在帧循环内排空就绪队列；每帧授予燃料，让失控的脚本在下一次检查时饥饿"
 
 
-#: src/reference/resource-limits.md:81
+#: src/reference/resource-limits.md:82
 msgid "wasm page"
 msgstr "wasm 页面"
 
 
-#: src/reference/resource-limits.md:81
+#: src/reference/resource-limits.md:82
 msgid ""
 "grant finite fuel; a watchdog stops refueling — the parked frame dies at its next check"
 msgstr "授予有限燃料；看门狗停止补充燃料 —— 被停放的帧在下一次检查时死亡"
 
 
-#: src/reference/resource-limits.md:82
+#: src/reference/resource-limits.md:83
 msgid "desktop service"
 msgstr "桌面服务"
 
 
-#: src/reference/resource-limits.md:82
+#: src/reference/resource-limits.md:83
 msgid ""
 "a watchdog thread flips a flag the host honors between `resume()` calls; no joins, no signals"
 msgstr "看门狗线程翻转一个标志，宿主在 `resume()` 调用之间尊重它；没有 join，没有信号"
 
 
-#: src/reference/resource-limits.md:83
+#: src/reference/resource-limits.md:84
 msgid "tests"
 msgstr "测试"
 
 
-#: src/reference/resource-limits.md:83
+#: src/reference/resource-limits.md:84
 msgid ""
 "finite fuel + the virtual clock (`vm.set_now`) → fully deterministic hang proofs"
 msgstr "有限燃料 + 虚拟时钟（`vm.set_now`）→ 完全确定性的挂起证明"
 
 
-#: src/reference/resource-limits.md:85
+#: src/reference/resource-limits.md:86
 msgid ""
 "Anything blocking that cannot be bounded by fuel (IO, locks) belongs on a worker thread answering a `Completer` — the VM thread never blocks on it ([the host futures bridge](host-futures.md))."
 msgstr ""
 "无法用燃料约束的任何阻塞操作（IO、锁）属于 worker 线程上应答 `Completer` 的工作 —— VM 线程绝不在其上阻塞（[宿主 future 桥接](host-futures.md)）。"
 
 
-#: src/reference/resource-limits.md:89
+#: src/reference/resource-limits.md:90
 msgid "Fairness"
 msgstr "公平性"
 
 
-#: src/reference/resource-limits.md:91
+#: src/reference/resource-limits.md:92
 msgid ""
 "Within one VM, the ready ring is round-robin: one greedy launched future cannot starve the rest of a queue drain indefinitely — each frame runs to its next park or completion, and fuel bounds each of those runs."
 msgstr ""
@@ -26058,170 +26050,165 @@ msgstr ""
 
 #: src/reference/vm-core.md:50
 msgid ""
-"Fuel is accounted per op, with the fuller budget check amortized every `interrupt_every` ops."
-msgstr "燃料按操作记账，更完整的预算检查每 `interrupt_every` 个操作摊销一次。"
+"Fuel is accounted per op — one cheap tick per op, checked every op; the heap budget is charged per allocation. `interrupt_every` is a construct-time cadence field that today gates nothing (no interrupt lane, natives never preempted)."
+msgstr ""
+"燃料按每个 op 记账——每 op 一次廉价跳、每个 op 都检查；堆预算按分配计费。`interrupt_every` 是构造期的节奏字段，今天不约束任何东西（没有中断车道，原生函数绝不会被抢占）。"
 
 
-#: src/reference/vm-core.md:55
+#: src/reference/vm-core.md:57
 msgid ""
 "The embedder's host-fn binding table (`HostRegistry`) is built **before** the `Vm` exists and is consumed at construction: every host thunk the program declares is resolved against the registry immediately, so a declared-but-unbound host fn is a _construction error_, never a mid-run trap. The join produces one dense dispatch row per function — an adapter code pointer, the body's state word, the declared return type, and its is-reference verdict — so calling a host fn costs one table copy, no name work, no allocation."
 msgstr ""
 "嵌入方的宿主函数绑定表（`HostRegistry`）在 `Vm` 存在**之前**构建，并在构造时被消费：程序声明的每个宿主 thunk 都立即对照注册表解析，因此声明了却未绑定的宿主函数是一个_构造错误_，绝不是运行中途的陷阱。这次 join 为每个函数产出一条稠密的分派行——一个适配器代码指针、函数体的状态字、声明的返回类型及其是否引用的判定——因此调用一个宿主函数的代价是一次表复制，没有名字工作，没有分配。"
 
 
-#: src/reference/vm-core.md:64
+#: src/reference/vm-core.md:66
 msgid ""
 "Host bodies are plain Rust functions over `&mut Vm` and slots; arity is capped at 8 (the boundary's tuple law), and signatures are derived from the body's Rust shape, not written by hand."
 msgstr ""
 "宿主函数体是架在 `&mut Vm` 与槽位之上的普通 Rust 函数；元数上限 8（边界的元组法则），签名从函数体的 Rust 形状推导，不是手写的。"
 
 
-#: src/reference/vm-core.md:67
+#: src/reference/vm-core.md:69
 msgid ""
 "A host body records a trap in a VM-side channel rather than returning `Result`; the trap fires before any destination register is written."
 msgstr "宿主函数体把陷阱记录在一个 VM 侧通道里，而不是返回 `Result`；陷阱在任何目的寄存器被写入之前触发。"
 
 
-#: src/reference/vm-core.md:69
+#: src/reference/vm-core.md:71
 msgid ""
 "**Re-entrant calls** (a host fn calling back into rut) run the callee on a fresh frame stack under the same budget. The outer cursor is stash/restore: on return or trap the outer frame is exactly as it was, so a propagated nested trap parks the outer frame _at the host op_ and `resume()` re-runs the host fn. A host fn that prefers to handle the situation itself can catch the trap, add fuel, and retry its nested call."
 msgstr ""
 "**重入调用**（宿主函数回调进 rut）在同一个预算下、用一摞全新的帧栈运行被调用者。外层游标是暂存/恢复式的：返回或陷阱时，外层帧与原先完全一致，因此传播上来的嵌套陷阱会把外层帧停放在_宿主操作处_，`resume()` 会重新运行宿主函数。愿意自行处置局面的宿主函数可以捕获陷阱、补充燃料，然后重试它的嵌套调用。"
 
 
-#: src/reference/vm-core.md:76
+#: src/reference/vm-core.md:78
 msgid ""
 "The async host-fn lane (`register_async!`) binds a Rust async body to the minted `{scope}::{name}__start/__yield/__take/__cancel` rows the compiler weaves for `host async fn` declarations ([The host futures bridge](host-futures.md))."
 msgstr ""
 "异步宿主函数链路（`register_async!`）把一个 Rust async 函数体绑定到编译器为 `host async fn` 声明织出的 `{scope}::{name}__start/__yield/__take/__cancel` 铸造行上（[宿主 future 桥](host-futures.md)）。"
 
 
-#: src/reference/vm-core.md:81
+#: src/reference/vm-core.md:83
 msgid "Traps"
 msgstr "陷阱"
 
 
-#: src/reference/vm-core.md:83
+#: src/reference/vm-core.md:85
 msgid ""
 "Bugs are traps, errors are values. Arithmetic overflow, division by zero, indexing out of bounds, nil dereference, `panic(...)`, a failed downcast guard, and budget exhaustion all unwind as `Err(Trap)` — never a Rust panic:"
 msgstr ""
 "bug 是陷阱，错误是值。算术溢出、除以零、越界索引、nil 解引用、`panic(...)`、失败的向下转型守卫以及预算耗尽，全都以 `Err(Trap)` 的形式展开——绝不是 Rust panic："
 
 
-#: src/reference/vm-core.md:98
+#: src/reference/vm-core.md:100
 msgid ""
 "**Traps are catchable only at the host boundary.** `vm.call(...)` returns `Result`; rut code never catches one — errors in rut are `(T, err)` tuples ([Errors and optionality](../tutorial/errors.md)). On the way out, frames are dropped and destructors run: `dispose` bodies fire, borrow guards release. The `Vm` itself survives a trap — the next call starts clean."
 msgstr ""
 "**陷阱只在宿主边界可捕获。**`vm.call(...)` 返回 `Result`；rut 代码从不捕获陷阱——rut 里的错误是 `(T, err)` 元组（[错误与可空性](../tutorial/errors.md)）。在出去的路上，帧被丢弃、析构器运行：`dispose` 函数体被触发，借用守卫释放。`Vm` 本身能在陷阱后幸存——下一次调用干净地开始。"
 
 
-#: src/reference/vm-core.md:109
-msgid ""
-"// per-op countdown\n"
-msgstr ""
-"// per-op countdown\n"
-
-
 #: src/reference/vm-core.md:111
 msgid ""
-"// default 1024\n"
+"// per-op countdown\n"
 msgstr ""
-"// default 1024\n"
+"// 每操作倒数\n"
 
 
-#: src/reference/vm-core.md:115
+#: src/reference/vm-core.md:117
 msgid ""
 "**Fuel** counts ops down. Exhaustion parks the frame at its pc — the loop state _is_ the frame — so `add_fuel(n)` + `resume()` continues it; nothing is lost or restarted. Loop back-edges carry `LoopHead` markers so tight loops still park."
 msgstr ""
 "**燃料**按操作倒数。耗尽会把帧停放在它的 pc——循环状态_就是_帧——因此 `add_fuel(n)` + `resume()` 能继续它；没有任何东西丢失或重启。循环回边携带 `LoopHead` 标记，因此紧凑循环也能停放。"
 
 
-#: src/reference/vm-core.md:119
+#: src/reference/vm-core.md:121
 msgid ""
 "**Heap budget** is checked at every allocation; over-limit allocation traps `OutOfMemory` the same parkable way."
 msgstr "**堆预算**在每次分配时检查；超限的分配以同样可停放的方式触发 `OutOfMemory` 陷阱。"
 
 
-#: src/reference/vm-core.md:121
+#: src/reference/vm-core.md:123
 msgid ""
 "**Heap accounting** is live: `heap_usage()` reports current bytes, `fuel_used` accumulates across resumes."
 msgstr "**堆记账**是实时的：`heap_usage()` 报告当前字节数，`fuel_used` 跨恢复累计。"
 
 
-#: src/reference/vm-core.md:123
+#: src/reference/vm-core.md:125
 msgid ""
-"**Interrupts** are cooperative: the budget check cadence bounds how long any host-requested stop can take. Native (host) bodies run outside the fuel budget and are expected to be fast."
-msgstr "**中断**是协作式的：预算检查的节奏为任何宿主请求的停止所需的时间设了上界。原生（宿主）函数体在燃料预算之外运行，并被期望是快的。"
+"**No interrupt lane.** `interrupt_every` is a construct-time cadence field that today gates nothing — there is no host-requested stop and no preemption point. Native (host) bodies run outside the fuel budget and are expected to be fast."
+msgstr ""
+"**没有中断车道。**`interrupt_every` 是构造期的节奏字段，今天不约束任何东西——不存在宿主请求的停止，也没有抢占点。原生（宿主）函数体在燃料预算之外运行，且应当保持快速。"
 
 
-#: src/reference/vm-core.md:126
+#: src/reference/vm-core.md:129
 msgid ""
 "`Vm::builder().compiled(c).limits(l).build()` takes the limits (`.limits(..)` on the builder, or the parts a `Compiled` hands over); unset limits mean unbounded fuel and heap — embedders that need budgets pass them explicitly ([Resource limits and fuel](resource-limits.md))."
 msgstr ""
 
 
-#: src/reference/vm-core.md:132
+#: src/reference/vm-core.md:135
 msgid "Coroutines and the driving loop"
 msgstr "协程与驱动循环"
 
 
-#: src/reference/vm-core.md:134
+#: src/reference/vm-core.md:137
 msgid ""
 "Every async entry runs as a root frame, parked when `await` returns pending. There is no microtask queue and no job executor — two queues and a virtual clock:"
 msgstr "每个异步入口都作为一个根帧运行，在 `await` 返回 pending 时停放。没有微任务队列，也没有作业执行器——只有两条队列和一个虚拟时钟："
 
 
-#: src/reference/vm-core.md:138
+#: src/reference/vm-core.md:141
 msgid ""
 "`ready: VecDeque<Slot>` — launched or woken frames; each entry owns one reference (retained on enqueue, released on pop)."
 msgstr "`ready: VecDeque<Slot>`——已启动或已唤醒的帧；每个条目持有一个引用（入队时保留，出队时释放）。"
 
 
-#: src/reference/vm-core.md:140
+#: src/reference/vm-core.md:143
 msgid ""
 "`timers: BTreeMap<u64, Vec<Slot>>` — sleep deadlines against the VM's **virtual clock** (`now_ms` / `set_now` — deterministic; the host advances it explicitly, or maps it to wall time)."
 msgstr ""
 "`timers: BTreeMap<u64, Vec<Slot>>`——对照 VM **虚拟时钟**的 sleep 期限（`now_ms` / `set_now`——确定性的；宿主显式推进它，或把它映射到墙上时间）。"
 
 
-#: src/reference/vm-core.md:143
+#: src/reference/vm-core.md:146
 msgid ""
 "`drive(fut)` — one drive step through the future's designated yield slot (the `Future<T>` class's engine ABI): a fresh engine context over the frame edge, answering `Done` or `Parked` off the frame's state field. Fuel accounting rides the per-op budget unchanged: an exhausted drive parks the frame at its pc, and a re-drive re-enters at the checkpoint state."
 msgstr ""
 
 
-#: src/reference/vm-core.md:149
+#: src/reference/vm-core.md:152
 msgid ""
 "`run_ready()` drains the ready queue one drive per entry; `next_deadline()` expires due timers into `ready` and answers the earliest remaining deadline; `pending_tasks()` is the idle test."
 msgstr ""
 "`run_ready()` 排空就绪队列，每个条目驱动一次；`next_deadline()` 把到期定时器过期进 `ready` 并应答剩余的最早期限；`pending_tasks()` 是空闲判据。"
 
 
-#: src/reference/vm-core.md:152
+#: src/reference/vm-core.md:155
 msgid ""
 "The wake pair (awaiter edge on the awaited frame, pending edge on the awaiter) is one-directional and cleared on resume — no cycle forms."
 msgstr "唤醒对（被 await 帧上的 awaiter 边、awaiter 上的 pending 边）是单向的，并在恢复时清除——不会成环。"
 
 
-#: src/reference/vm-core.md:154
+#: src/reference/vm-core.md:157
 msgid ""
 "A completed drive re-enqueues the frame's awaiter edge. A parked async frame is simply not in `ready` until its wake edge or timer fires."
 msgstr "一次完成的驱动会重新入队帧的 awaiter 边。停放的异步帧就是不在 `ready` 里，直到它的唤醒边或定时器触发。"
 
 
-#: src/reference/vm-core.md:157
+#: src/reference/vm-core.md:160
 msgid ""
 "The engine never owns a wall clock: sleeps are virtual-clock deadlines, and tests virtualize time by advancing the clock — full determinism ([Async and await](async.md), [Launched futures](launched-futures.md))."
 msgstr ""
 "引擎从不拥有墙上时钟：sleep 是虚拟时钟期限，测试通过推进时钟来虚拟化时间——完全确定性（[异步与 await](async.md)、[已启动的 future](launched-futures.md)）。"
 
 
-#: src/reference/vm-core.md:161
+#: src/reference/vm-core.md:164
 msgid "Heap integration"
 msgstr "堆集成"
 
 
-#: src/reference/vm-core.md:163
+#: src/reference/vm-core.md:166
 msgid ""
 "Allocation, retain, and release are inline loop work. There is **no collection pass at all**: destruction happens at release-to-zero, so nothing ever interrupts a frame. Strong reference cycles leak by design; the weak-reference machinery and the shutdown leak report are the diagnostic surface ([Weak references and the cycle collector](weak-refs.md), [The Rc heap and destructors](rc-heap.md)). Heap layout, cell formats, and the bump allocator are [The VM heap](vm-heap.md)."
 msgstr ""

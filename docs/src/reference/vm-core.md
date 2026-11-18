@@ -9,12 +9,12 @@ destruction — no JIT, no garbage-collection pass, no background threads.
 ```rust
 pub struct Vm {
     pub prog: Rc<Program>,        // the linked program
-    heap: Heap,                   // the RC heap — [The VM heap](vm-heap.md)
+    heap: Heap,                   // the RC heap — refcounted, self-managed
     frames: Vec<SavedFrame>,      // saved frames (the call stack)
     cur_func: u32, cur_pc: u32,   // the ACTIVE frame
     cur_regs: Vec<Slot>, cur_ret_dst: Option<Reg>,
     fuel: Option<u64>,            // per-op budget
-    interrupt_every: u32,         // budget check cadence (default 1024)
+    interrupt_every: u32,         // cadence field; nothing gates on it today
     host_slots: Vec<HostSlot>,    // the host-fn dispatch row (joined from
                                   // the HostRegistry at construction)
     ready: VecDeque<Slot>,        // launched/parked frames to (re)drive
@@ -47,8 +47,10 @@ at the op.
   nulls the weak list, queues the type's `dispose` body (the
   `[disposal]` contract), and frees
   ([The Rc heap and destructors](rc-heap.md)).
-- Fuel is accounted per op, with the fuller budget check amortized every
-  `interrupt_every` ops.
+- Fuel is accounted per op — one cheap tick per op, checked every op;
+  the heap budget is charged per allocation. `interrupt_every` is a
+  construct-time cadence field that today gates nothing (no interrupt
+  lane, natives never preempted).
 
 ## The host boundary
 
@@ -102,13 +104,13 @@ frames are dropped and destructors run: `dispose` bodies fire, borrow
 guards release. The `Vm` itself survives a trap — the next call starts
 clean.
 
-## Budgets and interrupts
+## Budgets
 
 ```rust
 pub struct Limits {
     pub fuel: Option<u64>,          // per-op countdown
     pub heap_limit_bytes: Option<u64>,
-    pub interrupt_every: u32,       // default 1024
+    pub interrupt_every: u32,       // cadence field; nothing gates on it today
 }
 ```
 
@@ -120,9 +122,10 @@ pub struct Limits {
   traps `OutOfMemory` the same parkable way.
 - **Heap accounting** is live: `heap_usage()` reports current bytes,
   `fuel_used` accumulates across resumes.
-- **Interrupts** are cooperative: the budget check cadence bounds how
-  long any host-requested stop can take. Native (host) bodies run outside
-  the fuel budget and are expected to be fast.
+- **No interrupt lane.** `interrupt_every` is a construct-time cadence
+  field that today gates nothing — there is no host-requested stop and no
+  preemption point. Native (host) bodies run outside the fuel budget and
+  are expected to be fast.
 - `Vm::builder().compiled(c).limits(l).build()` takes the limits
   (`.limits(..)` on the builder, or the parts a `Compiled` hands
   over); unset limits mean unbounded fuel and heap — embedders that

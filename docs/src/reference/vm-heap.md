@@ -32,13 +32,15 @@ Host-side Rust state is the host's memory, charged to the host.
 
 ```rust
 impl Heap {
-    /// The one allocation path for rut values.
-    /// Over budget -> Err(Trap::OutOfMemory); never aborts.
-    fn alloc(&mut self, size: u32, align: u8, ty: TypeId)
-        -> Result<NonNull<Header>, Trap>;
+    /// The typed allocation routes (cell mint, strings, buffers, `opaque`
+    /// boxes) charge first: over budget -> Err(Trap::OutOfMemory); never
+    /// aborts.
+    fn alloc_str_bytes(&self, bytes: Vec<u8>) -> Result<Slot, Trap>;
+    fn alloc_bytes(&self, bytes: Vec<u8>) -> Result<Slot, Trap>;
 
     fn used_bytes(&self) -> u64;      // feeds vm.heap_usage()
     fn peak_bytes(&self) -> u64;      // high-water mark: vm.heap_peak()
+    fn charge_public(&self, bytes: u64) -> Result<(), Trap>;  // `Vec` growth
 }
 ```
 
@@ -48,12 +50,12 @@ Fuel is the one live budget (`Vm::add_fuel`); a heap-trap resumption
 means dropping references so the retry fits, or rebuilding the VM with a
 larger budget ([resource limits](resource-limits.md)).
 
-Every route that materializes a rut value goes through it: cell mint,
-`Vec` growth, string concatenation, frame-pool growth, `opaque` store
-inserts. **The contributor rule**: an allocation path that materializes
-a rut value and does not flow through `alloc` is a bug — the budget
-would not bind, `heap_usage` would lie, and the leak report would miss
-it.
+Every route that materializes a rut value charges before the write:
+cell mint, `Vec` growth, string concatenation, frame-pool growth,
+`opaque` store inserts. **The contributor rule**: an allocation path
+that materializes a rut value and does not charge first is a bug — the
+budget would not bind, `heap_usage` would lie, and the leak report would
+miss it.
 
 Accounting checks run **before any write**: a failed allocation leaves
 the heap byte-identical to its state before the op, and the trap is

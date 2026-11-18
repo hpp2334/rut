@@ -9,7 +9,7 @@ construction, and both bind on the VM's own accounting
 pub struct Limits {
     pub fuel: Option<u64>,             // None = unbounded ops
     pub heap_limit_bytes: Option<u64>, // None = host-enforced only
-    pub interrupt_every: u32,          // check period; default 1024
+    pub interrupt_every: u32,          // cadence field; nothing gates on it today
 }
 ```
 
@@ -30,8 +30,9 @@ refunded (the accounting overcounts rather than undercounts).
 ## Fuel
 
 - One unit per executed op; `fuel` counts **down**. The counter is
-  decremented and checked on **every** op — `interrupt_every` is the
-  periodic budget-check cadence, not a separate interrupt lane.
+  decremented and checked on **every** op — a cheap per-op tick.
+  `interrupt_every` is a construct-time cadence field that today gates
+  nothing: there is no separate interrupt lane.
 - `Trap::OutOfFuel` parks the frame exactly like any resumable stop:
   nothing is unwound. Resumption is `vm.add_fuel(n)` then
   `vm.resume()` — the frame *is* the loop state. Fuel is chosen at

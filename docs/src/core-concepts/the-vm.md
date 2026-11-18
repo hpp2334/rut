@@ -12,12 +12,12 @@ verification, and the interpreter's execution and budgeting model.
 ```rust
 pub struct Vm {
     pub prog: Rc<Program>,        // the linked program
-    heap: Heap,                   // the RC heap — [The VM heap](vm-heap.md)
+    heap: Heap,                   // the RC heap — refcounted, self-managed
     frames: Vec<SavedFrame>,      // saved frames (the call stack)
     cur_func: u32, cur_pc: u32,   // the ACTIVE frame
     cur_regs: Vec<Slot>, cur_ret_dst: Option<Reg>,
     fuel: Option<u64>,            // per-op budget
-    interrupt_every: u32,         // budget check cadence (default 1024)
+    interrupt_every: u32,         // cadence field; nothing gates on it today
     host_slots: Vec<HostSlot>,    // the host-fn dispatch row (joined from
                                   // the HostRegistry at construction)
     ready: VecDeque<Slot>,        // launched/parked frames to (re)drive
@@ -132,7 +132,7 @@ unwinds as an `Err(Trap)` to the host call. Rut code cannot catch one;
 the boundary is the catch point (see
 [the host boundary](host-boundary.md)).
 
-## Budgets and interrupts
+## Budgets
 
 Two knobs make it safe to run third-party code: a **heap budget** and
 **fuel**. Both are set at construction, and fuel is the one live budget
@@ -141,12 +141,15 @@ Two knobs make it safe to run third-party code: a **heap budget** and
 ```rust
 Limits { fuel: Option<u64>,            // one unit per op, counts down
          heap_limit_bytes: Option<u64>,// checked at every allocation
-         interrupt_every: u32 }        // default: check every 1024 ops
+         interrupt_every: u32 }        // cadence field; nothing gates on it today
 ```
 
-The heap limit has no live setter: a heap trap is cleared by dropping
-references so the retry fits, or by rebuilding the VM with a larger
-budget; the interrupt cadence is construct-time too
+Fuel is a cheap per-op tick — one unit decremented and checked on every
+op — and the heap budget is charged per allocation. The heap limit has no
+live setter: a heap trap is cleared by dropping references so the retry
+fits, or by rebuilding the VM with a larger budget. `interrupt_every` is
+construct-time only and **today gates nothing**: there is no interrupt
+lane, and natives are never preempted
 ([resource limits](../reference/resource-limits.md)).
 
 - Exhaustion is **resumable**: the trap parks the frame exactly where
@@ -159,8 +162,8 @@ budget; the interrupt cadence is construct-time too
   leaves the heap byte-identical (see
   [memory](memory.md)).
 - Native functions run outside the fuel budget — a hanging native is a
-  host bug by contract. The periodic budget check (`interrupt_every`)
-  amortizes the fuller check; it never preempts a native mid-body.
+  host bug by contract, so keep native bodies non-blocking (there is no
+  interrupt lane to preempt one).
 
 ## Why no JIT is viable
 
