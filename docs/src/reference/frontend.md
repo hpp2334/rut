@@ -253,7 +253,7 @@ output is stable; a diag with no file of its own spells the fallback
 `--> line L, column C`. Messages name their fixes: *expected `super` or
 `pkg` in pub(..)* for an unknown visibility scope; *classes have no
 instance literal — construct through a class method (`Circle::new(..)`)*
-for a struct literal on a class.
+for a struct literal on a class from a used package.
 
 The compile stops before IR if any diagnostic exists — a module with
 diagnostics never produces bytecode. See

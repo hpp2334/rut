@@ -11,7 +11,7 @@ vocabulary ([async and await](async.md)).
 |---|---|---|
 | launch | `launch_future(f)` | live |
 | cancel | `h.abort()` | live |
-| join | `await h` on a receipt | compile-gated — "the receipt is not a Future and cannot be re-launched" |
+| join | `await h` on a receipt | compile-gated — "cannot `await` a LaunchedFutureHandle — the receipt is not a Future and cannot be re-launched" |
 | race | `select2(a, b)` (stdlib) | live |
 | first-of | `select_all(futs)` (stdlib) | live |
 | manual futures | `completer<T>()` (stdlib) | live |

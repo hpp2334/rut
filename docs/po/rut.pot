@@ -17667,7 +17667,9 @@ msgid "`await h` on a receipt"
 msgstr ""
 
 #: src/reference/launched-futures.md:14
-msgid "compile-gated — \"the receipt is not a Future and cannot be re-launched\""
+msgid ""
+"compile-gated — \"cannot `await` a LaunchedFutureHandle — the receipt is not "
+"a Future and cannot be re-launched\""
 msgstr ""
 
 #: src/reference/launched-futures.md:15
@@ -22166,9 +22168,10 @@ msgstr ""
 
 #: src/reference/stdlib.md:351
 msgid ""
-"both; `nil` → `null`, `null` → `nil`; `get()` unwraps (the union bound "
-"requires BOTH interfaces, so a decode-only `T` such as `JsonU64` cannot ride "
-"it)"
+"both; `nil` → `null`, `null` → `nil`; `get()` unwraps (admission needs ANY "
+"union member — `SOpt<JsonU64>` admits through `JsonDeserialize` — while the "
+"`encode` member is the one a decode-only `T` cannot satisfy: `` `JsonU64` "
+"has no method `encode` ``)"
 msgstr ""
 
 #: src/reference/stdlib.md:352
@@ -23338,7 +23341,7 @@ msgid ""
 "own spells the fallback `--> line L, column C`. Messages name their fixes: "
 "_expected `super` or `pkg` in pub(..)_ for an unknown visibility scope; "
 "_classes have no instance literal — construct through a class method "
-"(`Circle::new(..)`)_ for a struct literal on a class."
+"(`Circle::new(..)`)_ for a struct literal on a class from a used package."
 msgstr ""
 
 #: src/reference/frontend.md:258
@@ -28800,7 +28803,7 @@ msgid "implementation"
 msgstr ""
 
 #: src/reference/cli.md:385
-msgid "runs the designated `entry fn`"
+msgid "the package's designated `entry fn` (a loose file is refused)"
 msgstr ""
 
 #: src/reference/cli.md:385

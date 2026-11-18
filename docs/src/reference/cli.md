@@ -382,7 +382,7 @@ The file extension selects the parser mode:
 
 | file | mode | `run` | `fmt` | `dump` |
 |---|---|---|---|---|
-| `*.rut` | implementation | runs the designated `entry fn` | formats impls | AST + IR of the module |
+| `*.rut` | implementation | the package's designated `entry fn` (a loose file is refused) | formats impls | AST + IR of the module |
 | `*.d.rut` | declaration | refused (exit 2) | formats the surface | the surface's AST + IR |
 
 ## Exit codes

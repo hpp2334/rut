@@ -348,7 +348,7 @@ pub interface JsonDeserialize { fn decode(r: JsonReader) -> (?Self, ?DecodeJsonE
   |---|---|---|
   | `JsonI64` / `JsonF64` / `JsonBool` / `JsonStr` | `i64` / `f64` / `bool` / `str` | both directions; `get()` unwraps |
   | `JsonU64` | `u64` | decode-only — satisfaction is per-interface, so it satisfies `JsonDeserialize` alone (an out-of-`i64`-range producer has no encode row); `get()` unwraps |
-  | `SOpt<T requires JsonSerialize \| JsonDeserialize>` | `?T` | both; `nil` → `null`, `null` → `nil`; `get()` unwraps (the union bound requires BOTH interfaces, so a decode-only `T` such as `JsonU64` cannot ride it) |
+  | `SOpt<T requires JsonSerialize \| JsonDeserialize>` | `?T` | both; `nil` → `null`, `null` → `nil`; `get()` unwraps (admission needs ANY union member — `SOpt<JsonU64>` admits through `JsonDeserialize` — while the `encode` member is the one a decode-only `T` cannot satisfy: `` `JsonU64` has no method `encode` ``) |
   | `JsonArr<T requires JsonSerialize \| JsonDeserialize>` | `[T]` | both; `to_arr()` unwraps |
   | `JsonVec<T requires JsonSerialize \| JsonDeserialize>` | `Vec<T>` | both (over pouch's `Vec<T>`); `to_vec()` unwraps |
   | `JMapStr<V>` / `JMapI64<V>` / `JMapBool<V>` / `JMapU64<V>` / `JMapBytes<V>` | `HashMap<K, V>` per key shape | decode-only (over nmapset's `HashMap`); `to_map()` unwraps — `JMapBytes` answers the bytes-keys disclosure |
