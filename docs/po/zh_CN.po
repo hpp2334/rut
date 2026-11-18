@@ -7385,42 +7385,42 @@ msgstr "一个结构体，一个线程，一套堆"
 msgid ""
 "// the linked program\n"
 msgstr ""
-"// the linked program\n"
+"// 链接后的程序\n"
 
 
 #: src/core-concepts/the-vm.md:15 src/reference/vm-core.md:12
 msgid ""
 "// the RC heap — [The VM heap](vm-heap.md)\n"
 msgstr ""
-"// the RC heap — [The VM heap](vm-heap.md)\n"
+"// Rc 堆——[VM 堆](vm-heap.md)\n"
 
 
 #: src/core-concepts/the-vm.md:16 src/reference/vm-core.md:13
 msgid ""
 "// saved frames (the call stack)\n"
 msgstr ""
-"// saved frames (the call stack)\n"
+"// 保存的帧（调用栈）\n"
 
 
 #: src/core-concepts/the-vm.md:17 src/reference/vm-core.md:14
 msgid ""
 "// the ACTIVE frame\n"
 msgstr ""
-"// the ACTIVE frame\n"
+"// 活动帧\n"
 
 
 #: src/core-concepts/the-vm.md:19 src/reference/vm-core.md:16
 msgid ""
 "// per-op budget\n"
 msgstr ""
-"// per-op budget\n"
+"// 每操作预算\n"
 
 
 #: src/core-concepts/the-vm.md:20 src/reference/vm-core.md:17
 msgid ""
 "// budget check cadence (default 1024)\n"
 msgstr ""
-"// budget check cadence (default 1024)\n"
+"// 预算检查节奏（默认 1024）\n"
 
 
 #: src/core-concepts/the-vm.md:21 src/reference/vm-core.md:18
@@ -7428,27 +7428,29 @@ msgid ""
 "// the host-fn dispatch row (joined from\n"
 "                                  // the HostRegistry at construction)\n"
 msgstr ""
+"// 宿主函数分派行（在构造时从\n"
+"                                  // HostRegistry 联结而来）\n"
 
 
 #: src/core-concepts/the-vm.md:23 src/reference/vm-core.md:20
 msgid ""
 "// launched/parked frames to (re)drive\n"
 msgstr ""
-"// launched/parked frames to (re)drive\n"
+"// 待（重新）驱动的已启动/停放帧\n"
 
 
 #: src/core-concepts/the-vm.md:24 src/reference/vm-core.md:21
 msgid ""
 "// sleep deadlines -> wake lists\n"
 msgstr ""
-"// sleep deadlines -> wake lists\n"
+"// sleep 期限 -> 唤醒列表\n"
 
 
 #: src/core-concepts/the-vm.md:25 src/reference/vm-core.md:22
 msgid ""
 "// the VM's virtual clock\n"
 msgstr ""
-"// the VM's virtual clock\n"
+"// VM 的虚拟时钟\n"
 
 
 #: src/core-concepts/the-vm.md:30
@@ -7622,8 +7624,9 @@ msgstr "堆检查在任何写入_之前_运行，所以内存耗尽的失败让�
 
 #: src/core-concepts/the-vm.md:161
 msgid ""
-"Native functions run outside the fuel budget — a hanging native is a host bug by contract — and the interrupt hook is the host's lever at native return points."
-msgstr "原生函数运行在燃料预算之外——挂死的原生函数按契约就是宿主的 bug——而中断钩子是宿主在原生返回点上的操纵杆。"
+"Native functions run outside the fuel budget — a hanging native is a host bug by contract. The periodic budget check (`interrupt_every`) amortizes the fuller check; it never preempts a native mid-body."
+msgstr ""
+"原生函数在燃料预算之外运行——挂起的原生函数按契约是宿主 bug。周期性预算检查（`interrupt_every`）摊销更完整的检查；它绝不会在原生函数体中途抢占。"
 
 
 #: src/core-concepts/the-vm.md:165
@@ -17184,9 +17187,9 @@ msgstr "燃料"
 
 #: src/reference/resource-limits.md:32
 msgid ""
-"One unit per executed op; `fuel` counts **down**. The counter is decremented and checked on **every** op — `interrupt_every` meters the separate interrupt lane, not fuel."
+"One unit per executed op; `fuel` counts **down**. The counter is decremented and checked on **every** op — `interrupt_every` is the periodic budget-check cadence, not a separate interrupt lane."
 msgstr ""
-"每执行一个操作计一个单位；`fuel` 向**下**计数。计数器在**每个**操作上递减并检查——`interrupt_every` 计量的是独立的中断链路，不是燃料。"
+"每执行一个 op 消耗一个单位；`fuel` 向**下**计数。计数器在**每个** op 上递减并检查——`interrupt_every` 是周期性预算检查的节奏，不是独立的燃料闸门。"
 
 
 #: src/reference/resource-limits.md:35
@@ -17250,8 +17253,8 @@ msgstr "在写入之前停放"
 
 
 #: src/reference/resource-limits.md:51
-msgid "raise limit / free refs → `resume()`"
-msgstr "提高上限 / 释放引用 → `resume()`"
+msgid "free refs → `resume()`; a larger limit means a rebuilt VM — no live setter"
+msgstr "丢弃引用 → `resume()`；更大的限额意味着重建 VM——没有线上设置器"
 
 
 #: src/reference/resource-limits.md:52 src/reference/embedding.md:482

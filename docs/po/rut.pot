@@ -7526,8 +7526,8 @@ msgstr ""
 #: src/core-concepts/the-vm.md:161
 msgid ""
 "Native functions run outside the fuel budget — a hanging native is a host "
-"bug by contract — and the interrupt hook is the host's lever at native "
-"return points."
+"bug by contract. The periodic budget check (`interrupt_every`) amortizes the "
+"fuller check; it never preempts a native mid-body."
 msgstr ""
 
 #: src/core-concepts/the-vm.md:165
@@ -16976,8 +16976,8 @@ msgstr ""
 #: src/reference/resource-limits.md:32
 msgid ""
 "One unit per executed op; `fuel` counts **down**. The counter is decremented "
-"and checked on **every** op — `interrupt_every` meters the separate "
-"interrupt lane, not fuel."
+"and checked on **every** op — `interrupt_every` is the periodic budget-check "
+"cadence, not a separate interrupt lane."
 msgstr ""
 
 #: src/reference/resource-limits.md:35
@@ -17035,7 +17035,8 @@ msgid "parked before the write"
 msgstr ""
 
 #: src/reference/resource-limits.md:51
-msgid "raise limit / free refs → `resume()`"
+msgid ""
+"free refs → `resume()`; a larger limit means a rebuilt VM — no live setter"
 msgstr ""
 
 #: src/reference/resource-limits.md:52 src/reference/embedding.md:482

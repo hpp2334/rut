@@ -30,8 +30,8 @@ refunded (the accounting overcounts rather than undercounts).
 ## Fuel
 
 - One unit per executed op; `fuel` counts **down**. The counter is
-  decremented and checked on **every** op — `interrupt_every` meters
-  the separate interrupt lane, not fuel.
+  decremented and checked on **every** op — `interrupt_every` is the
+  periodic budget-check cadence, not a separate interrupt lane.
 - `Trap::OutOfFuel` parks the frame exactly like any resumable stop:
   nothing is unwound. Resumption is `vm.add_fuel(n)` then
   `vm.resume()` — the frame *is* the loop state. Fuel is chosen at
@@ -48,7 +48,7 @@ refunded (the accounting overcounts rather than undercounts).
 
 | Trap | Raised by | Frame state | Resumption |
 |---|---|---|---|
-| `OutOfMemory` | heap budget exceeded at an allocation check | parked before the write | raise limit / free refs → `resume()` |
+| `OutOfMemory` | heap budget exceeded at an allocation check | parked before the write | free refs → `resume()`; a larger limit means a rebuilt VM — no live setter |
 | `OutOfFuel` | fuel reached 0 at a check point | parked at the exact `pc` | `add_fuel(n)` → `resume()` |
 
 ```rust

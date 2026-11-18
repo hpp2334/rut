@@ -159,8 +159,8 @@ budget; the interrupt cadence is construct-time too
   leaves the heap byte-identical (see
   [memory](memory.md)).
 - Native functions run outside the fuel budget — a hanging native is a
-  host bug by contract — and the interrupt hook is the host's lever at
-  native return points.
+  host bug by contract. The periodic budget check (`interrupt_every`)
+  amortizes the fuller check; it never preempts a native mid-body.
 
 ## Why no JIT is viable
 
