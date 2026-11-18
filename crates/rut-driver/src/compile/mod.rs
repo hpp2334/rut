@@ -57,8 +57,17 @@ pub fn compile_module(src: &str, mode: Mode, module_name: &str) -> CompileOutput
             binary: None,
         };
     }
+    // the graph re-mounts through a Mounted source pkg, so the mode
+    // must ride the mount: a `.d.rut` surface mounts Decl (the graph's
+    // own parse would otherwise refuse every `builtin`/`host` row as
+    // an impl-file keyword); the impl/lir lanes keep the plain source
+    // mount
+    let mounted = match mode {
+        Mode::Decl => Mounted::decl(module_name, src),
+        Mode::Impl => Mounted::source(module_name, src),
+    };
     let compiled: Result<Compiled, RunError> = RutRun::new()
-        .mount(Mounted::source(module_name, src))
+        .mount(mounted)
         .entrypoint(module_name)
         .compile();
     render(compiled, ast_dump, ast_json)
