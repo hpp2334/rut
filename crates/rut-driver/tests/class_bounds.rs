@@ -248,6 +248,6 @@ impl<K, V> Box<K, V> {
 
 // NOTE: the full cross-module shape (bounded class in a lib module, key
 // spelled in the consumer) is out of A5 scope — used (imported) types
-// take no generic arguments in this build (resolve.rs, pre-existing v1
+// take no type arguments in this build (resolve.rs, pre-existing v1
 // rule). The bound gates through the same structural member-set match
 // either way.

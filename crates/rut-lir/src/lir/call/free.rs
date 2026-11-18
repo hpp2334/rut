@@ -41,7 +41,7 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
             self.ctx.err(
                 sp,
                 format!(
-                    "`{}` takes {} generic arguments, {} given",
+                    "`{}` takes {} type arguments, {} given",
                     self.ctx.name(name),
                     decl_generics.len(),
                     generics.len()

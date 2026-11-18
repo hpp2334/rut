@@ -865,8 +865,7 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                 let mut cur_ty = l.ty;
                 for seg in &segs[1..] {
                     if !seg.generics.is_empty() {
-                        self.ctx
-                            .err(sp, "generic arguments are not valid on a field");
+                        self.ctx.err(sp, "type arguments are not valid on a field");
                         return Err(());
                     }
                     // `p.x` auto-deref through a nullable: the
@@ -1105,7 +1104,7 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
             let name = seg.name;
             if !seg.generics.is_empty() {
                 self.ctx
-                    .err(sp, "generic arguments are not valid in a value path");
+                    .err(sp, "type arguments are not valid in a value path");
                 return Some(Err(()));
             }
             if let Some(fnode) = self.ctx.fn_in(&m, name) {

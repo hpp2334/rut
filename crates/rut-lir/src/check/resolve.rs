@@ -309,10 +309,7 @@ impl<'a> Ctx<'a> {
                 let prim = sym::primitive_ty(name);
                 if let Some(p) = prim {
                     if !seg.generics.is_empty() {
-                        self.err(
-                            sp,
-                            format!("`{}` takes no generic arguments", self.name(name)),
-                        );
+                        self.err(sp, format!("`{}` takes no type arguments", self.name(name)));
                     }
                     return p;
                 }
@@ -342,12 +339,12 @@ impl<'a> Ctx<'a> {
                     return match (kind, generics.as_slice()) {
                         (rut_core::binary::NativeTy::Opaque, []) => TY_OPAQUE,
                         (rut_core::binary::NativeTy::Opaque, _) => {
-                            self.err(sp, "`opaque` takes no generic arguments");
+                            self.err(sp, "`opaque` takes no type arguments");
                             TY_I32
                         }
                         (rut_core::binary::NativeTy::StackTrace, []) => TY_STACK_TRACE,
                         (rut_core::binary::NativeTy::StackTrace, _) => {
-                            self.err(sp, "`StackTrace` takes no generic arguments");
+                            self.err(sp, "`StackTrace` takes no type arguments");
                             TY_I32
                         }
                         // the disposal drain's context cell: the engine mints
@@ -356,7 +353,7 @@ impl<'a> Ctx<'a> {
                         // constructs it
                         (rut_core::binary::NativeTy::DisposalContext, []) => TY_DISPOSAL_CONTEXT,
                         (rut_core::binary::NativeTy::DisposalContext, _) => {
-                            self.err(sp, "`DisposalContext` takes no generic arguments");
+                            self.err(sp, "`DisposalContext` takes no type arguments");
                             TY_I32
                         }
                         // the TWO generic builtins — `Weak<T>` and (v20)
@@ -387,7 +384,7 @@ impl<'a> Ctx<'a> {
                         // `cx`; nothing constructs it
                         (rut_core::binary::NativeTy::RunContext, []) => self.run_context_ty(),
                         (rut_core::binary::NativeTy::RunContext, _) => {
-                            self.err(sp, "`RunContext` takes no generic arguments");
+                            self.err(sp, "`RunContext` takes no type arguments");
                             TY_I32
                         }
                     };
@@ -400,7 +397,7 @@ impl<'a> Ctx<'a> {
                         if !seg.generics.is_empty() {
                             self.err(
                                 sp,
-                                format!("enum `{}` takes no generic arguments", self.name(name)),
+                                format!("enum `{}` takes no type arguments", self.name(name)),
                             );
                         }
                         return e.ty;
@@ -410,7 +407,7 @@ impl<'a> Ctx<'a> {
                             if !seg.generics.is_empty() {
                                 self.err(
                                     sp,
-                                    format!("`{}` takes no generic arguments", self.name(name)),
+                                    format!("`{}` takes no type arguments", self.name(name)),
                                 );
                             }
                             return d.ty;
@@ -581,10 +578,7 @@ impl<'a> Ctx<'a> {
                         if !seg.generics.is_empty() {
                             self.err(
                                 sp,
-                                format!(
-                                    "used type `{}` takes no generic arguments",
-                                    self.name(name)
-                                ),
+                                format!("used type `{}` takes no type arguments", self.name(name)),
                             );
                         }
                         return t;
@@ -596,7 +590,13 @@ impl<'a> Ctx<'a> {
                         self.validate_alias(name);
                         let idx = self.aliases.iter().position(|x| x.name == name).unwrap();
                         if !seg.generics.is_empty() {
-                            self.err(sp, format!("alias `{}` takes no generic arguments — aliases are non-generic", self.name(name)));
+                            self.err(
+                                sp,
+                                format!(
+                                    "alias `{}` takes no type arguments — aliases are non-generic",
+                                    self.name(name)
+                                ),
+                            );
                         }
                         return match self.aliases[idx].resolved {
                             Some(AliasTarget::Ty(t)) => t,
@@ -649,7 +649,7 @@ impl<'a> Ctx<'a> {
             .iter()
             .any(|s| !s.generics.is_empty())
         {
-            self.err(sp, "generic arguments are not valid on a module segment");
+            self.err(sp, "type arguments are not valid on a module segment");
             return TY_I32;
         }
         let from = self.cur_mod.clone();
@@ -763,7 +763,7 @@ impl<'a> Ctx<'a> {
             if !generics.is_empty() {
                 self.err(
                     sp,
-                    format!("enum `{}` takes no generic arguments", self.name(name)),
+                    format!("enum `{}` takes no type arguments", self.name(name)),
                 );
             }
             return e.ty;
@@ -771,10 +771,7 @@ impl<'a> Ctx<'a> {
         if let Some(d) = self.data_in(m, name) {
             if d.generics.is_empty() {
                 if !generics.is_empty() {
-                    self.err(
-                        sp,
-                        format!("`{}` takes no generic arguments", self.name(name)),
-                    );
+                    self.err(sp, format!("`{}` takes no type arguments", self.name(name)));
                 }
                 return d.ty;
             }
@@ -842,7 +839,7 @@ impl<'a> Ctx<'a> {
                 self.err(
                     sp,
                     format!(
-                        "alias `{}` takes no generic arguments — aliases are non-generic",
+                        "alias `{}` takes no type arguments — aliases are non-generic",
                         self.name(name)
                     ),
                 );
