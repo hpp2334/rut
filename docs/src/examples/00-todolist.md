@@ -16,7 +16,7 @@ cargo run -p todolist        # from the repo root
 cargo test -p todolist       # the same run asserted as a test
 ```
 
-The run prints an abridged transcript like this:
+The run prints a transcript like this:
 
 ```text
 added: #1, #2, #3

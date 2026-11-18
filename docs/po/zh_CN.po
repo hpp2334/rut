@@ -366,7 +366,7 @@ msgid "The compiler pipeline"
 msgstr "编译器流水线"
 
 
-#: src/SUMMARY.md:102 src/core-concepts/the-vm.md:33
+#: src/SUMMARY.md:102 src/core-concepts/the-vm.md:37
 #: src/reference/typed-bytecode.md:1
 msgid "Typed bytecode"
 msgstr "类型化字节码"
@@ -7381,245 +7381,264 @@ msgid "One struct, one thread, one heap"
 msgstr "一个结构体，一个线程，一套堆"
 
 
-#: src/core-concepts/the-vm.md:14
+#: src/core-concepts/the-vm.md:14 src/reference/vm-core.md:11
 msgid ""
-"// runtime type descriptors + vtables\n"
+"// the linked program\n"
 msgstr ""
-"// 运行时类型描述符 + vtable\n"
+"// the linked program\n"
 
 
-#: src/core-concepts/the-vm.md:15
+#: src/core-concepts/the-vm.md:15 src/reference/vm-core.md:12
 msgid ""
-"// the refcounted, self-managed heap\n"
+"// the RC heap — [The VM heap](vm-heap.md)\n"
 msgstr ""
-"// 引用计数的自管堆\n"
+"// the RC heap — [The VM heap](vm-heap.md)\n"
 
 
-#: src/core-concepts/the-vm.md:16
+#: src/core-concepts/the-vm.md:16 src/reference/vm-core.md:13
 msgid ""
-"// linked binaries\n"
+"// saved frames (the call stack)\n"
 msgstr ""
-"// 已链接的二进制\n"
+"// saved frames (the call stack)\n"
 
 
-#: src/core-concepts/the-vm.md:17
+#: src/core-concepts/the-vm.md:17 src/reference/vm-core.md:14
 msgid ""
-"// the call stack\n"
+"// the ACTIVE frame\n"
 msgstr ""
-"// 调用栈\n"
+"// the ACTIVE frame\n"
 
 
-#: src/core-concepts/the-vm.md:18
+#: src/core-concepts/the-vm.md:19 src/reference/vm-core.md:16
 msgid ""
-"// woken async frames\n"
+"// per-op budget\n"
 msgstr ""
-"// 被唤醒的异步帧\n"
+"// per-op budget\n"
 
 
-#: src/core-concepts/the-vm.md:19
+#: src/core-concepts/the-vm.md:20 src/reference/vm-core.md:17
 msgid ""
-"// the virtual clock's wheel\n"
+"// budget check cadence (default 1024)\n"
 msgstr ""
-"// 虚拟时钟的轮盘\n"
+"// budget check cadence (default 1024)\n"
 
 
-#: src/core-concepts/the-vm.md:20
-msgid ""
-"// fuel, heap budget, interrupt interval\n"
-msgstr ""
-"// 燃料、堆预算、中断间隔\n"
-
-
-#: src/core-concepts/the-vm.md:21
+#: src/core-concepts/the-vm.md:21 src/reference/vm-core.md:18
 msgid ""
 "// the host-fn dispatch row (joined from\n"
-"                                // the HostRegistry at construction)\n"
+"                                  // the HostRegistry at construction)\n"
 msgstr ""
-"// 宿主函数分派行（在构造时从\n"
-"                                // HostRegistry 联结而来）\n"
 
 
-#: src/core-concepts/the-vm.md:26
+#: src/core-concepts/the-vm.md:23 src/reference/vm-core.md:20
+msgid ""
+"// launched/parked frames to (re)drive\n"
+msgstr ""
+"// launched/parked frames to (re)drive\n"
+
+
+#: src/core-concepts/the-vm.md:24 src/reference/vm-core.md:21
+msgid ""
+"// sleep deadlines -> wake lists\n"
+msgstr ""
+"// sleep deadlines -> wake lists\n"
+
+
+#: src/core-concepts/the-vm.md:25 src/reference/vm-core.md:22
+msgid ""
+"// the VM's virtual clock\n"
+msgstr ""
+"// the VM's virtual clock\n"
+
+
+#: src/core-concepts/the-vm.md:30
 msgid ""
 "A VM is single-threaded by construction (`!Send`). The host holds one and drives it with methods: `call` an entry point, `run_ready` to drain woken frames, `next_deadline` for the timer wheel, `drive` for a single resumption. See [the host boundary](host-boundary.md) for the embed loop and [the async model](async-model.md) for the queues' role in scheduling."
 msgstr ""
 "VM 在构造上就是单线程的（`!Send`）。宿主持有一台并用方法驱动它：用 `call` 调入口点，用 `run_ready` 排空被唤醒的帧，用 `next_deadline` 查定时器轮盘，用 `drive` 做单次恢复。嵌入循环见[宿主边界](host-boundary.md)；队列在调度中的角色见[异步模型](async-model.md)。"
 
 
-#: src/core-concepts/the-vm.md:35
+#: src/core-concepts/the-vm.md:39
 msgid ""
 "The instruction set is register-based: operands are `u16` indices into a per-frame slot file, and **every register has a static type recorded in the function's signature**. That single decision is what lets the hot path stay tag-free (see [reified types](reified-types.md)) and what makes refcounting precise: the compiler emits plain moves for scalars and retain/release moves for references, with no runtime tag checks."
 msgstr ""
 "指令集基于寄存器：操作数是指向每帧槽位文件的 `u16` 索引，而**每个寄存器都有记录在函数签名中的静态类型**。正是这一个决定让热路径保持无标签（参见[具体化类型](reified-types.md)），也让引用计数精确：编译器为标量生成普通移动，为引用生成保留/释放移动，没有任何运行时标签检查。"
 
 
-#: src/core-concepts/the-vm.md:42
+#: src/core-concepts/the-vm.md:46
 msgid ""
 "Ops are small and fixed-size, with variadic operand lists (call arguments, branch tables) living in per-function pools. A representative sample:"
 msgstr "操作小而定长，变长的操作数列表（调用实参、分支表）放在每函数的池子里。一份代表性样本："
 
 
-#: src/core-concepts/the-vm.md:60
+#: src/core-concepts/the-vm.md:64
 msgid "The type system also decides what is _not_ an op:"
 msgstr "类型系统同样决定什么_不是_操作："
 
 
-#: src/core-concepts/the-vm.md:62
+#: src/core-concepts/the-vm.md:66
 msgid ""
 "**Nothing static.** What the type table can answer at compile time becomes a constant — no \"get type id\" instruction, no length load for a fixed-size array."
 msgstr "**没有静态之事。**类型表在编译期能回答的都会变成常量——没有\"取类型 id\"指令，定长数组也没有长度加载。"
 
 
-#: src/core-concepts/the-vm.md:65
+#: src/core-concepts/the-vm.md:69
 msgid ""
 "**Nothing polymorphic and nothing named.** An interface-typed receiver has exactly one op (the itable call); string concatenation is a native call, not an opcode."
 msgstr ""
 
 
-#: src/core-concepts/the-vm.md:68
+#: src/core-concepts/the-vm.md:72
 msgid ""
 "**Concrete memory, control flow, and two readbacks.** Ops touch memory only through compile-time-known layouts, plus the two reads reification needs: \"what is it\" (`tidof`) and the guarded payload extract behind a downcast."
 msgstr ""
 "**具体的内存、控制流，外加两个读回。**操作只透过编译期已知的布局触碰内存，再加上具体化需要的两次读取：\"它是什么\"（`tidof`）与向下转型背后带守卫的载荷提取。"
 
 
-#: src/core-concepts/the-vm.md:73
+#: src/core-concepts/the-vm.md:77
 msgid "The module binary"
 msgstr "模块二进制"
 
 
-#: src/core-concepts/the-vm.md:75
+#: src/core-concepts/the-vm.md:79
 msgid ""
 "Compilation produces a versioned, self-contained binary per module: types, constants, functions (with their typed register signatures), imports, and a symbol table for backtraces. Its properties matter more than its layout:"
 msgstr "编译为每个模块产出一个带版本、自包含的二进制：类型、常量、函数（带各自的类型化寄存器签名）、导入，以及用于回溯的符号表。它的性质比它的布局更重要："
 
 
-#: src/core-concepts/the-vm.md:80
+#: src/core-concepts/the-vm.md:84
 msgid ""
 "**Deterministic.** The same sources plus the same dependency versions produce byte-identical binaries, so artifacts are cacheable by content hash and shippable instead of sources."
 msgstr "**确定性。**同样的源码加同样的依赖版本产出逐字节相同的二进制，因此产物可以按内容哈希缓存，可以交付二进制而非源码。"
 
 
-#: src/core-concepts/the-vm.md:83
+#: src/core-concepts/the-vm.md:87
 msgid ""
 "**Self-describing but strippable.** Names and source spans are retained for traces by default; a release build can strip them, and a sidecar map file (keyed by content hash) can restore symbolication later. See the reference on [diagnostics](../reference/diagnostics.md)."
 msgstr ""
 "**自描述但可剥离。**名字与源码区间默认为追踪保留；release 构建可以剥离它们，而一个旁车 map 文件（按内容哈希为键）可以在日后恢复符号化。参见关于[诊断](../reference/diagnostics.md)的参考章节。"
 
 
-#: src/core-concepts/the-vm.md:88
+#: src/core-concepts/the-vm.md:92
 msgid ""
 "**Link-time identity.** Type ids are module-local at rest and rebased into the VM's global table at link, where the interface tables merge by name. Cross-module interface-typed calls specialize per concrete argument here too — the static-dispatch rule of [interfaces and dispatch](interfaces-and-dispatch.md) holds across module boundaries."
 msgstr ""
 
 
-#: src/core-concepts/the-vm.md:94
+#: src/core-concepts/the-vm.md:98
 msgid ""
 "**Little-endian everywhere**, by law — every serialized word, so artifacts are platform-independent by construction rather than by luck."
 msgstr "**处处小端**，依律而行——每个序列化的字都是——产物因此从构造上就平台无关，而不是靠运气。"
 
 
-#: src/core-concepts/the-vm.md:98
+#: src/core-concepts/the-vm.md:102
 msgid "Verification at load"
 msgstr "加载时校验"
 
 
-#: src/core-concepts/the-vm.md:100
+#: src/core-concepts/the-vm.md:104
 msgid ""
 "Loading re-checks each function before anything executes: register operands against the signature, operand pools and jump targets in range, type operands present in the type table, native slots declared, and async state tables closed. A failed verification is a load error naming the module and function — **corrupted binaries never execute**. This is also where crossing rules are enforced for host-facing signatures, so a non-crossing shape is rejected before any script runs."
 msgstr ""
 "加载会在任何东西执行之前重新检查每个函数：寄存器操作数对照签名、操作数池与跳转目标在范围内、类型操作数在类型表中存在、原生槽位已声明、异步状态表封闭。校验失败是一个指名模块与函数的加载错误——**损坏的二进制永不执行**。这里也是宿主向签名的跨越规则被强制之处，因此不可跨越的形状在任何脚本运行之前就被拒绝。"
 
 
-#: src/core-concepts/the-vm.md:108
+#: src/core-concepts/the-vm.md:112
 msgid ""
 "Module-level initialization is folded at compile time: literals, enum members, constant expressions, and interned string literals become constants in the binary. A user function call in a module initializer is a compile error — there is no load-time execution at all. Loading a module runs nothing."
 msgstr ""
 "模块级初始化在编译期折叠：字面量、枚举成员、常量表达式与驻留字符串字面量都成为二进制中的常量。模块初始化器里的用户函数调用是编译错误——根本不存在加载期执行。加载模块不运行任何东西。"
 
 
-#: src/core-concepts/the-vm.md:114
+#: src/core-concepts/the-vm.md:118
 msgid "The interpreter loop and traps"
 msgstr "解释器循环与陷阱"
 
 
-#: src/core-concepts/the-vm.md:116
+#: src/core-concepts/the-vm.md:120
 msgid ""
 "Execution is a decode-dispatch loop over frames. A frame is the function's code, a program counter, its typed register file, and (for async frames) the resume state. Calls push frames; returns pop them; direct calls are an index plus jump, and interface calls are two loads plus an indirect jump through the itable."
 msgstr ""
 
 
-#: src/core-concepts/the-vm.md:122
+#: src/core-concepts/the-vm.md:126
 msgid ""
 "Failure is a **trap**, not an exception and not a Rust panic: integer overflow on the plain operators, a `nil` deref, an out-of-bounds index, a `panic(..)`, or an exhausted budget. A trap captures the raw frame chain (rendered lazily — symbolication happens only if someone prints it), runs destructors on the way out, and unwinds as an `Err(Trap)` to the host call. Rut code cannot catch one; the boundary is the catch point (see [the host boundary](host-boundary.md))."
 msgstr ""
 "失败是**陷阱**，不是异常，也不是 Rust panic：普通运算符上的整数溢出、对 `nil` 解引用、越界索引、`panic(..)`，或者耗尽的预算。陷阱捕获原始帧链（惰性渲染——只有当有人打印它时才做符号化），在退出路上运行析构器，并以 `Err(Trap)` 的形式沿栈展开到宿主调用。Rut 代码无法捕获它；边界就是捕获点（参见[宿主边界](host-boundary.md)）。"
 
 
-#: src/core-concepts/the-vm.md:131 src/reference/vm-core.md:105
+#: src/core-concepts/the-vm.md:135 src/reference/vm-core.md:105
 msgid "Budgets and interrupts"
 msgstr "预算与中断"
 
 
-#: src/core-concepts/the-vm.md:133
-msgid ""
-"Two knobs make it safe to run third-party code, both set at construction and mutable while running:"
-msgstr "两个旋钮让运行第三方代码变得安全，两者都在构造时设置、运行期间可变："
-
-
 #: src/core-concepts/the-vm.md:137
+msgid ""
+"Two knobs make it safe to run third-party code: a **heap budget** and **fuel**. Both are set at construction, and fuel is the one live budget (`Vm::add_fuel`):"
+msgstr "两个旋钮让运行第三方代码变得安全：**堆预算**与**燃料**。两者都在构造时设置，而燃料是唯一的线上预算（`Vm::add_fuel`）："
+
+
+#: src/core-concepts/the-vm.md:142
 msgid ""
 "// one unit per op, counts down\n"
 msgstr ""
 "// 每操作一个单位，倒数\n"
 
 
-#: src/core-concepts/the-vm.md:138
+#: src/core-concepts/the-vm.md:143
 msgid ""
 "// checked at every allocation\n"
 msgstr ""
 "// 每次分配都检查\n"
 
 
-#: src/core-concepts/the-vm.md:139
+#: src/core-concepts/the-vm.md:144
 msgid ""
 "// default: check every 1024 ops\n"
 msgstr ""
 "// 默认：每 1024 个操作检查一次\n"
 
 
-#: src/core-concepts/the-vm.md:142
-msgid ""
-"Exhaustion is **resumable**: the trap parks the frame exactly where it was — the frame _is_ the loop state — so the host can add fuel, raise the heap limit, or flip the interrupt flag and resume. A UI host yields mid-frame; a wasm page grants finite fuel; a test sets finite fuel plus a virtual clock and gets a deterministic hang proof."
-msgstr ""
-"耗尽是**可恢复的**：陷阱把帧停在原地——帧_就是_循环状态——宿主因此可以加燃料、调高堆限额或翻转中断标志然后恢复。UI 宿主在帧中途让步；wasm 页面发放有限燃料；测试设有限燃料加虚拟时钟，得到一份确定性的挂起证明。"
-
-
 #: src/core-concepts/the-vm.md:147
+msgid ""
+"The heap limit has no live setter: a heap trap is cleared by dropping references so the retry fits, or by rebuilding the VM with a larger budget; the interrupt cadence is construct-time too ([resource limits](../reference/resource-limits.md))."
+msgstr ""
+"堆限额没有线上设置器：堆陷阱靠丢弃引用让重试装得下来解除，或以更大的预算重建 VM；中断节奏同样是构造期的（[资源上限](../reference/resource-limits.md)）。"
+
+
+#: src/core-concepts/the-vm.md:152
+msgid ""
+"Exhaustion is **resumable**: the trap parks the frame exactly where it was — the frame _is_ the loop state — so the host can add fuel and resume; a heap stop needs references dropped so the retry fits, or a VM rebuilt with a larger budget. A UI host yields mid-frame; a wasm page grants finite fuel; a test sets finite fuel plus a virtual clock and gets a deterministic hang proof."
+msgstr ""
+"耗尽是**可恢复的**：陷阱把帧停在原地——帧_就是_循环状态——宿主因此可以加燃料然后恢复；堆停止需要丢弃引用让重试装得下，或以更大的预算重建 VM。UI 宿主在帧中途让步；wasm 页面发放有限燃料；测试设有限燃料加虚拟时钟，得到一份确定性的挂起证明。"
+
+
+#: src/core-concepts/the-vm.md:158
 msgid ""
 "The heap check runs _before_ any write, so an out-of-memory failure leaves the heap byte-identical (see [memory](memory.md))."
 msgstr "堆检查在任何写入_之前_运行，所以内存耗尽的失败让堆保持逐字节相同（参见[内存](memory.md)）。"
 
 
-#: src/core-concepts/the-vm.md:150
+#: src/core-concepts/the-vm.md:161
 msgid ""
 "Native functions run outside the fuel budget — a hanging native is a host bug by contract — and the interrupt hook is the host's lever at native return points."
 msgstr "原生函数运行在燃料预算之外——挂死的原生函数按契约就是宿主的 bug——而中断钩子是宿主在原生返回点上的操纵杆。"
 
 
-#: src/core-concepts/the-vm.md:154
+#: src/core-concepts/the-vm.md:165
 msgid "Why no JIT is viable"
 msgstr "为什么无 JIT 是可行的"
 
 
-#: src/core-concepts/the-vm.md:156
+#: src/core-concepts/the-vm.md:167
 msgid ""
 "A JS engine's speed is its JIT, and the JIT exists to speculate about polymorphic property loads. rut has no polymorphic loads: field access is by known index, calls bind statically whenever the site names one concrete type, generics are monomorphized, and the remaining dynamic dispatch is an honest checked vtable hop. The optimizer's currency is **type stability** — what the checker proves is everything the optimizer gets — and its passes (constant folding, inlining, monomorphization, register-level cleanup) all run ahead of time. The result is a runtime with no warmup curve, no deoptimization asymmetries, and per-op costs you can reason about from the bytecode alone."
 msgstr ""
 "JS 引擎的速度就是它的 JIT，而 JIT 的存在是为了对多态属性加载做投机。rut 没有多态加载：字段访问按已知索引，调用点指名一个具体类型时调用就静态绑定，泛型被单态化，剩下的动态分派是一次如实且受检的 vtable 跳转。优化器的通货是**类型稳定性**——检查器证明的一切就是优化器得到的全部——而它的各个 pass（常量折叠、内联、单态化、寄存器级清理）全部提前运行。结果是一个没有预热曲线、没有反优化不对称性的运行时，每操作的成本可以从字节码本身推演。"
 
 
-#: src/core-concepts/the-vm.md:168
+#: src/core-concepts/the-vm.md:179
 msgid ""
 "The full tables and laws live in the reference: [typed bytecode](../reference/typed-bytecode.md), [the module binary and verification](../reference/module-binary.md), [VM core](../reference/vm-core.md), and [resource limits and fuel](../reference/resource-limits.md)."
 msgstr ""
@@ -7861,8 +7880,8 @@ msgstr ""
 
 
 #: src/examples/00-todolist.md:19
-msgid "The run prints an abridged transcript like this:"
-msgstr "运行会打印出这样一份节选的对话记录："
+msgid "The run prints a transcript like this:"
+msgstr "运行会打印出这样一份对话记录："
 
 
 #: src/examples/00-todolist.md:21
@@ -26001,76 +26020,6 @@ msgstr ""
 #: src/reference/vm-core.md:7
 msgid "The machine"
 msgstr "这台机器"
-
-
-#: src/reference/vm-core.md:11
-msgid ""
-"// the linked program\n"
-msgstr ""
-"// the linked program\n"
-
-
-#: src/reference/vm-core.md:12
-msgid ""
-"// the RC heap — [The VM heap](vm-heap.md)\n"
-msgstr ""
-"// the RC heap — [The VM heap](vm-heap.md)\n"
-
-
-#: src/reference/vm-core.md:13
-msgid ""
-"// saved frames (the call stack)\n"
-msgstr ""
-"// saved frames (the call stack)\n"
-
-
-#: src/reference/vm-core.md:14
-msgid ""
-"// the ACTIVE frame\n"
-msgstr ""
-"// the ACTIVE frame\n"
-
-
-#: src/reference/vm-core.md:16
-msgid ""
-"// per-op budget\n"
-msgstr ""
-"// per-op budget\n"
-
-
-#: src/reference/vm-core.md:17
-msgid ""
-"// budget check cadence (default 1024)\n"
-msgstr ""
-"// budget check cadence (default 1024)\n"
-
-
-#: src/reference/vm-core.md:18
-msgid ""
-"// the host-fn dispatch row (joined from\n"
-"                                  // the HostRegistry at construction)\n"
-msgstr ""
-
-
-#: src/reference/vm-core.md:20
-msgid ""
-"// launched/parked frames to (re)drive\n"
-msgstr ""
-"// launched/parked frames to (re)drive\n"
-
-
-#: src/reference/vm-core.md:21
-msgid ""
-"// sleep deadlines -> wake lists\n"
-msgstr ""
-"// sleep deadlines -> wake lists\n"
-
-
-#: src/reference/vm-core.md:22
-msgid ""
-"// the VM's virtual clock\n"
-msgstr ""
-"// the VM's virtual clock\n"
 
 
 #: src/reference/vm-core.md:27

@@ -305,7 +305,7 @@ msgstr ""
 msgid "The compiler pipeline"
 msgstr ""
 
-#: src/SUMMARY.md:102 src/core-concepts/the-vm.md:33
+#: src/SUMMARY.md:102 src/core-concepts/the-vm.md:37
 #: src/reference/typed-bytecode.md:1
 msgid "Typed bytecode"
 msgstr ""
@@ -7295,41 +7295,49 @@ msgstr ""
 msgid "One struct, one thread, one heap"
 msgstr ""
 
-#: src/core-concepts/the-vm.md:14
-msgid "// runtime type descriptors + vtables\n"
+#: src/core-concepts/the-vm.md:14 src/reference/vm-core.md:11
+msgid "// the linked program\n"
 msgstr ""
 
-#: src/core-concepts/the-vm.md:15
-msgid "// the refcounted, self-managed heap\n"
+#: src/core-concepts/the-vm.md:15 src/reference/vm-core.md:12
+msgid "// the RC heap — [The VM heap](vm-heap.md)\n"
 msgstr ""
 
-#: src/core-concepts/the-vm.md:16
-msgid "// linked binaries\n"
+#: src/core-concepts/the-vm.md:16 src/reference/vm-core.md:13
+msgid "// saved frames (the call stack)\n"
 msgstr ""
 
-#: src/core-concepts/the-vm.md:17
-msgid "// the call stack\n"
+#: src/core-concepts/the-vm.md:17 src/reference/vm-core.md:14
+msgid "// the ACTIVE frame\n"
 msgstr ""
 
-#: src/core-concepts/the-vm.md:18
-msgid "// woken async frames\n"
+#: src/core-concepts/the-vm.md:19 src/reference/vm-core.md:16
+msgid "// per-op budget\n"
 msgstr ""
 
-#: src/core-concepts/the-vm.md:19
-msgid "// the virtual clock's wheel\n"
+#: src/core-concepts/the-vm.md:20 src/reference/vm-core.md:17
+msgid "// budget check cadence (default 1024)\n"
 msgstr ""
 
-#: src/core-concepts/the-vm.md:20
-msgid "// fuel, heap budget, interrupt interval\n"
-msgstr ""
-
-#: src/core-concepts/the-vm.md:21
+#: src/core-concepts/the-vm.md:21 src/reference/vm-core.md:18
 msgid ""
 "// the host-fn dispatch row (joined from\n"
-"                                // the HostRegistry at construction)\n"
+"                                  // the HostRegistry at construction)\n"
 msgstr ""
 
-#: src/core-concepts/the-vm.md:26
+#: src/core-concepts/the-vm.md:23 src/reference/vm-core.md:20
+msgid "// launched/parked frames to (re)drive\n"
+msgstr ""
+
+#: src/core-concepts/the-vm.md:24 src/reference/vm-core.md:21
+msgid "// sleep deadlines -> wake lists\n"
+msgstr ""
+
+#: src/core-concepts/the-vm.md:25 src/reference/vm-core.md:22
+msgid "// the VM's virtual clock\n"
+msgstr ""
+
+#: src/core-concepts/the-vm.md:30
 msgid ""
 "A VM is single-threaded by construction (`!Send`). The host holds one and "
 "drives it with methods: `call` an entry point, `run_ready` to drain woken "
@@ -7338,7 +7346,7 @@ msgid ""
 "[the async model](async-model.md) for the queues' role in scheduling."
 msgstr ""
 
-#: src/core-concepts/the-vm.md:35
+#: src/core-concepts/the-vm.md:39
 msgid ""
 "The instruction set is register-based: operands are `u16` indices into a "
 "per-frame slot file, and **every register has a static type recorded in the "
@@ -7348,56 +7356,56 @@ msgid ""
 "for references, with no runtime tag checks."
 msgstr ""
 
-#: src/core-concepts/the-vm.md:42
+#: src/core-concepts/the-vm.md:46
 msgid ""
 "Ops are small and fixed-size, with variadic operand lists (call arguments, "
 "branch tables) living in per-function pools. A representative sample:"
 msgstr ""
 
-#: src/core-concepts/the-vm.md:60
+#: src/core-concepts/the-vm.md:64
 msgid "The type system also decides what is _not_ an op:"
 msgstr ""
 
-#: src/core-concepts/the-vm.md:62
+#: src/core-concepts/the-vm.md:66
 msgid ""
 "**Nothing static.** What the type table can answer at compile time becomes a "
 "constant — no \"get type id\" instruction, no length load for a fixed-size "
 "array."
 msgstr ""
 
-#: src/core-concepts/the-vm.md:65
+#: src/core-concepts/the-vm.md:69
 msgid ""
 "**Nothing polymorphic and nothing named.** An interface-typed receiver has "
 "exactly one op (the itable call); string concatenation is a native call, not "
 "an opcode."
 msgstr ""
 
-#: src/core-concepts/the-vm.md:68
+#: src/core-concepts/the-vm.md:72
 msgid ""
 "**Concrete memory, control flow, and two readbacks.** Ops touch memory only "
 "through compile-time-known layouts, plus the two reads reification needs: "
 "\"what is it\" (`tidof`) and the guarded payload extract behind a downcast."
 msgstr ""
 
-#: src/core-concepts/the-vm.md:73
+#: src/core-concepts/the-vm.md:77
 msgid "The module binary"
 msgstr ""
 
-#: src/core-concepts/the-vm.md:75
+#: src/core-concepts/the-vm.md:79
 msgid ""
 "Compilation produces a versioned, self-contained binary per module: types, "
 "constants, functions (with their typed register signatures), imports, and a "
 "symbol table for backtraces. Its properties matter more than its layout:"
 msgstr ""
 
-#: src/core-concepts/the-vm.md:80
+#: src/core-concepts/the-vm.md:84
 msgid ""
 "**Deterministic.** The same sources plus the same dependency versions "
 "produce byte-identical binaries, so artifacts are cacheable by content hash "
 "and shippable instead of sources."
 msgstr ""
 
-#: src/core-concepts/the-vm.md:83
+#: src/core-concepts/the-vm.md:87
 msgid ""
 "**Self-describing but strippable.** Names and source spans are retained for "
 "traces by default; a release build can strip them, and a sidecar map file "
@@ -7405,7 +7413,7 @@ msgid ""
 "on [diagnostics](../reference/diagnostics.md)."
 msgstr ""
 
-#: src/core-concepts/the-vm.md:88
+#: src/core-concepts/the-vm.md:92
 msgid ""
 "**Link-time identity.** Type ids are module-local at rest and rebased into "
 "the VM's global table at link, where the interface tables merge by name. "
@@ -7414,17 +7422,17 @@ msgid ""
 "dispatch](interfaces-and-dispatch.md) holds across module boundaries."
 msgstr ""
 
-#: src/core-concepts/the-vm.md:94
+#: src/core-concepts/the-vm.md:98
 msgid ""
 "**Little-endian everywhere**, by law — every serialized word, so artifacts "
 "are platform-independent by construction rather than by luck."
 msgstr ""
 
-#: src/core-concepts/the-vm.md:98
+#: src/core-concepts/the-vm.md:102
 msgid "Verification at load"
 msgstr ""
 
-#: src/core-concepts/the-vm.md:100
+#: src/core-concepts/the-vm.md:104
 msgid ""
 "Loading re-checks each function before anything executes: register operands "
 "against the signature, operand pools and jump targets in range, type "
@@ -7435,7 +7443,7 @@ msgid ""
 "rejected before any script runs."
 msgstr ""
 
-#: src/core-concepts/the-vm.md:108
+#: src/core-concepts/the-vm.md:112
 msgid ""
 "Module-level initialization is folded at compile time: literals, enum "
 "members, constant expressions, and interned string literals become constants "
@@ -7444,11 +7452,11 @@ msgid ""
 "nothing."
 msgstr ""
 
-#: src/core-concepts/the-vm.md:114
+#: src/core-concepts/the-vm.md:118
 msgid "The interpreter loop and traps"
 msgstr ""
 
-#: src/core-concepts/the-vm.md:116
+#: src/core-concepts/the-vm.md:120
 msgid ""
 "Execution is a decode-dispatch loop over frames. A frame is the function's "
 "code, a program counter, its typed register file, and (for async frames) the "
@@ -7457,7 +7465,7 @@ msgid ""
 "the itable."
 msgstr ""
 
-#: src/core-concepts/the-vm.md:122
+#: src/core-concepts/the-vm.md:126
 msgid ""
 "Failure is a **trap**, not an exception and not a Rust panic: integer "
 "overflow on the plain operators, a `nil` deref, an out-of-bounds index, a "
@@ -7468,55 +7476,65 @@ msgid ""
 "boundary](host-boundary.md))."
 msgstr ""
 
-#: src/core-concepts/the-vm.md:131 src/reference/vm-core.md:105
+#: src/core-concepts/the-vm.md:135 src/reference/vm-core.md:105
 msgid "Budgets and interrupts"
 msgstr ""
 
-#: src/core-concepts/the-vm.md:133
-msgid ""
-"Two knobs make it safe to run third-party code, both set at construction and "
-"mutable while running:"
-msgstr ""
-
 #: src/core-concepts/the-vm.md:137
-msgid "// one unit per op, counts down\n"
-msgstr ""
-
-#: src/core-concepts/the-vm.md:138
-msgid "// checked at every allocation\n"
-msgstr ""
-
-#: src/core-concepts/the-vm.md:139
-msgid "// default: check every 1024 ops\n"
+msgid ""
+"Two knobs make it safe to run third-party code: a **heap budget** and "
+"**fuel**. Both are set at construction, and fuel is the one live budget "
+"(`Vm::add_fuel`):"
 msgstr ""
 
 #: src/core-concepts/the-vm.md:142
-msgid ""
-"Exhaustion is **resumable**: the trap parks the frame exactly where it was — "
-"the frame _is_ the loop state — so the host can add fuel, raise the heap "
-"limit, or flip the interrupt flag and resume. A UI host yields mid-frame; a "
-"wasm page grants finite fuel; a test sets finite fuel plus a virtual clock "
-"and gets a deterministic hang proof."
+msgid "// one unit per op, counts down\n"
+msgstr ""
+
+#: src/core-concepts/the-vm.md:143
+msgid "// checked at every allocation\n"
+msgstr ""
+
+#: src/core-concepts/the-vm.md:144
+msgid "// default: check every 1024 ops\n"
 msgstr ""
 
 #: src/core-concepts/the-vm.md:147
+msgid ""
+"The heap limit has no live setter: a heap trap is cleared by dropping "
+"references so the retry fits, or by rebuilding the VM with a larger budget; "
+"the interrupt cadence is construct-time too ([resource "
+"limits](../reference/resource-limits.md))."
+msgstr ""
+
+#: src/core-concepts/the-vm.md:152
+msgid ""
+"Exhaustion is **resumable**: the trap parks the frame exactly where it was — "
+"the frame _is_ the loop state — so the host can add fuel and resume; a heap "
+"stop needs references dropped so the retry fits, or a VM rebuilt with a "
+"larger budget. A UI host yields mid-frame; a wasm page grants finite fuel; a "
+"test sets finite fuel plus a virtual clock and gets a deterministic hang "
+"proof."
+msgstr ""
+
+#: src/core-concepts/the-vm.md:158
 msgid ""
 "The heap check runs _before_ any write, so an out-of-memory failure leaves "
 "the heap byte-identical (see [memory](memory.md))."
 msgstr ""
 
-#: src/core-concepts/the-vm.md:150
+#: src/core-concepts/the-vm.md:161
 msgid ""
 "Native functions run outside the fuel budget — a hanging native is a host "
 "bug by contract — and the interrupt hook is the host's lever at native "
 "return points."
 msgstr ""
 
-#: src/core-concepts/the-vm.md:154
+#: src/core-concepts/the-vm.md:165
 msgid "Why no JIT is viable"
 msgstr ""
 
-#: src/core-concepts/the-vm.md:156
+#: src/core-concepts/the-vm.md:167
 msgid ""
 "A JS engine's speed is its JIT, and the JIT exists to speculate about "
 "polymorphic property loads. rut has no polymorphic loads: field access is by "
@@ -7530,7 +7548,7 @@ msgid ""
 "bytecode alone."
 msgstr ""
 
-#: src/core-concepts/the-vm.md:168
+#: src/core-concepts/the-vm.md:179
 msgid ""
 "The full tables and laws live in the reference: [typed "
 "bytecode](../reference/typed-bytecode.md), [the module binary and "
@@ -7770,7 +7788,7 @@ msgid "# the same run asserted as a test\n"
 msgstr ""
 
 #: src/examples/00-todolist.md:19
-msgid "The run prints an abridged transcript like this:"
+msgid "The run prints a transcript like this:"
 msgstr ""
 
 #: src/examples/00-todolist.md:21
@@ -25165,48 +25183,6 @@ msgstr ""
 
 #: src/reference/vm-core.md:7
 msgid "The machine"
-msgstr ""
-
-#: src/reference/vm-core.md:11
-msgid "// the linked program\n"
-msgstr ""
-
-#: src/reference/vm-core.md:12
-msgid "// the RC heap — [The VM heap](vm-heap.md)\n"
-msgstr ""
-
-#: src/reference/vm-core.md:13
-msgid "// saved frames (the call stack)\n"
-msgstr ""
-
-#: src/reference/vm-core.md:14
-msgid "// the ACTIVE frame\n"
-msgstr ""
-
-#: src/reference/vm-core.md:16
-msgid "// per-op budget\n"
-msgstr ""
-
-#: src/reference/vm-core.md:17
-msgid "// budget check cadence (default 1024)\n"
-msgstr ""
-
-#: src/reference/vm-core.md:18
-msgid ""
-"// the host-fn dispatch row (joined from\n"
-"                                  // the HostRegistry at construction)\n"
-msgstr ""
-
-#: src/reference/vm-core.md:20
-msgid "// launched/parked frames to (re)drive\n"
-msgstr ""
-
-#: src/reference/vm-core.md:21
-msgid "// sleep deadlines -> wake lists\n"
-msgstr ""
-
-#: src/reference/vm-core.md:22
-msgid "// the VM's virtual clock\n"
 msgstr ""
 
 #: src/reference/vm-core.md:27

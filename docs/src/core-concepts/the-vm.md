@@ -11,15 +11,19 @@ verification, and the interpreter's execution and budgeting model.
 
 ```rust
 pub struct Vm {
-    types:  TypeTable,     // runtime type descriptors + vtables
-    heap:   Heap,          // the refcounted, self-managed heap
-    mods:   Vec<Module>,   // linked binaries
-    frames: Vec<Frame>,    // the call stack
-    ready:  Deque<Slot>,   // woken async frames
-    timers: BTreeMap<u64, Vec<Slot>>,  // the virtual clock's wheel
-    lim:    Limits,        // fuel, heap budget, interrupt interval
-    host_slots: Vec<HostSlot>,  // the host-fn dispatch row (joined from
-                                // the HostRegistry at construction)
+    pub prog: Rc<Program>,        // the linked program
+    heap: Heap,                   // the RC heap — [The VM heap](vm-heap.md)
+    frames: Vec<SavedFrame>,      // saved frames (the call stack)
+    cur_func: u32, cur_pc: u32,   // the ACTIVE frame
+    cur_regs: Vec<Slot>, cur_ret_dst: Option<Reg>,
+    fuel: Option<u64>,            // per-op budget
+    interrupt_every: u32,         // budget check cadence (default 1024)
+    host_slots: Vec<HostSlot>,    // the host-fn dispatch row (joined from
+                                  // the HostRegistry at construction)
+    ready: VecDeque<Slot>,        // launched/parked frames to (re)drive
+    timers: BTreeMap<u64, Vec<Slot>>,  // sleep deadlines -> wake lists
+    now_ms: u64,                  // the VM's virtual clock
+    ...
 }
 ```
 
@@ -130,8 +134,9 @@ the boundary is the catch point (see
 
 ## Budgets and interrupts
 
-Two knobs make it safe to run third-party code, both set at
-construction and mutable while running:
+Two knobs make it safe to run third-party code: a **heap budget** and
+**fuel**. Both are set at construction, and fuel is the one live budget
+(`Vm::add_fuel`):
 
 ```rust
 Limits { fuel: Option<u64>,            // one unit per op, counts down
@@ -139,11 +144,17 @@ Limits { fuel: Option<u64>,            // one unit per op, counts down
          interrupt_every: u32 }        // default: check every 1024 ops
 ```
 
+The heap limit has no live setter: a heap trap is cleared by dropping
+references so the retry fits, or by rebuilding the VM with a larger
+budget; the interrupt cadence is construct-time too
+([resource limits](../reference/resource-limits.md)).
+
 - Exhaustion is **resumable**: the trap parks the frame exactly where
-  it was — the frame *is* the loop state — so the host can add fuel,
-  raise the heap limit, or flip the interrupt flag and resume. A UI
-  host yields mid-frame; a wasm page grants finite fuel; a test sets
-  finite fuel plus a virtual clock and gets a deterministic hang proof.
+  it was — the frame *is* the loop state — so the host can add fuel and
+  resume; a heap stop needs references dropped so the retry fits, or a
+  VM rebuilt with a larger budget. A UI host yields mid-frame; a wasm
+  page grants finite fuel; a test sets finite fuel plus a virtual clock
+  and gets a deterministic hang proof.
 - The heap check runs *before* any write, so an out-of-memory failure
   leaves the heap byte-identical (see
   [memory](memory.md)).
