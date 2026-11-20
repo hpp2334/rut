@@ -76,7 +76,7 @@ impl Document {
                 include_comments: true,
             },
         );
-        let (toks, _, _) = lex_normalized(p.src(), false);
+        let (toks, _, _, _) = lex_normalized(p.src(), false);
         let lines = LineIndex::new(p.src());
         let (ast, src) = p.into_parts();
         Document {

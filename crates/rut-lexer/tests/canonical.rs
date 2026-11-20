@@ -18,7 +18,7 @@ fn clean_input_moves_through_pointer_unchanged() {
     // same allocation (a copy would land at a different address)
     let src = "let x = 1;\nfn f() -> nil {\n    return x;\n}\n".to_string();
     let ptr = src.as_ptr();
-    let (text, toks, diags, _) = lex_canonical(src, true);
+    let (text, toks, diags, _, _) = lex_canonical(src, true);
     assert_eq!(text.as_ptr(), ptr, "a clean input must move, not copy");
     assert!(diags.is_empty());
     assert!(!toks.is_empty());
@@ -33,7 +33,7 @@ fn dirty_input_returns_the_normalized_text_spans_index() {
     // the LF twin — the tokens lex over THAT text, so every span slices
     // the returned String exactly
     let src = "let a = 1;\r\nlet b = a;\r\n".to_string();
-    let (text, toks, diags, _) = lex_canonical(src, true);
+    let (text, toks, diags, _, _) = lex_canonical(src, true);
     assert_eq!(text, "let a = 1;\nlet b = a;\n");
     assert!(diags.is_empty());
     for t in &toks {
@@ -56,7 +56,7 @@ fn dirty_input_returns_the_normalized_text_spans_index() {
 fn a_lone_cr_becomes_a_line_break_too() {
     // the dirty mapping pinned at the leaf layer: paired AND lone `\r`
     // both land as `\n`
-    let (text, toks, diags, _) = lex_canonical("let a = 1;\rlet b = a;\r".to_string(), true);
+    let (text, toks, diags, _, _) = lex_canonical("let a = 1;\rlet b = a;\r".to_string(), true);
     assert_eq!(text, "let a = 1;\nlet b = a;\n");
     assert!(diags.is_empty());
     // the second `let` starts a line — the lone `\r` terminated the first
@@ -86,8 +86,8 @@ fn canonical_text_lexes_identically_through_the_borrow_door() {
     // the shared-law pin: lex over canonical()'s output equals
     // lex_canonical's own token stream — one normalization, either door
     let src = "fn f(x: i32) -> i32 {\r\n    return x;\r\n}\r\n";
-    let (text, toks, diags, _) = lex_canonical(src.to_string(), true);
-    let (toks2, diags2, _) = lex_normalized(&canonical(src), true);
+    let (text, toks, diags, _, _) = lex_canonical(src.to_string(), true);
+    let (toks2, diags2, _, _) = lex_normalized(&canonical(src), true);
     assert_eq!(text, canonical(src).into_owned());
     assert_eq!(diags.len(), diags2.len());
     assert_eq!(toks.len(), toks2.len());

@@ -101,7 +101,7 @@ pub fn parse(src: String, mode: Mode, opts: ParseOpts) -> Result<Parsed, Diag> {
 /// and `Parsed::src` is exactly the text the tokens (and every span)
 /// index.
 pub fn parse_with_recover(src: String, mode: Mode, opts: ParseOpts) -> Parsed {
-    let (normalized, toks, diags, comments) = rut_lexer::lexer::lex_canonical(src, true);
+    let (normalized, toks, diags, comments, _) = rut_lexer::lexer::lex_canonical(src, true);
     let comments = if opts.include_comments {
         Some(comments)
     } else {

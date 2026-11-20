@@ -16,8 +16,8 @@ use rut_lexer::token::Tok;
 fn the_leaf_layer_is_one_call_away_and_deterministic() {
     let src = "fn main() -> nil {\n    let x = 1;\n}\n";
     let p = parse_with_recover(src.to_string(), Mode::Impl, ParseOpts::default());
-    let (toks_a, diags, comments) = lex_normalized(p.src(), true);
-    let (toks_b, _, _) = lex_normalized(p.src(), false);
+    let (toks_a, diags, comments, _) = lex_normalized(p.src(), true);
+    let (toks_b, _, _, _) = lex_normalized(p.src(), false);
     assert!(diags.is_empty());
     assert!(comments.is_empty(), "no comments in the fixture");
     assert_eq!(
@@ -50,7 +50,7 @@ fn comments_collect_with_the_rustc_doc_convention() {
         "fn main() -> nil {\n}\n",
     );
     let p = parse_with_recover(src.to_string(), Mode::Impl, ParseOpts::default());
-    let (_, diags, comments) = lex_normalized(p.src(), true);
+    let (_, diags, comments, _) = lex_normalized(p.src(), true);
     assert!(diags.is_empty(), "{diags:?}");
     assert_eq!(comments.len(), 9, "{comments:#?}");
     let doc_flags: Vec<bool> = comments.iter().map(|c| c.doc).collect();
@@ -82,7 +82,7 @@ fn trailing_spaces_trim_off_line_comment_spans_only() {
         Mode::Impl,
         ParseOpts::default(),
     );
-    let (_, _, comments) = lex_normalized(p.src(), true);
+    let (_, _, comments, _) = lex_normalized(p.src(), true);
     assert_eq!(comments.len(), 2);
     // the line comment's hi stops at the last non-space (the fmt
     // printable-span law); the block keeps its closing `*/`
@@ -102,7 +102,7 @@ fn fstring_hole_interiors_are_not_document_trivia() {
     // bytes belong to the token, not to the document trivia table
     let src = "fn main() -> nil {\n    let s = f\"{ x /* hole */ }\";\n}\n";
     let p = parse_with_recover(src.to_string(), Mode::Impl, ParseOpts::default());
-    let (_, _, comments) = lex_normalized(p.src(), true);
+    let (_, _, comments, _) = lex_normalized(p.src(), true);
     assert!(
         comments.is_empty(),
         "hole interiors never collect: {comments:?}"
@@ -113,7 +113,7 @@ fn fstring_hole_interiors_are_not_document_trivia() {
 fn an_unterminated_block_comment_collects_and_diagnoses() {
     let src = "fn main() -> nil {\n}\n/* never closed";
     let p = parse_with_recover(src.to_string(), Mode::Impl, ParseOpts::default());
-    let (_, diags, comments) = lex_normalized(p.src(), true);
+    let (_, diags, comments, _) = lex_normalized(p.src(), true);
     assert!(
         diags
             .iter()

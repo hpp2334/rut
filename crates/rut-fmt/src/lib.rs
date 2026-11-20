@@ -53,7 +53,7 @@ pub fn format(src: &str, mode: Mode, style: &Style) -> Result<String, Vec<Diag>>
     }
     // the leaf layer on demand: tokens + comments in one linear pass
     // over the NORMALIZED text (`p.src()`) every span indexes
-    let (toks, _, comments) = rut_lexer::lexer::lex_normalized(p.src(), true);
+    let (toks, _, comments, _) = rut_lexer::lexer::lex_normalized(p.src(), true);
     let runs = comments::runs_from_comments(&comments, &toks, p.src());
     let printer = printer::P::new(p.ast(), p.src(), &toks, style, runs);
     Ok(printer.print_module())

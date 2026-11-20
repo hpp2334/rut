@@ -47,17 +47,26 @@ pub fn canonical(src: &str) -> Cow<'_, str> {
 /// the tokens are lexed over the text this returns, so the caller
 /// CANNOT obtain tokens whose spans index a text it does not hold
 /// (the pair law at the leaf layer).
-pub fn lex_canonical(src: String, collect: bool) -> (String, Vec<Token>, Vec<Diag>, Vec<Comment>) {
+pub fn lex_canonical(
+    src: String,
+    collect: bool,
+) -> (
+    String,
+    Vec<Token>,
+    Vec<Diag>,
+    Vec<Comment>,
+    Vec<u32>, /* line_starts */
+) {
     match canonical(&src) {
         Cow::Borrowed(_) => {
             // already canonical: the input IS the normalized text —
             // lex over it and move it out untouched
-            let (toks, diags, comments) = lex_normalized(&src, collect);
-            (src, toks, diags, comments)
+            let (toks, diags, comments, lines) = lex_normalized(&src, collect);
+            (src, toks, diags, comments, lines)
         }
         Cow::Owned(normalized) => {
-            let (toks, diags, comments) = lex_normalized(&normalized, collect);
-            (normalized, toks, diags, comments)
+            let (toks, diags, comments, lines) = lex_normalized(&normalized, collect);
+            (normalized, toks, diags, comments, lines)
         }
     }
 }
@@ -78,7 +87,8 @@ pub fn lex(src: &str) -> (Vec<Token>, Vec<Diag>) {
 /// stream and diags are IDENTICAL to `lex`'s either way.
 pub fn lex_collect(src: &str, collect: bool) -> (Vec<Token>, Vec<Diag>, Vec<Comment>) {
     let normalized = normalize(src);
-    lex_normalized(&normalized, collect)
+    let (toks, diags, comments, _) = lex_normalized(&normalized, collect);
+    (toks, diags, comments)
 }
 
 /// Lex ALREADY-normalized text — the path that normalizes once and
@@ -88,8 +98,37 @@ pub fn lex_collect(src: &str, collect: bool) -> (Vec<Token>, Vec<Diag>, Vec<Comm
 /// (the normalized text every span indexes). `lex`/`lex_collect`
 /// normalize internally; passing their output here would
 /// only re-copy it.
-pub fn lex_normalized(normalized: &str, collect: bool) -> (Vec<Token>, Vec<Diag>, Vec<Comment>) {
+///
+/// The line starts ride the SAME byte scan (a `\n` consumed anywhere
+/// records the line it opens) — the [`crate::source::Source`]
+/// constructor's fuel, never an extra pass.
+pub fn lex_normalized(
+    normalized: &str,
+    collect: bool,
+) -> (
+    Vec<Token>,
+    Vec<Diag>,
+    Vec<Comment>,
+    Vec<u32>, /* line_starts */
+) {
     let mut lx = Lexer::new(normalized, collect);
+    lx.run();
+    (lx.toks, lx.diags, lx.comments, lx.line_starts)
+}
+
+/// The splice lane's window door ([`crate::splice::splice_tokens`]):
+/// lex a SLICE of a larger document. Spans stay slice-relative — the
+/// caller lifts them onto absolute positions — and the BOM skip rides
+/// `doc_start`: only a window opening at byte 0 may skip it, because
+/// a BOM sequence mid-file is CONTENT (the cold lex of the whole
+/// document lexes it as a word token, and the window must agree).
+/// No line table — the splice's [`crate::source::Source`] keeps its own.
+pub(crate) fn lex_window(window: &str, doc_start: bool) -> (Vec<Token>, Vec<Diag>, Vec<Comment>) {
+    let mut lx = if doc_start {
+        Lexer::new(window, false)
+    } else {
+        Lexer::at_window_start(window, false)
+    };
     lx.run();
     (lx.toks, lx.diags, lx.comments)
 }
@@ -100,6 +139,10 @@ struct Lexer<'a> {
     pub toks: Vec<Token>,
     pub diags: Vec<Diag>,
     comments: Vec<Comment>,
+    /// byte offset where each line starts — `0` first, then one entry
+    /// per consumed `\n` (the text's own geometry, collected in this
+    /// scan; [`crate::source::Source`] consumes it)
+    line_starts: Vec<u32>,
     collect: bool,
     depth: u32,
     depth_reported: bool,
@@ -107,21 +150,40 @@ struct Lexer<'a> {
 
 impl<'a> Lexer<'a> {
     fn new(src: &'a str, collect: bool) -> Lexer<'a> {
+        Self::build(src, collect, true)
+    }
+
+    /// The window variant — see [`lex_window`]: no BOM skip, the
+    /// caller decides (only a window opening at byte 0 may skip).
+    fn at_window_start(src: &'a str, collect: bool) -> Lexer<'a> {
+        Self::build(src, collect, false)
+    }
+
+    fn build(src: &'a str, collect: bool, skip_bom: bool) -> Lexer<'a> {
         let mut lx = Lexer {
             src: src.as_bytes(),
             pos: 0,
             toks: Vec::new(),
             diags: Vec::new(),
             comments: Vec::new(),
+            line_starts: vec![0],
             collect,
             depth: 0,
             depth_reported: false,
         };
-        // skip BOM
-        if lx.src.starts_with(&[0xEF, 0xBB, 0xBF]) {
+        // skip BOM (a DOCUMENT marker — position 0 only)
+        if skip_bom && lx.src.starts_with(&[0xEF, 0xBB, 0xBF]) {
             lx.pos = 3;
         }
         lx
+    }
+
+    /// Record the line just opened: called AFTER advancing past a `\n`
+    /// (`self.pos` is the byte the new line begins at). Every newline
+    /// the scan consumes goes through this — strings, comments, holes
+    /// included — so the table matches a cold recount exactly.
+    fn note_line(&mut self) {
+        self.line_starts.push(self.pos as u32);
     }
 
     fn span(&self, lo: usize) -> Span {
@@ -197,8 +259,12 @@ impl<'a> Lexer<'a> {
             let lo = self.pos;
             let c = self.peek();
             match c {
-                b' ' | b'\t' | b'\n' => {
+                b' ' | b'\t' => {
                     self.pos += 1;
+                }
+                b'\n' => {
+                    self.pos += 1;
+                    self.note_line();
                 }
                 b'/' if self.peek2() == b'/' => {
                     while !self.at_end() && self.peek() != b'\n' {
@@ -215,7 +281,11 @@ impl<'a> Lexer<'a> {
                             closed = true;
                             break;
                         }
+                        let b = self.peek();
                         self.pos += 1;
+                        if b == b'\n' {
+                            self.note_line();
+                        }
                     }
                     if !closed {
                         self.err(self.span(lo), "unterminated block comment");
@@ -272,6 +342,9 @@ impl<'a> Lexer<'a> {
         }
         let b = self.peek();
         self.pos += 1;
+        if b == b'\n' {
+            self.note_line();
+        }
         match b {
             b't' => out.push('\t'),
             b'n' => out.push('\n'),
@@ -527,6 +600,9 @@ impl<'a> Lexer<'a> {
                 self.pos += run;
                 continue;
             }
+            if b == b'\n' {
+                self.note_line();
+            }
             out.push(b);
         }
     }
@@ -586,6 +662,9 @@ impl<'a> Lexer<'a> {
                     let start = self.pos;
                     let len = utf8_len(b);
                     self.pos += len;
+                    if b == b'\n' {
+                        self.note_line();
+                    }
                     lit.push_str(&String::from_utf8_lossy(
                         &self.src[start..self.pos.min(self.src.len())],
                     ));
@@ -651,7 +730,11 @@ impl<'a> Lexer<'a> {
                     while self.pos + 1 < self.src.len()
                         && !(self.peek() == b'*' && self.peek2() == b'/')
                     {
+                        let b = self.peek();
                         self.pos += 1;
+                        if b == b'\n' {
+                            self.note_line();
+                        }
                     }
                     self.pos = (self.pos + 2).min(self.src.len());
                 }
