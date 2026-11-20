@@ -1036,3 +1036,43 @@ fn host_fn_hover_via_the_calc_fixture_has_no_next_decl_artifact() {
     );
     assert!(!md.contains(";pub"), "the next-decl artifact leaked: {md}");
 }
+
+#[test]
+fn decl_site_hovers_decorate_the_name_token() {
+    // the round-2 pin: hovering a DECLARED name decorates exactly the
+    // name token — the let head, a param, a fn decl, a type decl —
+    // never the whole statement/decl extent
+    let src = "\
+fn go(x: i32) -> i32 {
+let total = x;
+return total;
+}
+struct Point {
+x: f64;
+}
+";
+    let file = mount_of(src, Mode::Impl, Mount::default());
+    let chain = Chain::new(vec![&file]);
+    let token = |name: &str, n: usize| {
+        let sp = find_ident_pos(file.doc.toks(), name, n).unwrap();
+        (sp, sp + name.len() as u32)
+    };
+    for (name, n) in [
+        ("total", 0usize), // the let's declared name
+        ("go", 0),         // the fn decl's name
+        ("x", 0),          // the param's declared name
+        ("Point", 0),      // the struct decl's name
+        ("x", 2),          // the field decl's name
+    ] {
+        let pos = find_ident_pos(file.doc.toks(), name, n).unwrap();
+        let out = hover(&chain, &crate::mods::DocMods::default(), pos).unwrap();
+        let (lo, hi) = token(name, n);
+        assert_eq!(
+            (out.span.lo, out.span.hi),
+            (lo, hi),
+            "`{name}` #{n} must decorate the hovered token: {}..{}",
+            out.span.lo,
+            out.span.hi
+        );
+    }
+}

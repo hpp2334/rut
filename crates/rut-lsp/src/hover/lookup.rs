@@ -117,7 +117,7 @@ pub fn hover(chain: &Chain, doc: &DocMods, pos: u32) -> Option<HoverOut> {
 
     // the name lanes key on the node's own recorded name — a path
     // segment, a param name, a local let's name
-    let name_id = node_name_id(ast, h, pos)?;
+    let (name_id, _name_span) = name_at(ast, h, pos)?;
     let name = ast.name(name_id);
     {
         if is_cap(name) || crate::semantic::is_primitive_ty(name) {
@@ -175,31 +175,35 @@ pub fn hover(chain: &Chain, doc: &DocMods, pos: u32) -> Option<HoverOut> {
     None
 }
 
-/// the deepest node's own recorded name position — the interner id
-/// behind the name lanes: a path segment, a param name, a local let's
-/// name
-fn node_name_id(ast: &rut_ast::Ast, h: AnyHandle, pos: u32) -> Option<rut_ast::IdentId> {
+/// the deepest node's own recorded name position — the interner id AND
+/// the exact name span the hover decorates: a path segment, a param
+/// name, a local let's name (destructured members included), a
+/// struct-literal label, a use leaf, a type slot's segment, or a decl
+/// node's declared name. The name lanes and the hover span read this
+/// ONE mapping, so the decoration is always the hovered token (the
+/// pre-phase `t.span` law), never the decl's whole extent.
+fn name_at(ast: &rut_ast::Ast, h: AnyHandle, pos: u32) -> Option<(rut_ast::IdentId, Span)> {
     if let Some(p) = h.downcast::<PathNode>() {
         for s in &p.get(ast).segs {
             if on_name(s.name_span, pos) {
-                return Some(s.name);
+                return Some((s.name, s.name_span));
             }
         }
         return None;
     }
     if let Some(p) = h.downcast::<ParamNode>() {
         let d = p.get(ast);
-        return on_name(d.name_span, pos).then_some(d.name);
+        return on_name(d.name_span, pos).then_some((d.name, d.name_span));
     }
     if let Some(l) = h.downcast::<rut_ast::LetStmtNode>() {
         let d = l.get(ast);
         if on_name(d.name_span, pos) {
-            return Some(d.name);
+            return Some((d.name, d.name_span));
         }
         if let Some(ns) = &d.destructure {
             for (n, sp) in ns {
                 if on_name(*sp, pos) {
-                    return Some(*n);
+                    return Some((*n, *sp));
                 }
             }
         }
@@ -207,18 +211,18 @@ fn node_name_id(ast: &rut_ast::Ast, h: AnyHandle, pos: u32) -> Option<rut_ast::I
     }
     if let Some(f) = h.downcast::<rut_ast::ForOfNode>() {
         let d = f.get(ast);
-        return on_name(d.name_span, pos).then_some(d.var);
+        return on_name(d.name_span, pos).then_some((d.var, d.name_span));
     }
     if let Some(f) = h.downcast::<rut_ast::ForCNode>() {
         let d = f.get(ast);
-        return on_name(d.name_span, pos).then_some(d.var);
+        return on_name(d.name_span, pos).then_some((d.var, d.name_span));
     }
     // struct-literal field labels are name positions (the FieldInit
     // rides the literal as data — no node of its own)
     if let Some(sl) = h.downcast::<rut_ast::StructLitNode>() {
         for fi in &sl.get(ast).fields {
             if on_name(fi.name_span, pos) {
-                return Some(fi.name);
+                return Some((fi.name, fi.name_span));
             }
         }
         return None;
@@ -229,7 +233,7 @@ fn node_name_id(ast: &rut_ast::Ast, h: AnyHandle, pos: u32) -> Option<rut_ast::I
         let d = u.get(ast);
         for (i, sp) in d.name_spans.iter().enumerate() {
             if on_name(*sp, pos) {
-                return d.names.get(i).copied();
+                return d.names.get(i).copied().map(|n| (n, *sp));
             }
         }
         return None;
@@ -239,7 +243,7 @@ fn node_name_id(ast: &rut_ast::Ast, h: AnyHandle, pos: u32) -> Option<rut_ast::I
     if let Some(t) = h.downcast::<rut_ast::TyPathNode>() {
         for seg in &t.get(ast).segs {
             if on_name(seg.name_span, pos) {
-                return Some(seg.name);
+                return Some((seg.name, seg.name_span));
             }
         }
         return None;
@@ -250,7 +254,7 @@ fn node_name_id(ast: &rut_ast::Ast, h: AnyHandle, pos: u32) -> Option<rut_ast::I
         ($t:ty) => {
             if let Some(d) = h.downcast::<$t>() {
                 let dd = d.get(ast);
-                return on_name(dd.name_span, pos).then_some(dd.name);
+                return on_name(dd.name_span, pos).then_some((dd.name, dd.name_span));
             }
         };
     }
@@ -270,31 +274,9 @@ fn node_name_id(ast: &rut_ast::Ast, h: AnyHandle, pos: u32) -> Option<rut_ast::I
 }
 
 /// the span the hover decorates — the node's own name position when it
-/// records one, else the node's span
+/// records one (the pre-phase `t.span` law), else the node's span
 fn node_span(ast: &rut_ast::Ast, h: AnyHandle, pos: u32) -> Span {
-    if let Some(u) = h.downcast::<UseNode>() {
-        let d = u.get(ast);
-        for sp in &d.name_spans {
-            if on_name(*sp, pos) {
-                return *sp;
-            }
-        }
-    }
-    if let Some(p) = h.downcast::<PathNode>() {
-        for s in &p.get(ast).segs {
-            if on_name(s.name_span, pos) {
-                return s.name_span;
-            }
-        }
-    }
-    if let Some(t) = h.downcast::<rut_ast::TyPathNode>() {
-        for s in &t.get(ast).segs {
-            if on_name(s.name_span, pos) {
-                return s.name_span;
-            }
-        }
-    }
-    ast.span_of(h)
+    name_at(ast, h, pos).map_or_else(|| ast.span_of(h), |(_, sp)| sp)
 }
 
 /// is the cursor on a member lane's node at its member position?
@@ -327,7 +309,18 @@ fn member_position(ast: &rut_ast::Ast, h: AnyHandle, pos: u32) -> bool {
 /// declared-or-inferred (the resolver reads the doc's bindings)
 fn binding_hover(chain: &Chain<'_>, pos: u32, id: rut_ast::IdentId) -> Option<String> {
     let d = chain.head();
-    let b = rut_ast::resolve_binding(d.doc.bindings(), pos, id)?;
+    // the shadow-correct resolve — or the DECL site: the cursor rides a
+    // row's declaring ident (a param head sits before its scope body,
+    // so the scope-containment resolve can't see it; definition's
+    // decl→itself law, mirrored for the hover)
+    let b = rut_ast::resolve_binding(d.doc.bindings(), pos, id).or_else(|| {
+        d.doc.bindings().iter().find(|b| {
+            b.name == id && {
+                let sp = b.decl_ident_span;
+                sp.lo <= pos && pos <= sp.hi
+            }
+        })
+    })?;
     let ty = chain.binding_ty(b);
     let name = d.doc.ast().name(b.name);
     Some(binding_markdown(b, name, ty))
