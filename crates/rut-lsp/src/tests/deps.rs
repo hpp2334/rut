@@ -1,4 +1,5 @@
 use crate::deps::*;
+use crate::hover::collection::Chain;
 use crate::hover::types::TyForm;
 use rut_ast::parser::Mode;
 use rut_ast::Vis;
@@ -308,37 +309,35 @@ fn a_packed_v12_bundle_indexes_hover_and_completion_from_the_entry() {
     assert_eq!(idx.mount.mode, Some(Mode::Decl));
     // the hover facts: the class row with its fields …
     let vec = idx.ty("Vec").expect("the class indexes");
-    assert_eq!(vec.form, TyForm::Class);
-    assert!(
-        vec.fields.iter().any(|m| m.name == "buf"),
-        "{:?}",
-        vec.fields.iter().map(|m| &m.name)
-    );
-    assert!(vec.fields.iter().any(|m| m.name == "len"));
+    assert_eq!(vec.form(), TyForm::Class);
+    let field_names: Vec<&str> = vec.fields().iter().map(|m| m.name()).collect();
+    assert!(field_names.contains(&"buf"), "{field_names:?}");
+    assert!(vec.fields().iter().any(|m| m.name() == "len"));
     // … and its member signatures — the completion surface
-    let names: Vec<&str> = vec.methods.iter().map(|m| m.name.as_str()).collect();
+    let names: Vec<&str> = vec.methods().iter().map(|m| m.name()).collect();
     assert!(names.contains(&"new"), "{names:?}");
     assert!(names.contains(&"push"), "{names:?}");
-    let push = vec.methods.iter().find(|m| m.name == "push").expect("push");
+    let methods = vec.methods();
+    let push = methods.iter().find(|m| m.name() == "push").expect("push");
     assert!(
-        push.src.contains("pub fn push(self"),
+        push.src().contains("pub fn push(self"),
         "the verbatim signature: {}",
-        push.src
+        push.src()
     );
     // the free fn indexes as a module-level fn with its signature
     let freeze = idx
-        .fns
-        .iter()
-        .find(|f| f.name == "freeze_bytes")
+        .fns()
+        .into_iter()
+        .find(|f| f.name() == "freeze_bytes")
         .expect("freeze_bytes");
     // span law v3.1: the decl span starts at its FIRST token — the
     // spelled `pub` rides the verbatim slice
     assert!(
-        freeze.src.starts_with("pub fn freeze_bytes"),
+        freeze.src().starts_with("pub fn freeze_bytes"),
         "{}",
-        freeze.src
+        freeze.src()
     );
-    assert!(freeze.owner.is_none());
+    assert!(freeze.owner().is_none());
 }
 
 #[test]
@@ -355,9 +354,10 @@ pub host fn legacy_ping() -> bool;
     assert_eq!(idxs[0].0, "");
     let root = &idxs[0].1;
     // the root's own rows + the file-form edge
-    assert!(root.fns.iter().any(|f| f.name == "legacy_ping"));
-    assert_eq!(root.mods.len(), 1);
-    assert_eq!(root.mods[0].name, "net");
+    assert!(root.fns().iter().any(|f| f.name() == "legacy_ping"));
+    let root_mods = root.mods();
+    assert_eq!(root_mods.len(), 1);
+    assert_eq!(root_mods[0].name(), "net");
     // one parse, one module: the origin is the entry uri
     assert_eq!(root.mount.origin, "bundle:myhost/mod.d.rut");
     assert_eq!(root.mount.mod_path.as_deref(), Some(""));
@@ -444,7 +444,7 @@ pub host fn sqrt(x: f64) -> f64;
 pub let PI: f64 = 3.141592653589793;
 pub let INFINITY: f64 = inf;
 ";
-    let idx = index_dep("calc", "file:///deps/calc.d.rut", None, src.to_string());
+    let idx = mount_file("calc", "file:///deps/calc.d.rut", None, src.to_string());
     // the explicit name rides the index …
     assert_eq!(idx.mount.module.as_deref(), Some("calc"));
     assert_eq!(idx.mount.origin, "file:///deps/calc.d.rut");
@@ -453,48 +453,48 @@ pub let INFINITY: f64 = inf;
     assert_eq!(idx.mount.mode, Some(Mode::Decl));
     // … the surface indexes …
     assert!(idx
-        .fns
+        .fns()
         .iter()
-        .any(|f| f.name == "sqrt" && f.owner.is_none()));
+        .any(|f| f.name() == "sqrt" && f.owner().is_none()));
     // … and the surface `pub let` rows ride the ordinary ModuleLet
     // path — the bare `use calc_host::{ PI }` form, indexed exactly
     // as authored source is (the manifest's `consts` table is
     // retired; `inf`/`-inf` spell the non-finite pair)
     let pi = idx
-        .lets
-        .iter()
-        .find(|l| l.name == "PI")
+        .lets()
+        .into_iter()
+        .find(|l| l.name() == "PI")
         .expect("PI as a module let");
-    assert_eq!(pi.ty.as_deref(), Some("f64"));
+    assert_eq!(pi.ty().as_deref(), Some("f64"));
     // span law v3.1: the spelled `pub` rides the verbatim slice
     assert!(
-        pi.src.starts_with("pub let PI: f64 = 3.141592653589793"),
+        pi.src().starts_with("pub let PI: f64 = 3.141592653589793"),
         "the verbatim row: {}",
-        pi.src
+        pi.src()
     );
-    assert_eq!(pi.vis, Vis::Pub);
+    assert_eq!(pi.vis(), Vis::Pub);
+    let let_names: Vec<&str> = idx.lets().iter().map(|l| l.name()).collect();
     assert!(
-        idx.lets.iter().any(|l| l.name == "INFINITY"),
-        "the inf literal indexes like any float: {:?}",
-        idx.lets.iter().map(|l| &l.name).collect::<Vec<_>>()
+        let_names.contains(&"INFINITY"),
+        "the inf literal indexes like any float: {let_names:?}"
     );
 }
 
 #[test]
 fn index_dep_without_lets_indexes_none() {
-    let idx = index_dep(
+    let idx = mount_file(
         "pouch",
         "file:///deps/pouch.rut",
         None,
         "class Vec<T> {\n}\n".to_string(),
     );
     assert_eq!(idx.mount.module.as_deref(), Some("pouch"));
-    assert!(idx.lets.is_empty());
+    assert!(idx.lets().is_empty());
 }
 
 #[test]
 fn index_dep_mod_stamps_the_mod_path() {
-    let idx = index_dep(
+    let idx = mount_file(
         "gadgets",
         "file:///deps/gadgets/layout/mod.rut",
         Some("layout"),
@@ -503,15 +503,16 @@ fn index_dep_mod_stamps_the_mod_path() {
     assert_eq!(idx.mount.module.as_deref(), Some("gadgets"));
     assert_eq!(idx.mount.mod_path.as_deref(), Some("layout"));
     // the recorded mod edges ride the parsed rows too
-    let root = index_dep(
+    let root = mount_file(
         "gadgets",
         "file:///deps/gadgets/mod.rut",
         Some(""),
         "pub mod layout;\n".to_string(),
     );
     assert_eq!(root.mount.mod_path.as_deref(), Some(""));
-    assert_eq!(root.mods.len(), 1);
-    assert_eq!(root.mods[0].name, "layout");
+    let root_mods = root.mods();
+    assert_eq!(root_mods.len(), 1);
+    assert_eq!(root_mods[0].name(), "layout");
 }
 
 /// THE HOP-1 MEMBER LAW: a dep source's inherent impl methods ride
@@ -531,26 +532,24 @@ fn dep_impl_methods_ride_the_dep_index() {
         "    pub fn info(self, msg: str) -> nil { logger_log(self.internal, 1, msg); }\n",
         "}\n",
     );
-    let idx = index_dep(
+    let idx = mount_file(
         "ink",
         "file:///deps/ink/src/mod.rut",
         Some(""),
         INK.to_string(),
     );
-    let info = idx.fns.iter().find(|f| f.name == "info");
+    let fns = idx.fns();
+    let info = fns.iter().find(|f| f.name() == "info");
+    let owners: Vec<(&str, Option<String>)> = fns.iter().map(|f| (f.name(), f.owner())).collect();
     assert_eq!(
-        info.map(|f| f.owner.as_deref()),
-        Some(Some("Logger")),
-        "impl methods ride the dep index: {:?}",
-        idx.fns
-            .iter()
-            .map(|f| (f.name.as_str(), f.owner.as_deref()))
-            .collect::<Vec<_>>()
+        info.map(|f| f.owner()),
+        Some(Some("Logger".to_string())),
+        "impl methods ride the dep index: {owners:?}"
     );
     // the class body is fields-only; the method answers ONLY through
     // the impl fallback
     let ty = idx.ty("Logger").expect("the Logger ty rides");
-    assert!(ty.methods.iter().all(|m| m.name != "info"));
+    assert!(ty.methods().iter().all(|m| m.name() != "info"));
     // the full member resolution, the definition lane's own path:
     // receiver `log` (ctor-inferred Logger) → `.info` → the dep fn
     let consumer = "use ink::{ Logger };\nentry fn main() {\n    let log = Logger(\"hello\");\n    log.info(\"hi\");\n}\n";
@@ -560,14 +559,20 @@ fn dep_impl_methods_ride_the_dep_index() {
         .position(|l| l.contains(".info"))
         .expect("the .info line") as u32;
     let ch = lines[line as usize].find(".info").unwrap() as u32 + 1;
-    let hits = crate::query::analysis::definition_at(
-        "file:///ws/main.rut",
-        consumer.to_string(),
-        &[idx],
-        &crate::mods::DocMods::default(),
-        line,
-        ch,
+    let doc_file = crate::hover::MountedFile::from_document(
+        crate::semantic::Document::parse(Mode::Impl, consumer.to_string()),
+        crate::hover::Mount::doc("file:///ws/main.rut"),
     );
+    let chain = Chain::new(vec![&doc_file, &idx]);
+    let dm = crate::mods::DocMods::default();
+    let ctx = crate::query::definition::Ctx {
+        doc_uri: "file:///ws/main.rut",
+        doc: &doc_file.doc,
+        chain: &chain,
+        doc_mods: &dm,
+    };
+    let byte = doc_file.doc.lines().byte(doc_file.doc.src(), line, ch);
+    let hits = crate::query::definition::definition(&ctx, byte);
     assert_eq!(hits.len(), 1, "the .info click resolves: {hits:?}");
     assert_eq!(hits[0].uri, "file:///deps/ink/src/mod.rut");
 }

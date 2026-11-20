@@ -1,67 +1,56 @@
-use crate::hover::DefIndex;
+use crate::hover::collection::Chain;
 use crate::hover::Mount;
+use crate::hover::MountedFile;
 use crate::mods::DocMods;
 use crate::query::definition::*;
 use crate::semantic::LineIndex;
 use rut_ast::parser::Mode;
-use rut_ast::Ast;
 use rut_lexer::lexer::canonical;
-use rut_lexer::token::Token;
-
-/// one doc artifact — the (normalized src, toks, ast) triple from ONE
-/// parse, read through the doc's doors (the test lane's replacement
-/// for the hand-spelled `normalize → lex → doc_ast` triple; doc
-/// grafting ON — the editor lane's shape, the recovering entry)
-fn doc_of(src: &str, mode: Mode) -> crate::semantic::Document {
-    crate::semantic::Document::parse(mode, src.to_string())
-}
 
 const DOC: &str = "file:///t/main.rut";
 
-/// a document + its hover index — the doc is the context (src, toks,
-/// and ast read through its doors)
+/// one mounted document — the parse-once entry (the test lane's
+/// replacement for the hand-built index: the doc + its decls ride
+/// together, the way the session's cache holds them)
 struct Doc {
-    pd: crate::semantic::Document,
-    index: DefIndex,
+    file: MountedFile,
 }
 
 impl Doc {
     fn src(&self) -> &str {
-        self.pd.src()
-    }
-    fn toks(&self) -> &[Token] {
-        self.pd.toks()
-    }
-    fn ast(&self) -> &Ast {
-        self.pd.ast()
+        self.file.doc.src()
     }
 }
 
 fn doc_at(uri: &str, src: &str) -> Doc {
-    let pd = doc_of(src, Mode::Impl);
-    let index = crate::hover::index(&pd, Mount::doc(uri));
-    Doc { pd, index }
+    Doc {
+        file: MountedFile::from_document(
+            crate::semantic::Document::parse(Mode::Impl, src.to_string()),
+            Mount::doc(uri),
+        ),
+    }
 }
 
 fn doc(src: &str) -> Doc {
     doc_at(DOC, src)
 }
 
-/// run `query` against the ctx built from `d` + `extra` (the chain
-/// lives here, so the Ctx's borrow of it is valid for the call);
+/// run `query` against the chain built from `d` + `extra` (the chain
+/// is an ordering view over the files — the doc first, then the rest);
 /// the doc context rides as the face's knowledge (`dm`)
 fn run(
     d: &Doc,
-    extra: &[DefIndex],
+    extra: &[MountedFile],
     dm: &DocMods,
     query: impl Fn(&Ctx) -> Vec<DefLocation>,
 ) -> Vec<DefLocation> {
-    let idxs: Vec<&DefIndex> = std::iter::once(&d.index).chain(extra.iter()).collect();
+    let mut files: Vec<&MountedFile> = vec![&d.file];
+    files.extend(extra.iter());
+    let chain = Chain::new(files);
     let ctx = Ctx {
-        doc_uri: &d.index.mount.origin,
-        toks: d.toks(),
-        ast: d.ast(),
-        idxs: &idxs,
+        doc_uri: d.file.origin(),
+        doc: &d.file.doc,
+        chain: &chain,
         doc_mods: dm,
     };
     query(&ctx)
@@ -87,24 +76,24 @@ fn span_of(src: &str, ix: &LineIndex, l: &DefLocation) -> (u32, u32) {
     )
 }
 
-fn def(d: &Doc, pos: u32, extra: &[DefIndex]) -> Vec<DefLocation> {
+fn def(d: &Doc, pos: u32, extra: &[MountedFile]) -> Vec<DefLocation> {
     def_as(d, pos, extra, &DocMods::default())
 }
 
 /// the doc-context lane — the own-package queries ride a `DocMods`
-fn def_as(d: &Doc, pos: u32, extra: &[DefIndex], dm: &DocMods) -> Vec<DefLocation> {
+fn def_as(d: &Doc, pos: u32, extra: &[MountedFile], dm: &DocMods) -> Vec<DefLocation> {
     run(d, extra, dm, |c| definition(c, pos))
 }
 
-fn typedef(d: &Doc, pos: u32, extra: &[DefIndex]) -> Vec<DefLocation> {
+fn typedef(d: &Doc, pos: u32, extra: &[MountedFile]) -> Vec<DefLocation> {
     run(d, extra, &DocMods::default(), |c| type_definition(c, pos))
 }
 
 const WIDGET_DOC: &str = "class Widget {\n    id: i32;\n}\n";
 const WIDGET_URI: &str = "file:///ws/gadgets/lib.rut";
 
-fn widget_index() -> DefIndex {
-    doc_at(WIDGET_URI, WIDGET_DOC).index
+fn widget_index() -> MountedFile {
+    doc_at(WIDGET_URI, WIDGET_DOC).file
 }
 
 // ---- layer 1: the binding pass ----
@@ -311,7 +300,7 @@ fn use_name_jumps_to_the_exporting_module() {
 fn the_use_graph_restricts_the_search_to_the_imported_pkg() {
     let src = "use gadgets::{ Widget };\nfn main() -> nil {\n    let w = Widget::new();\n}\n";
     let d = doc(src);
-    let mut foreign = doc("class Widget {\n    other: i32;\n}\n").index;
+    let mut foreign = doc("class Widget {\n    other: i32;\n}\n").file;
     foreign.mount.origin = "file:///ws/other/lib.rut".to_string();
     let extra = [widget_index(), foreign];
     let hits = def(&d, at(d.src(), "= Widget::new();", 1) + 2, &extra);
@@ -343,13 +332,13 @@ fn a_both_files_dep_answers_from_the_body() {
     // the body root's file top (0:0)
     let src = "use pkg::{ make };\nentry fn main() -> nil {\n    let x = make();\n}\n";
     let d = doc(src);
-    let surface = crate::deps::index_dep(
+    let surface = crate::deps::mount_file(
         "pkg",
         "file:///deps/pkg/pkg.d.rut",
         None,
         "pub host fn make() -> i32;\n".to_string(),
     );
-    let body = crate::deps::index_dep(
+    let body = crate::deps::mount_file(
         "pkg",
         "file:///deps/pkg/mod.rut",
         Some(""),
@@ -382,7 +371,7 @@ fn a_decl_only_host_pkg_lands_in_the_surface() {
     // all there is, so it is kept
     let src = "use calc::{ sqrt };\nentry fn main() -> nil {\n    let x = sqrt(1.0);\n}\n";
     let d = doc(src);
-    let surface = crate::deps::index_dep(
+    let surface = crate::deps::mount_file(
         "calc",
         "file:///deps/calc/calc.d.rut",
         None,
@@ -413,13 +402,13 @@ fn a_mounted_root_beats_the_ambient_surface_twin() {
     // pinned these bytes, the ambient index is only ever the fallback
     let src = "use ink_host::{ create_logger };\nentry fn main() -> nil {\n    create_logger(\"a\");\n}\n";
     let d = doc(src);
-    let ambient = crate::deps::index_dep(
+    let ambient = crate::deps::mount_file(
         "ink_host",
         "rut/ink_host/src/ink_host.d.rut",
         None,
         "pub host fn create_logger(name: str) -> opaque;\n".to_string(),
     );
-    let mounted = crate::deps::index_dep(
+    let mounted = crate::deps::mount_file(
         "ink_host",
         "file:///ws/.rut/deps/ink-eb2b568316ef/deps/ink_host@7e9a5d738fbd9797/src/ink_host.d.rut",
         None,
@@ -474,7 +463,7 @@ fn a_ctor_decl_click_answers_itself() {
         "file:///ws/flow/lib.rut",
         "class Ctx {\n    internal: opaque;\n}\n\nimpl Ctx {\n    [constructor] pub fn new(cap: i32) -> Self {\n        return Self { internal: 2 };\n    }\n}\n",
     )
-    .index;
+    .file;
     let ix = LineIndex::new(d.src());
     let want = at(d.src(), "fn new", 1) + 3;
     let hits = def(&d, want, &[other]);
@@ -494,7 +483,7 @@ fn a_fn_decl_click_answers_itself_despite_a_foreign_twin() {
         "file:///ws/other/lib.rut",
         "fn make() -> i32 { return 2; }\n",
     )
-    .index;
+    .file;
     let ix = LineIndex::new(d.src());
     let want = at(d.src(), "fn make", 1) + 3;
     let hits = def(&d, want, &[other]);
@@ -511,7 +500,7 @@ fn a_doubled_twin_answer_is_one_answer() {
     // ambiguity peek is for DISTINCT targets
     let src = "class Widget {\n    id: i32;\n}\n";
     let d = doc(src);
-    let twin = doc_at(DOC, src).index; // the same origin, stamped twin
+    let twin = doc_at(DOC, src).file; // the same origin, stamped twin
     let ix = LineIndex::new(d.src());
     let want = at(d.src(), "Widget", 1);
     let hits = def(&d, want, &[twin]);
@@ -539,9 +528,9 @@ fn a_mounted_member_beats_the_ambient_twin() {
     .join("\n");
     let d = doc(&src);
     let surface = "class Logger {\n    internal: opaque;\n}\n\nimpl Logger {\n    pub fn info(msg: str) -> nil { }\n}\n";
-    let mut ambient = doc_at("rut/ink/src/mod.rut", surface).index;
+    let mut ambient = doc_at("rut/ink/src/mod.rut", surface).file;
     ambient.mount.src_path = Some("rut/ink/src/mod.rut".into());
-    let mounted = doc_at("file:///ws/.rut/deps/ink-eb2b568316ef/src/mod.rut", surface).index;
+    let mounted = doc_at("file:///ws/.rut/deps/ink-eb2b568316ef/src/mod.rut", surface).file;
     let extra = [ambient, mounted];
     let surface_src = canonical(surface).into_owned();
     let six = LineIndex::new(&surface_src);
@@ -570,13 +559,13 @@ fn a_middle_use_segment_jumps_to_the_mod_edge() {
     // root's mod.rut (the dep lane; the e2e face re-covers it)
     let src = "use gadgets::layout::{ Column };\nentry fn main() -> nil {\n}\n";
     let d = doc(src);
-    let root = crate::deps::index_dep(
+    let root = crate::deps::mount_file(
         "gadgets",
         "file:///deps/gadgets/mod.rut",
         Some(""),
         "pub mod layout;\npub fn tag() -> i32 { return 1; }\n".to_string(),
     );
-    let layout = crate::deps::index_dep(
+    let layout = crate::deps::mount_file(
         "gadgets",
         "file:///deps/gadgets/layout/mod.rut",
         Some("layout"),
@@ -615,8 +604,8 @@ fn app_root() -> Doc {
 
 /// the mounted `helpers` child, stamped the way the faces' mount
 /// lays it into the chain
-fn app_helpers() -> DefIndex {
-    crate::deps::index_dep(
+fn app_helpers() -> MountedFile {
+    crate::deps::mount_file(
         "app",
         "file:///ws/app/helpers/mod.rut",
         Some("helpers"),
@@ -667,7 +656,7 @@ fn a_nested_edge_click_walks_from_the_doc_s_own_path() {
         "file:///ws/app/helpers.rut",
         "mod deep;\npub struct Slot {\n    n: i32;\n}\n",
     );
-    let deep = crate::deps::index_dep(
+    let deep = crate::deps::mount_file(
         "app",
         "file:///ws/app/helpers/deep.rut",
         Some("helpers/deep"),
@@ -690,7 +679,7 @@ fn an_edge_click_never_leaks_across_packages() {
     // another pkg's index stamped at the SAME mod path must not
     // answer the app root's edge click (the (pkg, path) pair keys)
     let d = app_root();
-    let other = crate::deps::index_dep(
+    let other = crate::deps::mount_file(
         "other",
         "file:///ws/other/helpers/mod.rut",
         Some("helpers"),
@@ -709,7 +698,7 @@ fn an_own_pkg_use_path_resolves_intra_package() {
         "file:///ws/app/mod.rut",
         "mod helpers;\nuse app::helpers::{ Slot };\nentry fn main() -> nil {\n}\n",
     );
-    let root_twin = crate::deps::index_dep(
+    let root_twin = crate::deps::mount_file(
         "app",
         "file:///ws/app/on-disk/mod.rut",
         Some(""),
@@ -752,13 +741,13 @@ fn an_own_mod_edge_use_head_resolves_through_the_ancestor_walk() {
         "file:///ws/app/mod.rut",
         "use helpers::deep::{ Gem };\nmod helpers;\nentry fn main() -> nil {\n}\n",
     );
-    let helpers = crate::deps::index_dep(
+    let helpers = crate::deps::mount_file(
         "app",
         "file:///ws/app/helpers/mod.rut",
         Some("helpers"),
         "mod deep;\npub struct Slot {\n    n: i32;\n}\n".to_string(),
     );
-    let deep = crate::deps::index_dep(
+    let deep = crate::deps::mount_file(
         "app",
         "file:///ws/app/helpers/deep.rut",
         Some("helpers/deep"),
@@ -797,7 +786,7 @@ fn the_explicit_module_name_beats_the_path_derivation() {
     // a dep index named `pouch` whose paths spell something else:
     // the explicit module is the WHOLE match
     let src = "class Widget {\n    id: i32;\n}\n";
-    let mut idx = crate::hover::index(&doc_of(src, Mode::Impl), Mount::default());
+    let mut idx = MountedFile::from_src(Mount::default(), src.to_string());
     idx.mount.origin = "file:///ws/gadgets/lib.rut".to_string();
     idx.mount.src_path = Some("somewhere/else/lib.rut".to_string());
     idx.mount.module = Some("pouch".to_string());
@@ -814,7 +803,7 @@ fn the_unnamed_fallback_stays_verbatim() {
     // module None → today's derivation, byte-for-byte: the
     // src_path segment, then the origin's file stem
     let src = "class Widget {\n    id: i32;\n}\n";
-    let mut idx = crate::hover::index(&doc_of(src, Mode::Impl), Mount::default());
+    let mut idx = MountedFile::from_src(Mount::default(), src.to_string());
     idx.mount.origin = "file:///ws/gadgets/lib.rut".to_string();
     assert!(matches_pkg(&idx, "gadgets"), "the file stem still resolves");
     idx.mount.src_path = Some("rut/pouch/mod.rut".to_string());
@@ -847,7 +836,7 @@ fn std_use_jumps_to_the_true_source_path() {
     const POUCH: &str = include_str!("../../../../rut/pouch/src/mod.rut");
     let src = "use pouch::{ Vec };\nfn main() -> nil {\n    let v = Vec::new();\n}\n";
     let d = doc(src);
-    let extra = [crate::deps::index_dep(
+    let extra = [crate::deps::mount_file(
         "pouch",
         "rut/pouch/src/mod.rut",
         None,

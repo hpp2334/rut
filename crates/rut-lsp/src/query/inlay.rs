@@ -28,26 +28,29 @@ use ls_types::{
     InlayHint, InlayHintKind, InlayHintLabel, InlayHintTooltip, MarkupContent, MarkupKind, Position,
 };
 
-use crate::semantic::LineIndex;
-use crate::semantic::Token;
 use rut_ast::{Ast, ElseBranch, ExprRef, ItemRef, StmtRef};
 
+use crate::hover::collection::{Chain, MountedFile};
 use crate::hover::lookup::{self, recv_type};
-use crate::hover::types::{head_of_ty, DefIndex, FnDef};
+use crate::hover::types::head_of_ty;
 use crate::hover::{bindings, infer, BindKind, Binding};
 
-/// everything one inlay query needs — the same `doc_ctx` pipeline the
-/// other queries ride, plus the line index (byte spans ⇄ LSP positions
-/// over the normalized source)
+/// everything one inlay query needs — the chain the collection handed
+/// out (the open document at the head; its kept document owns the
+/// tokens, the tree, the line index, and the text)
 pub struct Ctx<'a> {
-    pub ast: &'a Ast,
-    pub toks: &'a [Token],
-    /// the document's own index — module-let hints and their renders
-    pub doc: &'a DefIndex,
+    /// the document's own mounted file — module-let hints and their
+    /// renders
+    pub doc: &'a MountedFile,
     /// the lookup chain: the open document first, then the prelude + workspace
-    pub idxs: &'a [&'a DefIndex],
-    pub index: &'a LineIndex,
-    pub src: &'a str,
+    pub chain: &'a Chain<'a>,
+}
+
+impl Ctx<'_> {
+    /// the open document's tree (the chain head's kept document)
+    fn ast(&self) -> &Ast {
+        self.doc.doc.ast()
+    }
 }
 
 /// one hint before position/label conversion — byte-based so the range
@@ -63,15 +66,19 @@ struct Raw {
 /// normalized source — the full document when the face passes 0..len).
 /// Sorted by position; a hint outside the range is dropped.
 pub fn hints(ctx: &Ctx, lo: u32, hi: u32) -> Vec<InlayHint> {
+    let (index, src) = (ctx.doc.doc.lines(), ctx.doc.doc.src());
     let mut raw: Vec<Raw> = Vec::new();
-    let binds = bindings::collect(ctx.ast, ctx.toks, ctx.idxs);
+    let binds = bindings::collect(ctx.doc.doc.ast(), ctx.doc.doc.toks(), ctx.chain);
     type_hints(ctx, &binds, &mut raw);
-    call_hints(ctx, &binds, &mut raw);
-    raw.sort_by_key(|h| ctx.index.position(ctx.src, h.byte));
+    // the inference pass's file window — one pointer slice over the
+    // chain (the call-site type hints' decl lookups)
+    let files: Vec<&MountedFile> = ctx.chain.iter().collect();
+    call_hints(ctx, &binds, &files, &mut raw);
+    raw.sort_by_key(|h| index.position(src, h.byte));
     raw.into_iter()
         .filter(|h| h.byte >= lo && h.byte <= hi)
         .map(|h| {
-            let (line, character) = ctx.index.position(ctx.src, h.byte);
+            let (line, character) = index.position(src, h.byte);
             InlayHint {
                 position: Position { line, character },
                 label: InlayHintLabel::String(h.label),
@@ -116,28 +123,25 @@ fn type_hints(ctx: &Ctx, binds: &[Binding], out: &mut Vec<Raw>) {
         });
     }
     // module lets — the AST's `ty: None` is the unannotated law;
-    // `LetDef::ty` (annotation-or-inferred, the hover render's source)
-    // supplies the text
-    for item in ctx.ast.root().items(ctx.ast) {
-        let ItemRef::ModuleLet(h) = item else {
-            continue;
-        };
-        if h.get(ctx.ast).ty.is_some() {
+    // the view's annotation-or-inferred type text (the hover render's
+    // own source) supplies the label
+    for l in ctx.doc.lets() {
+        if l.h
+            .downcast::<rut_ast::ModuleLetNode>()
+            .map(|n| n.get(ctx.ast()).ty.is_some())
+            == Some(true)
+        {
             continue;
         }
-        let span = h.span(ctx.ast);
-        let Some(l) = ctx.doc.lets.iter().find(|l| l.span == span) else {
+        let Some(text) = l.ty().filter(|t| !t.trim().is_empty()) else {
             continue;
         };
-        let Some(text) = l.ty.as_deref().filter(|t| !t.trim().is_empty()) else {
-            continue;
-        };
-        let Some(name) = l.name_span else { continue };
+        let Some(name) = l.name_span() else { continue };
         out.push(Raw {
             byte: name.hi,
             label: format!(": {text}"),
             kind: InlayHintKind::TYPE,
-            tooltip: Some(crate::hover::render_let(ctx.doc, l)),
+            tooltip: Some(crate::hover::render_let(&l)),
         });
     }
 }
@@ -145,16 +149,21 @@ fn type_hints(ctx: &Ctx, binds: &[Binding], out: &mut Vec<Raw>) {
 /// PARAMETER hints — one walk over every body (fns, methods, lambdas,
 /// module-let initializers), a hint per arg where the callee's recorded
 /// params match the arity exactly.
-fn call_hints(ctx: &Ctx, binds: &[Binding], out: &mut Vec<Raw>) {
-    let mut cx = CallCx { ctx, binds, out };
-    for item in ctx.ast.root().items(ctx.ast) {
+fn call_hints(ctx: &Ctx, binds: &[Binding], files: &[&MountedFile], out: &mut Vec<Raw>) {
+    let mut cx = CallCx {
+        ctx,
+        binds,
+        files,
+        out,
+    };
+    for item in ctx.ast().root().items(ctx.ast()) {
         match item {
-            ItemRef::Fn(h) => cx.walk_block(h.get(ctx.ast).body),
-            ItemRef::Class(h) => cx.walk_methods(&h.get(ctx.ast).methods),
-            ItemRef::Struct(h) => cx.walk_methods(&h.get(ctx.ast).methods),
-            ItemRef::Interface(h) => cx.walk_methods(&h.get(ctx.ast).methods),
-            ItemRef::Impl(h) => cx.walk_methods(&h.get(ctx.ast).methods),
-            ItemRef::ModuleLet(h) => cx.walk_expr(h.get(ctx.ast).init),
+            ItemRef::Fn(h) => cx.walk_block(h.get(ctx.ast()).body),
+            ItemRef::Class(h) => cx.walk_methods(&h.get(ctx.ast()).methods),
+            ItemRef::Struct(h) => cx.walk_methods(&h.get(ctx.ast()).methods),
+            ItemRef::Interface(h) => cx.walk_methods(&h.get(ctx.ast()).methods),
+            ItemRef::Impl(h) => cx.walk_methods(&h.get(ctx.ast()).methods),
+            ItemRef::ModuleLet(h) => cx.walk_expr(h.get(ctx.ast()).init),
             _ => {}
         }
     }
@@ -163,6 +172,8 @@ fn call_hints(ctx: &Ctx, binds: &[Binding], out: &mut Vec<Raw>) {
 struct CallCx<'a> {
     ctx: &'a Ctx<'a>,
     binds: &'a [Binding],
+    /// the inference pass's file window (the chain's pointer slice)
+    files: &'a [&'a MountedFile],
     out: &'a mut Vec<Raw>,
 }
 
@@ -172,14 +183,14 @@ impl CallCx<'_> {
             let rut_ast::MethodRef::Method(h) = m else {
                 continue;
             };
-            if let Some(body) = h.get(self.ctx.ast).body {
+            if let Some(body) = h.get(self.ctx.ast()).body {
                 self.walk_block(body);
             }
         }
     }
 
     fn walk_block(&mut self, block: rut_ast::Handle<rut_ast::BlockNode>) {
-        let d = block.get(self.ctx.ast);
+        let d = block.get(self.ctx.ast());
         for s in d.stmts.iter().copied() {
             self.walk_stmt(s);
         }
@@ -191,21 +202,21 @@ impl CallCx<'_> {
 
     fn walk_stmt(&mut self, s: StmtRef) {
         match s {
-            StmtRef::Let(h) => self.walk_expr(h.get(self.ctx.ast).init),
+            StmtRef::Let(h) => self.walk_expr(h.get(self.ctx.ast()).init),
             StmtRef::ForOf(h) => {
-                let d = h.get(self.ctx.ast);
+                let d = h.get(self.ctx.ast());
                 self.walk_expr(d.iter);
                 self.walk_block(d.body);
             }
             StmtRef::ForC(h) => {
-                let d = h.get(self.ctx.ast);
+                let d = h.get(self.ctx.ast());
                 self.walk_expr(d.init);
                 self.walk_expr(d.cond);
                 self.walk_expr(d.update);
                 self.walk_block(d.body);
             }
             StmtRef::If(h) => {
-                let d = h.get(self.ctx.ast);
+                let d = h.get(self.ctx.ast());
                 self.walk_expr(d.cond);
                 self.walk_block(d.then);
                 match d.els {
@@ -215,19 +226,19 @@ impl CallCx<'_> {
                 }
             }
             StmtRef::While(h) => {
-                let d = h.get(self.ctx.ast);
+                let d = h.get(self.ctx.ast());
                 self.walk_expr(d.cond);
                 self.walk_block(d.body);
             }
             StmtRef::When(h) => {
-                let d = h.get(self.ctx.ast);
+                let d = h.get(self.ctx.ast());
                 self.walk_expr(d.scrut);
                 for a in &d.arms {
-                    self.walk_expr(a.get(self.ctx.ast).body);
+                    self.walk_expr(a.get(self.ctx.ast()).body);
                 }
             }
             StmtRef::Return(h) => {
-                if let Some(v) = h.get(self.ctx.ast).value {
+                if let Some(v) = h.get(self.ctx.ast()).value {
                     self.walk_expr(v);
                 }
             }
@@ -239,7 +250,7 @@ impl CallCx<'_> {
     fn walk_expr(&mut self, e: ExprRef) {
         match e {
             ExprRef::Call(h) => {
-                let d = h.get(self.ctx.ast);
+                let d = h.get(self.ctx.ast());
                 self.free_call(d.callee, &d.args);
                 self.walk_expr(d.callee);
                 for a in d.args.clone() {
@@ -247,7 +258,7 @@ impl CallCx<'_> {
                 }
             }
             ExprRef::Method(h) => {
-                let d = h.get(self.ctx.ast);
+                let d = h.get(self.ctx.ast());
                 self.method_call(e, d.recv, d.name, &d.args);
                 self.walk_expr(d.recv);
                 for a in d.args.clone() {
@@ -255,9 +266,9 @@ impl CallCx<'_> {
                 }
             }
             ExprRef::Block(bh) => self.walk_block(bh),
-            ExprRef::Lambda(h) => self.walk_expr(h.get(self.ctx.ast).body),
+            ExprRef::Lambda(h) => self.walk_expr(h.get(self.ctx.ast()).body),
             _ => {
-                for c in bindings::expr_children(self.ctx.ast, e) {
+                for c in bindings::expr_children(self.ctx.ast(), e) {
                     self.walk_expr(c);
                 }
             }
@@ -270,19 +281,20 @@ impl CallCx<'_> {
         let ExprRef::Path(h) = callee else {
             return;
         };
-        let segs = &h.get(self.ctx.ast).segs;
+        let segs = &h.get(self.ctx.ast()).segs;
         if segs.len() != 1 {
             return;
         }
-        let name = self.ctx.ast.name(segs[0].name);
-        let hits: Vec<&FnDef> = self
+        let name = self.ctx.ast().name(segs[0].name);
+        let hits: Vec<_> = self
             .ctx
-            .idxs
+            .chain
             .iter()
-            .flat_map(|i| i.fns.iter().filter(|f| f.name == name && f.owner.is_none()))
+            .flat_map(|f| f.fns())
+            .filter(|f| f.name() == name && f.owner().is_none())
             .collect();
         let [one] = hits.as_slice() else { return };
-        let params = one.params.clone();
+        let params = one.params();
         self.arg_hints(&params, args);
     }
 
@@ -295,23 +307,24 @@ impl CallCx<'_> {
         name: rut_ast::IdentId,
         args: &[ExprRef],
     ) {
-        let pos = call.span(self.ctx.ast).lo;
+        let pos = call.span(self.ctx.ast()).lo;
         // a named receiver resolves through the phase-1 recv rule
         // (`self`, capitalized, primitive, binding, module let);
         // anything else (chained calls, field paths) through the
         // display-side expression inference
         let head = match recv {
-            ExprRef::Path(ph) if ph.get(self.ctx.ast).segs.len() == 1 => recv_type(
-                self.ctx.idxs,
+            ExprRef::Path(ph) if ph.get(self.ctx.ast()).segs.len() == 1 => recv_type(
+                self.ctx.chain,
                 self.binds,
                 pos,
-                self.ctx.ast.name(ph.get(self.ctx.ast).segs[0].name),
+                self.ctx.ast().name(ph.get(self.ctx.ast()).segs[0].name),
             ),
-            _ => infer::expr_ty(self.ctx.ast, self.binds, self.ctx.idxs, recv)
-                .map(|t| head_of_ty(&t)),
+            _ => {
+                infer::expr_ty(self.ctx.ast(), self.binds, self.files, recv).map(|t| head_of_ty(&t))
+            }
         };
         let Some(ty_name) = head else { return };
-        let Some(params) = self.method_params(&ty_name, self.ctx.ast.name(name)) else {
+        let Some(params) = self.method_params(&ty_name, self.ctx.ast().name(name)) else {
             return;
         };
         self.arg_hints(&params, args);
@@ -321,7 +334,7 @@ impl CallCx<'_> {
     /// impl-block methods only, via the shared `impl_method_fn` rule
     /// (own-surface methods are FINAL with no hints, never wrong names)
     fn method_params(&self, ty_name: &str, member: &str) -> Option<Vec<String>> {
-        lookup::impl_method_fn(self.ctx.idxs, ty_name, member).map(|f| f.params.clone())
+        lookup::impl_method_fn(self.ctx.chain, ty_name, member).map(|f| f.params())
     }
 
     /// one PARAMETER hint per arg, at the arg's first byte — only on
@@ -333,7 +346,7 @@ impl CallCx<'_> {
         }
         for (p, a) in params.iter().zip(args) {
             self.out.push(Raw {
-                byte: a.span(self.ctx.ast).lo,
+                byte: a.span(self.ctx.ast()).lo,
                 label: format!("{p}:"),
                 kind: InlayHintKind::PARAMETER,
                 tooltip: None,

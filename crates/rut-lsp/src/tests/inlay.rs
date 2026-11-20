@@ -1,78 +1,63 @@
-use crate::hover::DefIndex;
+use crate::hover::collection::Chain;
 use crate::hover::Mount;
+use crate::hover::MountedFile;
 use crate::query::inlay::*;
-use crate::semantic::LineIndex;
 use ls_types::{InlayHint, InlayHintKind, InlayHintLabel, InlayHintTooltip};
 use rut_ast::parser::Mode;
-use rut_ast::*;
-use rut_lexer::token::Token;
-
-/// one doc artifact — the (normalized src, toks, ast) triple from ONE
-/// parse, read through the doc's doors (the test lane's replacement
-/// for the hand-spelled `normalize → lex → doc_ast` triple; doc
-/// grafting ON — the editor lane's shape, the recovering entry)
-fn doc_of(src: &str, mode: Mode) -> crate::semantic::Document {
-    crate::semantic::Document::parse(mode, src.to_string())
-}
 
 const DOC: &str = "file:///t/main.rut";
 
-/// a document + its hover index — the doc is the context (src, toks,
-/// ast, and the line index read through its doors)
+/// one mounted document — the parse-once entry (the doc + its decls
+/// ride together, the way the session's cache holds them; the tokens,
+/// the tree, the line index, and the text read through its doors)
 struct Doc {
-    pd: crate::semantic::Document,
-    index: DefIndex,
+    file: MountedFile,
 }
 
 impl Doc {
     fn src(&self) -> &str {
-        self.pd.src()
-    }
-    fn toks(&self) -> &[Token] {
-        self.pd.toks()
-    }
-    fn ast(&self) -> &Ast {
-        self.pd.ast()
-    }
-    fn lines(&self) -> &LineIndex {
-        self.pd.lines()
+        self.file.doc.src()
     }
 }
 
 fn doc(src: &str) -> Doc {
-    let pd = doc_of(src, Mode::Impl);
-    let index = crate::hover::index(&pd, Mount::doc(DOC));
-    Doc { pd, index }
-}
-
-/// the query context + its chain, both held by the caller (the
-/// `Ctx` borrows the slice)
-struct W<'a> {
-    d: &'a Doc,
-    idxs: Vec<&'a DefIndex>,
-}
-
-fn w<'a>(d: &'a Doc, extra: &'a [DefIndex]) -> W<'a> {
-    W {
-        d,
-        idxs: std::iter::once(&d.index).chain(extra.iter()).collect(),
+    Doc {
+        file: MountedFile::from_document(
+            crate::semantic::Document::parse(Mode::Impl, src.to_string()),
+            Mount::doc(DOC),
+        ),
     }
 }
 
-impl W<'_> {
-    fn cx(&self) -> Ctx<'_> {
+/// the query context + its chain, both held by the caller (the chain
+/// is an ordering view over the files — the doc first, then the rest)
+struct W<'a> {
+    d: &'a Doc,
+    files: Vec<&'a MountedFile>,
+}
+
+fn w<'a>(d: &'a Doc, extra: &'a [MountedFile]) -> W<'a> {
+    let mut files: Vec<&'a MountedFile> = vec![&d.file];
+    files.extend(extra.iter());
+    W { d, files }
+}
+
+impl<'a> W<'a> {
+    /// the ctx over the caller-held chain (the ctx borrows it)
+    fn cx(&self, chain: &'a Chain<'a>) -> Ctx<'a> {
         Ctx {
-            ast: self.d.ast(),
-            toks: self.d.toks(),
-            doc: &self.d.index,
-            idxs: &self.idxs,
-            index: self.d.lines(),
-            src: self.d.src(),
+            doc: chain.head(),
+            chain,
         }
     }
 
+    fn chain(&self) -> Chain<'a> {
+        Chain::new(self.files.clone())
+    }
+
     fn all(&self) -> Vec<InlayHint> {
-        hints(&self.cx(), 0, self.d.src().len() as u32)
+        let chain = self.chain();
+        hints(&self.cx(&chain), 0, self.d.src().len() as u32)
     }
 }
 
@@ -225,16 +210,10 @@ fn hint_and_hover_agree_on_the_type_text() {
     let d = doc(&src);
     let hs = w(&d, &[]).all();
     assert_eq!(hs.len(), 1);
-    let idxs: Vec<&DefIndex> = vec![&d.index];
+    let chain = Chain::new(vec![&d.file]);
     let (hl, hc) = at(&src, "let c", 1);
-    let byte = d.lines().byte(d.src(), hl, hc) + 4; // the `c` ident
-    let hov = crate::hover::hover(
-        &idxs,
-        d.toks(),
-        d.ast(),
-        &crate::mods::DocMods::default(),
-        byte,
-    );
+    let byte = d.file.doc.lines().byte(d.src(), hl, hc) + 4; // the `c` ident
+    let hov = crate::hover::hover(&chain, &crate::mods::DocMods::default(), byte);
     let md = hov.expect("hover at the binding").markdown;
     assert!(md.contains("let c: Circle"), "{md}");
     let hover_ty = md
@@ -301,18 +280,12 @@ fn tuple_types_render_no_empty_hints() {
     // site's param hint rides along
     assert_eq!(labels(&hs), [": (opaque, str)", "s:"], "{hs:?}");
     // ...and the hover shows the same text (the consistency law)
-    let idxs: Vec<&DefIndex> = vec![&d.index];
+    let chain = Chain::new(vec![&d.file]);
     let (hl, hc) = at(&src, "let v", 1);
-    let byte = d.lines().byte(d.src(), hl, hc) + 4; // the `v` ident
-    let md = crate::hover::hover(
-        &idxs,
-        d.toks(),
-        d.ast(),
-        &crate::mods::DocMods::default(),
-        byte,
-    )
-    .expect("hover at the binding")
-    .markdown;
+    let byte = d.file.doc.lines().byte(d.src(), hl, hc) + 4; // the `v` ident
+    let md = crate::hover::hover(&chain, &crate::mods::DocMods::default(), byte)
+        .expect("hover at the binding")
+        .markdown;
     assert!(md.contains("let v: (opaque, str)"), "{md}");
 }
 
@@ -395,7 +368,7 @@ fn ambiguous_callee_stays_silent() {
     // no unique match, no hints (the call_ty law)
     let src = "fn f(a: i32) -> i32 {\n    return a;\n}\nfn main() -> i32 {\n    let x = f(1);\n    return x;\n}\n";
     let d = doc(src);
-    let mut foreign = doc("fn f(b: str) -> str {\n    return b;\n}\n").index;
+    let mut foreign = doc("fn f(b: str) -> str {\n    return b;\n}\n").file;
     foreign.mount.origin = "file:///ws/other/lib.rut".to_string();
     let extra = [foreign];
     assert!(w(&d, &extra).all().is_empty());
@@ -472,11 +445,13 @@ fn range_filters_hints() {
     let w1 = w(&d, &[]);
     assert_eq!(labels(&w1.all()), [": i32", ": i32"]);
     // only the second line's hint stays inside [line 1, end]
-    let lo = d.lines().byte(d.src(), 1, 0);
+    let lo = d.file.doc.lines().byte(d.src(), 1, 0);
     let hi = d.src().len() as u32;
-    let hs = hints(&w1.cx(), lo, hi);
+    let chain = w1.chain();
+    let cx = w1.cx(&chain);
+    let hs = hints(&cx, lo, hi);
     assert_eq!(hs.len(), 1, "{hs:?}");
     assert_eq!(pos(&hs[0]).0, 1);
     // a range before everything is empty, never wrong
-    assert!(hints(&w1.cx(), 0, 0).is_empty());
+    assert!(hints(&cx, 0, 0).is_empty());
 }

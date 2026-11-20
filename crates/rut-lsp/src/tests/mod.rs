@@ -9,6 +9,7 @@ mod completion;
 mod corpus;
 mod definition;
 mod deps;
+mod doc_sync;
 mod hover;
 mod inlay;
 mod line_index;

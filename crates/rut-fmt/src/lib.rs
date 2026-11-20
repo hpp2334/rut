@@ -53,7 +53,7 @@ pub fn format(src: &str, mode: Mode, style: &Style) -> Result<String, Vec<Diag>>
     // over that text
     let (toks, _, comments, _) = rut_lexer::lexer::lex_normalized(text, true);
     let runs = comments::runs_from_comments(&comments, &toks, text);
-    let printer = printer::P::new(ast, text, &toks, style, runs);
+    let printer = printer::P::new(ast, text, &toks, style, runs, &doc);
     Ok(printer.print_module())
 }
 

@@ -2,6 +2,12 @@
 //! the exact text `rut_lexer::lexer::lex` produces spans over) ⇄ LSP
 //! positions (line, UTF-16 code-unit column). LSP positions are UTF-16 by
 //! default; spans are bytes — this is the only place that converts.
+//!
+//! ONE line table per artifact: the geometry comes from the rut-ast
+//! [`Doc`]'s own line doors (`line_span` — the `Source` table the parse
+//! lexed once), never a second byte scan.
+
+use rut_ast::Doc;
 
 #[derive(Debug, Clone)]
 pub struct LineIndex {
@@ -10,19 +16,25 @@ pub struct LineIndex {
     len: u32,
 }
 
-impl Default for LineIndex {
-    /// a single empty line — position/byte clamp to (0, 0) / 0; every
-    /// real index is built with `new` (this exists only so `DefIndex`
-    /// can derive `Default` before its own `index` pass fills the field)
-    fn default() -> Self {
+impl LineIndex {
+    /// the doc's own line geometry — one walk over the line doors
+    /// (`line_of` names the last line, `line_span` yields each start),
+    /// no second byte scan. Byte-identical to the old `\n` byte scan:
+    /// a trailing newline registers the empty final line.
+    pub fn of(doc: &Doc) -> LineIndex {
+        let last = doc.line_of(doc.len());
+        let mut line_starts = Vec::with_capacity(last as usize + 1);
+        for line in 0..=last {
+            line_starts.push(doc.line_span(line).lo);
+        }
         LineIndex {
-            line_starts: vec![0],
-            len: 0,
+            line_starts,
+            len: doc.len(),
         }
     }
-}
 
-impl LineIndex {
+    /// build over raw text — the lanes that hold text but no `Doc`
+    /// (the check lane's per-file rows) pay their own scan here
     pub fn new(src: &str) -> LineIndex {
         let mut line_starts = vec![0u32];
         for (i, &b) in src.as_bytes().iter().enumerate() {

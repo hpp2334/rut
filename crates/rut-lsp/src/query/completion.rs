@@ -28,8 +28,8 @@ use crate::semantic::{Tok, Token};
 use ls_types::Range;
 use rut_ast::{Ast, ItemRef, Vis};
 
-use crate::hover::lookup::{find_ty, used_ifaces};
-use crate::hover::types::{DefIndex, TyForm};
+use crate::hover::collection::Chain;
+use crate::hover::types::TyForm;
 use crate::mods::{self, DocMods};
 use crate::semantic::LineIndex;
 
@@ -96,17 +96,17 @@ pub enum CompletionKind {
 /// `direct_deps` is the open document's own dep set (its manifest's
 /// rows) — the auto-import tier derives its gate from it live.
 pub fn complete(
-    idxs: &[&DefIndex],
-    toks: &[Token],
-    ast: &Ast,
+    chain: &Chain,
     pos: u32,
     src: &str,
     doc: &DocMods,
     direct_deps: &HashSet<String>,
 ) -> Vec<CompletionOut> {
+    // the doc's own tokens + tree — the chain head's kept document
+    let (toks, ast) = (chain.head().doc.toks(), chain.head().doc.ast());
     // the binding pass, computed once: the member tier keys receivers on
     // it and the bare position's locals tier enumerates it
-    let binds = crate::hover::bindings::collect(ast, toks, idxs);
+    let binds = crate::hover::bindings::collect(ast, toks, chain);
     if let Some((segs, prefix)) = use_path_before(toks, pos) {
         // the OWN lane first — a head that speaks for the doc's own
         // package (its own name, or an own mod edge) rides the
@@ -114,10 +114,10 @@ pub fn complete(
         // visible-members gate, exactly what the compiler's own-use
         // check accepts (`use imp::⏐` offers the module's visible
         // members). A foreign head keeps the cross-package tier.
-        if let Some(out) = position_path_completions(idxs, doc, &segs, &prefix) {
+        if let Some(out) = position_path_completions(chain, doc, &segs, &prefix) {
             return out;
         }
-        return use_path_completions(idxs, &segs, &prefix);
+        return use_path_completions(chain, &segs, &prefix);
     }
     // a lone `:` (or the `->` arrow) under the cursor is the
     // annotation boundary — the type tier answers it: the primitive
@@ -126,16 +126,16 @@ pub fn complete(
     // position). `Vec<⏐` stays ambiguous at token level (`<` vs the
     // comparison) and is not this tier.
     if let Some(prefix) = annotation_boundary_before(toks, pos) {
-        return type_tier_completions(idxs, &prefix);
+        return type_tier_completions(chain, &prefix);
     }
     if let Some((segs, prefix)) = qualified_path_before(toks, pos) {
-        if let Some(out) = position_path_completions(idxs, doc, &segs, &prefix) {
+        if let Some(out) = position_path_completions(chain, doc, &segs, &prefix) {
             return out;
         }
         // the head did not resolve to a module — the `::` law's other
         // member lists ride the same trigger: enum members, namespace
         // statics, a type head's associated fns
-        if let Some(out) = type_head_completions(idxs, &segs, &prefix) {
+        if let Some(out) = type_head_completions(chain, &segs, &prefix) {
             return out;
         }
         // the head resolved to nothing known — `::` in an unknown
@@ -155,9 +155,9 @@ pub fn complete(
         // the locals tier rides AHEAD of the keyword table — the name
         // being typed is most often a binding just declared
         let mut out = local_completions(&binds, pos);
-        out.extend(bare_completions(idxs));
+        out.extend(bare_completions(chain));
         out.extend(auto_import_completions(
-            idxs,
+            chain,
             ast,
             toks,
             pos,
@@ -179,13 +179,13 @@ pub fn complete(
     // resolves as a MOD HEAD offers the module's members (the same
     // tier the `::` form rides). A resolved head is final; an unknown
     // one falls through to the member tier
-    if let Some(out) = position_path_completions(idxs, doc, std::slice::from_ref(&recv), &prefix) {
+    if let Some(out) = position_path_completions(chain, doc, std::slice::from_ref(&recv), &prefix) {
         return out;
     }
     // the binding pass already ran at the top — member completion shares
     // hover's receiver inference (field reads, chained calls, loop
     // variables)
-    member_completions(idxs, ast, &binds, pos, &recv, &prefix)
+    member_completions(chain, &binds, pos, &recv, &prefix)
 }
 
 /// The member-completion context at `pos`: the receiver's source text
@@ -231,14 +231,13 @@ fn dot_context_before(src: &str, pos: u32) -> bool {
 /// honest); on a type, fields, own methods, and inherent impl-block
 /// methods — the mirror of hover's `member_target`.
 fn member_completions(
-    idxs: &[&DefIndex],
-    ast: &Ast,
+    chain: &Chain,
     binds: &[crate::hover::Binding],
     pos: u32,
     recv: &str,
     prefix: &str,
 ) -> Vec<CompletionOut> {
-    let Some(ty_name) = crate::hover::lookup::recv_type(idxs, binds, pos, recv) else {
+    let Some(ty_name) = crate::hover::lookup::recv_type(chain, binds, pos, recv) else {
         return vec![];
     };
     // an interface receiver: the declared signatures are the whole
@@ -246,16 +245,18 @@ fn member_completions(
     // rides along. The use-both gate: a foreign interface's members
     // complete only when this document names the interface in a `use`;
     // an interface declared here is in scope natively
-    if let Some((home, iface)) = crate::hover::lookup::iface_decl(idxs, &ty_name) {
+    if let Some(iface) = chain.iface_decl(&ty_name) {
         let mut out: Vec<CompletionOut> = Vec::new();
-        if std::ptr::eq(home, idxs[0]) || used_ifaces(ast).contains(&iface.name) {
-            for m in &iface.methods {
+        if std::ptr::eq(iface.file, chain.head())
+            || crate::hover::collection::used_ifaces(chain.head()).contains(iface.name())
+        {
+            for m in iface.methods() {
                 push_item(
                     &mut out,
                     CompletionOut::plain(
-                        m.name.clone(),
-                        m.src.clone(),
-                        m.doc.clone(),
+                        m.name().to_string(),
+                        m.src(),
+                        m.doc_lines(),
                         CompletionKind::Method,
                     ),
                 );
@@ -267,43 +268,43 @@ fn member_completions(
         out.sort_by(|a, b| a.label.cmp(&b.label));
         return out;
     }
-    let Some((_ti, ty)) = crate::hover::lookup::find_ty(idxs, &ty_name) else {
+    let Some(ty) = chain.type_decl(&ty_name) else {
         return vec![];
     };
     let mut out: Vec<CompletionOut> = Vec::new();
-    for f in &ty.fields {
+    for f in ty.fields() {
         push_item(
             &mut out,
             CompletionOut::plain(
-                f.name.clone(),
-                f.src.clone(),
-                f.doc.clone(),
+                f.name().to_string(),
+                f.src(),
+                f.doc_lines(),
                 CompletionKind::Field,
             ),
         );
     }
-    for m in &ty.methods {
+    for m in ty.methods() {
         push_item(
             &mut out,
             CompletionOut::plain(
-                m.name.clone(),
-                m.src.clone(),
-                m.doc.clone(),
+                m.name().to_string(),
+                m.src(),
+                m.doc_lines(),
                 CompletionKind::Method,
             ),
         );
     }
     // inherent impl-block methods — where methods live since type bodies
     // went fields-only; the owner string IS the target type's name
-    for i in idxs {
-        for f in &i.fns {
-            if f.owner.as_deref() == Some(ty_name.as_str()) {
+    for i in chain.iter() {
+        for f in i.fns() {
+            if f.owner().as_deref() == Some(ty_name.as_str()) {
                 push_item(
                     &mut out,
                     CompletionOut::plain(
-                        f.name.clone(),
-                        f.src.clone(),
-                        f.doc.clone(),
+                        f.name().to_string(),
+                        f.src(),
+                        f.doc_lines(),
                         CompletionKind::Method,
                     ),
                 );
@@ -378,7 +379,7 @@ fn local_completions(binds: &[crate::hover::Binding], pos: u32) -> Vec<Completio
 /// insert edit): a plain offer the compile would reject is a trap.
 /// Free fns and types only; methods are reached through a receiver,
 /// not named bare.
-fn bare_completions(idxs: &[&DefIndex]) -> Vec<CompletionOut> {
+fn bare_completions(chain: &Chain) -> Vec<CompletionOut> {
     let mut out: Vec<CompletionOut> = Vec::new();
     for kw in crate::semantic::RESERVED_KW {
         out.push(CompletionOut::plain(
@@ -388,14 +389,14 @@ fn bare_completions(idxs: &[&DefIndex]) -> Vec<CompletionOut> {
             CompletionKind::Keyword,
         ));
     }
-    let doc = idxs[0];
+    let doc = chain.head();
     let imported = crate::query::definition::import_map(doc);
-    for i in idxs {
-        let own = std::ptr::eq(*i, doc);
-        // the names this document's `use`s bound FROM this index's
+    for i in chain.iter() {
+        let own = std::ptr::eq(i, doc);
+        // the names this document's `use`s bound FROM this file's
         // package — the same (name, pkg) match the definition layer's
         // use-graph walk reads (`matches_pkg`, module name first, the
-        // origin/stem derivation on an unnamed index)
+        // origin/stem derivation on an unnamed file)
         let used_from: HashSet<&str> = imported
             .iter()
             .filter(|(_, pkg)| crate::query::definition::matches_pkg(i, pkg))
@@ -405,36 +406,36 @@ fn bare_completions(idxs: &[&DefIndex]) -> Vec<CompletionOut> {
         // when the ambient linkage bound them or the document's `use`
         // named them from this package
         let offered = |name: &str, ambient: bool| own || ambient || used_from.contains(name);
-        for t in &i.types {
-            if !offered(&t.name, t.ambient) {
+        for t in i.types() {
+            if !offered(t.name(), t.ambient()) {
                 continue;
             }
             push_item(
                 &mut out,
                 CompletionOut::plain(
-                    t.name.clone(),
-                    t.head.clone(),
-                    t.doc.clone(),
-                    match t.form {
+                    t.name().to_string(),
+                    t.head(),
+                    t.doc_lines(),
+                    match t.form() {
                         TyForm::Interface => CompletionKind::Interface,
                         _ => CompletionKind::Type,
                     },
                 ),
             );
         }
-        for f in &i.fns {
-            if f.owner.is_some() {
+        for f in i.fns() {
+            if f.owner().is_some() {
                 continue;
             }
-            if !offered(&f.name, f.ambient) {
+            if !offered(f.name(), f.ambient()) {
                 continue;
             }
             push_item(
                 &mut out,
                 CompletionOut::plain(
-                    f.name.clone(),
-                    f.src.clone(),
-                    f.doc.clone(),
+                    f.name().to_string(),
+                    f.src(),
+                    f.doc_lines(),
                     CompletionKind::Fn,
                 ),
             );
@@ -538,16 +539,16 @@ fn use_path_before(toks: &[Token], pos: u32) -> Option<(Vec<String>, String)> {
 /// the `pub` gate on fns/lets/re-exports holds on walked AND flat
 /// spellings alike: the gate the compiler's qualified-use check
 /// applies. No index is special-cased.
-fn use_path_completions(idxs: &[&DefIndex], segs: &[String], prefix: &str) -> Vec<CompletionOut> {
+fn use_path_completions(chain: &Chain, segs: &[String], prefix: &str) -> Vec<CompletionOut> {
     let Some(pkg) = segs.first() else {
         let mut out: Vec<CompletionOut> = Vec::new();
-        for i in idxs {
-            let Some(m) = &i.mount.module else { continue };
+        for f in chain.iter() {
+            let Some(m) = &f.mount.module else { continue };
             push_item(
                 &mut out,
                 CompletionOut::plain(
                     m.clone(),
-                    i.mount.origin.clone(),
+                    f.mount.origin.clone(),
                     Vec::new(),
                     CompletionKind::Module,
                 ),
@@ -559,21 +560,20 @@ fn use_path_completions(idxs: &[&DefIndex], segs: &[String], prefix: &str) -> Ve
     };
     // the import is the gate-opener, so the `pub builtin` gate does
     // not bind here (this IS the use that names them)
-    let chain: Vec<&DefIndex> = idxs
+    let scoped: Vec<&crate::hover::collection::MountedFile> = chain
         .iter()
-        .copied()
-        .filter(|i| crate::query::definition::matches_pkg(i, pkg))
+        .filter(|f| crate::query::definition::matches_pkg(f, pkg))
         .collect();
-    if chain.is_empty() {
+    if scoped.is_empty() {
         return Vec::new();
     }
     // resolve the walked module: the flat spelling answers the root —
-    // for a mod-carrying package that is the ROOT index only (members
+    // for a mod-carrying package that is the ROOT file only (members
     // live under their module path), for a flat package today's whole
     // chain; deeper segments walk the pub edges (`use_path_before`
     // stripped the trailing PARTIAL ident already — `use pkg::V⏐`
     // offers the root; `use pkg::layout::Co⏐` walks `layout` only)
-    let carrying = chain.iter().any(|i| i.mount.mod_path.is_some());
+    let carrying = scoped.iter().any(|f| f.mount.mod_path.is_some());
     // the walked interior: the segments minus the pkg head —
     // `use_path_before` already stripped the trailing PARTIAL ident
     // (`use pkg::layout::Co⏐` walks `layout` only; the brace form's
@@ -582,88 +582,87 @@ fn use_path_completions(idxs: &[&DefIndex], segs: &[String], prefix: &str) -> Ve
     let walked = if interior.is_empty() {
         Some(String::new())
     } else {
-        mods::walk_use_mods(idxs, pkg, interior)
+        mods::walk_use_mods(chain, pkg, interior)
     };
     let Some(path) = walked else {
         return Vec::new();
     };
-    let scope: Vec<&DefIndex> = if carrying {
-        chain
-            .iter()
-            .copied()
-            .filter(|i| mods::mod_path_of(i) == path)
+    let scope: Vec<&crate::hover::collection::MountedFile> = if carrying {
+        scoped
+            .into_iter()
+            .filter(|f| mods::mod_path_of(f) == path)
             .collect()
     } else {
-        chain
+        scoped
     };
     let mut out: Vec<CompletionOut> = Vec::new();
-    for i in &scope {
+    for f in &scope {
         // the walkable children — pub edges only (cross-package law)
-        for m in &i.mods {
-            if m.vis != Vis::Pub {
+        for m in f.mods() {
+            if m.vis() != Vis::Pub {
                 continue;
             }
-            let child = mods::child_path(&path, &m.name);
+            let child = mods::child_path(&path, m.name());
             push_item(
                 &mut out,
                 CompletionOut::plain(
-                    m.name.clone(),
+                    m.name().to_string(),
                     format!(
                         "file module — {}",
-                        mods::display_of(idxs, Some(pkg.as_str()), &child)
+                        mods::display_of(chain, Some(pkg.as_str()), &child)
                     ),
-                    m.doc.clone(),
+                    m.doc_lines(),
                     CompletionKind::Module,
                 ),
             );
         }
-        for t in &i.types {
-            if !t.is_pub {
+        for t in f.types() {
+            if !t.is_pub() {
                 continue;
             }
             push_item(
                 &mut out,
                 CompletionOut::plain(
-                    t.name.clone(),
-                    t.head.clone(),
-                    t.doc.clone(),
-                    match t.form {
+                    t.name().to_string(),
+                    t.head(),
+                    t.doc_lines(),
+                    match t.form() {
                         TyForm::Interface => CompletionKind::Interface,
                         _ => CompletionKind::Type,
                     },
                 ),
             );
         }
-        for f in &i.fns {
-            if f.owner.is_some() {
+        for fv in f.fns() {
+            if fv.owner().is_some() {
                 continue;
             }
             // the walked path binds through the compiler's qualified-use
             // gate: only `pub` names cross — on walked AND flat spellings
             // alike (one gate, no ungated legacy shape)
-            if f.vis != Vis::Pub {
+            if fv.vis() != Vis::Pub {
                 continue;
             }
             push_item(
                 &mut out,
                 CompletionOut::plain(
-                    f.name.clone(),
-                    f.src.clone(),
-                    f.doc.clone(),
+                    fv.name().to_string(),
+                    fv.src(),
+                    fv.doc_lines(),
                     CompletionKind::Fn,
                 ),
             );
         }
-        for l in &i.lets {
-            if l.vis != Vis::Pub {
+        for l in f.lets() {
+            if l.vis() != Vis::Pub {
                 continue;
             }
             push_item(
                 &mut out,
                 CompletionOut::plain(
-                    l.name.clone(),
-                    l.src.clone(),
-                    l.doc.clone(),
+                    l.name().to_string(),
+                    l.src(),
+                    l.doc_lines(),
                     CompletionKind::Const,
                 ),
             );
@@ -673,18 +672,18 @@ fn use_path_completions(idxs: &[&DefIndex], segs: &[String], prefix: &str) -> Ve
         // walked path binds only `pub` edges across packages, flat
         // spellings included). The cap law picks
         // the icon until real resolution (same as the use classifier)
-        for u in &i.uses {
-            if u.vis != Vis::Pub {
+        for u in f.uses() {
+            if u.vis() != Vis::Pub {
                 continue;
             }
-            let src = u.path.join("::");
+            let src = u.path().join("::");
             push_item(
                 &mut out,
                 CompletionOut::plain(
-                    u.name.clone(),
-                    format!("re-export of {src}::{}", u.name),
+                    u.name().to_string(),
+                    format!("re-export of {src}::{}", u.name()),
                     Vec::new(),
-                    if crate::hover::infer::is_cap(&u.name) {
+                    if crate::hover::infer::is_cap(u.name()) {
                         CompletionKind::Type
                     } else {
                         CompletionKind::Fn
@@ -799,7 +798,7 @@ fn annotation_boundary_before(toks: &[Token], pos: u32) -> Option<String> {
 /// document's own types, the chain's AMBIENT builtin rows, and the
 /// foreign types the document already `use`s. Keywords, fns, and
 /// locals stay off: values never ride a type position.
-fn type_tier_completions(idxs: &[&DefIndex], prefix: &str) -> Vec<CompletionOut> {
+fn type_tier_completions(chain: &Chain, prefix: &str) -> Vec<CompletionOut> {
     let mut out: Vec<CompletionOut> = Vec::new();
     for p in crate::semantic::PRIMITIVE_TYS {
         push_item(
@@ -812,28 +811,28 @@ fn type_tier_completions(idxs: &[&DefIndex], prefix: &str) -> Vec<CompletionOut>
             ),
         );
     }
-    let doc = idxs[0];
+    let doc = chain.head();
     let imported = crate::query::definition::import_map(doc);
-    for i in idxs {
-        let own = std::ptr::eq(*i, doc);
+    for f in chain.iter() {
+        let own = std::ptr::eq(f, doc);
         let used_from: HashSet<&str> = imported
             .iter()
-            .filter(|(_, pkg)| crate::query::definition::matches_pkg(i, pkg))
+            .filter(|(_, pkg)| crate::query::definition::matches_pkg(f, pkg))
             .map(|(name, _)| *name)
             .collect();
-        for t in &i.types {
+        for t in f.types() {
             // the same bare gate the decl tiers read: own types always,
             // foreign types when ambient or imported from this package
-            if !own && !t.ambient && !used_from.contains(t.name.as_str()) {
+            if !own && !t.ambient() && !used_from.contains(t.name()) {
                 continue;
             }
             push_item(
                 &mut out,
                 CompletionOut::plain(
-                    t.name.clone(),
-                    t.head.clone(),
-                    t.doc.clone(),
-                    match t.form {
+                    t.name().to_string(),
+                    t.head(),
+                    t.doc_lines(),
+                    match t.form() {
                         TyForm::Interface => CompletionKind::Interface,
                         _ => CompletionKind::Type,
                     },
@@ -857,26 +856,26 @@ fn type_tier_completions(idxs: &[&DefIndex], prefix: &str) -> Vec<CompletionOut>
 /// list is the answer even when empty (the known-head law, like the
 /// module tier's).
 fn type_head_completions(
-    idxs: &[&DefIndex],
+    chain: &Chain,
     segs: &[String],
     prefix: &str,
 ) -> Option<Vec<CompletionOut>> {
     let (head, rest) = segs.split_first()?;
-    let (_ti, ty) = find_ty(idxs, head)?;
+    let ty = chain.type_decl(head)?;
     let mut out: Vec<CompletionOut> = Vec::new();
     // a deeper walk under a type head descends nothing — types are not
     // namespaces (`Color::Red::` answers empty, final)
     if rest.is_empty() {
-        match ty.form {
+        match ty.form() {
             // `Color::⏐` — the declared members
             TyForm::Enum => {
-                for m in &ty.fields {
+                for m in ty.fields() {
                     push_item(
                         &mut out,
                         CompletionOut::plain(
-                            m.name.clone(),
-                            m.src.clone(),
-                            m.doc.clone(),
+                            m.name().to_string(),
+                            m.src(),
+                            m.doc_lines(),
                             CompletionKind::EnumMember,
                         ),
                     );
@@ -886,31 +885,31 @@ fn type_head_completions(
             TyForm::Interface => {}
             // `Counter::⏐` — statics first, then the associated fns
             _ => {
-                for f in &ty.fields {
-                    // a declared static — the verdict rides the row (the
-                    // node's own modifier flags), never a string match
-                    // on the rendered slice
-                    if f.is_static {
+                for m in ty.fields() {
+                    // a declared static — the verdict rides the node's
+                    // own modifier chain, never a string match on the
+                    // rendered slice
+                    if m.is_static() {
                         push_item(
                             &mut out,
                             CompletionOut::plain(
-                                f.name.clone(),
-                                f.src.clone(),
-                                f.doc.clone(),
+                                m.name().to_string(),
+                                m.src(),
+                                m.doc_lines(),
                                 CompletionKind::Field,
                             ),
                         );
                     }
                 }
-                for i in idxs {
-                    for f in &i.fns {
-                        if f.owner.as_deref() == Some(head.as_str()) {
+                for f in chain.iter() {
+                    for fv in f.fns() {
+                        if fv.owner().as_deref() == Some(head.as_str()) {
                             push_item(
                                 &mut out,
                                 CompletionOut::plain(
-                                    f.name.clone(),
-                                    f.src.clone(),
-                                    f.doc.clone(),
+                                    fv.name().to_string(),
+                                    fv.src(),
+                                    fv.doc_lines(),
                                     CompletionKind::Fn,
                                 ),
                             );
@@ -927,17 +926,17 @@ fn type_head_completions(
 
 /// the leaf scope for a resolved mod path — the open document itself
 /// when the path IS its own module (the pkg head resolving to the
-/// root from the root), else the chain index stamped for it
+/// root from the root), else the chain file stamped for it
 fn scope_index<'a>(
-    idxs: &[&'a DefIndex],
+    chain: &'a Chain<'a>,
     doc: &DocMods,
     pkg: Option<&str>,
     path: &str,
-) -> Option<&'a DefIndex> {
+) -> Option<&'a crate::hover::collection::MountedFile> {
     if doc.mod_path.as_deref() == Some(path) {
-        return Some(idxs[0]);
+        return Some(chain.head());
     }
-    mods::find_mod(idxs, pkg, path)
+    mods::find_mod(chain, pkg, path)
 }
 
 /// A use of the DOC that bound `head` as a member of a NAMED dep
@@ -948,18 +947,18 @@ fn scope_index<'a>(
 /// dep-module lane); a use that bound a plain name answers nothing
 /// here — its module resolution never lands.
 fn use_bound_dep_module(
-    idxs: &[&DefIndex],
-    doc_index: &DefIndex,
+    chain: &Chain,
+    doc_file: &crate::hover::collection::MountedFile,
     head: &str,
 ) -> Option<(String, String)> {
-    for u in &doc_index.uses {
-        if u.name != head || u.path.is_empty() {
+    for u in doc_file.uses() {
+        if u.name() != head || u.path().is_empty() {
             continue;
         }
-        // the dep must be mounted and named (a named index answers for it)
-        if !idxs
+        // the dep must be mounted and named (a named file answers for it)
+        if !chain
             .iter()
-            .any(|i| i.mount.module.as_deref() == Some(u.pkg.as_str()))
+            .any(|f| f.mount.module.as_deref() == Some(u.pkg()))
         {
             continue;
         }
@@ -967,17 +966,17 @@ fn use_bound_dep_module(
         // (`use calc::{ math }` → `math`); a qualified use's deeper
         // path spells it (`use calc::math::{ grid }` → `math/grid`
         // when the leaf itself names a module)
-        let path = if u.path.len() == 1 {
-            u.name.clone()
+        let path = if u.path().len() == 1 {
+            u.name().to_string()
         } else {
-            u.path[1..].join("/")
+            u.path()[1..].join("/")
         };
         // the binding must land on a MODULE of the dep (a fn/const
         // leaf heads no path)
-        if !mods::find_mod(idxs, Some(&u.pkg), &path).is_some() {
+        if !mods::find_mod(chain, Some(u.pkg()), &path).is_some() {
             continue;
         }
-        return Some((u.pkg.clone(), path));
+        return Some((u.pkg().to_string(), path));
     }
     None
 }
@@ -995,81 +994,81 @@ fn use_bound_dep_module(
 /// `math::sqrt(x)` / `math::PI` resolution. `None` = the head did not
 /// resolve to a module (the caller falls through).
 fn position_path_completions(
-    idxs: &[&DefIndex],
+    chain: &Chain,
     doc: &DocMods,
     segs: &[String],
     prefix: &str,
 ) -> Option<Vec<CompletionOut>> {
     let (head, rest) = segs.split_first()?;
-    let doc_index = idxs[0];
-    let (pkg, start) = match mods::resolve_position_head(doc, doc_index, idxs, head) {
+    let doc_file = chain.head();
+    let (pkg, start) = match mods::resolve_position_head(doc, doc_file, chain, head) {
         Some(start) => (doc.pkg.clone().unwrap_or_default(), start),
-        None => use_bound_dep_module(idxs, doc_index, head)?,
+        None => use_bound_dep_module(chain, doc_file, head)?,
     };
     let pkg = pkg.as_str();
-    let path = mods::walk_position_mods(idxs, Some(pkg), &start, rest)?;
+    let path = mods::walk_position_mods(chain, Some(pkg), &start, rest)?;
     let from = doc.mod_path.as_deref().unwrap_or("");
-    let Some(scope) = scope_index(idxs, doc, Some(pkg), &path) else {
+    let Some(scope) = scope_index(chain, doc, Some(pkg), &path) else {
         return Some(Vec::new());
     };
     let mut out: Vec<CompletionOut> = Vec::new();
     // the walkable children — any declared edge (intra-package)
-    for m in &scope.mods {
-        let child = mods::child_path(&path, &m.name);
+    for m in scope.mods() {
+        let child = mods::child_path(&path, m.name());
         push_item(
             &mut out,
             CompletionOut::plain(
-                m.name.clone(),
+                m.name().to_string(),
                 format!(
                     "file module — {}",
-                    mods::display_of(idxs, Some(pkg), &child)
+                    mods::display_of(chain, Some(pkg), &child)
                 ),
-                m.doc.clone(),
+                m.doc_lines(),
                 CompletionKind::Module,
             ),
         );
     }
-    for t in &scope.types {
-        if !mods::vis_allows(from, &path, t.vis) {
+    for t in scope.types() {
+        if !mods::vis_allows(from, &path, t.vis()) {
             continue;
         }
         push_item(
             &mut out,
             CompletionOut::plain(
-                t.name.clone(),
-                t.head.clone(),
-                t.doc.clone(),
-                match t.form {
+                t.name().to_string(),
+                t.head(),
+                t.doc_lines(),
+                match t.form() {
                     TyForm::Interface => CompletionKind::Interface,
                     _ => CompletionKind::Type,
                 },
             ),
         );
     }
-    for f in &scope.fns {
-        if f.owner.is_some() || !mods::vis_allows(from, &path, f.vis) {
+    for f in scope.fns() {
+        if f.owner().is_some() || !mods::vis_allows(from, &path, f.vis()) {
             continue;
         }
         push_item(
             &mut out,
             CompletionOut::plain(
-                f.name.clone(),
-                f.src.clone(),
-                f.doc.clone(),
+                f.name().to_string(),
+                f.src(),
+                f.doc_lines(),
                 CompletionKind::Fn,
             ),
         );
     }
-    for l in &scope.lets {
-        if !mods::vis_allows(from, &path, l.vis) {
+    for l in scope.lets() {
+        if !mods::vis_allows(from, &path, l.vis()) {
             continue;
         }
         push_item(
             &mut out,
             CompletionOut::plain(
-                l.name.clone(),
-                l.src.clone(),
-                l.doc.clone(),
+                l.name().to_string(),
+                l.src(),
+                l.doc_lines(),
                 CompletionKind::Const,
             ),
         );
@@ -1079,18 +1078,18 @@ fn position_path_completions(
     // use's declared vis (the engine's leaf gate reads the same row).
     // The cap law picks the icon until real resolution (same as the
     // use classifier)
-    for u in &scope.uses {
-        if !mods::vis_allows(from, &path, u.vis) {
+    for u in scope.uses() {
+        if !mods::vis_allows(from, &path, u.vis()) {
             continue;
         }
-        let src = u.path.join("::");
+        let src = u.path().join("::");
         push_item(
             &mut out,
             CompletionOut::plain(
-                u.name.clone(),
-                format!("re-export of {src}::{}", u.name),
+                u.name().to_string(),
+                format!("re-export of {src}::{}", u.name()),
                 Vec::new(),
-                if crate::hover::infer::is_cap(&u.name) {
+                if crate::hover::infer::is_cap(u.name()) {
                     CompletionKind::Type
                 } else {
                     CompletionKind::Fn
@@ -1125,7 +1124,7 @@ fn position_path_completions(
 /// only on mounted dep indexes (a named module); plain workspace
 /// files never ride this tier.
 fn auto_import_completions(
-    idxs: &[&DefIndex],
+    chain: &Chain,
     ast: &Ast,
     toks: &[Token],
     pos: u32,
@@ -1135,32 +1134,31 @@ fn auto_import_completions(
     // the gate itself: the ambient prelude (origin `core` — a walked
     // dep's origin is always a uri, never the bare label, so no
     // collision) or a module the document's own manifest names
-    let direct = |i: &DefIndex| {
-        i.mount.origin == "core"
-            || i.mount
+    let direct = |f: &crate::hover::collection::MountedFile| {
+        f.mount.origin == "core"
+            || f.mount
                 .module
                 .as_deref()
                 .is_some_and(|m| direct_deps.contains(m))
     };
     let prefix = bare_prefix(toks, pos);
-    let imported: HashSet<(&str, &str)> = idxs[0]
-        .uses
-        .iter()
-        .map(|u| (u.name.as_str(), u.pkg.as_str()))
+    let imported: HashSet<(&str, &str)> = chain
+        .head()
+        .uses()
+        .into_iter()
+        .map(|u| (u.name(), u.pkg()))
         .collect();
-    let gated: HashSet<&str> = idxs
-        .iter()
-        .flat_map(|i| i.pub_gated.iter().map(|s| s.as_str()))
-        .collect();
+    let gated: HashSet<String> = chain.iter().flat_map(|f| f.pub_gated()).collect();
     let insert = import_insert(src, ast);
     let mut out: Vec<CompletionOut> = Vec::new();
-    for i in idxs.iter().skip(1) {
-        let Some(m) = &i.mount.module else { continue };
-        if !direct(i) {
+    for f in chain.iter().skip(1) {
+        let Some(m) = &f.mount.module else { continue };
+        if !direct(f) {
             continue; // a transitive-only dep — `use` of it is the D5 error
         }
+        let m = m.as_str();
         let mut foreign = |name: &str, doc: &[String], kind: CompletionKind| {
-            if imported.contains(&(name, m.as_str())) {
+            if imported.contains(&(name, m)) {
                 return; // already imported — never re-offered
             }
             if gated.contains(name) {
@@ -1185,27 +1183,30 @@ fn auto_import_completions(
                 additional_text_edits: vec![(insert.0, text)],
             });
         };
-        for t in &i.types {
-            if !t.is_pub {
+        for t in f.types() {
+            if !t.is_pub() {
                 continue;
             }
+            let doc = t.doc_lines();
             foreign(
-                &t.name,
-                &t.doc,
-                match t.form {
+                t.name(),
+                &doc,
+                match t.form() {
                     TyForm::Interface => CompletionKind::Interface,
                     _ => CompletionKind::Type,
                 },
             );
         }
-        for f in &i.fns {
-            if f.owner.is_some() {
+        for fv in f.fns() {
+            if fv.owner().is_some() {
                 continue;
             }
-            foreign(&f.name, &f.doc, CompletionKind::Fn);
+            let doc = fv.doc_lines();
+            foreign(fv.name(), &doc, CompletionKind::Fn);
         }
-        for l in &i.lets {
-            foreign(&l.name, &l.doc, CompletionKind::Const);
+        for l in f.lets() {
+            let doc = l.doc_lines();
+            foreign(l.name(), &doc, CompletionKind::Const);
         }
     }
     // label dedup across modules: the first module (chain order) wins,

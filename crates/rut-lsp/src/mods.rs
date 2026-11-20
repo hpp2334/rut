@@ -1,15 +1,15 @@
 //! File modules in the editor index — the namespace walk over the
-//! def-index chain (the editor face of the phase-3 semantic core).
+//! mounted-file chain (the editor face of the phase-3 semantic core).
 //!
-//! A package's def indexes are keyed by the (module, mod_path) pair:
+//! A package's mounted files are keyed by the (module, mod_path) pair:
 //! `module` is the bare pkg name a `use` path spells (the
 //! `matches_pkg` fallback laws ride unchanged), `mod_path` is the
 //! full file-module path (`""` = the pkg root's `mod.rut`,
-//! `"layout/grid"` = that child). Each index records the `mod NAME;`
-//! edges its file declares; the mounted child lives in its own index,
-//! found through the chain at the child's mod path. Declarations are
-//! the graph, exactly as the loader mounts them — the walk below
-//! never reads a directory listing.
+//! `"layout/grid"` = that child). Each file records the `mod NAME;`
+//! edges its decl map carries; the mounted child lives in its own
+//! file, found through the chain at the child's mod path.
+//! Declarations are the graph, exactly as the loader mounts them —
+//! the walk below never reads a directory listing.
 //!
 //! Two walks, the compiler's two gates mirrored:
 //! - **cross-package** (a `use` path after the pkg head): every edge
@@ -20,7 +20,7 @@
 
 use rut_ast::Vis;
 
-use crate::hover::types::DefIndex;
+use crate::hover::collection::{Chain, ModView, MountedFile};
 
 /// what the face knows about the OPEN document's place in its
 /// package's mod tree — the input that turns position-path completion
@@ -38,11 +38,11 @@ pub struct DocMods {
     pub pkg: Option<String>,
 }
 
-/// the index's mod path — `None` answers the root (today's
+/// the file's mod path — `None` answers the root (today's
 /// single-file shapes: the prelude, unnamed workspace files,
 /// flat deps)
-pub(crate) fn mod_path_of(i: &DefIndex) -> &str {
-    i.mount.mod_path.as_deref().unwrap_or("")
+pub(crate) fn mod_path_of(f: &MountedFile) -> &str {
+    f.mount.mod_path.as_deref().unwrap_or("")
 }
 
 /// a child's full mod path (`""` + `layout` → `"layout"`,
@@ -87,38 +87,38 @@ pub fn vis_allows(from: &str, def_mod: &str, vis: Vis) -> bool {
     }
 }
 
-/// does this index speak for `pkg`'s file module `path`? `pkg`
-/// `None` matches UNNAMED indexes only (a workspace package's files
+/// does this file speak for `pkg`'s file module `path`? `pkg`
+/// `None` matches UNNAMED files only (a workspace package's files
 /// — and only where a face STAMPED the mod path, so unrelated
 /// unstamped files can never impersonate a module).
-pub fn matches_mod(i: &DefIndex, pkg: Option<&str>, path: &str) -> bool {
+pub fn matches_mod(f: &MountedFile, pkg: Option<&str>, path: &str) -> bool {
     match pkg {
-        Some(p) => crate::query::definition::matches_pkg(i, p) && mod_path_of(i) == path,
-        None => i.mount.module.is_none() && i.mount.mod_path.as_deref() == Some(path),
+        Some(p) => crate::query::definition::matches_pkg(f, p) && mod_path_of(f) == path,
+        None => f.mount.module.is_none() && f.mount.mod_path.as_deref() == Some(path),
     }
 }
 
-/// the chain's index that IS `pkg`'s module `path`
+/// the chain's file that IS `pkg`'s module `path`
 pub(crate) fn find_mod<'a>(
-    idxs: &[&'a DefIndex],
+    chain: &'a Chain<'a>,
     pkg: Option<&str>,
     path: &str,
-) -> Option<&'a DefIndex> {
-    idxs.iter().copied().find(|i| matches_mod(i, pkg, path))
+) -> Option<&'a MountedFile> {
+    chain.iter().find(|f| matches_mod(f, pkg, path))
 }
 
-/// the `mod NAME;` edge `parent` (an index) declares for `name`,
+/// the `mod NAME;` edge `parent` (a mounted file) declares for `name`,
 /// the child's full mod path attached
-fn child_edge<'a>(
-    parent: &'a DefIndex,
-    name: &str,
-) -> Option<(&'a crate::hover::types::ModDef, String)> {
+fn child_edge<'a>(parent: &'a MountedFile, name: &str) -> Option<(ModView<'a>, String)> {
     let from = mod_path_of(parent);
     parent
-        .mods
-        .iter()
-        .find(|m| m.name == name)
-        .map(|m| (m, child_path(from, &m.name)))
+        .mods()
+        .into_iter()
+        .find(|m| m.name() == name)
+        .map(|m| {
+            let path = child_path(from, m.name());
+            (m, path)
+        })
 }
 
 /// The CROSS-PACKAGE walk: each segment after the pkg head must be a
@@ -126,12 +126,12 @@ fn child_edge<'a>(
 /// `mod` children never offered cross-package). Answers the resolved
 /// mod path; `None` = a segment does not resolve or is not `pub` —
 /// the caller offers nothing rather than wrong names.
-pub fn walk_use_mods(idxs: &[&DefIndex], pkg: &str, segs: &[String]) -> Option<String> {
+pub fn walk_use_mods(chain: &Chain, pkg: &str, segs: &[String]) -> Option<String> {
     let mut cur = String::new();
     for seg in segs {
-        let parent = find_mod(idxs, Some(pkg), &cur)?;
-        let (_edge, path) = child_edge(parent, seg)?;
-        if _edge.vis != Vis::Pub {
+        let parent = find_mod(chain, Some(pkg), &cur)?;
+        let (edge, path) = child_edge(parent, seg)?;
+        if edge.vis() != Vis::Pub {
             return None;
         }
         cur = path;
@@ -144,27 +144,27 @@ pub fn walk_use_mods(idxs: &[&DefIndex], pkg: &str, segs: &[String]) -> Option<S
 /// doc's own module or of one of its ancestors (nearest wins), and
 /// the package's own name names the root module. Any declared edge
 /// walks (visibility gates the LEAF members, not the head). The doc's
-/// own index reads first for its own scope (the freshest rows — the
-/// chain's stamped twin may lag an open edit); ancestor scopes ride
-/// the chain's stamped indexes.
+/// own file reads first for its own scope (the freshest decls — the
+/// sync lane keeps it fresher than any stamped twin); ancestor scopes
+/// ride the chain's stamped files.
 pub fn resolve_position_head(
     doc: &DocMods,
-    doc_index: &DefIndex,
-    idxs: &[&DefIndex],
+    doc_file: &MountedFile,
+    chain: &Chain,
     head: &str,
 ) -> Option<String> {
     let from = doc.mod_path.clone()?;
     let mut cur = from.clone();
     let mut own = true;
     loop {
-        let scope: Option<&DefIndex> = if own && cur == from {
-            Some(doc_index)
+        let scope: Option<&MountedFile> = if own && cur == from {
+            Some(doc_file)
         } else {
-            find_mod(idxs, doc.pkg.as_deref(), &cur)
+            find_mod(chain, doc.pkg.as_deref(), &cur)
         };
         own = false;
-        if let Some(edge) = scope.and_then(|s| s.mods.iter().find(|m| m.name == head)) {
-            return Some(child_path(&cur, &edge.name));
+        if let Some(edge) = scope.and_then(|s| s.mods().into_iter().find(|m| m.name() == head)) {
+            return Some(child_path(&cur, edge.name()));
         }
         if cur.is_empty() {
             break;
@@ -183,14 +183,14 @@ pub fn resolve_position_head(
 /// declared child of the module the walk stands at (any edge vis —
 /// the phase-3 `walk_mod_path` shape; the leaf members tier-gate).
 pub(crate) fn walk_position_mods(
-    idxs: &[&DefIndex],
+    chain: &Chain,
     pkg: Option<&str>,
     start: &str,
     segs: &[String],
 ) -> Option<String> {
     let mut cur = start.to_string();
     for seg in segs {
-        let parent = find_mod(idxs, pkg, &cur)?;
+        let parent = find_mod(chain, pkg, &cur)?;
         let (_edge, path) = child_edge(parent, seg)?;
         cur = path;
     }
@@ -209,15 +209,24 @@ pub fn display(path: &str) -> String {
 }
 
 /// [`display`] with the REAL file name when the child is mounted as a
-/// single-file module: its index's origin basename (`imp.rut`), never
+/// single-file module: its file's origin basename (`imp.rut`), never
 /// the directory-form guess. The loader's dir-form spelling stays the
 /// fallback — the child not indexed, or mounted directory-form (whose
 /// origin basename is the flavor's `mod.rut`/`mod.d.rut`).
-pub fn display_of(idxs: &[&DefIndex], pkg: Option<&str>, child: &str) -> String {
-    let mounted = idxs.iter().copied().find(|i| {
-        mod_path_of(i) == child && pkg.is_none_or(|p| crate::query::definition::matches_pkg(i, p))
+pub fn display_of(chain: &Chain, pkg: Option<&str>, child: &str) -> String {
+    let mounted = chain.iter().find(|f| {
+        mod_path_of(f) == child && pkg.is_none_or(|p| crate::query::definition::matches_pkg(f, p))
     });
-    match mounted.and_then(|i| origin_file_name(&i.mount.origin)) {
+    match mounted.and_then(|f| origin_file_name(&f.mount.origin)) {
+        Some(name) if name != "mod.rut" && name != rut_driver::decl::DECL_CHILD_FILE => name,
+        _ => display(child),
+    }
+}
+
+/// [`display_of`] over ONE resolved file — the render's shape (the
+/// resolved module's own real name; the dir-form fallback)
+pub(crate) fn display_of_single(f: &MountedFile, child: &str) -> String {
+    match origin_file_name(&f.mount.origin) {
         Some(name) if name != "mod.rut" && name != rut_driver::decl::DECL_CHILD_FILE => name,
         _ => display(child),
     }

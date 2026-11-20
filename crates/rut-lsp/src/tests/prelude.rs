@@ -7,8 +7,9 @@
 //! below ports the old surface's mod-tree assertions onto the same
 //! lane the walk mounts through.
 
-use crate::deps::index_dep;
-use crate::hover::DefIndex;
+use crate::deps::mount_file;
+use crate::hover::collection::Chain;
+use crate::hover::MountedFile;
 use crate::prelude;
 use std::collections::HashSet;
 
@@ -19,21 +20,21 @@ const MYHOST: &str = include_str!("../../../../rut/myhost/src/myhost.d.rut");
 const MYHOST_NET: &str = include_str!("../../../../rut/myhost/src/net/mod.d.rut");
 const MYHOST_NET_TLS: &str = include_str!("../../../../rut/myhost/src/net/tls/mod.d.rut");
 
-fn myhost_chain() -> Vec<DefIndex> {
+fn myhost_chain() -> Vec<MountedFile> {
     vec![
-        index_dep(
+        mount_file(
             "myhost",
             "rut/myhost/src/myhost.d.rut",
             Some(""),
             MYHOST.to_string(),
         ),
-        index_dep(
+        mount_file(
             "myhost",
             "rut/myhost/src/net/mod.d.rut",
             Some("net"),
             MYHOST_NET.to_string(),
         ),
-        index_dep(
+        mount_file(
             "myhost",
             "rut/myhost/src/net/tls/mod.d.rut",
             Some("net/tls"),
@@ -66,7 +67,7 @@ fn the_prelude_index_stamps_the_manifest_shape() {
     assert_eq!(idx.mount.module.as_deref(), Some("core"));
     assert_eq!(idx.mount.mode, Some(rut_ast::parser::Mode::Decl));
     assert!(
-        !idx.fns.is_empty() && !idx.types.is_empty(),
+        !idx.fns().is_empty() && !idx.types().is_empty(),
         "the prelude carries rows"
     );
 
@@ -80,21 +81,20 @@ fn the_prelude_index_stamps_the_manifest_shape() {
     // fixture with a plain pub row (the real prelude's pub rows are
     // `pub builtin` — gated — and its ambient ones already complete
     // plain), the doc's dep set EMPTY.
-    let doc = "entry fn main() -> nil { }\n";
-    let ddoc = doc_of(doc, rut_ast::parser::Mode::Impl);
-    let (d2, toks, ast) = (ddoc.src(), ddoc.toks(), ddoc.ast());
-    let di = crate::hover::index(&ddoc, crate::hover::Mount::default());
-    let core = index_dep(
+    let di = MountedFile::from_document(
+        doc_of("entry fn main() -> nil { }\n", rut_ast::parser::Mode::Impl),
+        crate::hover::Mount::default(),
+    );
+    let core = mount_file(
         "core",
         "core",
         None,
         "pub fn ambient_offered() -> i32 { return 1; }\n".to_string(),
     );
-    let idxs = [&di, &core];
+    let chain = Chain::new(vec![&di, &core]);
+    let d2 = di.doc.src();
     let items = crate::query::completion::complete(
-        &idxs,
-        toks,
-        ast,
+        &chain,
         d2.len() as u32,
         d2,
         &crate::mods::DocMods::default(),
@@ -117,24 +117,21 @@ fn the_ambient_pair_completes_plain() {
     // engine's own ambient split exactly.
     let idx = prelude::index();
     let st = idx.ty("StackTrace").expect("StackTrace indexes");
-    assert!(st.ambient, "StackTrace is an ambient row");
+    assert!(st.ambient(), "StackTrace is an ambient row");
     let panic = idx
-        .fns
-        .iter()
-        .find(|f| f.name == "panic")
+        .fns()
+        .into_iter()
+        .find(|f| f.name() == "panic")
         .expect("panic indexes");
-    assert!(panic.ambient, "panic is an ambient row");
+    assert!(panic.ambient(), "panic is an ambient row");
+    let gated = idx.pub_gated();
     assert!(
-        !idx.pub_gated
-            .iter()
-            .any(|n| n == "StackTrace" || n == "panic"),
-        "the ambient pair never rides the import gate: {:?}",
-        idx.pub_gated
+        !gated.iter().any(|n| n == "StackTrace" || n == "panic"),
+        "the ambient pair never rides the import gate: {gated:?}"
     );
     assert!(
-        idx.pub_gated.iter().any(|n| n == "Weak"),
-        "the `pub builtin` spelling rides the gate: {:?}",
-        idx.pub_gated
+        gated.iter().any(|n| n == "Weak"),
+        "the `pub builtin` spelling rides the gate: {gated:?}"
     );
 }
 
@@ -155,11 +152,11 @@ fn the_host_tree_mounts_root_and_children_through_the_dep_lane() {
     assert_eq!(idxs[1].mount.origin, "rut/myhost/src/net/mod.d.rut");
     assert_eq!(idxs[2].mount.origin, "rut/myhost/src/net/tls/mod.d.rut");
     // the root carries the edge and its flat row; the children their own
-    assert!(idxs[0].mods.iter().any(|m| m.name == "net"));
-    assert!(idxs[0].fns.iter().any(|f| f.name == "legacy_ping"));
-    assert!(idxs[1].mods.iter().any(|m| m.name == "tls"));
-    assert!(idxs[1].fns.iter().any(|f| f.name == "connect"));
-    assert!(idxs[2].fns.iter().any(|f| f.name == "handshake"));
+    assert!(idxs[0].mods().iter().any(|m| m.name() == "net"));
+    assert!(idxs[0].fns().iter().any(|f| f.name() == "legacy_ping"));
+    assert!(idxs[1].mods().iter().any(|m| m.name() == "tls"));
+    assert!(idxs[1].fns().iter().any(|f| f.name() == "connect"));
+    assert!(idxs[2].fns().iter().any(|f| f.name() == "handshake"));
     // every row of the pkg carries the manifest-shape stamps
     for i in &idxs {
         assert_eq!(i.mount.module.as_deref(), Some("myhost"));
@@ -174,19 +171,20 @@ fn definition_over_a_qualified_host_use_jumps_into_the_tree() {
     // `net` segment lands on the declaring `pub mod net;` edge
     let src = "use myhost::net::{ connect };\n\nentry fn main() -> nil {\n    let _ = connect(\"x\");\n}\n";
     let ddoc = doc_of(src, rut_ast::parser::Mode::Impl);
-    let (normalized, toks, ast) = (ddoc.src(), ddoc.toks(), ddoc.ast());
     let doc_uri = "file:///t/main.rut";
-    let doc_idx = crate::hover::index(&ddoc, crate::hover::Mount::doc(doc_uri));
+    let doc_idx = MountedFile::from_document(ddoc, crate::hover::Mount::doc(doc_uri));
     let idxs = myhost_chain();
-    let chain: Vec<&DefIndex> = std::iter::once(&doc_idx).chain(idxs.iter()).collect();
+    let mut files: Vec<&MountedFile> = vec![&doc_idx];
+    files.extend(idxs.iter());
+    let chain = Chain::new(files);
     let dm = crate::mods::DocMods::default();
     let ctx = crate::query::definition::Ctx {
         doc_uri,
-        toks,
-        ast,
-        idxs: &chain,
+        doc: &doc_idx.doc,
+        chain: &chain,
         doc_mods: &dm,
     };
+    let normalized = doc_idx.doc.src();
     // the leaf: the `connect` inside the braces
     let leaf = normalized.find("connect").expect("the leaf") as u32;
     let hits = crate::query::definition::definition(&ctx, leaf);
@@ -211,13 +209,15 @@ fn hover_over_a_qualified_host_use_renders_the_row() {
     // row's signature from the child file
     let src = "use myhost::net::{ connect };\n";
     let ddoc = doc_of(src, rut_ast::parser::Mode::Impl);
-    let (normalized, toks, ast) = (ddoc.src(), ddoc.toks(), ddoc.ast());
     let doc_uri = "file:///t/main.rut";
-    let doc_idx = crate::hover::index(&ddoc, crate::hover::Mount::doc(doc_uri));
+    let doc_idx = MountedFile::from_document(ddoc, crate::hover::Mount::doc(doc_uri));
     let idxs = myhost_chain();
-    let chain: Vec<&DefIndex> = std::iter::once(&doc_idx).chain(idxs.iter()).collect();
+    let mut files: Vec<&MountedFile> = vec![&doc_idx];
+    files.extend(idxs.iter());
+    let chain = Chain::new(files);
+    let normalized = doc_idx.doc.src();
     let leaf = normalized.find("connect").expect("the leaf") as u32;
-    let h = crate::hover::hover(&chain, toks, ast, &crate::mods::DocMods::default(), leaf)
+    let h = crate::hover::hover(&chain, &crate::mods::DocMods::default(), leaf)
         .expect("the leaf hovers");
     assert!(h.markdown.contains("connect"), "{}", h.markdown);
     assert!(
@@ -235,7 +235,7 @@ fn a_std_source_mounts_as_an_ordinary_dep() {
     // pouch — a root-module lib pkg: the file parses in Impl mode
     // (the filename convention), the module is named, and the class
     // rows the use-path tiers read are simply there
-    let idx = index_dep(
+    let idx = mount_file(
         "pouch",
         "rut/pouch/src/mod.rut",
         None,

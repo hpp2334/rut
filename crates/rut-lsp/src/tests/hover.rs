@@ -4,6 +4,7 @@
 //! layer (field + enum-member + module-let decl sites), and the M7
 //! primitive blurbs.
 
+use crate::hover::collection::Chain;
 use crate::hover::*;
 use rut_ast::parser::Mode;
 use rut_lexer::token::{Tok, Token};
@@ -14,6 +15,13 @@ use rut_lexer::token::{Tok, Token};
 /// grafting ON — the editor lane's shape, the recovering entry)
 fn doc_of(src: &str, mode: Mode) -> crate::semantic::Document {
     crate::semantic::Document::parse(mode, src.to_string())
+}
+
+/// one mounted document — the parse-once entry (the doc + its decls
+/// ride together; the tokens, the tree, and the text read through its
+/// doors)
+fn mount_of(src: &str, mode: Mode, mount: Mount) -> MountedFile {
+    MountedFile::from_document(doc_of(src, mode), mount)
 }
 
 fn hover_at(src: &str, needle: &str) -> Option<String> {
@@ -27,12 +35,10 @@ fn hover_nth(src: &str, needle: &str, n: usize) -> Option<String> {
 }
 
 fn hover_out_nth(src: &str, needle: &str, n: usize) -> Option<crate::hover::lookup::HoverOut> {
-    let ddoc = doc_of(src, Mode::Impl);
-    let (toks, ast) = (ddoc.toks(), ddoc.ast());
-    let idx = index(&ddoc, Mount::default());
-    let idxs = [&idx];
-    let pos = find_ident_pos(toks, needle, n)?;
-    hover(&idxs, toks, ast, &crate::mods::DocMods::default(), pos)
+    let file = mount_of(src, Mode::Impl, Mount::default());
+    let chain = Chain::new(vec![&file]);
+    let pos = find_ident_pos(file.doc.toks(), needle, n)?;
+    hover(&chain, &crate::mods::DocMods::default(), pos)
 }
 
 fn find_ident_pos(toks: &[Token], name: &str, n: usize) -> Option<u32> {
@@ -190,12 +196,10 @@ fn main() -> nil { let x = length(3); }
 
 /// hover in DECLARATION mode — the surface lanes' shape (`.d.rut`)
 fn hover_decl_at(src: &str, needle: &str) -> Option<String> {
-    let ddoc = doc_of(src, Mode::Decl);
-    let (toks, ast) = (ddoc.toks(), ddoc.ast());
-    let idx = index(&ddoc, Mount::default());
-    let idxs = [&idx];
-    let pos = find_ident_pos(toks, needle, 0)?;
-    hover(&idxs, toks, ast, &crate::mods::DocMods::default(), pos).map(|h| h.markdown)
+    let file = mount_of(src, Mode::Decl, Mount::default());
+    let chain = Chain::new(vec![&file]);
+    let pos = find_ident_pos(file.doc.toks(), needle, 0)?;
+    hover(&chain, &crate::mods::DocMods::default(), pos).map(|h| h.markdown)
 }
 
 #[test]
@@ -263,15 +267,13 @@ prelude builtin class Result<T> {
 fn is_ok(self) -> bool;
 }
 ";
-    let ddoc = doc_of(src, Mode::Decl);
-    let idx = index(&ddoc, Mount::default());
+    let idx = mount_of(src, Mode::Decl, Mount::default());
     let src_of = |n: &str| {
-        idx.fns
-            .iter()
-            .find(|f| f.name == n)
+        idx.fns()
+            .into_iter()
+            .find(|f| f.name() == n)
             .unwrap_or_else(|| panic!("no fn row `{n}`"))
-            .src
-            .clone()
+            .src()
     };
     assert_eq!(src_of("fetch"), "pub host async fn fetch(u: str) -> bytes");
     assert_eq!(src_of("echo"), "pub builtin fn echo<T>(x: T) -> T");
@@ -289,14 +291,13 @@ fn the_newtype_head_renders_without_the_terminator() {
     // `class Foo(Bar) {`, never `class Foo(Bar); {` nor a headless
     // ` {` (the degenerate cut rode the span's LO and sliced nothing)
     let src = "class Foo(Bar);\n";
-    let ddoc = doc_of(src, Mode::Decl);
-    let idx = index(&ddoc, Mount::default());
+    let idx = mount_of(src, Mode::Decl, Mount::default());
     let ty = idx
-        .types
-        .iter()
-        .find(|t| t.name == "Foo")
-        .unwrap_or_else(|| panic!("no type row `Foo`: {:?}", idx.types));
-    assert_eq!(ty.head, "class Foo(Bar)");
+        .types()
+        .into_iter()
+        .find(|t| t.name() == "Foo")
+        .unwrap_or_else(|| panic!("no type row `Foo`"));
+    assert_eq!(ty.head(), "class Foo(Bar)");
     let md = hover_decl_at(src, "Foo").unwrap();
     assert!(md.contains("class Foo(Bar) {"), "{md}");
     assert!(!md.contains(";"), "no terminator artifact: {md}");
@@ -305,22 +306,18 @@ fn the_newtype_head_renders_without_the_terminator() {
 #[test]
 fn ambiguity_lists_candidates() {
     // two workspace files each defining `helper`
-    let mk = |origin: &str| {
-        index(
-            &doc_of("fn helper() -> nil { }\n", Mode::Impl),
-            Mount::doc(origin),
-        )
-    };
+    let mk = |origin: &str| mount_of("fn helper() -> nil { }\n", Mode::Impl, Mount::doc(origin));
     let a = mk("a.rut");
     let b = mk("b.rut");
 
-    let src = "fn go() -> nil { let h = helper(); }\n";
-    let ddoc = doc_of(src, Mode::Impl);
-    let (toks, ast) = (ddoc.toks(), ddoc.ast());
-    let doc = index(&ddoc, Mount::doc("main.rut"));
-    let idxs = [&doc, &a, &b];
-    let pos = find_ident_pos(toks, "helper", 0).unwrap();
-    let md = hover(&idxs, toks, ast, &crate::mods::DocMods::default(), pos)
+    let doc = mount_of(
+        "fn go() -> nil { let h = helper(); }\n",
+        Mode::Impl,
+        Mount::doc("main.rut"),
+    );
+    let chain = Chain::new(vec![&doc, &a, &b]);
+    let pos = find_ident_pos(doc.doc.toks(), "helper", 0).unwrap();
+    let md = hover(&chain, &crate::mods::DocMods::default(), pos)
         .unwrap()
         .markdown;
     assert!(md.contains("multiple definitions"), "{md}");
@@ -331,15 +328,16 @@ fn ambiguity_lists_candidates() {
 fn host_fn_surface_favors_own_methods() {
     // std-style surface index ahead of the doc
     let surf_src = "pub host fn string_join(s: [str]) -> i32;\n";
-    let surf = index(&doc_of(surf_src, Mode::Decl), Mount::doc("core"));
+    let surf = mount_of(surf_src, Mode::Decl, Mount::doc("core"));
 
-    let doc = "fn main() -> i32 { return string_join([]); }\n";
-    let ddoc = doc_of(doc, Mode::Impl);
-    let (toks, ast) = (ddoc.toks(), ddoc.ast());
-    let di = index(&ddoc, Mount::doc("main.rut"));
-    let idxs = [&di, &surf];
-    let pos = find_ident_pos(toks, "string_join", 0).unwrap();
-    let h = hover(&idxs, toks, ast, &crate::mods::DocMods::default(), pos).unwrap();
+    let di = mount_of(
+        "fn main() -> i32 { return string_join([]); }\n",
+        Mode::Impl,
+        Mount::doc("main.rut"),
+    );
+    let chain = Chain::new(vec![&di, &surf]);
+    let pos = find_ident_pos(di.doc.toks(), "string_join", 0).unwrap();
+    let h = hover(&chain, &crate::mods::DocMods::default(), pos).unwrap();
     assert!(h.markdown.contains("fn string_join"), "{}", h.markdown);
     assert!(h.markdown.contains("core"), "{}", h.markdown);
 }
@@ -412,15 +410,13 @@ fn foreign_interface_member_requires_use() {
     // members resolve only once the document `use`s it — a foreign
     // interface's members need the use
     let surf_src = "interface Greeter {\nfn greet(self) -> nil;\n}\n";
-    let surf = index(&doc_of(surf_src, Mode::Impl), Mount::doc("greets.rut"));
+    let surf = mount_of(surf_src, Mode::Impl, Mount::doc("greets.rut"));
 
     let mk = |doc: &str| {
-        let ddoc = doc_of(doc, Mode::Impl);
-        let (toks, ast) = (ddoc.toks(), ddoc.ast());
-        let di = index(&ddoc, Mount::doc("main.rut"));
-        let idxs = [&di, &surf];
-        let pos = find_ident_pos(toks, "greet", 0).unwrap();
-        hover(&idxs, toks, ast, &crate::mods::DocMods::default(), pos).map(|h| h.markdown)
+        let di = mount_of(doc, Mode::Impl, Mount::doc("main.rut"));
+        let chain = Chain::new(vec![&di, &surf]);
+        let pos = find_ident_pos(di.doc.toks(), "greet", 0).unwrap();
+        hover(&chain, &crate::mods::DocMods::default(), pos).map(|h| h.markdown)
     };
 
     let gated = "fn go(g: Greeter) -> nil { g.greet(); }\n";
@@ -763,11 +759,10 @@ fn binding_decl_span_is_byte_exact() {
     // the span-first law: the record's decl_ident_span equals the
     // declaring ident's token span — phase 2's definition target
     let src = "fn go() -> nil {\n    let total = 1;\n    let u = total;\n}\n";
-    let ddoc = doc_of(src, Mode::Impl);
-    let (src2, toks, ast) = (ddoc.src(), ddoc.toks(), ddoc.ast());
-    let idx = index(&ddoc, Mount::default());
-    let idxs = [&idx];
-    let binds = bindings::collect(ast, toks, &idxs);
+    let file = mount_of(src, Mode::Impl, Mount::default());
+    let chain = Chain::new(vec![&file]);
+    let (src2, toks, ast) = (file.doc.src(), file.doc.toks(), file.doc.ast());
+    let binds = bindings::collect(ast, toks, &chain);
     let total = bindings::resolve(&binds, src2.rfind("total").unwrap() as u32, "total").unwrap();
     let decl_span = toks
         .iter()
@@ -777,7 +772,7 @@ fn binding_decl_span_is_byte_exact() {
     assert_eq!(total.decl_ident_span, decl_span);
     // the hover decorates exactly the token under the cursor
     let use_pos = src2.rfind("total").unwrap() as u32;
-    let out = hover(&idxs, toks, ast, &crate::mods::DocMods::default(), use_pos).unwrap();
+    let out = hover(&chain, &crate::mods::DocMods::default(), use_pos).unwrap();
     let use_span = toks
         .iter()
         .rev()
@@ -814,14 +809,15 @@ fn surface_primitives_keep_their_rich_hover() {
     // `str`/`bytes`/`opaque` have surface decls — those must win over
     // the static blurb (the lsp-align smoke's `primitive str {` law)
     let core_src = "prelude builtin primitive str {\nfn len(self) -> i32;\n}\n";
-    let core = index(&doc_of(core_src, Mode::Decl), Mount::default());
-    let doc = "fn f(s: str) -> str { return s; }\n";
-    let ddoc = doc_of(doc, Mode::Impl);
-    let (toks, ast) = (ddoc.toks(), ddoc.ast());
-    let di = index(&ddoc, Mount::default());
-    let idxs = [&di, &core];
-    let pos = find_ident_pos(toks, "str", 0).unwrap();
-    let md = hover(&idxs, toks, ast, &crate::mods::DocMods::default(), pos)
+    let core = mount_of(core_src, Mode::Decl, Mount::default());
+    let di = mount_of(
+        "fn f(s: str) -> str { return s; }\n",
+        Mode::Impl,
+        Mount::default(),
+    );
+    let chain = Chain::new(vec![&di, &core]);
+    let pos = find_ident_pos(di.doc.toks(), "str", 0).unwrap();
+    let md = hover(&chain, &crate::mods::DocMods::default(), pos)
         .unwrap()
         .markdown;
     assert!(md.contains("primitive str {"), "{md}");
@@ -866,23 +862,21 @@ return rr;
 
 // ---- file modules: the namespace edges (phase 4) ----
 
-/// a parsed+stamped index the way the dep faces lay them down
-fn dep_index(pkg: &str, mod_path: &str, src: &str) -> DefIndex {
-    index(
-        &doc_of(src, Mode::Impl),
+/// a parsed+stamped file the way the dep faces lay them down
+fn dep_index(pkg: &str, mod_path: &str, src: &str) -> MountedFile {
+    MountedFile::from_src(
         Mount {
             module: Some(pkg.to_string()),
             mod_path: Some(mod_path.to_string()),
             ..Mount::default()
         },
+        src.to_string(),
     )
 }
 
 /// hover `name` (n-th ident) in `doc` over the gadget dep chain
 fn hover_over_dep(doc: &str, name: &str, n: usize) -> Option<String> {
-    let ddoc = doc_of(doc, Mode::Impl);
-    let (toks, ast) = (ddoc.toks(), ddoc.ast());
-    let idx = index(&ddoc, Mount::default());
+    let idx = mount_of(doc, Mode::Impl, Mount::default());
     let dep = [
         dep_index(
             "gadgets",
@@ -901,10 +895,11 @@ fn hover_over_dep(doc: &str, name: &str, n: usize) -> Option<String> {
         ),
         dep_index("gadgets", "secret", "pub fn open() -> i32 { return 1; }\n"),
     ];
-    let mut idxs: Vec<&DefIndex> = vec![&idx];
-    idxs.extend(dep.iter());
-    let pos = find_ident_pos(toks, name, n)?;
-    hover(&idxs, toks, ast, &crate::mods::DocMods::default(), pos).map(|h| h.markdown)
+    let mut files: Vec<&MountedFile> = vec![&idx];
+    files.extend(dep.iter());
+    let chain = Chain::new(files);
+    let pos = find_ident_pos(idx.doc.toks(), name, n)?;
+    hover(&chain, &crate::mods::DocMods::default(), pos).map(|h| h.markdown)
 }
 
 #[test]
@@ -971,15 +966,15 @@ fn use_rows_carry_the_reexport_vis() {
     // declared vis (the completion re-export tier's gate reads it);
     // a plain `use` row stays private
     let src = "pub use util::{ helper };\nuse util::{ hidden };\n";
-    let idx = index(&doc_of(src, Mode::Impl), Mount::default());
+    let idx = mount_of(src, Mode::Impl, Mount::default());
     let row = |n: &str| {
-        idx.uses
-            .iter()
-            .find(|u| u.name == n)
-            .unwrap_or_else(|| panic!("use row `{n}` missing: {:?}", idx.uses))
+        idx.uses()
+            .into_iter()
+            .find(|u| u.name() == n)
+            .unwrap_or_else(|| panic!("use row `{n}` missing"))
     };
-    assert_eq!(row("helper").vis, rut_ast::Vis::Pub, "the pub use row");
-    assert_eq!(row("hidden").vis, rut_ast::Vis::Self_, "the private row");
+    assert_eq!(row("helper").vis(), rut_ast::Vis::Pub, "the pub use row");
+    assert_eq!(row("hidden").vis(), rut_ast::Vis::Self_, "the private row");
 }
 
 #[test]
@@ -989,16 +984,19 @@ fn host_fn_surface_signature_cuts_at_its_own_semicolon() {
     // item's OWN `;` (the ModuleLet precedent), or `pub host fn
     // abs(x: f64) -> f64;` rendered `...f64;pub` in the detail
     let surf_src = "pub host fn abs(x: f64) -> f64;\npub host fn ceil(x: f64) -> f64;\n";
-    let idx = index(&doc_of(surf_src, Mode::Decl), Mount::default());
+    let idx = mount_of(surf_src, Mode::Decl, Mount::default());
     // the surface decl span starts at the item's FIRST token (span
     // law v3.1) — the spelled `pub` rides the slice; each row still
     // cuts at its own `;` (no `;pub` artifact)
+    let fns = idx.fns();
     assert_eq!(
-        idx.fns[0].src, "pub host fn abs(x: f64) -> f64",
+        fns[0].src(),
+        "pub host fn abs(x: f64) -> f64",
         "no `;pub` artifact"
     );
     assert_eq!(
-        idx.fns[1].src, "pub host fn ceil(x: f64) -> f64",
+        fns[1].src(),
+        "pub host fn ceil(x: f64) -> f64",
         "each row cuts at its own `;`"
     );
 }
@@ -1013,28 +1011,30 @@ fn host_fn_hover_via_the_calc_fixture_has_no_next_decl_artifact() {
     // mounted as a fixture (`deps::index_dep` (the mod-path `Some` lane), the
     // root shell + the math module beside it), exactly what the
     // walk indexes
-    let doc = "fn go(x: f64) -> f64 {\n    return abs(x);\n}\n";
-    let ddoc = doc_of(doc, Mode::Impl);
-    let (s, toks, ast) = (ddoc.src(), ddoc.toks(), ddoc.ast());
-    let di = index(&ddoc, Mount::default());
+    let di = mount_of(
+        "fn go(x: f64) -> f64 {\n    return abs(x);\n}\n",
+        Mode::Impl,
+        Mount::default(),
+    );
     let std = [
-        crate::deps::index_dep(
+        crate::deps::mount_file(
             "calc",
             "rut/calc/src/mod.rut",
             None,
             include_str!("../../../../rut/calc/src/mod.rut").to_string(),
         ),
-        crate::deps::index_dep(
+        crate::deps::mount_file(
             "calc",
             "rut/calc/src/math.rut",
             Some("math"),
             include_str!("../../../../rut/calc/src/math.rut").to_string(),
         ),
     ];
-    let mut chain: Vec<&DefIndex> = vec![&di];
-    chain.extend(std.iter());
-    let pos = s.find("abs(").unwrap() as u32;
-    let md = hover(&chain, toks, ast, &crate::mods::DocMods::default(), pos)
+    let mut files: Vec<&MountedFile> = vec![&di];
+    files.extend(std.iter());
+    let chain = Chain::new(files);
+    let pos = di.doc.src().find("abs(").unwrap() as u32;
+    let md = hover(&chain, &crate::mods::DocMods::default(), pos)
         .expect("abs hovers through the calc math module")
         .markdown;
     assert!(

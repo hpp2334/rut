@@ -10,27 +10,28 @@
 //! written.
 //!
 //! Two layers (the lsp-features survey §3.2 design): the **decl layer**
-//! (`build` — types, fns, fields, enum members, module lets, use names,
-//! all with the nodes' own recorded name spans; docs ride the decl
-//! nodes' `DocData` chains) and the **binding pass**
-//! (`bindings` — every fn-local binding as
+//! (the mounted files' decl maps — types, fns, fields, enum members,
+//! module lets, use names, all keyed on the nodes' own recorded name
+//! spans; docs ride the decl nodes' `DocData` chains) and the
+//! **binding pass** (`bindings` — every fn-local binding as
 //! `{ name, decl_ident_span, scope_span, kind, ty }`, shadow-correct
 //! resolve). `infer` is the display-side type heuristic both consume.
 
 //!
-//! Layout: `types` (the index data) → `build` (the index pass over a
-//! parsed document) → `bindings` + `lookup` + `infer` (what's under the
-//! cursor) → `render` (markdown).
+//! Layout: `types` (the shared vocabulary — Mount, TyForm, type text)
+//! → `collection` (MountedFile + DefIndexCollection, the views and the
+//! doors) → `bindings` + `lookup` + `infer` (what's under the cursor)
+//! → `render` (markdown).
 
 pub mod bindings;
-pub(crate) mod build;
+pub(crate) mod collection;
 pub(crate) mod infer;
 pub(crate) mod lookup;
 mod render;
 pub(crate) mod types;
 
 pub use bindings::{BindKind, Binding};
-pub use build::index;
+pub(crate) use collection::{DefIndexCollection, MountedFile};
 pub use lookup::hover;
 pub(crate) use render::{binding_markdown, render_let};
-pub use types::{DefIndex, Mount};
+pub use types::Mount;

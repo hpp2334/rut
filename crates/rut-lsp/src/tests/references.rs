@@ -1,46 +1,35 @@
-use crate::hover::DefIndex;
+use crate::hover::collection::Chain;
 use crate::hover::Mount;
+use crate::hover::MountedFile;
 use crate::query::definition;
 use crate::query::definition::DefLocation;
 use crate::query::references::*;
 use crate::semantic::LineIndex;
 use rut_ast::parser::Mode;
 use rut_lexer::lexer::canonical;
-use rut_lexer::token::Token;
-
-/// one doc artifact — the (normalized src, toks, ast) triple from ONE
-/// parse, read through the doc's doors (the test lane's replacement
-/// for the hand-spelled `normalize → lex → doc_ast` triple; doc
-/// grafting ON — the editor lane's shape, the recovering entry)
-fn doc_of(src: &str, mode: Mode) -> crate::semantic::Document {
-    crate::semantic::Document::parse(mode, src.to_string())
-}
 
 const DOC: &str = "file:///t/main.rut";
 
-/// a document + its hover index — the doc is the context (src, toks,
-/// and ast read through its doors)
+/// one mounted document — the parse-once entry (the doc + its decls
+/// ride together; the tokens, the tree, and the text read through its
+/// doors)
 struct Doc {
-    pd: crate::semantic::Document,
-    index: DefIndex,
+    file: MountedFile,
 }
 
 impl Doc {
     fn src(&self) -> &str {
-        self.pd.src()
-    }
-    fn toks(&self) -> &[Token] {
-        self.pd.toks()
-    }
-    fn ast(&self) -> &rut_ast::Ast {
-        self.pd.ast()
+        self.file.doc.src()
     }
 }
 
 fn doc_at(uri: &str, src: &str) -> Doc {
-    let pd = doc_of(src, Mode::Impl);
-    let index = crate::hover::index(&pd, Mount::doc(uri));
-    Doc { pd, index }
+    Doc {
+        file: MountedFile::from_document(
+            crate::semantic::Document::parse(Mode::Impl, src.to_string()),
+            Mount::doc(uri),
+        ),
+    }
 }
 
 fn doc(src: &str) -> Doc {
@@ -69,14 +58,15 @@ fn ref_offsets(src: &str, uri: &str, locs: &[DefLocation]) -> Vec<u32> {
         .collect()
 }
 
-fn refs(d: &Doc, pos: u32, extra: &[DefIndex], include_decl: bool) -> Vec<DefLocation> {
-    let idxs: Vec<&DefIndex> = std::iter::once(&d.index).chain(extra.iter()).collect();
+fn refs(d: &Doc, pos: u32, extra: &[MountedFile], include_decl: bool) -> Vec<DefLocation> {
+    let mut files: Vec<&MountedFile> = vec![&d.file];
+    files.extend(extra.iter());
+    let chain = Chain::new(files);
     let dm = crate::mods::DocMods::default();
     let ctx = definition::Ctx {
         doc_uri: DOC,
-        toks: d.toks(),
-        ast: d.ast(),
-        idxs: &idxs,
+        doc: &d.file.doc,
+        chain: &chain,
         doc_mods: &dm,
     };
     references(&ctx, pos, include_decl)
@@ -84,7 +74,7 @@ fn refs(d: &Doc, pos: u32, extra: &[DefIndex], include_decl: bool) -> Vec<DefLoc
 
 /// the query at byte `pos` references EXACTLY the idents at `want`
 /// (byte offsets of the reference idents, order-insensitive)
-fn assert_refs(d: &Doc, pos: u32, want: &[u32], extra: &[DefIndex]) {
+fn assert_refs(d: &Doc, pos: u32, want: &[u32], extra: &[MountedFile]) {
     let hits = refs(d, pos, extra, false);
     let mut got = ref_offsets(d.src(), DOC, &hits);
     got.sort();
@@ -381,18 +371,17 @@ fn widget_user() -> (Doc, String) {
 fn cross_file_refs_find_the_importing_files() {
     let lib = widget_lib();
     let (main, norm) = widget_user();
-    let extra = [&lib.index];
+    let extra = [&lib.file];
     // references on the LIB's type — queried from the importing doc:
     // the use-statement name + the usage site, nothing else
-    let idxs: Vec<&DefIndex> = std::iter::once(&main.index)
-        .chain(extra.iter().copied())
-        .collect();
+    let mut files: Vec<&MountedFile> = vec![&main.file];
+    files.extend(extra.iter().copied());
+    let chain = Chain::new(files);
     let dm = crate::mods::DocMods::default();
     let ctx = definition::Ctx {
         doc_uri: DOC,
-        toks: main.toks(),
-        ast: main.ast(),
-        idxs: &idxs,
+        doc: &main.file.doc,
+        chain: &chain,
         doc_mods: &dm,
     };
     let hits = references(&ctx, at(&norm, "Widget::new", 1), false);
@@ -409,19 +398,18 @@ fn cross_file_refs_find_the_importing_files() {
 fn refs_from_the_decl_side_reach_the_importing_doc() {
     let lib = widget_lib();
     let (main, norm) = widget_user();
-    let extra = [&main.index];
+    let extra = [&main.file];
     // query from the LIB's decl ident, doc = the lib: the scan's
     // reverse edge finds the importing doc's two sites — the only
     // two entries, both carrying the DOC's uri
-    let idxs: Vec<&DefIndex> = std::iter::once(&lib.index)
-        .chain(extra.iter().copied())
-        .collect();
+    let mut files: Vec<&MountedFile> = vec![&lib.file];
+    files.extend(extra.iter().copied());
+    let chain = Chain::new(files);
     let dm = crate::mods::DocMods::default();
     let ctx = definition::Ctx {
         doc_uri: WIDGET_URI,
-        toks: lib.toks(),
-        ast: lib.ast(),
-        idxs: &idxs,
+        doc: &lib.file.doc,
+        chain: &chain,
         doc_mods: &dm,
     };
     let hits = references(&ctx, at(lib.src(), "class Widget", 1) + 6, false);
@@ -443,18 +431,17 @@ fn an_unrelated_same_named_type_does_not_leak_in() {
         "class Widget {\n    other: i32;\n}\n",
     );
     let (main, norm) = widget_user();
-    let extra = [&lib.index, &foreign.index];
+    let extra = [&lib.file, &foreign.file];
     // references on the gadgets Widget (via the importing doc's use
     // site): the other pkg's same-named type must contribute nothing
-    let idxs: Vec<&DefIndex> = std::iter::once(&main.index)
-        .chain(extra.iter().copied())
-        .collect();
+    let mut files: Vec<&MountedFile> = vec![&main.file];
+    files.extend(extra.iter().copied());
+    let chain = Chain::new(files);
     let dm = crate::mods::DocMods::default();
     let ctx = definition::Ctx {
         doc_uri: DOC,
-        toks: main.toks(),
-        ast: main.ast(),
-        idxs: &idxs,
+        doc: &main.file.doc,
+        chain: &chain,
         doc_mods: &dm,
     };
     let hits = references(&ctx, at(&norm, "Widget::new", 1), false);

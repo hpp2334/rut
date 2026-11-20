@@ -46,3 +46,35 @@ fn clamps() {
     assert_eq!(ix.byte(src, 9, 0), 5);
     assert_eq!(ix.byte(src, 0, 99), 3); // clamps to line end (incl. \n)
 }
+
+#[test]
+fn of_the_doc_equals_the_byte_scan() {
+    // the line-table dedup: the doc-door build is byte-identical to
+    // the raw scan, on every trailing shape (trailing newline, no
+    // newline, blank runs, the empty document)
+    for src in [
+        "entry fn main() -> nil {\n    let x = 1;\n}\n",
+        "let a = 1;",
+        "a\n\n\nb\n",
+        "\n",
+        "",
+    ] {
+        let doc = rut_ast::Doc::parse(rut_ast::parser::Mode::Impl, src.to_string());
+        let of = LineIndex::of(&doc);
+        let scanned = LineIndex::new(src);
+        for byte in 0..=src.len() as u32 {
+            assert_eq!(
+                of.position(src, byte),
+                scanned.position(src, byte),
+                "position differs at {byte} of {src:?}"
+            );
+            let (l, c) = scanned.position(src, byte);
+            assert_eq!(of.byte(src, l, c), scanned.byte(src, l, c));
+        }
+        assert_eq!(
+            of.position(src, src.len() as u32 + 9),
+            scanned.position(src, src.len() as u32 + 9),
+            "clamps agree: {src:?}"
+        );
+    }
+}

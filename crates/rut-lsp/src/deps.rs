@@ -15,7 +15,7 @@
 //!   source files — the zip's own `rut.jsonc` names the module; the
 //!   rode-along dep groups are the loader's business, not the
 //!   editor's.
-//! - [`index_dep`] indexes one dep source file under its mount (the
+//! - [`mount_file`] mounts one dep source file under its stamp (the
 //!   module NAMED, the mod path spelled); the surface `pub let` rows
 //!   of a current tree ride the ordinary ModuleLet path; the
 //!   qualified forms ride the dep's own `mod` tree: `use calc::{
@@ -34,7 +34,7 @@ type ModHead = (
 use crate::semantic::Mode;
 use sha2::{Digest, Sha256};
 
-use crate::hover::DefIndex;
+use crate::hover::MountedFile;
 
 /// One entry source a dep indexes: the manifest-relative file path and
 /// the mode it parses in (`entry.type` → Decl, the `mod.rut` root →
@@ -790,21 +790,19 @@ pub fn bundle_file_mod_path(path: &str) -> Option<String> {
     None
 }
 
-/// Index one mounted dep source file — the flat shape (`mod_path`
-/// `None`, today's single-file packages) or one file module of a
-/// mod-carrying pkg (`Some(path)`, `""` = the pkg root's `mod.rut`):
-/// the ordinary [`analysis::index_at`] pass over `src`, the mount —
-/// origin, module name, mod path, parse mode — riding ONE [`Mount`]
-/// handed to the builder up front. The surface `pub let` rows ride the
-/// ordinary ModuleLet path; the module-qualified forms ride the dep's
-/// own `mod` tree.
-pub fn index_dep(name: &str, uri: &str, mod_path: Option<&str>, src: String) -> DefIndex {
-    // the ordinary index pass — `mode_of(uri)` spells the filename
-    // convention (every caller already derived it that way). `src` BY
-    // VALUE: it moves into the doc (a fresh walk read moves for free,
-    // a borrowed text clones to move)
-    let doc = crate::semantic::Document::parse(crate::semantic::mode_of(uri), src);
-    crate::hover::index(&doc, crate::hover::Mount::dep(name, uri, mod_path))
+/// Mount one dep source file — the flat shape (`mod_path` `None`,
+/// today's single-file packages) or one file module of a mod-carrying
+/// pkg (`Some(path)`, `""` = the pkg root's `mod.rut`): the ordinary
+/// parse over `src`, the mount — origin, module name, mod path, parse
+/// mode — riding ONE [`Mount`] built up front. The surface `pub let`
+/// rows ride the ordinary ModuleLet path; the module-qualified forms
+/// ride the dep's own `mod` tree.
+pub fn mount_file(name: &str, uri: &str, mod_path: Option<&str>, src: String) -> MountedFile {
+    // `mode_of(uri)` spells the filename convention (every caller
+    // already derived it that way). `src` BY VALUE: it moves into the
+    // doc (a fresh walk read moves for free, a borrowed text clones to
+    // move)
+    MountedFile::from_src(crate::hover::Mount::dep(name, uri, mod_path), src)
 }
 
 /// One declaration entry's module index — the wire-13 consumption of
@@ -819,25 +817,8 @@ pub fn index_dep_decl_group(
     uri: &str,
     mod_path: &str,
     src: String,
-) -> Vec<(String, DefIndex)> {
-    // the ordinary parse once — `mode_of(uri)`: the `.d.rut` suffix IS
-    // the declaration entry lane's mode (the filename convention)
-    let doc = crate::semantic::Document::parse(crate::semantic::mode_of(uri), src);
-    let (ast, toks, src) = (doc.ast(), doc.toks(), doc.src());
-    let mount = crate::hover::Mount {
-        origin: uri.to_string(),
-        module: Some(name.to_string()),
-        mod_path: Some(mod_path.to_string()),
-        // the parse mode rides the mount — the definition
-        // layer's body-over-decl preference reads it
-        mode: Some(crate::semantic::mode_of(uri)),
-        ..crate::hover::Mount::default()
-    };
-    let items = ast.root().items(ast).to_vec();
-    vec![(
-        String::new(),
-        crate::hover::build::index_items(src, ast, toks, &items, mount),
-    )]
+) -> Vec<(String, MountedFile)> {
+    vec![(String::new(), mount_file(name, uri, Some(mod_path), src))]
 }
 
 // (the minted manifest-const rows are gone — the retired `consts`

@@ -1,53 +1,39 @@
-use crate::hover::DefIndex;
+use crate::hover::collection::Chain;
 use crate::hover::Mount;
+use crate::hover::MountedFile;
 use crate::query::signature_help::*;
 use ls_types::{Documentation, ParameterLabel, SignatureHelp};
 use rut_ast::parser::Mode;
-use rut_ast::Ast;
-use rut_lexer::token::Token;
-
-/// one doc artifact — the (normalized src, toks, ast) triple from ONE
-/// parse, read through the doc's doors (the test lane's replacement
-/// for the hand-spelled `normalize → lex → doc_ast` triple; doc
-/// grafting ON — the editor lane's shape, the recovering entry)
-fn doc_of(src: &str, mode: Mode) -> crate::semantic::Document {
-    crate::semantic::Document::parse(mode, src.to_string())
-}
 
 const DOC: &str = "file:///t/main.rut";
 
-/// a document + its hover index — the doc is the context (src, toks,
-/// and ast read through its doors)
+/// one mounted document — the parse-once entry (the doc + its decls
+/// ride together; the tokens, the tree, and the text read through its
+/// doors)
 struct Doc {
-    pd: crate::semantic::Document,
-    index: DefIndex,
+    file: MountedFile,
 }
 
 impl Doc {
     fn src(&self) -> &str {
-        self.pd.src()
-    }
-    fn toks(&self) -> &[Token] {
-        self.pd.toks()
-    }
-    fn ast(&self) -> &Ast {
-        self.pd.ast()
+        self.file.doc.src()
     }
 }
 
 fn doc(src: &str) -> Doc {
-    let pd = doc_of(src, Mode::Impl);
-    let index = crate::hover::index(&pd, Mount::doc(DOC));
-    Doc { pd, index }
+    Doc {
+        file: MountedFile::from_document(
+            crate::semantic::Document::parse(Mode::Impl, src.to_string()),
+            Mount::doc(DOC),
+        ),
+    }
 }
 
-fn help(d: &Doc, pos: u32, extra: &[DefIndex]) -> Option<SignatureHelp> {
-    let idxs: Vec<&DefIndex> = std::iter::once(&d.index).chain(extra.iter()).collect();
-    let ctx = Ctx {
-        toks: d.toks(),
-        ast: d.ast(),
-        idxs: &idxs,
-    };
+fn help(d: &Doc, pos: u32, extra: &[MountedFile]) -> Option<SignatureHelp> {
+    let mut files: Vec<&MountedFile> = vec![&d.file];
+    files.extend(extra.iter());
+    let chain = Chain::new(files);
+    let ctx = Ctx { chain: &chain };
     signature_help(&ctx, pos)
 }
 
@@ -260,8 +246,8 @@ fn ambiguous_callee_stays_silent() {
     let src = "fn f(a: i32) -> i32 {\n    return a;\n}\nfn main() -> i32 {\n    let x = f(1);\n    return x;\n}\n";
     let d = doc(src);
     let mut foreign = doc("fn f(b: str) -> str {\n    return b;\n}\n");
-    foreign.index.mount.origin = "file:///ws/other/lib.rut".to_string();
-    let extra = [foreign.index];
+    foreign.file.mount.origin = "file:///ws/other/lib.rut".to_string();
+    let extra = [foreign.file];
     assert!(help(&d, at(d.src(), "f(1)", 1) + 2, &extra).is_none());
 }
 

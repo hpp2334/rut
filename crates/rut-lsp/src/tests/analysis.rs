@@ -1,4 +1,3 @@
-use crate::query::analysis::analyze_unstamped;
 use crate::query::analysis::*;
 use ls_types::*;
 use rut_lexer::lexer::canonical;
@@ -14,9 +13,18 @@ use crate::semantic::LineIndex;
 use rut_ast::parser::Mode;
 use std::collections::BTreeMap;
 
+/// the sync lane's analysis shape — the envelope off ONE parse (the
+/// old unstamped facade's lane, the uri spelling the mode)
+fn analyze(uri: &str, src: String) -> Analysis {
+    analysis_of(&crate::semantic::Document::parse(
+        crate::query::analysis::mode_of(uri),
+        src,
+    ))
+}
+
 #[test]
 fn analyze_end_to_end() {
-    let a = analyze_unstamped(
+    let a = analyze(
         IMPL_URI,
         "entry fn main() -> nil {\n    let x = ;\n}\n".to_string(),
     );
@@ -24,7 +32,7 @@ fn analyze_end_to_end() {
     assert!(a.diags[0].severity == Some(DiagnosticSeverity::ERROR));
     assert_eq!(a.diags[0].source.as_deref(), Some("rut"));
 
-    let clean = analyze_unstamped(IMPL_URI, "enum Color { Red }\n".to_string());
+    let clean = analyze(IMPL_URI, "enum Color { Red }\n".to_string());
     assert!(clean.diags.is_empty());
     assert_eq!(clean.symbols.len(), 1);
     assert_eq!(clean.symbols[0].name, "Color");
@@ -33,7 +41,7 @@ fn analyze_end_to_end() {
 #[test]
 fn encode_is_delta_correct() {
     let src = "enum Color { Red }\nfn f(x: i32) -> nil {}\n";
-    let a = analyze_unstamped(IMPL_URI, src.to_string());
+    let a = analyze(IMPL_URI, src.to_string());
     // decode back: every token's absolute (line, char, len) must land
     // on the exact text it classified
     let mut line = 0u32;
@@ -65,7 +73,7 @@ fn pub_on_a_use_classifies_as_the_keyword() {
     // carries on every item), and the use's own names keep the cap-law
     // classes (`util` a namespace head, `helper` a function leaf)
     let src = "pub use util::{ helper };\n";
-    let a = analyze_unstamped(IMPL_URI, src.to_string());
+    let a = analyze(IMPL_URI, src.to_string());
     let s = canonical(src).into_owned();
     let mut line = 0u32;
     let mut ch = 0u32;
@@ -104,11 +112,14 @@ fn pub_on_a_use_classifies_as_the_keyword() {
 
 #[test]
 fn decl_mode_for_dot_d_rut() {
-    assert_eq!(mode_of("x/y/plugin.d.rut"), Mode::Decl);
-    assert_eq!(mode_of("x/y/main.rut"), Mode::Impl);
+    assert_eq!(
+        crate::query::analysis::mode_of("x/y/plugin.d.rut"),
+        Mode::Decl
+    );
+    assert_eq!(crate::query::analysis::mode_of("x/y/main.rut"), Mode::Impl);
     // the host default root routes Decl like every `.d.rut` surface
-    assert_eq!(mode_of("mod.d.rut"), Mode::Decl);
-    assert_eq!(mode_of("net/mod.d.rut"), Mode::Decl);
+    assert_eq!(crate::query::analysis::mode_of("mod.d.rut"), Mode::Decl);
+    assert_eq!(crate::query::analysis::mode_of("net/mod.d.rut"), Mode::Decl);
 }
 
 // ---- the semantic lane (B1+B2): merge + check ----
@@ -159,7 +170,7 @@ fn merge_dedupes_true_duplicates_only() {
 #[test]
 fn no_package_context_is_parse_only() {
     let src = "entry fn main() -> nil {\n    let x = ;\n}\n";
-    let parse = analyze_unstamped(IMPL_URI, src.to_string()).diags;
+    let parse = analyze(IMPL_URI, src.to_string()).diags;
     assert!(!parse.is_empty());
     let merged = check::merged_doc_diags(
         "file:///ws/p.rut",
@@ -178,7 +189,7 @@ fn check_enabled_doc_maps_lir_diags_to_ranges() {
     // surfaces through the checker with the range the editor highlights
     let src = "use kit::{ Task };\nfn main() -> nil {\n    let checked: str = \" \";\n    checked = true;\n}\n";
     let uri = "file:///ws/app/mod.rut";
-    let parse = analyze_unstamped(IMPL_URI, src.to_string()).diags;
+    let parse = analyze(IMPL_URI, src.to_string()).diags;
     assert!(parse.is_empty(), "the doc parses clean: {parse:?}");
     let dep = group(
         "kit",
@@ -247,7 +258,7 @@ fn check_enabled_doc_maps_lir_diags_to_ranges() {
     // and the missing `;` — so the law is pinned as "the check lane
     // adds nothing", not as a v1 row count.)
     let bad = "fn main() -> nil {\n    let x = ;\n}\n";
-    let parse = analyze_unstamped(IMPL_URI, bad.to_string()).diags;
+    let parse = analyze(IMPL_URI, bad.to_string()).diags;
     assert!(!parse.is_empty());
     let n_parse = parse.len();
     let app = group("app", file(uri, bad));
@@ -289,7 +300,7 @@ fn unattributable_spans_skip() {
         ),
     );
     let app = group("app3", file(uri, doc));
-    let parse = analyze_unstamped(IMPL_URI, doc.to_string()).diags;
+    let parse = analyze(IMPL_URI, doc.to_string()).diags;
     assert!(parse.is_empty(), "{parse:?}");
     let merged = check::merged_doc_diags(
         uri,

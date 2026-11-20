@@ -1,21 +1,28 @@
 //! the session state — one instance per editing session (the
-//! language core's accumulated facts): the open documents, the defs
-//! store, the walk lane's ledgers. The loop task owns this value
-//! exclusively (see [`crate::event_loop`]); the host's `Lsp` is
-//! only the inbox handle, and no caller ever borrows the state.
+//! language core's accumulated facts): the open documents (the
+//! versioned cache), the mounted-file world, the walk lane's ledgers.
+//! The loop task owns this value exclusively (see
+//! [`crate::event_loop`]); the host's `Lsp` is only the inbox handle,
+//! and no caller ever borrows the state.
 
 use std::collections::{BTreeMap, HashMap, HashSet};
 
 use crate::env;
 use crate::event_loop;
-use crate::hover::DefIndex;
+use crate::hover::{DefIndexCollection, Mount, MountedFile};
 use crate::wire;
 
 pub(crate) struct SessionState {
-    /// open documents by URI (the LSP's full-text sync)
-    pub(crate) docs: HashMap<String, String>,
+    /// open documents by URI (the LSP's full-text sync) — the
+    /// VERSIONED CACHE: each entry is the document's [`MountedFile`]
+    /// (the [`crate::semantic::Document`] + its stamp + its decl map),
+    /// synced once per change (the incremental `Doc::edit` pipeline)
+    /// and rebuilt there — so the query burst riding one version
+    /// re-derives nothing (per-uri parse happens once per change,
+    /// never per query).
+    pub(crate) docs: HashMap<String, MountedFile>,
     /// the core prelude + walked/workspace files, in lookup order
-    pub(crate) defs: Vec<DefIndex>,
+    pub(crate) defs: DefIndexCollection,
     /// url → pin, from the workspace root's `rut.lock` (the host reads
     /// the file and hands the bytes to `set_lock`; the manifest
     /// grammar carries no pins). `parse_manifest` stamps the rows
@@ -45,21 +52,69 @@ pub(crate) struct SessionState {
 }
 
 impl SessionState {
-    /// the session state as it boots — the engine prelude pre-indexed
-    /// (`core` alone, the ONE ambient index; every other std pkg rides
+    /// the session state as it boots — the engine prelude pre-mounted
+    /// (`core` alone, the ONE ambient entry; every other std pkg rides
     /// the dep lane like any third-party lib), no session facts yet. The loop
     /// task owns this value exclusively; both constructors (`new` the
     /// wasm face, `spawn_native` the native harness) hand a fresh one
     /// to [`event_loop::run`].
     pub(crate) fn boot() -> SessionState {
+        let mut defs = DefIndexCollection::new();
+        defs.mount(crate::prelude::index());
         SessionState {
             docs: HashMap::new(),
-            defs: vec![crate::prelude::index()],
+            defs,
             lock_pins: BTreeMap::new(),
             direct_deps: HashSet::new(),
             hints_shown: HashSet::new(),
             walk_task: None,
         }
+    }
+
+    // ---- the sync lane (the doc-sync law: text arrives → sync →
+    // queries read) ----
+
+    /// one document change in, a coherent session out: the stored
+    /// entry syncs (the incremental `Doc::edit` pipeline + the UTF-16
+    /// view rebuild + the lazy views drop) and its decl map rebuilds —
+    /// THE one parse per change, never per query. The entry's stamped
+    /// mount — the (module, mod_path, mode) identity a walk lane laid
+    /// down on the same uri — survives untouched; a fresh uri mounts
+    /// with the open-doc stamp (origin only).
+    pub(crate) fn sync(&mut self, uri: &str, src: &str) {
+        match self.docs.get_mut(uri) {
+            Some(f) => f.doc.sync(src),
+            None => {
+                let mount = Mount::doc(uri);
+                self.docs.insert(
+                    uri.to_string(),
+                    MountedFile::from_document(
+                        crate::semantic::Document::parse(
+                            crate::semantic::mode_of(uri),
+                            src.to_string(),
+                        ),
+                        mount,
+                    ),
+                );
+            }
+        }
+        let f = self.docs.get_mut(uri).expect("just synced");
+        f.decls = crate::hover::collection::decls_of(&f.doc);
+    }
+
+    /// the document at `uri`, if open
+    pub(crate) fn doc(&self, uri: &str) -> Option<&crate::semantic::Document> {
+        self.docs.get(uri).map(|f| &f.doc)
+    }
+
+    /// the query chain — the open document's entry at the head (the
+    /// fresh version the sync lane keeps), the mounted world after
+    /// (the prelude + workspace; a stamped twin of the SAME uri keeps
+    /// its place — the definition layer's dedupe law handles the
+    /// doubled answer). `None` = the doc is unknown.
+    pub(crate) fn chain(&self, uri: &str) -> Option<crate::hover::collection::Chain<'_>> {
+        let head = self.docs.get(uri)?;
+        Some(self.defs.chain_with(head))
     }
 
     // ---- the lanes the ABI handlers and the dep walk SHARE (the
@@ -87,15 +142,15 @@ impl SessionState {
         }
     }
 
-    /// the walk's named-dep index lane: index one dep source
+    /// the walk's named-dep mount lane: mount one dep source
     /// file under its module NAME (replace-by-origin) — the FLAT
     /// mount (`mod_path` `None`).
     pub(crate) fn index_named_at(&mut self, uri: &str, name: &str, src: String) {
-        let idx = crate::deps::index_dep(name, uri, None, src);
-        self.replace_by_origin(uri, idx);
+        let file = crate::deps::mount_file(name, uri, None, src);
+        self.defs.mount(file);
     }
 
-    /// [`event_loop::Cmd::IndexModAt`]'s body: index one dep source
+    /// [`event_loop::Cmd::IndexModAt`]'s body: mount one dep source
     /// file at a MOD PATH (the pkg root `""`, a mounted child its
     /// `<path>`), answering the parsed file's own `mod` declarations —
     /// the walk's next hop (structure lives in the parse, never in
@@ -107,31 +162,21 @@ impl SessionState {
         mod_path: &str,
         src: String,
     ) -> Vec<wire::ModDecl> {
-        let idx = crate::deps::index_dep(pkg, uri, Some(mod_path), src);
-        let decls: Vec<wire::ModDecl> = idx
-            .mods
+        let file = crate::deps::mount_file(pkg, uri, Some(mod_path), src);
+        let decls: Vec<wire::ModDecl> = file
+            .mods()
             .iter()
             .map(|m| wire::ModDecl {
-                name: m.name.clone(),
-                vis: if matches!(m.vis, rut_ast::Vis::Pub) {
+                name: m.name().to_string(),
+                vis: if matches!(m.vis(), rut_ast::Vis::Pub) {
                     "pub"
                 } else {
                     "mod"
                 },
             })
             .collect();
-        self.replace_by_origin(uri, idx);
+        self.defs.mount(file);
         decls
-    }
-
-    /// the defs store's replace-by-origin law — one index per origin
-    /// uri, re-indexing replaces (the world stays idempotent under
-    /// re-walks).
-    fn replace_by_origin(&mut self, uri: &str, idx: crate::hover::DefIndex) {
-        match self.defs.iter().position(|d| d.mount.origin == uri) {
-            Some(slot) => self.defs[slot] = idx,
-            None => self.defs.push(idx),
-        }
     }
 
     /// the once-per-reason hint gate: the first `key` notifies, every
@@ -144,39 +189,42 @@ impl SessionState {
     }
 
     /// the open document's file-module context, read off the STAMPED
-    /// twin: whichever face indexed the file under its real uri (the
-    /// extension's dep walk / workspace indexer) laid down the (module,
-    /// mod_path) pair — the fresh per-query doc index borrows it.
-    /// Unstamped files answer the default (position-path completion off;
-    /// nothing else reads this).
+    /// twin in the mounted world: whichever face mounted the file
+    /// under its real uri (the extension's dep walk / workspace
+    /// indexer) laid down the (module, mod_path) pair. Unstamped files
+    /// answer the default (position-path completion off; nothing else
+    /// reads this).
     pub(crate) fn doc_mods_of(&self, uri: &str) -> crate::mods::DocMods {
-        for d in &self.defs {
-            if d.mount.origin == uri {
-                return crate::mods::DocMods {
-                    mod_path: d.mount.mod_path.clone(),
-                    pkg: d.mount.module.clone(),
-                };
-            }
+        match self.defs.file_for(uri) {
+            Some(f) => crate::mods::DocMods {
+                mod_path: f.mount.mod_path.clone(),
+                pkg: f.mount.module.clone(),
+            },
+            None => crate::mods::DocMods::default(),
         }
-        crate::mods::DocMods::default()
     }
 
-    /// the completion query's body over the stored doc — TYPED: the
-    /// state layer speaks values, and the calling arm owns the
+    /// the completion query's body over the STORED document — TYPED:
+    /// the state layer speaks values, and the calling arm owns the
     /// envelope (one law with every other query: JSON writes happen
-    /// once, at the `Reply::Text` boundary)
+    /// once, at the `Reply::Text` boundary). The doc-sync law: the
+    /// caller synced FIRST, so the chain head's document IS the text
+    /// the cursor sits in.
     pub(crate) fn complete_stored(
         &self,
         uri: &str,
         line: u32,
         ch: u32,
     ) -> Vec<ls_types::CompletionItem> {
-        // the store-clone moves into the parse (the doc-sync law's one
-        // copy per keystroke query — the old normalize copy is gone)
-        let Some(src) = self.docs.get(uri).cloned() else {
+        let Some(chain) = self.chain(uri) else {
             return Vec::new();
         };
+        let head = chain.head();
+        let byte = head.doc.lines().byte(head.doc.src(), line, ch);
         let doc = self.doc_mods_of(uri);
-        crate::query::analysis::complete_at(uri, src, &self.defs, line, ch, &doc, &self.direct_deps)
+        crate::query::completion::complete(&chain, byte, head.doc.src(), &doc, &self.direct_deps)
+            .into_iter()
+            .map(crate::query::completion::lsp_item)
+            .collect()
     }
 }

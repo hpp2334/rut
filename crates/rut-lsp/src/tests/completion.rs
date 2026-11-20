@@ -1,5 +1,6 @@
-use crate::hover::DefIndex;
+use crate::hover::collection::Chain;
 use crate::hover::Mount;
+use crate::hover::MountedFile;
 use crate::mods::DocMods;
 use crate::query::completion::*;
 use rut_ast::parser::Mode;
@@ -14,20 +15,11 @@ fn doc_of(src: &str, mode: Mode) -> crate::semantic::Document {
 }
 
 fn complete_after(src: &str, needle: &str) -> Vec<CompletionOut> {
-    let doc = doc_of(src, Mode::Impl);
-    let (s, toks, ast) = (doc.src(), doc.toks(), doc.ast());
-    let idx = crate::hover::index(&doc, Mount::default());
-    let idxs = [&idx];
+    let doc = MountedFile::from_document(doc_of(src, Mode::Impl), Mount::default());
+    let chain = Chain::new(vec![&doc]);
+    let s = doc.doc.src();
     let pos = s.rfind(needle).unwrap() as u32 + needle.len() as u32;
-    complete(
-        &idxs,
-        toks,
-        ast,
-        pos,
-        s,
-        &DocMods::default(),
-        &HashSet::new(),
-    )
+    complete(&chain, pos, s, &DocMods::default(), &HashSet::new())
 }
 
 fn labels(items: &[CompletionOut]) -> Vec<&str> {
@@ -60,23 +52,14 @@ fn member_completion_gates_foreign_interface_members() {
     // the foreign interface's members complete only once the doc
     // uses it; the document's own interface needs no gate
     let surf_src = "interface Greeter {\nfn greet(self) -> nil;\n}\n";
-    let surf = crate::hover::index(&doc_of(surf_src, Mode::Impl), Mount::default());
+    let surf = MountedFile::from_src(Mount::default(), surf_src.to_string());
 
     let mk = |doc: &str| {
-        let ddoc = doc_of(doc, Mode::Impl);
-        let (d2, toks, ast) = (ddoc.src(), ddoc.toks(), ddoc.ast());
-        let di = crate::hover::index(&ddoc, Mount::default());
-        let idxs = [&di, &surf];
+        let di = MountedFile::from_document(doc_of(doc, Mode::Impl), Mount::default());
+        let chain = Chain::new(vec![&di, &surf]);
+        let d2 = di.doc.src();
         let pos = d2.rfind("g.").unwrap() as u32 + 2;
-        complete(
-            &idxs,
-            toks,
-            ast,
-            pos,
-            d2,
-            &DocMods::default(),
-            &HashSet::new(),
-        )
+        complete(&chain, pos, d2, &DocMods::default(), &HashSet::new())
     };
 
     let gated = "fn go(g: Greeter) -> nil { g. }\n";
@@ -93,16 +76,13 @@ fn member_completion_gates_foreign_interface_members() {
 
     // the document's own interface is in scope natively
     let own = "interface Local {\nfn hi(self) -> nil;\n}\nfn go(l: Local) -> nil { l. }\n";
-    let odoc = doc_of(own, Mode::Impl);
-    let (d2, toks, ast) = (odoc.src(), odoc.toks(), odoc.ast());
-    let di = crate::hover::index(&odoc, Mount::default());
-    let idxs = [&di];
+    let di = MountedFile::from_document(doc_of(own, Mode::Impl), Mount::default());
+    let chain = Chain::new(vec![&di]);
+    let d2 = di.doc.src();
     let pos = d2.rfind("l.").unwrap() as u32 + 2;
     assert!(
         labels(&complete(
-            &idxs,
-            toks,
-            ast,
+            &chain,
             pos,
             d2,
             &DocMods::default(),
@@ -158,30 +138,20 @@ fn bare_completion_gates_pub_builtin_core_names() {
                         pub builtin class DisposalContext { }\n\
                         pub builtin class Weak { }\n\
                         prelude builtin class StackTrace { }\n";
-    let cdoc = doc_of(core_src, Mode::Decl);
-    let core = crate::hover::index(
-        &cdoc,
+    let core = MountedFile::from_src(
         Mount {
             module: Some("core".to_string()),
             ..Mount::default()
         },
+        core_src.to_string(),
     );
 
     let mk = |doc: &str| {
-        let ddoc = doc_of(doc, Mode::Impl);
-        let (d2, toks, ast) = (ddoc.src(), ddoc.toks(), ddoc.ast());
-        let di = crate::hover::index(&ddoc, Mount::default());
-        let idxs = [&di, &core];
+        let di = MountedFile::from_document(doc_of(doc, Mode::Impl), Mount::default());
+        let chain = Chain::new(vec![&di, &core]);
+        let d2 = di.doc.src();
         let pos = d2.len() as u32;
-        complete(
-            &idxs,
-            toks,
-            ast,
-            pos,
-            d2,
-            &DocMods::default(),
-            &HashSet::new(),
-        )
+        complete(&chain, pos, d2, &DocMods::default(), &HashSet::new())
     };
 
     let bare = "entry fn main() -> nil { }\n";
@@ -239,8 +209,8 @@ fn bare_completion_gates_pub_builtin_core_names() {
 /// pub struct, built the way the dep walk does (`index_dep`:
 /// module stamped). Directness is NOT an index fact — the tier
 /// derives it at read from the seeded set (`complete_with_dep`)
-fn tag_dep() -> DefIndex {
-    crate::deps::index_dep(
+fn tag_dep() -> MountedFile {
+    crate::deps::mount_file(
         "gadgets",
         "file:///deps/gadgets/lib.rut",
         None,
@@ -253,17 +223,14 @@ fn tag_dep() -> DefIndex {
 /// set (the root manifest's rows — the tier's live gate)
 fn complete_with_dep(
     doc: &str,
-    dep: &DefIndex,
+    dep: &MountedFile,
     direct_deps: &HashSet<String>,
 ) -> Vec<CompletionOut> {
-    let ddoc = doc_of(doc, Mode::Impl);
-    let (d2, toks, ast) = (ddoc.src(), ddoc.toks(), ddoc.ast());
-    let di = crate::hover::index(&ddoc, Mount::default());
-    let idxs = [&di, dep];
+    let di = MountedFile::from_document(doc_of(doc, Mode::Impl), Mount::default());
+    let chain = Chain::new(vec![&di, dep]);
+    let d2 = di.doc.src();
     complete(
-        &idxs,
-        toks,
-        ast,
+        &chain,
         d2.len() as u32,
         d2,
         &DocMods::default(),
@@ -396,23 +363,16 @@ fn string_receiver_completes_str_surface() {
     // std index ahead of the doc: `str`'s builtin contract supplies
     // the member list
     let core_src = "prelude builtin primitive str {\nfn len(self) -> i32;\n}\n";
-    let core = crate::hover::index(&doc_of(core_src, Mode::Decl), Mount::default());
+    let core = MountedFile::from_src(Mount::default(), core_src.to_string());
 
-    let doc = "fn f(s: str) -> i32 { return s. }\n";
-    let ddoc = doc_of(doc, Mode::Impl);
-    let (d2, toks, ast) = (ddoc.src(), ddoc.toks(), ddoc.ast());
-    let di = crate::hover::index(&ddoc, Mount::default());
-    let idxs = [&di, &core];
-    let pos = d2.rfind("s.").unwrap() as u32 + 2;
-    let items = complete(
-        &idxs,
-        toks,
-        ast,
-        pos,
-        d2,
-        &DocMods::default(),
-        &HashSet::new(),
+    let di = MountedFile::from_document(
+        doc_of("fn f(s: str) -> i32 { return s. }\n", Mode::Impl),
+        Mount::default(),
     );
+    let chain = Chain::new(vec![&di, &core]);
+    let d2 = di.doc.src();
+    let pos = d2.rfind("s.").unwrap() as u32 + 2;
+    let items = complete(&chain, pos, d2, &DocMods::default(), &HashSet::new());
     assert!(labels(&items).contains(&"len"), "{:?}", labels(&items));
 }
 
@@ -421,15 +381,15 @@ fn string_receiver_completes_str_surface() {
 /// completions with the cursor just after `needle`, over the std
 /// fixture chain (the doc itself carries nothing)
 fn complete_over_std(doc: &str, needle: &str) -> Vec<CompletionOut> {
-    let ddoc = doc_of(doc, Mode::Impl);
-    let (s, toks, ast) = (ddoc.src(), ddoc.toks(), ddoc.ast());
-    let di = crate::hover::index(&ddoc, Mount::default());
+    let di = MountedFile::from_document(doc_of(doc, Mode::Impl), Mount::default());
     let std = std_dep_fixtures();
-    let mut chain: Vec<&crate::hover::DefIndex> = vec![&di];
-    chain.extend(std.iter());
+    let mut files: Vec<&MountedFile> = vec![&di];
+    files.extend(std.iter());
+    let chain = Chain::new(files);
+    let s = di.doc.src();
     let pos = s.rfind(needle).unwrap() as u32 + needle.len() as u32;
     let direct = std_direct_deps();
-    complete(&chain, toks, ast, pos, s, &DocMods::default(), &direct)
+    complete(&chain, pos, s, &DocMods::default(), &direct)
 }
 
 /// the std chain's direct-dep set — the names the doc's own manifest
@@ -444,15 +404,16 @@ fn std_direct_deps() -> HashSet<String> {
 
 /// the std chain as the PUBLIC dep lane serves it: the ambient
 /// prelude (the ONE embedded index) plus the repo's own std sources
-/// mounted as ordinary dep fixtures — `deps::index_dep`, the same
+/// mounted as ordinary dep fixtures — `deps::mount_file`, the same
 /// door the walk rides (std is not special anymore; the library
 /// embeds nothing but core, tests embedding fixture sources is the
 /// normal shape). Directness is not an index fact — the seeded set
 /// (`std_direct_deps`) mirrors the walk's root-manifest rows, the
 /// auto-import tier's live gate.
-fn std_dep_fixtures() -> Vec<DefIndex> {
-    let mount =
-        |name: &str, uri: &str, src: &str| crate::deps::index_dep(name, uri, None, src.to_string());
+fn std_dep_fixtures() -> Vec<MountedFile> {
+    let mount = |name: &str, uri: &str, src: &str| {
+        crate::deps::mount_file(name, uri, None, src.to_string())
+    };
     vec![
         crate::prelude::index(),
         mount(
@@ -532,20 +493,20 @@ fn use_path_completion_lists_the_dep_lets_and_mods() {
     // row is the one const spelling (the manifest's `consts` table is
     // retired), and the module tree IS the qualified surface
     let src = "pub host fn sqrt(x: f64) -> f64;\npub let PI: f64 = 3.141592653589793;\n";
-    let calc_host = crate::deps::index_dep(
+    let calc_host = crate::deps::mount_file(
         "calc_host",
         "file:///deps/calc_host.d.rut",
         None,
         src.to_string(),
     );
     let mk_mod = |mod_path: &str, text: &str| {
-        crate::hover::index(
-            &doc_of(text, Mode::Impl),
+        MountedFile::from_src(
             Mount {
                 module: Some("calc".to_string()),
                 mod_path: Some(mod_path.to_string()),
                 ..Mount::default()
             },
+            text.to_string(),
         )
     };
     let calc_root = mk_mod("", "pub mod math;\n");
@@ -553,42 +514,22 @@ fn use_path_completion_lists_the_dep_lets_and_mods() {
         "math",
         "pub use calc_host::{ PI };\npub fn sqrt(x: f64) -> f64 { return x; }\n",
     );
-    let doc = "use calc_host::";
-    let ddoc = doc_of(doc, Mode::Impl);
-    let (s, toks, ast) = (ddoc.src(), ddoc.toks(), ddoc.ast());
-    let di = crate::hover::index(&ddoc, Mount::default());
-    let idxs = [&di, &calc_host];
+    let di = MountedFile::from_document(doc_of("use calc_host::", Mode::Impl), Mount::default());
+    let chain = Chain::new(vec![&di, &calc_host]);
+    let s = di.doc.src();
     let direct = HashSet::from(["calc_host".to_string()]);
-    let items = complete(
-        &idxs,
-        toks,
-        ast,
-        s.len() as u32,
-        s,
-        &DocMods::default(),
-        &direct,
-    );
+    let items = complete(&chain, s.len() as u32, s, &DocMods::default(), &direct);
     let ls = labels(&items);
     assert!(ls.contains(&"sqrt"), "the module's fns complete: {ls:?}");
     assert!(ls.contains(&"PI"), "the surface lets complete: {ls:?}");
     let pi = items.iter().find(|c| c.label == "PI").unwrap();
     assert!(matches!(pi.kind, CompletionKind::Const), "{:?}", pi.kind);
     // the dep's mod tree walks: `use calc::` offers the `pub mod` child
-    let doc = "use calc::";
-    let ddoc = doc_of(doc, Mode::Impl);
-    let (s, toks, ast) = (ddoc.src(), ddoc.toks(), ddoc.ast());
-    let di = crate::hover::index(&ddoc, Mount::default());
-    let idxs = [&di, &calc_root, &calc_math];
+    let di = MountedFile::from_document(doc_of("use calc::", Mode::Impl), Mount::default());
+    let chain = Chain::new(vec![&di, &calc_root, &calc_math]);
+    let s = di.doc.src();
     let direct = HashSet::from(["calc".to_string()]);
-    let items = complete(
-        &idxs,
-        toks,
-        ast,
-        s.len() as u32,
-        s,
-        &DocMods::default(),
-        &direct,
-    );
+    let items = complete(&chain, s.len() as u32, s, &DocMods::default(), &direct);
     let ls = labels(&items);
     assert!(ls.contains(&"math"), "the pub mod child completes: {ls:?}");
 }
@@ -600,15 +541,15 @@ fn use_path_completion_lists_the_dep_lets_and_mods() {
 /// `mod secret;`; `layout` a `pub mod grid;` child with a pub
 /// struct, a private fn, and a `pub(super)` fn; `layout/grid` and
 /// `secret` leaves
-fn gadget_dep() -> Vec<DefIndex> {
+fn gadget_dep() -> Vec<MountedFile> {
     let mk = |mod_path: &str, src: &str| {
-        crate::hover::index(
-            &doc_of(src, Mode::Impl),
+        MountedFile::from_src(
             Mount {
                 module: Some("gadgets".to_string()),
                 mod_path: Some(mod_path.to_string()),
                 ..Mount::default()
             },
+            src.to_string(),
         )
     };
     vec![
@@ -625,18 +566,18 @@ fn gadget_dep() -> Vec<DefIndex> {
 /// completions over the gadget dep with the cursor after `needle`
 /// (`gadgets` seeded as the doc's own dep — the doc's `use` names it)
 fn complete_over_gadgets(doc: &str, needle: &str, doc_mods: DocMods) -> Vec<CompletionOut> {
-    let ddoc = doc_of(doc, Mode::Impl);
-    let (s, toks, ast) = (ddoc.src(), ddoc.toks(), ddoc.ast());
-    let di = crate::hover::index(&ddoc, Mount::default());
+    let di = MountedFile::from_document(doc_of(doc, Mode::Impl), Mount::default());
     let dep = gadget_dep();
-    let mut chain: Vec<&DefIndex> = vec![&di];
-    chain.extend(dep.iter());
+    let mut files: Vec<&MountedFile> = vec![&di];
+    files.extend(dep.iter());
+    let chain = Chain::new(files);
     let direct = HashSet::from(["gadgets".to_string()]);
+    let s = di.doc.src();
     let pos = s
         .rfind(needle)
         .unwrap_or_else(|| panic!("needle {needle:?} not found in:\n{s}")) as u32
         + needle.len() as u32;
-    complete(&chain, toks, ast, pos, s, &doc_mods, &direct)
+    complete(&chain, pos, s, &doc_mods, &direct)
 }
 
 #[test]
@@ -869,15 +810,15 @@ fn the_use_path_tier_answers_an_own_package_head() {
 /// the re-export fixture: `mid`'s root and its `sub` module each `pub
 /// use` names off `util` (and keep a private use — the crossed tier's
 /// control)
-fn mid_dep() -> Vec<DefIndex> {
+fn mid_dep() -> Vec<MountedFile> {
     let mk = |mod_path: &str, src: &str| {
-        crate::hover::index(
-            &doc_of(src, Mode::Impl),
+        MountedFile::from_src(
             Mount {
                 module: Some("mid".to_string()),
                 mod_path: Some(mod_path.to_string()),
                 ..Mount::default()
             },
+            src.to_string(),
         )
     };
     vec![
@@ -890,18 +831,18 @@ fn mid_dep() -> Vec<DefIndex> {
 }
 
 fn complete_over_mid(doc: &str, needle: &str) -> Vec<CompletionOut> {
-    let ddoc = doc_of(doc, Mode::Impl);
-    let (s, toks, ast) = (ddoc.src(), ddoc.toks(), ddoc.ast());
-    let di = crate::hover::index(&ddoc, Mount::default());
+    let di = MountedFile::from_document(doc_of(doc, Mode::Impl), Mount::default());
     let dep = mid_dep();
-    let mut chain: Vec<&DefIndex> = vec![&di];
-    chain.extend(dep.iter());
+    let mut files: Vec<&MountedFile> = vec![&di];
+    files.extend(dep.iter());
+    let chain = Chain::new(files);
     let direct = HashSet::from(["mid".to_string()]);
+    let s = di.doc.src();
     let pos = s
         .rfind(needle)
         .unwrap_or_else(|| panic!("needle {needle:?} not found in:\n{s}")) as u32
         + needle.len() as u32;
-    complete(&chain, toks, ast, pos, s, &DocMods::default(), &direct)
+    complete(&chain, pos, s, &DocMods::default(), &direct)
 }
 
 #[test]
@@ -980,13 +921,13 @@ fn colon2_completion_lists_the_dep_module_statics() {
     // module's pub fns and its re-exported consts (the dep-module
     // lane the engine resolves)
     let stamp = |text: &str, mod_path: &str| {
-        crate::hover::index(
-            &doc_of(text, Mode::Impl),
+        MountedFile::from_src(
             Mount {
                 module: Some("calc".to_string()),
                 mod_path: Some(mod_path.to_string()),
                 ..Mount::default()
             },
+            text.to_string(),
         )
     };
     let root = stamp("pub mod math;\n", "");
@@ -994,14 +935,18 @@ fn colon2_completion_lists_the_dep_module_statics() {
         "pub use calc_host::{ PI };\npub fn sqrt(x: f64) -> f64 { return x; }\n",
         "math",
     );
-    let doc = "use calc::{ math };\nentry fn main() -> nil {\n    let x = math::\n}\n";
-    let ddoc = doc_of(doc, Mode::Impl);
-    let (s, toks, ast) = (ddoc.src(), ddoc.toks(), ddoc.ast());
-    let di = crate::hover::index(&ddoc, Mount::default());
-    let idxs = [&di, &root, &math];
+    let di = MountedFile::from_document(
+        doc_of(
+            "use calc::{ math };\nentry fn main() -> nil {\n    let x = math::\n}\n",
+            Mode::Impl,
+        ),
+        Mount::default(),
+    );
+    let chain = Chain::new(vec![&di, &root, &math]);
+    let s = di.doc.src();
     let pos = s.rfind("math::").unwrap() as u32 + "math::".len() as u32;
     let direct = HashSet::from(["calc".to_string()]);
-    let items = complete(&idxs, toks, ast, pos, s, &DocMods::default(), &direct);
+    let items = complete(&chain, pos, s, &DocMods::default(), &direct);
     let ls = labels(&items);
     assert!(ls.contains(&"sqrt"), "the module's fns complete: {ls:?}");
     assert!(
@@ -1235,29 +1180,20 @@ fn the_type_tier_offers_the_ambient_and_imported_foreign_types() {
     // complete; the `pub builtin` gated row completes only once the
     // document's `use` names it
     let core_src = "pub builtin class Weak { }\nprelude builtin class StackTrace { }\n";
-    let core = crate::hover::index(
-        &doc_of(core_src, Mode::Decl),
+    let core = MountedFile::from_src(
         Mount {
             module: Some("core".to_string()),
             ..Mount::default()
         },
+        core_src.to_string(),
     );
 
     let mk = |doc: &str| {
-        let ddoc = doc_of(doc, Mode::Impl);
-        let (d2, toks, ast) = (ddoc.src(), ddoc.toks(), ddoc.ast());
-        let di = crate::hover::index(&ddoc, Mount::default());
-        let idxs = [&di, &core];
+        let di = MountedFile::from_document(doc_of(doc, Mode::Impl), Mount::default());
+        let chain = Chain::new(vec![&di, &core]);
+        let d2 = di.doc.src();
         let pos = d2.rfind("let e:").unwrap() as u32 + "let e:".len() as u32;
-        complete(
-            &idxs,
-            toks,
-            ast,
-            pos,
-            d2,
-            &DocMods::default(),
-            &HashSet::new(),
-        )
+        complete(&chain, pos, d2, &DocMods::default(), &HashSet::new())
     };
 
     let items = mk("entry fn main() -> nil {\n    let e: \n}\n");
@@ -1291,23 +1227,17 @@ fn import_item<'a>(items: &'a [CompletionOut], label: &str) -> Option<&'a Comple
 
 #[test]
 fn auto_import_offers_foreign_names_with_the_insert_edit() {
-    let doc = "entry fn main() -> nil {\n    let v = Ve\n}\n";
-    let ddoc = doc_of(doc, Mode::Impl);
-    let (s, toks, ast) = (ddoc.src(), ddoc.toks(), ddoc.ast());
-    let di = crate::hover::index(&ddoc, Mount::default());
-    let std = std_dep_fixtures();
-    let mut chain: Vec<&crate::hover::DefIndex> = vec![&di];
-    chain.extend(std.iter());
-    let pos = s.rfind("Ve").unwrap() as u32 + 2;
-    let items = complete(
-        &chain,
-        toks,
-        ast,
-        pos,
-        s,
-        &DocMods::default(),
-        &std_direct_deps(),
+    let di = MountedFile::from_document(
+        doc_of("entry fn main() -> nil {\n    let v = Ve\n}\n", Mode::Impl),
+        Mount::default(),
     );
+    let std = std_dep_fixtures();
+    let mut files: Vec<&MountedFile> = vec![&di];
+    files.extend(std.iter());
+    let chain = Chain::new(files);
+    let s = di.doc.src();
+    let pos = s.rfind("Ve").unwrap() as u32 + 2;
+    let items = complete(&chain, pos, s, &DocMods::default(), &std_direct_deps());
     let imp = import_item(&items, "Vec").expect("Vec auto-imports from pouch");
     assert_eq!(imp.detail, "pouch::Vec — import");
     assert_eq!(
@@ -1326,23 +1256,20 @@ fn auto_import_offers_foreign_names_with_the_insert_edit() {
 
 #[test]
 fn auto_import_lands_after_the_last_leading_use() {
-    let doc = "use core::{ NAN };\n\nentry fn main() -> nil {\n    let v = Ve\n}\n";
-    let ddoc = doc_of(doc, Mode::Impl);
-    let (s, toks, ast) = (ddoc.src(), ddoc.toks(), ddoc.ast());
-    let di = crate::hover::index(&ddoc, Mount::default());
-    let std = std_dep_fixtures();
-    let mut chain: Vec<&crate::hover::DefIndex> = vec![&di];
-    chain.extend(std.iter());
-    let pos = s.rfind("Ve").unwrap() as u32 + 2;
-    let items = complete(
-        &chain,
-        toks,
-        ast,
-        pos,
-        s,
-        &DocMods::default(),
-        &std_direct_deps(),
+    let di = MountedFile::from_document(
+        doc_of(
+            "use core::{ NAN };\n\nentry fn main() -> nil {\n    let v = Ve\n}\n",
+            Mode::Impl,
+        ),
+        Mount::default(),
     );
+    let std = std_dep_fixtures();
+    let mut files: Vec<&MountedFile> = vec![&di];
+    files.extend(std.iter());
+    let chain = Chain::new(files);
+    let s = di.doc.src();
+    let pos = s.rfind("Ve").unwrap() as u32 + 2;
+    let items = complete(&chain, pos, s, &DocMods::default(), &std_direct_deps());
     let imp = import_item(&items, "Vec").expect("Vec auto-imports");
     let (range, text) = &imp.additional_text_edits[0];
     // right after the leading use's `;` — column 18 of line 0 —
@@ -1353,23 +1280,20 @@ fn auto_import_lands_after_the_last_leading_use() {
 
 #[test]
 fn auto_import_skips_leading_comments() {
-    let doc = "// the header prose\n\nentry fn main() -> nil {\n    let v = Ve\n}\n";
-    let ddoc = doc_of(doc, Mode::Impl);
-    let (s, toks, ast) = (ddoc.src(), ddoc.toks(), ddoc.ast());
-    let di = crate::hover::index(&ddoc, Mount::default());
-    let std = std_dep_fixtures();
-    let mut chain: Vec<&crate::hover::DefIndex> = vec![&di];
-    chain.extend(std.iter());
-    let pos = s.rfind("Ve").unwrap() as u32 + 2;
-    let items = complete(
-        &chain,
-        toks,
-        ast,
-        pos,
-        s,
-        &DocMods::default(),
-        &std_direct_deps(),
+    let di = MountedFile::from_document(
+        doc_of(
+            "// the header prose\n\nentry fn main() -> nil {\n    let v = Ve\n}\n",
+            Mode::Impl,
+        ),
+        Mount::default(),
     );
+    let std = std_dep_fixtures();
+    let mut files: Vec<&MountedFile> = vec![&di];
+    files.extend(std.iter());
+    let chain = Chain::new(files);
+    let s = di.doc.src();
+    let pos = s.rfind("Ve").unwrap() as u32 + 2;
+    let items = complete(&chain, pos, s, &DocMods::default(), &std_direct_deps());
     let imp = import_item(&items, "Vec").expect("Vec auto-imports");
     let (range, text) = &imp.additional_text_edits[0];
     // top of the file BODY — after the comment block and the blank
@@ -1379,23 +1303,20 @@ fn auto_import_skips_leading_comments() {
 
 #[test]
 fn already_imported_names_are_not_re_offered() {
-    let doc = "use pouch::{ Vec };\nentry fn main() -> nil {\n    let v = Ve\n}\n";
-    let ddoc = doc_of(doc, Mode::Impl);
-    let (s, toks, ast) = (ddoc.src(), ddoc.toks(), ddoc.ast());
-    let di = crate::hover::index(&ddoc, Mount::default());
-    let std = std_dep_fixtures();
-    let mut chain: Vec<&crate::hover::DefIndex> = vec![&di];
-    chain.extend(std.iter());
-    let pos = s.rfind("Ve").unwrap() as u32 + 2;
-    let items = complete(
-        &chain,
-        toks,
-        ast,
-        pos,
-        s,
-        &DocMods::default(),
-        &std_direct_deps(),
+    let di = MountedFile::from_document(
+        doc_of(
+            "use pouch::{ Vec };\nentry fn main() -> nil {\n    let v = Ve\n}\n",
+            Mode::Impl,
+        ),
+        Mount::default(),
     );
+    let std = std_dep_fixtures();
+    let mut files: Vec<&MountedFile> = vec![&di];
+    files.extend(std.iter());
+    let chain = Chain::new(files);
+    let s = di.doc.src();
+    let pos = s.rfind("Ve").unwrap() as u32 + 2;
+    let items = complete(&chain, pos, s, &DocMods::default(), &std_direct_deps());
     // the name still completes (the bare tier), but NO import edit
     // rides it — the document already imports it
     assert!(

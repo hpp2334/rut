@@ -45,18 +45,14 @@
 //! keyword, so the module carries the same content under a spellable
 //! name.
 
-use std::collections::VecDeque;
-use std::panic::{catch_unwind, AssertUnwindSafe};
-use std::rc::Rc;
-use std::str::FromStr;
-
+use crate::wire;
+use crate::{json_envelope, locations_envelope, state::SessionState};
 use futures::channel::mpsc::{unbounded, UnboundedReceiver, UnboundedSender};
 use futures::channel::oneshot::Sender;
 use futures::StreamExt;
-use ls_types::Uri;
-
-use crate::wire;
-use crate::{json_envelope, locations_envelope, state::SessionState};
+use std::collections::VecDeque;
+use std::panic::{catch_unwind, AssertUnwindSafe};
+use std::rc::Rc;
 
 /// the deferral window — the walk lane's debounce interval (the old JS
 /// engine's 200ms, now the ACTOR's own clock read: ONE armed window
@@ -368,36 +364,33 @@ fn dispatch(l: &mut Loop, cmd: Cmd) {
             ))));
         }
         Cmd::Analyze { uri, src, tx } => {
-            // open / FULL-sync change: the doc stores FIRST (the analyze
-            // lane's store — the queries below read the same text)
-            l.state.docs.insert(uri.clone(), src.clone());
-            // analyze_at stamps related-info URIs + hover provenance at
-            // construction; a degenerate URI still analyzes (unstamped
-            // twin below). The store holds one clone (the doc-sync law);
-            // the analyze clone MOVES into the parse — the old
-            // normalize copy is gone; the check lane still borrows.
-            let a = match Uri::from_str(&uri) {
-                Ok(u) => crate::query::analysis::analyze_at(&u, src.clone()),
-                Err(_) => crate::query::analysis::analyze_unstamped(&uri, src.clone()),
+            // open / FULL-sync change: the doc syncs FIRST (the
+            // doc-sync lane's store — the queries below read the same
+            // version), then the analysis envelope rides the entry's
+            // kept document. One parse per change — never per query.
+            l.state.sync(&uri, &src);
+            let mut a = match l.state.doc(&uri) {
+                Some(doc) => crate::query::analysis::analysis_of(doc),
+                None => unreachable!("the sync lane stored the entry"),
+            };
+            // the merged set (B1+B2): the doc's package (its stamped
+            // twin names it) compiles with its dep closure and the
+            // checker's per-file diags map back through the file
+            // stamps. No package context → parse-only, exactly the
+            // pre-B1 answer.
+            let dm = l.state.doc_mods_of(&uri);
+            let diags = match (dm.pkg.as_deref(), l.state.doc(&uri)) {
+                (Some(_), Some(doc)) => crate::query::analysis::merged_diags_for(
+                    &uri,
+                    doc.src(),
+                    &dm,
+                    l.state.defs.files(),
+                    std::mem::take(&mut a.diags),
+                ),
+                _ => std::mem::take(&mut a.diags),
             };
             // the envelope's rows move to the wire field by field (a
             // plain record — no consuming ceremony)
-            let diags = {
-                let dm = l.state.doc_mods_of(&uri);
-                let groups = if dm.pkg.is_some() {
-                    crate::query::check::groups_from_defs(&l.state.defs)
-                } else {
-                    Vec::new()
-                };
-                crate::query::check::merged_doc_diags(
-                    &uri,
-                    &src,
-                    dm.pkg,
-                    dm.mod_path,
-                    groups,
-                    a.diags,
-                )
-            };
             let answer = json_envelope(wire::Analysis {
                 diags,
                 // SemanticTokens serializes `data` to the flat u32 wire format
@@ -415,12 +408,14 @@ fn dispatch(l: &mut Loop, cmd: Cmd) {
             let _ = tx.send(Reply::Done);
         }
         Cmd::Hover { uri, line, ch, tx } => {
-            let answer = match l.state.docs.get(&uri).cloned() {
+            // the doc-sync law: queries read the STORED entry — no doc,
+            // no answer (the old parse-per-request lane is gone)
+            let answer = match l.state.chain(&uri) {
                 None => "null".to_string(),
-                Some(src) => {
-                    let doc = l.state.doc_mods_of(&uri);
-                    let out =
-                        crate::query::analysis::hover_at(&uri, src, &l.state.defs, &doc, line, ch);
+                Some(chain) => {
+                    let doc = &chain.head().doc;
+                    let dm = l.state.doc_mods_of(&uri);
+                    let out = crate::query::analysis::hover_on(doc, &chain, &dm, line, ch);
                     json_envelope(serde_json::json!(out))
                 }
             };
@@ -433,45 +428,34 @@ fn dispatch(l: &mut Loop, cmd: Cmd) {
             ch,
             tx,
         } => {
-            // the doc-sync entry: the CURRENT text stores FIRST (see the
+            // the doc-sync entry: the CURRENT text syncs FIRST (see the
             // bridge's doc — the analyze lane debounces, completion fires
             // on the keystroke). The typed body; the envelope writes
             // HERE, at the reply boundary (hover's arm's own shape)
-            l.state.docs.insert(uri.clone(), src);
+            l.state.sync(&uri, &src);
             let items = l.state.complete_stored(&uri, line, ch);
             let _ = tx.send(Reply::Text(json_envelope(serde_json::json!(items))));
         }
         Cmd::Definition { uri, line, ch, tx } => {
-            let answer = match l.state.docs.get(&uri).cloned() {
+            let answer = match l.state.chain(&uri) {
                 None => "null".to_string(),
-                Some(src) => {
-                    let doc = l.state.doc_mods_of(&uri);
-                    let locs = crate::query::analysis::definition_at(
-                        &uri,
-                        src,
-                        &l.state.defs,
-                        &doc,
-                        line,
-                        ch,
-                    );
+                Some(chain) => {
+                    let doc = &chain.head().doc;
+                    let dm = l.state.doc_mods_of(&uri);
+                    let locs = crate::query::analysis::definition_on(doc, &chain, &dm, line, ch);
                     locations_envelope(&locs)
                 }
             };
             let _ = tx.send(Reply::Text(answer));
         }
         Cmd::TypeDefinition { uri, line, ch, tx } => {
-            let answer = match l.state.docs.get(&uri).cloned() {
+            let answer = match l.state.chain(&uri) {
                 None => "null".to_string(),
-                Some(src) => {
-                    let doc = l.state.doc_mods_of(&uri);
-                    let locs = crate::query::analysis::type_definition_at(
-                        &uri,
-                        src,
-                        &l.state.defs,
-                        &doc,
-                        line,
-                        ch,
-                    );
+                Some(chain) => {
+                    let doc = &chain.head().doc;
+                    let dm = l.state.doc_mods_of(&uri);
+                    let locs =
+                        crate::query::analysis::type_definition_on(doc, &chain, &dm, line, ch);
                     locations_envelope(&locs)
                 }
             };
@@ -485,13 +469,13 @@ fn dispatch(l: &mut Loop, cmd: Cmd) {
             end_ch,
             tx,
         } => {
-            let answer = match l.state.docs.get(&uri).cloned() {
+            let answer = match l.state.chain(&uri) {
                 None => "null".to_string(),
-                Some(src) => {
-                    let hints = crate::query::analysis::inlay_hints_at(
-                        &uri,
-                        src,
-                        &l.state.defs,
+                Some(chain) => {
+                    let doc = &chain.head().doc;
+                    let hints = crate::query::analysis::inlay_hints_on(
+                        doc,
+                        &chain,
                         ls_types::Range {
                             start: ls_types::Position {
                                 line: start_line,
@@ -515,15 +499,15 @@ fn dispatch(l: &mut Loop, cmd: Cmd) {
             include_decl,
             tx,
         } => {
-            let answer = match l.state.docs.get(&uri).cloned() {
+            let answer = match l.state.chain(&uri) {
                 None => "null".to_string(),
-                Some(src) => {
-                    let doc = l.state.doc_mods_of(&uri);
-                    let locs = crate::query::analysis::references_at(
-                        &uri,
-                        src,
-                        &l.state.defs,
-                        &doc,
+                Some(chain) => {
+                    let doc = &chain.head().doc;
+                    let dm = l.state.doc_mods_of(&uri);
+                    let locs = crate::query::analysis::references_on(
+                        doc,
+                        &chain,
+                        &dm,
                         line,
                         ch,
                         include_decl != 0,
@@ -534,16 +518,10 @@ fn dispatch(l: &mut Loop, cmd: Cmd) {
             let _ = tx.send(Reply::Text(answer));
         }
         Cmd::SignatureHelp { uri, line, ch, tx } => {
-            let answer = match l.state.docs.get(&uri).cloned() {
+            let answer = match l.state.chain(&uri) {
                 None => "null".to_string(),
-                Some(src) => {
-                    let out = crate::query::analysis::signature_help_at(
-                        &uri,
-                        src,
-                        &l.state.defs,
-                        line,
-                        ch,
-                    );
+                Some(chain) => {
+                    let out = crate::query::analysis::signature_help_on(&chain, line, ch);
                     json_envelope(serde_json::json!(out))
                 }
             };
@@ -551,12 +529,10 @@ fn dispatch(l: &mut Loop, cmd: Cmd) {
         }
         Cmd::IndexFile { uri, src, tx } => {
             // the wire's String moves into the parse — a fresh read,
-            // zero copies end to end
-            let idx = crate::query::analysis::index_at(&uri, src);
-            match l.state.defs.iter().position(|d| d.mount.origin == uri) {
-                Some(slot) => l.state.defs[slot] = idx,
-                None => l.state.defs.push(idx),
-            }
+            // zero copies end to end. The mounted file rides the
+            // open-doc stamp (the workspace scan's shape)
+            let file = crate::hover::MountedFile::from_src(crate::hover::Mount::doc(&uri), src);
+            l.state.defs.mount(file);
             let _ = tx.send(Reply::Done);
         }
         Cmd::ParseManifest { text, tx } => {

@@ -1,9 +1,13 @@
-//! The index data — one entry per type, fn, or impl declaration:
-//! verbatim signature slices, doc lines, and spans for rendering.
+//! The decl layer's shared vocabulary — the mount stamp, the type
+//! forms, and the type-text helpers the views and the queries join
+//! with. The row types (`TyDef`/`FnDef`/`LetDef`/`UseDef`/`ModDef`/
+//! `MemberSrc`) are GONE: every decl fact derives from a view over
+//! `(Doc, AnyHandle)` at read (see [`super::collection`]) — verbatim
+//! slices are span×src joins on the owning file, and the
+//! `ambient`/`is_pub`/`static` verdicts ride the modifier chains.
 
 use crate::semantic::Mode;
-use crate::semantic::Span;
-use rut_ast::{Ast, TyRef, Vis};
+use rut_ast::{Ast, TyRef};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum TyForm {
@@ -26,167 +30,10 @@ pub enum TyForm {
     Alias,
 }
 
-use crate::semantic::LineIndex;
-
-#[derive(Debug, Clone)]
-pub struct MemberSrc {
-    pub name: String,
-    /// verbatim source of the declaration (signature for methods) —
-    /// modifiers included: the decl span starts at the member's first
-    /// token
-    pub src: String,
-    /// the declared type as written — fields: the type; methods: the
-    /// return (`None` = unwritten, i.e. `nil`-returning). Inferred-type
-    /// hovers key on this instead of re-parsing `src`
-    pub ty: Option<String>,
-    /// the `static` verdict, derived from the field's modifier nodes —
-    /// the `::` completion tier's gate (methods are never static)
-    pub is_static: bool,
-    /// byte span of the name identifier — token recovery (names are
-    /// `IdentId`s: the AST carries no name spans, no parser changes).
-    /// The field / enum-member decl-site hover and phase 2's
-    /// definition lookup key on it; `None` only when recovery fails
-    /// (a degenerate parse)
-    pub name_span: Option<Span>,
-    pub doc: Vec<String>,
-    /// 1-based line of the declaration
-    pub line: u32,
-}
-
-/// a module-scope `let` — a real definition (the survey §3.2 decl
-/// layer: `ModuleLet` and `Use` were skipped by the old index)
-#[derive(Debug, Clone)]
-pub struct LetDef {
-    pub name: String,
-    pub name_span: Option<Span>,
-    /// declared annotation as written, else the initializer-derived
-    /// type (the same display-side heuristic the binding pass uses)
-    pub ty: Option<String>,
-    /// verbatim decl slice, through the initializer
-    pub src: String,
-    pub doc: Vec<String>,
-    /// the declared visibility — the position-path completion's tier
-    /// gate reads it (`pub(pkg)`/`pub(super)` are not `pub`)
-    pub vis: Vis,
-    pub span: Span,
-    pub line: u32,
-}
-
-/// a `pub? use pkg::A::B::{ Name, .. }` import edge — the name's span
-/// is a definition target (phase 2: ctrl+click on `Vec` in the use
-/// jumps to the pouch decl). The full path rides since the file-module
-/// phase: `path[0]` is the package, the rest name modules — the
-/// use-path completion walk and the segment hovers/definition targets
-/// key on them (the flat spelling degenerates to `path = [pkg]`). The
-/// vis carries the re-export edge: a `pub use`'s names join the
-/// module's surface (the completion re-export tier's gate).
-#[derive(Debug, Clone)]
-pub struct UseDef {
-    pub name: String,
-    pub name_span: Option<Span>,
-    /// the use's declared visibility (`Vis::Self_` = a private import)
-    pub vis: Vis,
-    pub pkg: String,
-    /// the spelled path, pkg head included (`["pouch", "layout"]`)
-    pub path: Vec<String>,
-    /// token-recovered spans per path segment, same order — the use
-    /// segment hover/definition targets (`None` when recovery failed)
-    pub path_spans: Vec<Option<Span>>,
-}
-
-#[derive(Debug, Clone)]
-pub struct TyDef {
-    pub name: String,
-    /// byte span of the name identifier — token recovery (names are
-    /// `IdentId`s); phase 2's definition target (the declaring ident,
-    /// not the whole decl)
-    pub name_span: Option<Span>,
-    pub form: TyForm,
-    /// the decl head as WRITTEN — the verbatim `span × src` slice from
-    /// the item's first token (span law v3.1: modifiers included,
-    /// generics and admission bounds as written) cut at the body's
-    /// `{`; an alias slices through its own terminator. The render and
-    /// the completion labels use it directly — they never
-    /// re-synthesize `class`/`pub`/`<T>` text
-    pub head: String,
-    /// the declared visibility — the completion/hover tier gate reads
-    /// it (`pub(pkg)`/`pub(super)` are not `pub`)
-    pub vis: Vis,
-    /// `pub` on the declaration — the completion tiers' names face
-    /// (the use-path exports, the auto-import tier) offers pub rows
-    /// only, while the INDEX itself stays unfiltered: a pub-less row
-    /// still answers hover/definition (D2 — a mounted dep's internals
-    /// are readable, exactly like the source they mirror)
-    pub is_pub: bool,
-    /// the ambient builtin linkage (`prelude builtin`) — the name
-    /// binds in every compilation unit with no `use`, so completion
-    /// offers it bare from ANY index in the chain. `false` = a plain
-    /// decl or the import-gated spelling (`pub builtin`, mirrored in
-    /// `DefIndex::pub_gated`)
-    pub ambient: bool,
-    pub fields: Vec<MemberSrc>,
-    pub methods: Vec<MemberSrc>,
-    pub doc: Vec<String>,
-    pub span: Span,
-    pub line: u32,
-}
-
-#[derive(Debug, Clone)]
-pub struct FnDef {
-    pub name: String,
-    /// byte span of the name identifier — the definition target
-    /// (recovery may fail on a degenerate parse; `span` is the fallback)
-    pub name_span: Option<Span>,
-    /// verbatim signature source
-    pub src: String,
-    /// the declared return as written (`None` = unwritten);
-    /// inferred-type hovers read it for call initializers
-    pub ret: Option<String>,
-    pub params: Vec<String>,
-    pub doc: Vec<String>,
-    /// the declared visibility — the position-path completion's tier
-    /// gate reads it (free fns; impl methods carry their member vis)
-    pub vis: Vis,
-    /// the ambient builtin linkage (`prelude builtin fn`) — the name
-    /// binds in every compilation unit with no `use`, so completion
-    /// offers it bare from ANY index in the chain. `false` = a plain
-    /// decl or the import-gated spelling (`pub builtin`)
-    pub ambient: bool,
-    /// the owning inherent impl's target type (`Circle` — inherent
-    /// impls own their methods, so an impl method renders like the
-    /// type's own surface), `None` for a free fn
-    pub owner: Option<String>,
-    pub span: Span,
-    pub line: u32,
-}
-
-/// a `pub? mod NAME;` declaration — the file-module namespace edge.
-/// The namespace itself is the mounted `NAME/mod.rut`'s own index
-/// (found through the chain by its mod path); this row carries the
-/// edge: the declaring ident span (hover/definition target), the
-/// edge's visibility (`mod` vs `pub mod` — the crossing gates read
-/// it), and the doc comment.
-#[derive(Debug, Clone)]
-pub struct ModDef {
-    pub name: String,
-    /// byte span of the name identifier — the decl-site hover /
-    /// definition target (`None` only on a degenerate parse)
-    pub name_span: Option<Span>,
-    /// the edge's declared visibility (`Vis::Self_` = bare `mod`)
-    pub vis: Vis,
-    /// the edge as spelled — the verbatim `span × src` slice (span law
-    /// v3.1 starts the item at its first modifier), trailing `;`
-    /// trimmed: the render never re-synthesizes `pub mod NAME;`
-    pub src: String,
-    pub doc: Vec<String>,
-    pub span: Span,
-    pub line: u32,
-}
-
-/// Where one index sits in the session's world — the lanes' identity
-/// stamps, ONE record built in ONE expression at the mount site and
-/// handed to the builder up front (identity is never patched on after
-/// the fact). A plain record: many construction sites, no invariant.
+/// Where one mounted file sits in the session's world — the lanes'
+/// identity stamps, ONE record built in ONE expression at the mount
+/// site and handed up front (identity is never patched on after the
+/// fact). A plain record: many construction sites, no invariant.
 #[derive(Debug, Default, Clone)]
 pub struct Mount {
     /// label for provenance lines — the file's path, or `core`; the
@@ -198,19 +45,19 @@ pub struct Mount {
     /// so a workspace that is the rut repo lands in the real file
     pub src_path: Option<String>,
     /// the module's explicit manifest name (`pouch` — what a `use`
-    /// path spells). Named indexes answer the use graph FIRST: a
+    /// path spells). Named files answer the use graph FIRST: a
     /// `Some` here is the whole match; `None` (open documents) falls
     /// back to the origin path-segment / file-stem derivation,
     /// byte-for-byte the old behavior
     pub module: Option<String>,
-    /// which of the package's file modules THIS index is — the full
+    /// which of the package's file modules THIS file is — the full
     /// mod path (`""` = the pkg root's `mod.rut`, `"layout/grid"` =
     /// that child). The (module, mod_path) pair is the whole key the
     /// mod-aware queries walk; `None` is the flat single-file shape.
     /// Stamped by the faces that mount a package's mod tree (the dep
     /// walk, the bundle loader); never derived from text.
     pub mod_path: Option<String>,
-    /// which parse mode this index was BUILT in — `Some(Decl)` marks a
+    /// which parse mode this file was BUILT in — `Some(Decl)` marks a
     /// `.d.rut` surface (a dep's `entry.type`, a host pkg's whole
     /// file), `Some(Impl)` the body (`mod.rut`); `None` = unknown
     /// (open documents, any builder that does not stamp). The
@@ -241,39 +88,6 @@ impl Mount {
             mode: Some(crate::semantic::mode_of(uri)),
             ..Mount::default()
         }
-    }
-}
-
-#[derive(Debug, Default)]
-pub struct DefIndex {
-    pub types: Vec<TyDef>,
-    pub fns: Vec<FnDef>,
-    /// module-scope lets (the decl layer)
-    pub lets: Vec<LetDef>,
-    /// use-imported names (the decl layer)
-    pub uses: Vec<UseDef>,
-    /// `pub? mod NAME;` declarations — the file-module namespace edges
-    /// this file declares (the mounted child lives in its own index)
-    pub mods: Vec<ModDef>,
-    /// where this index sits in the session's world — the lanes'
-    /// stamps, set once at the mount site
-    pub mount: Mount,
-    /// the normalized source this index was built over — cross-file
-    /// definition targets convert their byte spans to LSP ranges
-    /// against THIS text (the editor face cannot re-read files)
-    pub src: String,
-    /// byte offsets ⇄ (line, UTF-16 col) over `src`
-    pub lines: LineIndex,
-    /// names whose decl spelled the import-gated builtin linkage
-    /// (`pub builtin` — the core disposal pair): completion offers them
-    /// only when the document's `use` names them, the same ambient
-    /// split the compiler binds by
-    pub pub_gated: Vec<String>,
-}
-
-impl DefIndex {
-    pub fn ty(&self, name: &str) -> Option<&TyDef> {
-        self.types.iter().find(|t| t.name == name)
     }
 }
 

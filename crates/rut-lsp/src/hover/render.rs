@@ -1,10 +1,13 @@
 //! Markdown rendering — verbatim-signature code blocks, provenance
-//! lines, doc paragraphs; a candidate list on ambiguity. Plus the new
+//! lines, doc paragraphs; a candidate list on ambiguity. Plus the
 //! phase-1 shapes: the binding pass's identifier hover, the M7
-//! primitive blurbs, and the module-let decl render.
+//! primitive blurbs, and the module-let decl render. Every verbatim
+//! slice is a span×src join on the OWNING file's document (the views'
+//! law) — nothing rendered is stored text.
 
 use super::bindings::Binding;
-use super::types::{DefIndex, FnDef, LetDef, MemberSrc, ModDef, TyDef, TyForm};
+use super::collection::{FnView, LetView, MemberView, ModView, MountedFile, TyView};
+use super::types::TyForm;
 
 fn code_block(body: &str) -> String {
     format!("```rut\n{body}\n```")
@@ -14,119 +17,113 @@ fn provenance(origin: &str, line: u32) -> String {
     format!("— {origin}:{line}")
 }
 
-pub(crate) fn render_ty(i: &DefIndex, ty: &TyDef) -> String {
+pub(crate) fn render_ty(t: &TyView) -> String {
     let mut out = String::new();
-    // the decl head is the row's own verbatim slice (`head` — from the
-    // first token through the name and generics, modifiers included);
-    // the arms shape only the BODY layout. No synthesized text: the
-    // LSP verbatim law renders source-less rows nowhere
-    match ty.form {
+    // the decl head is the view's own verbatim slice (`head()` — from
+    // the first token through the name and generics, modifiers
+    // included); the arms shape only the BODY layout. No synthesized
+    // text: the LSP verbatim law renders source-less rows nowhere
+    match t.form() {
         TyForm::Alias => {
             // `type X = A;` — the whole decl as written
-            out.push_str(&code_block(&format!("{};", ty.head)));
+            out.push_str(&code_block(&format!("{};", t.head())));
         }
         TyForm::Enum => {
             // the member rows are the source-true slices
-            let members: Vec<&str> = ty.fields.iter().map(|f| f.src.as_str()).collect();
+            let members: Vec<String> = t.fields().into_iter().map(|f| f.src()).collect();
             out.push_str(&code_block(&format!(
                 "{} {{ {} }}",
-                ty.head,
+                t.head(),
                 members.join(", ")
             )));
         }
         TyForm::Interface | TyForm::Builtin | TyForm::Primitive => {
             let mut body = String::new();
-            for m in &ty.methods {
+            for m in t.methods() {
                 body.push_str("    ");
-                body.push_str(&m.src);
+                body.push_str(&m.src());
                 body.push('\n');
             }
-            out.push_str(&code_block(&format!("{} {{\n{}}}", ty.head, body)));
+            out.push_str(&code_block(&format!("{} {{\n{}}}", t.head(), body)));
         }
         // a dep's host surface renders like a class body: the consts as
         // fields, the module's fns as the method count
         TyForm::Class | TyForm::Struct | TyForm::HostStruct => {
             let mut body = String::new();
-            for f in &ty.fields {
+            for f in t.fields() {
                 body.push_str("    ");
-                body.push_str(&f.src);
+                body.push_str(&f.src());
                 body.push('\n');
             }
-            out.push_str(&code_block(&format!("{} {{\n{}}}", ty.head, body)));
-            if !ty.methods.is_empty() {
+            out.push_str(&code_block(&format!("{} {{\n{}}}", t.head(), body)));
+            let methods = t.methods();
+            if !methods.is_empty() {
                 out.push_str(&format!(
                     "\n{} method{} — hover one for its signature",
-                    ty.methods.len(),
-                    if ty.methods.len() == 1 { "" } else { "s" }
+                    methods.len(),
+                    if methods.len() == 1 { "" } else { "s" }
                 ));
             }
         }
     }
-    if !i.mount.origin.is_empty() {
-        out.push_str(&format!("\n{}", provenance(&i.mount.origin, ty.line)));
+    let origin = &t.file.mount.origin;
+    if !origin.is_empty() {
+        out.push_str(&format!("\n{}", provenance(origin, t.line())));
     }
-    for d in &ty.doc {
-        out.push_str(&format!("\n\n{}", d));
+    for d in t.doc_lines() {
+        out.push_str(&format!("\n\n{d}"));
     }
     out
 }
 
-pub(crate) fn render_member(
-    i: &DefIndex,
-    ty: &TyDef,
-    m: &MemberSrc,
-    via: Option<String>,
-) -> String {
-    let mut out = code_block(&m.src);
+pub(crate) fn render_member(m: &MemberView, via: Option<String>) -> String {
+    let ty = &m.ty;
+    let mut out = code_block(&m.src());
     match via {
         Some(v) => out.push_str(&format!("\nfrom `{v}`")),
-        None if ty.form == TyForm::Interface => {
-            out.push_str(&format!("\ndeclared in `{}`", ty.name));
+        None if ty.form() == TyForm::Interface => {
+            out.push_str(&format!("\ndeclared in `{}`", ty.name()));
         }
-        None => out.push_str(&format!("\nin `{}`", ty.name)),
+        None => out.push_str(&format!("\nin `{}`", ty.name())),
     }
-    if !i.mount.origin.is_empty() {
-        out.push_str(&format!("\n{}", provenance(&i.mount.origin, m.line)));
+    let origin = &m.file.mount.origin;
+    if !origin.is_empty() {
+        out.push_str(&format!("\n{}", provenance(origin, m.line())));
     }
-    for d in &m.doc {
-        out.push_str(&format!("\n\n{}", d));
+    for d in m.doc_lines() {
+        out.push_str(&format!("\n\n{d}"));
     }
     out
 }
 
-pub(crate) fn render_fn_hits(hits: &[(&DefIndex, &FnDef)], one: &FnDef) -> String {
-    let i = hits
-        .iter()
-        .find(|(_, f)| f.span == one.span)
-        .map(|(i, _)| *i);
-    let mut out = code_block(&one.src);
-    if let Some(o) = &one.owner {
+pub(crate) fn render_fn_hits(one: &FnView) -> String {
+    let mut out = code_block(&one.src());
+    if let Some(o) = one.owner() {
         out.push_str(&format!("\nin `{o}`"));
     }
-    if let Some(i) = i {
-        if !i.mount.origin.is_empty() {
-            out.push_str(&format!("\n{}", provenance(&i.mount.origin, one.line)));
-        }
+    let origin = &one.file.mount.origin;
+    if !origin.is_empty() {
+        out.push_str(&format!("\n{}", provenance(origin, one.line())));
     }
-    for d in &one.doc {
-        out.push_str(&format!("\n\n{}", d));
+    for d in one.doc_lines() {
+        out.push_str(&format!("\n\n{d}"));
     }
     out
 }
 
-pub(crate) fn render_candidates(many: &[(&DefIndex, &FnDef)]) -> String {
+pub(crate) fn render_candidates(many: &[FnView]) -> String {
     let mut out = String::from("multiple definitions:");
-    for (i, f) in many {
-        let where_ = match &f.owner {
+    for f in many {
+        let where_ = match f.owner() {
             Some(o) => format!(" ({o})"),
             None => String::new(),
         };
         out.push_str(&format!(
             "\n- `{}`{} — {}:{}",
-            f.src.replace('\n', " "),
+            f.src().replace('\n', " "),
             where_,
-            i.mount.origin,
-            f.line
+            f.file.mount.origin,
+            f.line()
         ));
     }
     out
@@ -207,17 +204,18 @@ fn prim_line(name: &str, signedness: &str, bits: u32, range: &str) -> String {
 
 /// the module-let decl render — verbatim slice, provenance, doc; the
 /// type line shows the annotation or the inferred head
-pub(crate) fn render_let(i: &DefIndex, l: &LetDef) -> String {
-    let mut out = code_block(&l.src);
+pub(crate) fn render_let(l: &LetView) -> String {
+    let mut out = code_block(&l.src());
     out.push_str("\nmodule let");
-    if let Some(ty) = &l.ty {
+    if let Some(ty) = l.ty() {
         out.push_str(&format!(" — `{ty}`"));
     }
-    if !i.mount.origin.is_empty() {
-        out.push_str(&format!("\n{}", provenance(&i.mount.origin, l.line)));
+    let origin = &l.file.mount.origin;
+    if !origin.is_empty() {
+        out.push_str(&format!("\n{}", provenance(origin, l.line())));
     }
-    for d in &l.doc {
-        out.push_str(&format!("\n\n{}", d));
+    for d in l.doc_lines() {
+        out.push_str(&format!("\n\n{d}"));
     }
     out
 }
@@ -226,17 +224,17 @@ pub(crate) fn render_let(i: &DefIndex, l: &LetDef) -> String {
 /// any resolved module): the mounted file as the subject (the REAL
 /// name for a single-file module — the origin's basename), the child
 /// count, provenance
-pub(crate) fn render_module_target(i: &DefIndex, path: &str) -> String {
-    let file = crate::mods::display_of(&[i], i.mount.module.as_deref(), path);
+pub(crate) fn render_module_target(f: &MountedFile, path: &str) -> String {
+    let file = crate::mods::display_of_single(f, path);
     let mut out = code_block(&file);
     out.push_str("\nfile module");
-    match i.mods.len() {
+    match f.mods().len() {
         0 => out.push_str("\nno child modules"),
         1 => out.push_str("\n1 child module"),
         n => out.push_str(&format!("\n{n} child modules")),
     }
-    if !i.mount.origin.is_empty() {
-        out.push_str(&format!("\n{}", provenance(&i.mount.origin, 1)));
+    if !f.mount.origin.is_empty() {
+        out.push_str(&format!("\n{}", provenance(&f.mount.origin, 1)));
     }
     out
 }
@@ -245,15 +243,15 @@ pub(crate) fn render_module_target(i: &DefIndex, path: &str) -> String {
 /// verbatim slice — never re-synthesized), the kind, the mounted file
 /// the namespace resolves to, and the child's own `mod` count (the
 /// walkable path segments beneath it). `children` is `None` when the
-/// mounted index is not in the chain (an honest dash, never a wrong
+/// mounted file is not in the chain (an honest dash, never a wrong
 /// count).
 pub(crate) fn render_mod(
-    i: &DefIndex,
-    m: &ModDef,
+    f: &MountedFile,
+    m: &ModView,
     mounted: &str,
     children: Option<usize>,
 ) -> String {
-    let mut out = code_block(&format!("{};", m.src));
+    let mut out = code_block(&format!("{};", m.src()));
     out.push_str(&format!("\nfile module — `{}`", mounted));
     if let Some(n) = children {
         out.push_str(&match n {
@@ -262,11 +260,11 @@ pub(crate) fn render_mod(
             n => format!("\n{n} child modules"),
         });
     }
-    if !i.mount.origin.is_empty() {
-        out.push_str(&format!("\n{}", provenance(&i.mount.origin, m.line)));
+    if !f.mount.origin.is_empty() {
+        out.push_str(&format!("\n{}", provenance(&f.mount.origin, m.line())));
     }
-    for d in &m.doc {
-        out.push_str(&format!("\n\n{}", d));
+    for d in m.doc_lines() {
+        out.push_str(&format!("\n\n{d}"));
     }
     out
 }

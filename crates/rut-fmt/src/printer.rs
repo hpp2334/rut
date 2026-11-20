@@ -273,7 +273,9 @@ pub(super) struct P<'a> {
     /// built from the token AFTER the `}`, so the block's true end
     /// comes from the tokens, not the span)
     toks: &'a [rut_lexer::token::Token],
-    line_starts: Vec<u32>,
+    /// the pipeline owner — `line_of` reads its own line geometry
+    /// (the lex rode the same byte scan; no second table here)
+    doc: &'a rut_ast::Doc,
     runs: Vec<CommentRun>,
     /// index of the next unconsumed run
     ri: usize,
@@ -300,19 +302,14 @@ impl<'a> P<'a> {
         toks: &'a [rut_lexer::token::Token],
         style: &'a Style,
         runs: Vec<CommentRun>,
+        doc: &'a rut_ast::Doc,
     ) -> P<'a> {
-        let mut line_starts: Vec<u32> = vec![0];
-        for (i, b) in src.bytes().enumerate() {
-            if b == b'\n' {
-                line_starts.push(i as u32 + 1);
-            }
-        }
         P {
             a,
             style,
             src,
             toks,
-            line_starts,
+            doc,
             runs,
             ri: 0,
             passed: 0,
@@ -335,10 +332,7 @@ impl<'a> P<'a> {
 
 impl<'a> P<'a> {
     fn line_of(&self, off: u32) -> usize {
-        match self.line_starts.partition_point(|&s| s <= off) {
-            0 => 0,
-            n => n - 1,
-        }
+        self.doc.line_of(off) as usize
     }
 
     /// the element's TRUE content end. v2 node spans are EXACT (the

@@ -12,14 +12,14 @@ use crate::semantic::IntSuffix;
 use rut_ast::{Ast, BinOp, ExprRef, Lit, PathSeg};
 
 use super::bindings::{elem_ty, resolve, Binding};
-use super::lookup::find_ty;
-use super::types::{head_of_ty, ty_src, DefIndex, FnDef, LetDef, TyForm};
+use super::collection::MountedFile;
+use super::types::{head_of_ty, ty_src, TyForm};
 
 /// the type an expression suggests, as display text
 pub(crate) fn expr_ty(
     ast: &Ast,
     binds: &[Binding],
-    idxs: &[&DefIndex],
+    idxs: &[&MountedFile],
     e: ExprRef,
 ) -> Option<String> {
     match e {
@@ -111,7 +111,7 @@ pub(crate) fn expr_ty(
 fn path_ty(
     ast: &Ast,
     binds: &[Binding],
-    idxs: &[&DefIndex],
+    idxs: &[&MountedFile],
     pos: u32,
     segs: &[PathSeg],
 ) -> Option<String> {
@@ -120,7 +120,11 @@ fn path_ty(
     // `self` spells the enclosing type — the same answer recv_type gives
     let self_ty = || -> Option<String> {
         if text == "self" {
-            return Some(super::lookup::enclosing_type(idxs, pos)?.1.name.clone());
+            return Some(
+                super::lookup::enclosing_type(idxs.iter().copied(), pos)?
+                    .name()
+                    .to_string(),
+            );
         }
         None
     };
@@ -147,7 +151,7 @@ fn path_ty(
     resolve(binds, pos, text)
         .and_then(|b| b.ty.clone())
         .or_else(self_ty)
-        .or_else(|| module_let_ty(idxs, text))
+        .or_else(|| module_let_ty(idxs.iter().copied(), text))
 }
 
 /// `f(..)` — a free fn's declared ret, unique match only (ambiguity is
@@ -155,25 +159,29 @@ fn path_ty(
 /// CAPITALIZED path segment the index knows as a class/struct — is the
 /// type itself (`let log = Logger("hello");` types `log` as `Logger`,
 /// the positional shape of the `Type::new(..)` arm below)
-fn call_ty(idxs: &[&DefIndex], ast: &Ast, callee: ExprRef) -> Option<String> {
+fn call_ty(idxs: &[&MountedFile], ast: &Ast, callee: ExprRef) -> Option<String> {
     if let ExprRef::Path(h) = callee {
         let segs = &h.get(ast).segs;
         if segs.len() == 1 {
             let name = ast.name(segs[0].name);
-            let hits: Vec<&FnDef> = idxs
+            let hits: Vec<_> = idxs
                 .iter()
-                .flat_map(|i| i.fns.iter().filter(|f| f.name == name && f.owner.is_none()))
+                .flat_map(|f| f.fns())
+                .filter(|f| f.name() == name && f.owner().is_none())
                 .collect();
             if let [one] = hits.as_slice() {
-                return one.ret.clone();
+                return one.ret();
             }
             // `Logger(..)` — the constructor call. Only an INDEXED
             // class/struct answers: a capitalized name with no type
             // head behind it (an enum, a plain unknown) stays a miss —
             // never wrong text. The free-fn match keeps precedence.
             if is_cap(name) {
-                if let Some((_, ty)) = find_ty(idxs, name) {
-                    if matches!(ty.form, TyForm::Class | TyForm::Struct | TyForm::HostStruct) {
+                if let Some(ty) = super::lookup::find_ty(idxs, name) {
+                    if matches!(
+                        ty.form(),
+                        TyForm::Class | TyForm::Struct | TyForm::HostStruct
+                    ) {
                         return Some(name.to_string());
                     }
                 }
@@ -193,39 +201,46 @@ fn call_ty(idxs: &[&DefIndex], ast: &Ast, callee: ExprRef) -> Option<String> {
 /// fields, then inherent impl-block methods. Interface members stay
 /// out — the use-gate is member_hover's call to make with the full
 /// answer; inference stays conservative
-fn member_ret(idxs: &[&DefIndex], ty_name: &str, member: &str) -> Option<String> {
-    for i in idxs {
+fn member_ret(idxs: &[&MountedFile], ty_name: &str, member: &str) -> Option<String> {
+    for i in idxs.iter() {
         if let Some(t) = i.ty(ty_name) {
-            if let Some(m) = t.methods.iter().find(|m| m.name == member) {
-                return m.ty.clone();
+            if let Some(m) = t.methods().into_iter().find(|m| m.name() == member) {
+                return m.ty();
             }
         }
-        for f in &i.fns {
-            if f.name == member && f.owner.as_deref() == Some(ty_name) {
-                return f.ret.clone();
+        for f in i.fns() {
+            if f.name() == member && f.owner().as_deref() == Some(ty_name) {
+                return f.ret();
             }
         }
     }
     None
 }
 
-fn field_ty(idxs: &[&DefIndex], ty_name: &str, field: &str) -> Option<String> {
-    idxs.iter().find_map(|i| {
-        i.ty(ty_name)
-            .and_then(|t| t.fields.iter().find(|f| f.name == field))
-            .and_then(|f| f.ty.clone())
+fn field_ty(idxs: &[&MountedFile], ty_name: &str, field: &str) -> Option<String> {
+    idxs.iter().copied().find_map(|i| {
+        i.ty(ty_name)?
+            .fields()
+            .into_iter()
+            .find(|f| f.name() == field)
+            .and_then(|f| f.ty())
     })
 }
 
 /// a module let's type head — the decl layer's contribution to
 /// receiver inference (`let TOTAL = ..;` at module scope, read below)
-pub(crate) fn module_let_ty(idxs: &[&DefIndex], name: &str) -> Option<String> {
-    let hits: Vec<&LetDef> = idxs
-        .iter()
-        .flat_map(|i| i.lets.iter().filter(|l| l.name == name))
+pub(crate) fn module_let_ty<'a, I>(idxs: I, name: &str) -> Option<String>
+where
+    I: IntoIterator<Item = &'a MountedFile>,
+{
+    let hits: Vec<Option<String>> = idxs
+        .into_iter()
+        .flat_map(|f| f.lets())
+        .filter(|l| l.name() == name)
+        .map(|l| l.ty())
         .collect();
     match hits.as_slice() {
-        [one] => one.ty.as_deref().map(head_of_ty),
+        [one] => one.as_deref().map(head_of_ty),
         _ => None,
     }
 }

@@ -23,6 +23,7 @@ use std::cell::OnceCell;
 use rut_ast::parser::Mode;
 use rut_ast::{Ast, Doc};
 use rut_lexer::diag::Diag;
+use rut_lexer::source::Edit;
 use rut_lexer::span::Span;
 use rut_lexer::token::Token;
 
@@ -65,7 +66,7 @@ impl Document {
     /// String clones to move, a fresh read moves for free.
     pub fn parse(mode: Mode, src: String) -> Document {
         let doc = Doc::parse(mode, src);
-        let lines = LineIndex::new(doc.text(doc.span()));
+        let lines = LineIndex::of(&doc);
         Document {
             doc,
             lines,
@@ -77,6 +78,21 @@ impl Document {
     /// the AST artifact — the capsule store (the text lives in the Doc)
     pub fn ast(&self) -> &Ast {
         self.doc.ast()
+    }
+
+    /// THE SYNC LANE — one edit in, a coherent view out: the host's
+    /// new text diffs against the Doc's own (`Edit::between`), the one
+    /// `Doc::edit` mutator repairs the pipeline (text + tokens + tree
+    /// inside), the UTF-16 view rebuilds over the fresh text, and the
+    /// lazy views drop (the first read after the change re-derives
+    /// them — never yesterday's spans). The shell sequences NOTHING
+    /// else: every query above reads the same coherent document.
+    pub fn sync(&mut self, text: &str) {
+        let e = Edit::between(self.src(), text);
+        self.doc.edit(e);
+        self.lines = LineIndex::of(&self.doc);
+        self.spans = OnceCell::new();
+        self.symbols = OnceCell::new();
     }
 
     /// the leaf layer, lexed once (the Doc's own token stream)
@@ -119,6 +135,13 @@ impl Document {
     /// byte offset -> (line, UTF-16 column) over the artifact's src
     pub fn position(&self, byte: u32) -> (u32, u32) {
         self.lines.position(self.src(), byte)
+    }
+
+    /// the 0-based line `byte` sits on — the Doc's own line geometry
+    /// (the per-row scan this replaces built a table for; the geometry
+    /// was lexed once and lives in the pipeline)
+    pub fn line_of(&self, byte: u32) -> u32 {
+        self.doc.line_of(byte)
     }
 
     /// the parse diags, ALL of them (the recovering parse yields the

@@ -28,9 +28,10 @@ use rut_ast::{
     StmtRef, TyRef, TyTupleNode,
 };
 
+use super::collection::{Chain, MountedFile};
 use super::infer;
 use super::lookup::contains;
-use super::types::{ty_src, DefIndex};
+use super::types::ty_src;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum BindKind {
@@ -91,15 +92,20 @@ pub fn resolve<'b>(bs: &'b [Binding], pos: u32, name: &str) -> Option<&'b Bindin
         .max_by_key(|b| b.decl_ident_span.lo)
 }
 
-/// every fn-local binding in the document, in declaration order
-pub fn collect(ast: &Ast, toks: &[Token], idxs: &[&DefIndex]) -> Vec<Binding> {
+/// every fn-local binding in the document, in declaration order. The
+/// chain rides for the inference pass's decl lookups (module lets,
+/// member types) — the document walked is the chain HEAD's.
+pub fn collect(ast: &Ast, toks: &[Token], idxs: &Chain<'_>) -> Vec<Binding> {
+    // the inference pass's file window — one pointer slice over the
+    // chain (the pass's reads never mutate the world)
+    let idxs: Vec<&MountedFile> = idxs.iter().collect();
     // the source end — the lexer rides an EOF token last, its hi the
     // normalized length; `scope_of` extends unterminated blocks past it
     let src_end = toks.last().map(|t| t.span.hi).unwrap_or(0);
     let mut cx = Cx {
         ast,
         toks,
-        idxs,
+        idxs: &idxs,
         src_end,
         out: Vec::new(),
     };
@@ -124,7 +130,7 @@ pub fn collect(ast: &Ast, toks: &[Token], idxs: &[&DefIndex]) -> Vec<Binding> {
 struct Cx<'a> {
     ast: &'a Ast,
     toks: &'a [Token],
-    idxs: &'a [&'a DefIndex],
+    idxs: &'a [&'a MountedFile],
     /// the source end (the EOF token's hi) — `scope_of`'s extension target
     src_end: u32,
     out: Vec<Binding>,

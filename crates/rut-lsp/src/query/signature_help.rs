@@ -13,13 +13,13 @@
 //!   FINAL with no recorded params → no help, so a same-named impl fn's
 //!   signature can never leak through (the known-receiver-is-final law).
 //!
-//! The signature renders verbatim (`FnDef::src` — fn name + params as
-//! written, the hover render's own slices); the ACTIVE parameter is the
-//! comma/paren depth at the request position. F-strings cannot miscount
-//! — the lexer hands an f-string over as ONE token, so commas and parens
-//! inside its holes are invisible to the scan. Nested calls each answer
-//! at their own depth (the innermost unclosed paren wins). The
-//! never-wrong guard is phase 3's: ambiguity, unknown receiver,
+//! The signature renders verbatim (the fn view's own slice — the fn
+//! name and params as written, the hover render's source); the ACTIVE
+//! parameter is the comma/paren depth at the request position. F-strings
+//! cannot miscount — the lexer hands an f-string over as ONE token, so
+//! commas and parens inside its holes are invisible to the scan. Nested
+//! calls each answer at their own depth (the innermost unclosed paren
+//! wins). The never-wrong guard is phase 3's: ambiguity, unknown receiver,
 //! own-surface finality, or MORE arguments than the signature has
 //! parameters — no help, never wrong help. A call still being typed
 //! (fewer args than parameters) is the help's whole point and shows the
@@ -31,27 +31,26 @@ use ls_types::{
 };
 
 use crate::semantic::{Tok, Token};
-use rut_ast::Ast;
 
+use crate::hover::bindings;
+use crate::hover::collection::Chain;
 use crate::hover::lookup::{self, recv_type};
-use crate::hover::types::FnDef;
-use crate::hover::{bindings, DefIndex};
 
-/// everything one signature-help query needs — the same `doc_ctx`
-/// pipeline the other queries ride
+/// everything one signature-help query needs — the chain the
+/// collection handed out (the open document at the head; its kept
+/// document owns the tokens and the tree)
 pub struct Ctx<'a> {
-    pub toks: &'a [Token],
-    pub ast: &'a Ast,
     /// the lookup chain: the open document first, then the prelude + workspace
-    pub idxs: &'a [&'a DefIndex],
+    pub chain: &'a Chain<'a>,
 }
 
 /// `textDocument/signatureHelp` at an LSP position (already converted to
 /// a byte offset). `None` when there is no call to help with, or when
 /// the callee does not resolve to exactly one known signature.
 pub fn signature_help(ctx: &Ctx, pos: u32) -> Option<SignatureHelp> {
-    let (open_i, commas) = enclosing_call(ctx.toks, pos)?;
-    let head = ctx.toks.get(open_i.checked_sub(1)?)?;
+    let toks = ctx.chain.head().doc.toks();
+    let (open_i, commas) = enclosing_call(toks, pos)?;
+    let head = toks.get(open_i.checked_sub(1)?)?;
     let Tok::Ident(name) = &head.tok else {
         return None;
     };
@@ -59,47 +58,44 @@ pub fn signature_help(ctx: &Ctx, pos: u32) -> Option<SignatureHelp> {
         return None;
     }
     // method call iff a dot sits between the head and what's before it
-    let is_method = open_i >= 2 && ctx.toks[open_i - 2].tok == Tok::Dot;
+    let is_method = open_i >= 2 && toks[open_i - 2].tok == Tok::Dot;
 
-    let (fndef, params) = if is_method {
+    let (fndef, params, fndef_doc) = if is_method {
         // the receiver must be ONE plain identifier (`c`, `Circle`,
         // `self`) — a dot before it means a multi-segment path, anything
         // else (a `)`, a literal) a chained/complex receiver; both stay
         // honest misses mid-typing (the AST the chained rules need is
         // exactly what a half-typed call does not have)
-        let recv_tok = ctx.toks.get(open_i.checked_sub(3)?)?;
+        let recv_tok = toks.get(open_i.checked_sub(3)?)?;
         let recv = match &recv_tok.tok {
             Tok::Ident(s) if !crate::semantic::is_keyword(s) => s.clone(),
             _ => return None,
         };
-        if open_i >= 4 && ctx.toks[open_i - 4].tok == Tok::Dot {
+        if open_i >= 4 && toks[open_i - 4].tok == Tok::Dot {
             return None;
         }
-        let binds = bindings::collect(ctx.ast, ctx.toks, ctx.idxs);
-        let ty_name = recv_type(ctx.idxs, &binds, pos, &recv)?;
+        let binds = bindings::collect(ctx.chain.head().doc.ast(), toks, ctx.chain);
+        let ty_name = recv_type(ctx.chain, &binds, pos, &recv)?;
         // own-surface finality: `None` here is FINAL — no help, never
         // a same-named impl fn's signature
-        let f = lookup::impl_method_fn(ctx.idxs, &ty_name, name)?;
-        (f, f.params.clone())
+        let f = lookup::impl_method_fn(ctx.chain, &ty_name, name)?;
+        (f.src(), f.params(), f.doc_lines())
     } else {
         // free fn by unique match (the call_ty law: ambiguity is a miss)
-        let hits: Vec<&FnDef> = ctx
-            .idxs
+        let hits: Vec<_> = ctx
+            .chain
             .iter()
-            .flat_map(|i| {
-                i.fns
-                    .iter()
-                    .filter(|f| f.name == name.as_str() && f.owner.is_none())
-            })
+            .flat_map(|f| f.fns())
+            .filter(|f| f.name() == name.as_str() && f.owner().is_none())
             .collect();
         match hits.as_slice() {
-            [one] => (*one, one.params.clone()),
+            [one] => (one.src(), one.params(), one.doc_lines()),
             _ => return None,
         }
     };
 
     // render: the verbatim signature, params as written
-    let (label, pieces) = signature_parts(&fndef.src, &params, is_method)?;
+    let (label, pieces) = signature_parts(&fndef, &params, is_method)?;
 
     // the active parameter: depth-0 commas at-or-before the cursor. A
     // call still being typed has fewer args than params — that IS the
@@ -120,7 +116,7 @@ pub fn signature_help(ctx: &Ctx, pos: u32) -> Option<SignatureHelp> {
     Some(SignatureHelp {
         signatures: vec![SignatureInformation {
             label,
-            documentation: doc_markdown(&fndef.doc),
+            documentation: doc_markdown(&fndef_doc),
             parameters: Some(
                 pieces
                     .into_iter()

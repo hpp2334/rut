@@ -1,58 +1,33 @@
-use crate::hover::types::{ModDef, TyDef, TyForm};
-use crate::hover::DefIndex;
+use crate::hover::collection::Chain;
 use crate::hover::Mount;
+use crate::hover::MountedFile;
 use crate::mods::*;
 use rut_ast::Vis;
-use rut_lexer::span::Span;
 
-/// a named index standing at `mod_path` with the given mod edges
-fn mod_index(pkg: &str, mod_path: &str, edges: &[(&str, Vis)]) -> DefIndex {
-    let mut i = DefIndex {
-        mount: Mount {
+/// a named mounted file standing at `mod_path`, its `mod NAME;` edges
+/// parsed from fixture text the way the dep walk mounts them
+fn mod_index(pkg: &str, mod_path: &str, edges: &[(&str, Vis)]) -> MountedFile {
+    let mut src = String::new();
+    for (name, vis) in edges {
+        if *vis == Vis::Pub {
+            src.push_str(&format!("pub mod {name};\n"));
+        } else {
+            src.push_str(&format!("mod {name};\n"));
+        }
+    }
+    MountedFile::from_src(
+        Mount {
             module: Some(pkg.to_string()),
             mod_path: (!mod_path.is_empty() || !edges.is_empty()).then(|| mod_path.to_string()),
             ..Mount::default()
         },
-        ..DefIndex::default()
-    };
-    for (name, vis) in edges {
-        i.mods.push(ModDef {
-            name: name.to_string(),
-            name_span: None,
-            vis: *vis,
-            src: if *vis == Vis::Pub {
-                format!("pub mod {name}")
-            } else {
-                format!("mod {name}")
-            },
-            doc: Vec::new(),
-            span: Span::new(0, 0),
-            line: 1,
-        });
-    }
-    i
+        src,
+    )
 }
 
-/// one pub type row
-fn pub_ty(name: &str, vis: Vis) -> TyDef {
-    TyDef {
-        name: name.to_string(),
-        name_span: None,
-        form: TyForm::Struct,
-        head: if vis == Vis::Pub {
-            format!("pub struct {name}")
-        } else {
-            format!("struct {name}")
-        },
-        vis,
-        is_pub: vis == Vis::Pub,
-        ambient: false,
-        fields: Vec::new(),
-        methods: Vec::new(),
-        doc: Vec::new(),
-        span: Span::new(0, 0),
-        line: 1,
-    }
+/// the chain over the fixture files, in order
+fn chain(files: &[MountedFile]) -> Chain<'_> {
+    Chain::new(files.iter().collect())
 }
 
 #[test]
@@ -64,22 +39,23 @@ fn the_cross_package_walk_gates_pub_edges() {
     );
     let layout = mod_index("gadgets", "layout", &[("grid", Vis::Pub)]);
     let grid = mod_index("gadgets", "layout/grid", &[]);
-    let idxs = [&root, &layout, &grid];
+    let files = [root, layout, grid];
+    let c = chain(&files);
 
     assert_eq!(
-        walk_use_mods(&idxs, "gadgets", &["layout".into()]).as_deref(),
+        walk_use_mods(&c, "gadgets", &["layout".into()]).as_deref(),
         Some("layout")
     );
     assert_eq!(
-        walk_use_mods(&idxs, "gadgets", &["layout".into(), "grid".into()]).as_deref(),
+        walk_use_mods(&c, "gadgets", &["layout".into(), "grid".into()]).as_deref(),
         Some("layout/grid")
     );
     // a bare `mod` child never crosses
-    assert_eq!(walk_use_mods(&idxs, "gadgets", &["secret".into()]), None);
+    assert_eq!(walk_use_mods(&c, "gadgets", &["secret".into()]), None);
     // an unknown segment is a miss
-    assert_eq!(walk_use_mods(&idxs, "gadgets", &["ghost".into()]), None);
+    assert_eq!(walk_use_mods(&c, "gadgets", &["ghost".into()]), None);
     // an unknown package is a miss
-    assert_eq!(walk_use_mods(&idxs, "pouch", &["layout".into()]), None);
+    assert_eq!(walk_use_mods(&c, "pouch", &["layout".into()]), None);
 }
 
 #[test]
@@ -88,7 +64,8 @@ fn the_position_head_walks_ancestors_and_the_pkg_name() {
     let layout = mod_index("app", "layout", &[("grid", Vis::Pub)]);
     let grid = mod_index("app", "layout/grid", &[("util", Vis::Self_)]);
     let util = mod_index("app", "layout/grid/util", &[]);
-    let idxs = [&root, &layout, &grid, &util];
+    let files = [root, layout, grid, util];
+    let c = chain(&files);
     let mk = |p: &str| DocMods {
         mod_path: Some(p.into()),
         pkg: Some("app".into()),
@@ -97,26 +74,26 @@ fn the_position_head_walks_ancestors_and_the_pkg_name() {
     // from layout/grid: a sibling resolves through the parent scope
     let doc = mk("layout/grid");
     assert_eq!(
-        resolve_position_head(&doc, &grid, &idxs, "util").as_deref(),
+        resolve_position_head(&doc, &files[2], &c, "util").as_deref(),
         Some("layout/grid/util")
     );
     // the own-pkg head names the root
     assert_eq!(
-        resolve_position_head(&doc, &grid, &idxs, "app").as_deref(),
+        resolve_position_head(&doc, &files[2], &c, "app").as_deref(),
         Some("")
     );
     // from layout: its own child (read off the doc's own rows when
-    // the doc index IS that module)
+    // the doc IS that module)
     let doc2 = mk("layout");
     assert_eq!(
-        resolve_position_head(&doc2, &layout, &idxs, "grid").as_deref(),
+        resolve_position_head(&doc2, &files[1], &c, "grid").as_deref(),
         Some("layout/grid")
     );
     // unknown pkg name: a miss
-    assert_eq!(resolve_position_head(&doc2, &layout, &idxs, "pouch"), None);
+    assert_eq!(resolve_position_head(&doc2, &files[1], &c, "pouch"), None);
     // an unstamped doc (mod_path None) resolves nothing
     let flat = DocMods::default();
-    assert_eq!(resolve_position_head(&flat, &root, &idxs, "grid"), None);
+    assert_eq!(resolve_position_head(&flat, &files[0], &c, "grid"), None);
 }
 
 #[test]
@@ -144,23 +121,29 @@ fn the_vis_predicate_mirrors_the_compiler_tiers() {
 
 #[test]
 fn matches_mod_keys_on_the_pair() {
-    let i = mod_index("gadgets", "layout", &[]);
-    assert!(matches_mod(&i, Some("gadgets"), "layout"));
-    assert!(!matches_mod(&i, Some("gadgets"), ""));
-    assert!(!matches_mod(&i, Some("pouch"), "layout"));
-    // an unnamed index participates only where a face STAMPED it —
+    let f = mod_index("gadgets", "layout", &[]);
+    assert!(matches_mod(&f, Some("gadgets"), "layout"));
+    assert!(!matches_mod(&f, Some("gadgets"), ""));
+    assert!(!matches_mod(&f, Some("pouch"), "layout"));
+    // an unnamed file participates only where a face STAMPED it —
     // unstamped files never impersonate a module, not even the root
     // (the doc's own scope reads off its own rows, not a lookup)
-    let mut stray = DefIndex::default();
+    let stray = MountedFile::from_src(Mount::default(), "entry fn main() -> nil { }\n".into());
     assert!(!matches_mod(&stray, None, ""));
     assert!(!matches_mod(&stray, None, "layout"));
-    stray.mount.mod_path = Some("layout".into());
-    assert!(matches_mod(&stray, None, "layout"));
+    let stamped = MountedFile::from_src(
+        Mount {
+            mod_path: Some("layout".into()),
+            ..Mount::default()
+        },
+        "entry fn main() -> nil { }\n".into(),
+    );
+    assert!(matches_mod(&stamped, None, "layout"));
     assert!(
-        !matches_mod(&stray, Some("gadgets"), "layout"),
+        !matches_mod(&stamped, Some("gadgets"), "layout"),
         "unnamed never answers a named pkg"
     );
-    // mod_path None answers the root for a named index
+    // mod_path None answers the root for a named file
     let flat = mod_index("pouch", "", &[]);
     assert!(matches_mod(&flat, Some("pouch"), ""));
 }
@@ -173,34 +156,37 @@ fn display_spells_the_mounted_file() {
 
 #[test]
 fn display_of_spells_a_single_file_child() {
-    // a single-file module's REAL name rides its index's origin
+    // a single-file module's REAL name rides its file's origin
     // basename; the dir-form guess stays the fallback
     let mut file_child = mod_index("gadgets", "imp", &[]);
     file_child.mount.origin = "file:///ws/imp.rut".to_string();
     let mut dir_child = mod_index("gadgets", "layout", &[]);
     dir_child.mount.origin = "file:///ws/layout/mod.rut".to_string();
-    let idxs = [&file_child, &dir_child];
-    assert_eq!(display_of(&idxs, Some("gadgets"), "imp"), "imp.rut");
+    let files = [file_child, dir_child];
+    let c = chain(&files);
+    assert_eq!(display_of(&c, Some("gadgets"), "imp"), "imp.rut");
     // the dir-form child keeps the loader's spelling (its origin
     // basename is the flavor's `mod.rut`)
-    assert_eq!(
-        display_of(&idxs, Some("gadgets"), "layout"),
-        "layout/mod.rut"
-    );
+    assert_eq!(display_of(&c, Some("gadgets"), "layout"), "layout/mod.rut");
     // an unindexed child (or a non-file origin — `core`) falls back
-    assert_eq!(display_of(&idxs, Some("gadgets"), "ghost"), "ghost/mod.rut");
+    assert_eq!(display_of(&c, Some("gadgets"), "ghost"), "ghost/mod.rut");
     let mut core = mod_index("core", "prim", &[]);
     core.mount.origin = "core".to_string();
-    let single = [&core];
-    assert_eq!(display_of(&single, None, "prim"), "prim/mod.rut");
+    let single = [core];
+    let c1 = chain(&single);
+    assert_eq!(display_of(&c1, None, "prim"), "prim/mod.rut");
 }
 
-// keep the unused-import lint honest — pub_ty shapes a row the
-// vis tests assert through completion.rs
+// the vis rows the completion tests mount — a pub struct parses with
+// its vis verdict on the node (the fixture lane's shape)
 #[test]
 fn pub_ty_rows_carry_their_vis() {
-    let t = pub_ty("Column", Vis::Pub);
-    assert!(t.is_pub);
-    let t = pub_ty("Hidden", Vis::Pkg);
-    assert!(!t.is_pub && t.vis == Vis::Pkg);
+    let f = MountedFile::from_src(
+        Mount::default(),
+        "pub struct Column { w: i32; }\npub(pkg) struct Hidden { h: i32; }\n".to_string(),
+    );
+    let t = f.ty("Column").expect("Column parses");
+    assert!(t.is_pub());
+    let t = f.ty("Hidden").expect("Hidden parses");
+    assert!(!t.is_pub() && t.vis() == Vis::Pkg);
 }
