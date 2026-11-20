@@ -173,6 +173,9 @@ pub(crate) struct UseFrame {
     path_spans: Vec<Span>,
     names: Vec<IdentId>,
     name_spans: Vec<Span>,
+    /// the `{..}` group's span (braces included) — stamped only when
+    /// the group's closing brace landed
+    group: Option<Span>,
 }
 
 impl UseFrame {
@@ -184,6 +187,7 @@ impl UseFrame {
             path_spans: Vec::new(),
             names: Vec::new(),
             name_spans: Vec::new(),
+            group: None,
         }
     }
 
@@ -201,7 +205,9 @@ impl UseFrame {
         p.bump(); // use — the lo already covers a leading modifier
         let Some(pkg) = p.expect_ident("a package name") else {
             p.sync_stmt();
-            return Step::Pop(Done::Failed);
+            // the incomplete rung: `use` alone at the typing edge — the
+            // empty-path use keeps a real item at the cursor
+            return self.partial(p);
         };
         self.push_seg(pkg);
         if !p.eat_punct(Tok::Colon2) {
@@ -209,30 +215,41 @@ impl UseFrame {
                 "expected `::` after the package name — use paths spell `use <pkg>::{A, B};`",
             );
             p.sync_stmt();
-            return Step::Pop(Done::Failed);
+            // the incomplete rung: the path parsed, the leaf never
+            // materialized — the partial use keeps a real node at the
+            // cursor instead of a fence
+            return self.partial(p);
         }
-        if p.eat_punct(Tok::LBrace) {
+        if matches!(p.tok(), Tok::LBrace) {
+            let brace_lo = p.span().lo;
+            p.bump(); // {
             if !self.brace_names(p) {
                 p.sync_stmt();
-                return Step::Pop(Done::Failed);
+                return self.partial(p);
             }
+            self.group = Some(Span::new(brace_lo, p.prev_end));
         } else {
             // the module path: `ident (:: ident)*`, then either the
             // brace leaf or the `::ident` single-name leaf
             loop {
                 let Some(seg) = p.expect_ident("a path segment") else {
                     p.sync_stmt();
-                    return Step::Pop(Done::Failed);
+                    // the incomplete rung: the path continues (`use
+                    // pkg::` at the typing edge) — the partial use
+                    return self.partial(p);
                 };
                 self.push_seg(seg);
                 if !p.eat_punct(Tok::Colon2) {
                     break;
                 }
-                if p.eat_punct(Tok::LBrace) {
+                if matches!(p.tok(), Tok::LBrace) {
+                    let brace_lo = p.span().lo;
+                    p.bump(); // {
                     if !self.brace_names(p) {
                         p.sync_stmt();
-                        return Step::Pop(Done::Failed);
+                        return self.partial(p);
                     }
+                    self.group = Some(Span::new(brace_lo, p.prev_end));
                     break;
                 }
             }
@@ -268,6 +285,32 @@ impl UseFrame {
                 name_span,
                 names: std::mem::take(&mut self.names),
                 name_spans: std::mem::take(&mut self.name_spans),
+                group: self.group.take(),
+                doc: DocData::default(),
+            }
+        );
+        Step::Pop(Done::Item(node.allocate(&mut p.ast)))
+    }
+
+    /// the incomplete rung: the path parsed but the leaf never
+    /// materialized — emit the partial use (absent group, no names)
+    /// instead of fencing; the span runs to the cursor's token (the
+    /// sync point — the region the typing continues in) so the
+    /// cursor's walk lands on a real node, and the diag rows stay
+    fn partial(&mut self, p: &mut Parser) -> Step {
+        let name_span = self.path_spans.first().copied().unwrap_or(Span::new(0, 0));
+        let end = p.span().lo.max(self.lo);
+        let node = with_doc!(
+            p,
+            UseNode {
+                span: Span::new(self.lo, end),
+                modifiers: std::mem::take(&mut self.modifiers),
+                path: std::mem::take(&mut self.path),
+                path_spans: std::mem::take(&mut self.path_spans),
+                name_span,
+                names: std::mem::take(&mut self.names),
+                name_spans: std::mem::take(&mut self.name_spans),
+                group: None,
                 doc: DocData::default(),
             }
         );
@@ -1546,8 +1589,15 @@ impl MethodFrame {
                 self.ret = Some(t);
                 self.finish_sig(p)
             }
-            (MeStage::Ret, Done::Failed) => Step::Pop(Done::Failed),
+            // the incomplete rung: the return type is being typed —
+            // the method survives with the ABSENT ret
+            (MeStage::Ret, Done::Failed) => self.finish_sig(p),
             (MeStage::Body, Done::Block(b)) => self.pop(p, Some(b)),
+            (MeStage::Body, Done::Failed) if matches!(p.tok(), Tok::Eof) => {
+                // the incomplete rung at EOF: the body is being typed —
+                // the bodiless method keeps a real member at the cursor
+                self.pop(p, None)
+            }
             (MeStage::Body, Done::Failed) => Step::Pop(Done::Failed),
             _ => unreachable!("method frame receives params, types, or a body"),
         }
@@ -1698,7 +1748,10 @@ impl FnFrame {
                 self.ret = Some(t);
                 self.body(p)
             }
-            (FnSStage::Ret, Done::Failed) => Step::Pop(Done::Failed),
+            // the incomplete rung: the return type is being typed —
+            // the fn survives with the ABSENT ret (a normal absent
+            // slot); the body stage decides the rest
+            (FnSStage::Ret, Done::Failed) => self.body(p),
             (FnSStage::Body, Done::Block(body)) => {
                 let f = with_doc!(
                     p,
@@ -1716,6 +1769,12 @@ impl FnFrame {
                     }
                 );
                 Step::Pop(Done::Item(f.allocate(&mut p.ast)))
+            }
+            (FnSStage::Body, Done::Failed) if matches!(p.tok(), Tok::Eof) => {
+                // the incomplete rung at EOF: the body is being typed —
+                // the synthesized bodiless fn (the decl-mode
+                // precedent) keeps a real item at the cursor
+                self.pop(p)
             }
             (FnSStage::Body, Done::Failed) => Step::Pop(Done::Failed),
             _ => unreachable!("fn frame receives params, types, or a body"),

@@ -761,25 +761,29 @@ fn binding_decl_span_is_byte_exact() {
     let src = "fn go() -> nil {\n    let total = 1;\n    let u = total;\n}\n";
     let file = mount_of(src, Mode::Impl, Mount::default());
     let chain = Chain::new(vec![&file]);
-    let (src2, toks, ast) = (file.doc.src(), file.doc.toks(), file.doc.ast());
-    let binds = bindings::collect(ast, toks, &chain);
-    let total = bindings::resolve(&binds, src2.rfind("total").unwrap() as u32, "total").unwrap();
-    let decl_span = toks
-        .iter()
-        .find(|t| matches!(&t.tok, Tok::Ident(s) if s == "total"))
-        .unwrap()
-        .span;
+    let src2 = file.doc.src();
+    let total_id = file
+        .doc
+        .ast()
+        .interner()
+        .lookup("total")
+        .expect("the name is in the tree");
+    let total = rut_ast::resolve_binding(
+        file.doc.bindings(),
+        src2.rfind("total").unwrap() as u32,
+        total_id,
+    )
+    .unwrap();
+    let decl_span = rut_ast::name_positions(file.doc.ast())
+        .into_iter()
+        .find(|(_, id)| *id == total_id)
+        .map(|(sp, _)| sp)
+        .unwrap();
     assert_eq!(total.decl_ident_span, decl_span);
     // the hover decorates exactly the token under the cursor
     let use_pos = src2.rfind("total").unwrap() as u32;
     let out = hover(&chain, &crate::mods::DocMods::default(), use_pos).unwrap();
-    let use_span = toks
-        .iter()
-        .rev()
-        .find(|t| matches!(&t.tok, Tok::Ident(s) if s == "total"))
-        .unwrap()
-        .span;
-    assert_eq!(out.span, use_span);
+    assert_eq!(out.span, decl_span, "the hover decorates the name token");
 }
 
 #[test]

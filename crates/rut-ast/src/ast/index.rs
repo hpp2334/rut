@@ -76,16 +76,18 @@ impl TreeIndex {
     }
 
     /// the deepest node whose span contains `pos` — the smallest span
-    /// with `lo <= pos < hi` (ties break on the sorted row order, so
-    /// the answer is deterministic). The rows are sorted by `lo`, so
-    /// the scan stops at the first row past the window.
+    /// with `lo <= pos < hi`. The rows are sorted by `lo`, so the scan
+    /// stops at the first row past the window; equal-size spans (an
+    /// item ending at EOF ties with the root module) break on the
+    /// sorted row order — the LATER row wins, so the item beats the
+    /// root that wraps it.
     pub(crate) fn node_at(&self, pos: u32) -> Option<AnyHandle> {
         let mut best: Option<(Span, AnyHandle)> = None;
         for &(s, h) in &self.rows {
             if s.lo > pos {
                 break;
             }
-            if pos < s.hi && best.is_none_or(|(bs, _)| s.hi - s.lo < bs.hi - bs.lo) {
+            if pos < s.hi && best.is_none_or(|(bs, _)| s.hi - s.lo <= bs.hi - bs.lo) {
                 best = Some((s, h));
             }
         }

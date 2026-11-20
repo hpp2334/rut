@@ -33,11 +33,15 @@
 #![recursion_limit = "256"]
 
 mod ast;
+mod bindings;
 mod document;
+mod names;
 pub mod parser;
 
 pub use ast::*;
+pub use bindings::{expr_children, resolve as resolve_binding, BindKind, Binding};
 pub use document::Doc;
+pub use names::name_positions;
 
 // the parse lane's construction macros, crate-root reachable for the
 // `use crate::slot_alloc;` house style — never public

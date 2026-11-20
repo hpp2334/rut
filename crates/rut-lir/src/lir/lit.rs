@@ -1480,6 +1480,18 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                     out.push(segs[0].name);
                 }
             }
+            ExprRef::Self_(h) => {
+                // the receiver is a name candidate exactly as the `self`
+                // path head was (lookup filters the non-local `Self`)
+                let name = if h.get(self.ctx.ast).is_ty {
+                    sym::SELF_TY
+                } else {
+                    sym::SELF
+                };
+                if out.len() < 4096 && !out.contains(&name) {
+                    out.push(name);
+                }
+            }
             ExprRef::Lit(_) | ExprRef::Error(_) => {}
             ExprRef::Call(h) => {
                 let n = h.get(self.ctx.ast);
@@ -1700,6 +1712,16 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                 let segs = &ph.get(self.ctx.ast).segs;
                 if inside && !segs.is_empty() {
                     captured.insert(segs[0].name);
+                }
+            }
+            ExprRef::Self_(h) => {
+                // the receiver captures exactly as the `self` path head did
+                if inside {
+                    captured.insert(if h.get(self.ctx.ast).is_ty {
+                        sym::SELF_TY
+                    } else {
+                        sym::SELF
+                    });
                 }
             }
             ExprRef::Lit(_) | ExprRef::Error(_) => {}

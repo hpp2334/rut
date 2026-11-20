@@ -286,6 +286,13 @@ impl<'a> Ctx<'a> {
                 );
                 TY_I32
             }
+            TyRef::Self_(_) => {
+                // the sig lane binds `Self` (resolve_sig_ty_deep); reaching
+                // the ordinary resolver means no enclosing type — the
+                // old SELF_TY-path diagnostic stands
+                self.err(sp, "`Self` is only valid inside a type body");
+                TY_I32
+            }
             TyRef::Error(_) => {
                 // a broken tree never lowers — the compile lanes refuse
                 // on !ast.is_clean() first; unreachable in practice

@@ -5,7 +5,7 @@
 //! slice is a span×src join on the OWNING file's document (the views'
 //! law) — nothing rendered is stored text.
 
-use super::bindings::Binding;
+use super::bindings::{BindKind, Binding};
 use super::collection::{FnView, LetView, MemberView, ModView, MountedFile, TyView};
 use super::types::TyForm;
 
@@ -129,28 +129,29 @@ pub(crate) fn render_candidates(many: &[FnView]) -> String {
     out
 }
 
-/// the identifier hover — the binding pass's record rendered: the
-/// binding as it binds (`const c: ?Circle`, `let x`, `p: Point`), then
-/// the kind; an inferred type says so (the display-side scoping
-/// ruling: declared annotations render as written, inference is
-/// labeled)
-pub(crate) fn binding_markdown(b: &Binding) -> String {
+/// the identifier hover — the binding row rendered: the binding as it
+/// binds (`const c: ?Circle`, `let x`, `p: Point`), then the kind; an
+/// INFERRED type says so (the display-side scoping ruling: declared
+/// annotations render as written — the row's span join — inference is
+/// labeled). `name` is the interner spelling (the rows carry ids);
+/// `ty` is the resolver's declared-or-inferred answer.
+pub(crate) fn binding_markdown(b: &Binding, name: &str, ty: Option<String>) -> String {
     // the binding as it binds — the head keyword rides along (`const`
     // vs `let`) for a let-form binding and a const loop var; a param
     // renders bare (params are mutable by default)
     let kw = match (b.kind, b.is_const) {
-        (super::bindings::BindKind::Let, true) => "const ",
-        (super::bindings::BindKind::Let, false) => "let ",
-        (super::bindings::BindKind::IterVar, true) => "const ",
+        (BindKind::Let, true) => "const ",
+        (BindKind::Let, false) => "let ",
+        (BindKind::IterVar, true) => "const ",
         _ => "",
     };
-    let head = match &b.ty {
-        Some(t) => format!("{kw}{}: {t}", b.name),
-        None => format!("{kw}{}", b.name),
+    let head = match &ty {
+        Some(t) => format!("{kw}{name}: {t}"),
+        None => format!("{kw}{name}"),
     };
     let mut out = code_block(&head);
     out.push_str(&format!("\n{}", b.kind.label()));
-    if b.inferred {
+    if b.ty_span.is_none() && ty.is_some() {
         out.push_str(" — type inferred");
     }
     out

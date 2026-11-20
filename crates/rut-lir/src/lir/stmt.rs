@@ -502,7 +502,7 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
         if destructure.is_none() && self.ctx.poisoned.insert(name) {
             out.push(name);
         }
-        for n in destructure.into_iter().flatten() {
+        for (n, _) in destructure.into_iter().flatten() {
             if self.ctx.poisoned.insert(n) {
                 out.push(n);
             }
@@ -702,10 +702,10 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                                 },
                                 sp.lo,
                             );
-                            self.bind_local(*n, reg, fty, is_const, Vec::new(), sp.lo);
+                            self.bind_local(n.0, reg, fty, is_const, Vec::new(), sp.lo);
                             // a fresh binding from a tuple field carries no
                             // union provenance
-                            self.union_syms.remove(n);
+                            self.union_syms.remove(&n.0);
                         }
                     }
                 }

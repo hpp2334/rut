@@ -148,13 +148,13 @@ enum StmtStage {
     LetTy {
         is_const: bool,
         name: Name,
-        destructure: Option<Vec<crate::IdentId>>,
+        destructure: Option<Vec<(crate::IdentId, Span)>>,
     },
     /// `let`/`const` — waiting for the initializer
     LetInit {
         is_const: bool,
         name: Name,
-        destructure: Option<Vec<crate::IdentId>>,
+        destructure: Option<Vec<(crate::IdentId, Span)>>,
         ty: Option<TyRef>,
     },
     WhileCond,
@@ -220,7 +220,7 @@ impl StmtFrame {
                     let mut destructure_first: Option<Name> = None;
                     let destructure = if matches!(p.tok(), Tok::LParen) {
                         p.bump();
-                        let mut names = Vec::new();
+                        let mut names: Vec<(rut_core::IdentId, Span)> = Vec::new();
                         loop {
                             let Some(n) = binding_name(p) else {
                                 return Step::Pop(Done::Failed);
@@ -228,7 +228,7 @@ impl StmtFrame {
                             if destructure_first.is_none() {
                                 destructure_first = Some(n);
                             }
-                            names.push(n.id);
+                            names.push((n.id, n.span));
                             if !p.eat_punct(Tok::Comma) {
                                 break;
                             }
@@ -323,7 +323,7 @@ impl StmtFrame {
         p: &mut Parser,
         is_const: bool,
         name: Name,
-        destructure: Option<Vec<crate::IdentId>>,
+        destructure: Option<Vec<(crate::IdentId, Span)>>,
         ty: Option<TyRef>,
     ) -> Step {
         p.expect(Tok::Eq);
@@ -342,7 +342,7 @@ impl StmtFrame {
         p: &mut Parser,
         is_const: bool,
         name: Name,
-        destructure: Option<Vec<crate::IdentId>>,
+        destructure: Option<Vec<(crate::IdentId, Span)>>,
         ty: Option<TyRef>,
         init: ExprRef,
     ) -> Step {
@@ -365,7 +365,7 @@ impl StmtFrame {
         p: &mut Parser,
         is_const: bool,
         name: Name,
-        destructure: Option<Vec<crate::IdentId>>,
+        destructure: Option<Vec<(crate::IdentId, Span)>>,
         ty: Option<TyRef>,
     ) -> Step {
         // the ladder's part tier: the init failed — the LET survives
@@ -422,6 +422,17 @@ impl StmtFrame {
                 },
                 Done::Ty(t),
             ) => self.let_eq(p, is_const, name, destructure, Some(t)),
+            // the incomplete rung: the annotation is being typed — the
+            // let survives (absent annotation, Error-slot init), the
+            // same shape the failed-init lane produces
+            (
+                StmtStage::LetTy {
+                    is_const,
+                    name,
+                    destructure,
+                },
+                Done::Failed,
+            ) => self.let_hole(p, is_const, name, destructure, None),
             (
                 StmtStage::LetInit {
                     is_const,

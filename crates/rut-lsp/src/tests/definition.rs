@@ -49,7 +49,6 @@ fn run(
     let chain = Chain::new(files);
     let ctx = Ctx {
         doc_uri: d.file.origin(),
-        doc: &d.file.doc,
         chain: &chain,
         doc_mods: dm,
     };
@@ -82,11 +81,13 @@ fn def(d: &Doc, pos: u32, extra: &[MountedFile]) -> Vec<DefLocation> {
 
 /// the doc-context lane — the own-package queries ride a `DocMods`
 fn def_as(d: &Doc, pos: u32, extra: &[MountedFile], dm: &DocMods) -> Vec<DefLocation> {
-    run(d, extra, dm, |c| definition(c, pos))
+    run(d, extra, dm, |c| get_definition(c, pos))
 }
 
 fn typedef(d: &Doc, pos: u32, extra: &[MountedFile]) -> Vec<DefLocation> {
-    run(d, extra, &DocMods::default(), |c| type_definition(c, pos))
+    run(d, extra, &DocMods::default(), |c| {
+        get_type_definition(c, pos)
+    })
 }
 
 const WIDGET_DOC: &str = "class Widget {\n    id: i32;\n}\n";

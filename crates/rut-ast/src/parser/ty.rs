@@ -111,8 +111,36 @@ impl TypeFrame {
     fn path_run(&mut self, p: &mut Parser) -> Step {
         loop {
             let Some(name) = p.expect_ident("a type name") else {
-                return Step::Pop(Done::Failed);
+                // the incomplete rung: the path continues (`layout::`
+                // at the typing edge) — the partial type path keeps a
+                // real slot instead of fencing (a path with no head is
+                // identity damage: the fence stands)
+                let segs = match &mut self.stage {
+                    TyStage::Path { segs } => std::mem::take(segs),
+                    _ => Vec::new(),
+                };
+                if segs.is_empty() {
+                    return Step::Pop(Done::Failed);
+                }
+                let t = TyPathNode {
+                    span: Span::new(self.lo.lo, p.prev_end.max(self.lo.lo)),
+                    segs,
+                }
+                .allocate(&mut p.ast);
+                return self.pop_or_union(p, t);
             };
+            // `Self` — the enclosing type's own name: a SINGLE-seg
+            // spelling is the tree's own kind (`Self::A` stays a path)
+            if name.id == sym::SELF_TY
+                && matches!(&self.stage, TyStage::Path { segs } if segs.is_empty())
+                && !matches!(p.tok(), Tok::Colon2 | Tok::Lt)
+            {
+                let t = crate::SelfTyNode {
+                    span: Span::new(self.lo.lo, p.prev_end.max(self.lo.lo)),
+                }
+                .allocate(&mut p.ast);
+                return self.pop_or_union(p, t);
+            }
             if matches!(p.tok(), Tok::Lt) {
                 // type position: `<` is always generic args
                 p.bump();

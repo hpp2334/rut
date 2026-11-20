@@ -85,14 +85,20 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                     let n = fh.get(self.ctx.ast);
                     (n.recv, n.name)
                 };
-                let ExprRef::Path(ph) = base else {
-                    return None;
+                // the chain head: a single-seg path — or the receiver
+                // itself (`self.k`: the `Self_` node, bound as `self`)
+                let head = match base {
+                    ExprRef::Path(ph) => {
+                        let segs = &ph.get(self.ctx.ast).segs;
+                        if segs.len() != 1 || !segs[0].generics.is_empty() {
+                            return None;
+                        }
+                        segs[0].name
+                    }
+                    ExprRef::Self_(h) if !h.get(self.ctx.ast).is_ty => sym::SELF,
+                    _ => return None,
                 };
-                let segs = &ph.get(self.ctx.ast).segs;
-                if segs.len() != 1 || !segs[0].generics.is_empty() {
-                    return None;
-                }
-                let base_ty = self.lookup(segs[0].name)?.ty;
+                let base_ty = self.lookup(head)?.ty;
                 let field_ty_node = self.declared_field_ty_node(base_ty, name)?;
                 match field_ty_node {
                     TyRef::Path(th)

@@ -42,23 +42,25 @@ macro_rules! arenas {
 }
 
 // the muncher — one expansion per kind (its own macro so the catch-all
-// entry above can never re-match the recursion)
+// entry above can never re-match the recursion). A row may carry a
+// trailing `(expr)` — the kind's absence rule for the completeness
+// query (the slots whose `None` makes the node incomplete).
 macro_rules! arenas_munch {
-    // step: carry one row (id, name, field, ty), bump the id
+    // step: carry one row (id, name, field, ty, incompleteness), bump the id
     (@emit [$($acc:tt)*] $next:tt;
-        $field:ident : $ty:ty => $name:literal
+        $field:ident : $ty:ty => $name:literal $(($inc:expr))?
         $(, $($rest:tt)* )?
     ) => {
         arenas_munch!(
             @emit
-            [$($acc)* [$next $name $field [$ty]]]
+            [$($acc)* [$next $name $field [$ty] [$($inc)?]]]
             ($next + 1);
             $( $($rest)* )?
         );
     };
     // base: every kind carries its row — emit the store
     (@emit [$(
-        [$n:tt $name:tt $field:ident [$ty:tt]]
+        [$n:tt $name:tt $field:ident [$ty:tt] [$($inc:tt)*]]
     )*] $next:tt;) => {
         pub struct Ast {
             $( $field: Arena<$ty>, )*
@@ -146,6 +148,10 @@ macro_rules! arenas_munch {
             const KIND: NodeKindId = $n;
             const NAME: &'static str = $name;
         } )*
+        // the completeness impl — default complete, or the row's
+        // absence rule (a closure over the node, bound in the row's
+        // own hygiene context)
+        $( incomplete_impl!($ty, [$($inc)*]); )*
 
         /// the kind dispatch — one probe per stamped kind, id-compared
         /// (the ids are the macro's own running index). `None` = dead
@@ -160,6 +166,23 @@ macro_rules! arenas_munch {
                 }
             )*
             None
+        }
+
+        /// the completeness query's dispatch — the per-kind absence
+        /// rules above, over the same inventory. A dead slot or bogus
+        /// id is not an incomplete node.
+        pub(crate) fn incomplete_of_any(ast: &Ast, h: AnyHandle) -> bool {
+            let kind = h.kind;
+            let idx = h.idx;
+            $(
+                if kind == <$ty as NodeKind>::KIND {
+                    return ast
+                        .$field
+                        .get(idx)
+                        .is_some_and(|n| <$ty as crate::ast::handle::IsIncomplete>::is_incomplete(n));
+                }
+            )*
+            false
         }
 
         /// the printable name of a kind id — the same single table the
@@ -190,11 +213,30 @@ macro_rules! arenas_munch {
     };
 }
 
+// the completeness impl — default complete, or the row's absence rule.
+// The row spells a CLOSURE over the node (`|n: &Self| ..`), so its
+// bindings live in the row's own hygiene context.
+macro_rules! incomplete_impl {
+    ($ty:ty, []) => {
+        impl crate::ast::handle::IsIncomplete for $ty {}
+    };
+    ($ty:ty, [$($inc:tt)*]) => {
+        impl crate::ast::handle::IsIncomplete for $ty {
+            fn is_incomplete(&self) -> bool {
+                #[allow(clippy::redundant_closure_for_method_calls)]
+                ($($inc)*)(self)
+            }
+        }
+    };
+}
+
 arenas! {
     // items
     modules: crate::ast::item::ModuleNode => "Module",
     mod_decls: crate::ast::item::ModDeclNode => "ModDecl",
-    uses: crate::ast::item::UseNode => "Use",
+    uses: crate::ast::item::UseNode => "Use" (
+        |n: &Self| n.names.is_empty() && n.group.is_none()
+    ),
     aliases: crate::ast::item::AliasNode => "Alias",
     module_lets: crate::ast::item::ModuleLetNode => "ModuleLet",
     enums: crate::ast::item::EnumNode => "Enum",
@@ -228,8 +270,11 @@ arenas! {
     blocks: crate::ast::expr::BlockNode => "Block",
     lits: crate::ast::expr::LitNode => "Lit",
     paths: crate::ast::expr::PathNode => "Path",
-    calls: crate::ast::expr::CallNode => "Call",
-    methods: crate::ast::expr::MethodNode => "Method",
+    selfs: crate::ast::expr::SelfNode => "Self",
+    calls: crate::ast::expr::CallNode => "Call" (|n: &Self| n.rparen.is_none()),
+    methods: crate::ast::expr::MethodNode => "Method" (
+        |n: &Self| n.member.is_none() || n.rparen.is_none()
+    ),
     fields: crate::ast::expr::FieldNode => "Field",
     indexes: crate::ast::expr::IndexNode => "Index",
     unaries: crate::ast::expr::UnaryNode => "Unary",
@@ -249,6 +294,7 @@ arenas! {
     casts: crate::ast::expr::CastNode => "Cast",
     // types
     ty_paths: crate::ast::ty::TyPathNode => "TyPath",
+    self_tys: crate::ast::ty::SelfTyNode => "SelfTy",
     ty_fns: crate::ast::ty::TyFnNode => "TyFn",
     ty_opts: crate::ast::ty::TyOptNode => "TyOpt",
     ty_arrays: crate::ast::ty::TyArrayNode => "TyArray",
@@ -310,5 +356,12 @@ impl Ast {
     /// spine (`node_at` → `ancestors` → `downcast`)
     pub fn ancestors(&self, h: AnyHandle) -> impl Iterator<Item = AnyHandle> + '_ {
         std::iter::successors(Some(h), |&cur| self.parent(cur))
+    }
+    /// the generic completeness query — absence-derived per kind
+    /// (a method's member or a call's `rparen` absent, a use without
+    /// leaf names): the partial-shape rung's door. The tree always has
+    /// something at the cursor; the query says whether it is whole.
+    pub fn is_incomplete(&self, h: AnyHandle) -> bool {
+        incomplete_of_any(self, h)
     }
 }

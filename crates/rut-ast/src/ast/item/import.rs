@@ -28,6 +28,10 @@ pub struct UseNode {
     pub name_span: Span,
     pub names: Vec<IdentId>,
     pub name_spans: Vec<Span>,
+    /// the `{..}` group's span, braces included — `None` for the flat
+    /// leaf (`use pkg::A;`) and for the incomplete shape (`use pkg::`
+    /// at the typing edge: the group is being typed)
+    pub group: Option<Span>,
     pub doc: DocData,
 }
 

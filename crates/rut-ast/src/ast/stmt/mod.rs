@@ -109,8 +109,10 @@ pub struct LetStmtNode {
     pub is_const: bool,
     pub name: IdentId,
     pub name_span: Span,
-    /// `let (a, b) = ..` — tuple destructuring (name_span is names\[0]'s)
-    pub destructure: Option<Vec<IdentId>>,
+    /// `let (a, b) = ..` — tuple destructuring: each member's ident +
+    /// its own token span (name_span is names\[0]'s; the per-member
+    /// spans are the bindings pass's decl targets — no token recovery)
+    pub destructure: Option<Vec<(IdentId, Span)>>,
     pub ty: Option<TyRef>,
     pub init: ExprRef,
 }

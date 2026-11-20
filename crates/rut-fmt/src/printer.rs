@@ -1131,6 +1131,9 @@ impl<'a> P<'a> {
                     }
                 }
             }
+            TyRef::Self_(_) => {
+                self.text("Self");
+            }
             TyRef::Fn(h) => {
                 let d = h.get(self.a);
                 self.text("fn(");
@@ -1397,7 +1400,7 @@ impl<'a> P<'a> {
                             if i > 0 {
                                 self.text(", ");
                             }
-                            self.text(self.a.name(*n));
+                            self.text(self.a.name(n.0));
                         }
                         self.text(")");
                     }
@@ -1791,6 +1794,10 @@ impl<'a> P<'a> {
             ExprRef::Path(h) => {
                 self.path(&h.get(self.a).segs);
             }
+            ExprRef::Self_(h) => {
+                let d = h.get(self.a);
+                self.text(if d.is_ty { "Self" } else { "self" });
+            }
             ExprRef::Call(h) => {
                 let d = h.get(self.a);
                 self.operand(d.callee, L_POSTFIX, false);
@@ -1804,7 +1811,9 @@ impl<'a> P<'a> {
                 let d = h.get(self.a);
                 self.operand(d.recv, L_POSTFIX, false);
                 self.text(".");
-                self.text(self.a.name(d.name));
+                if let Some((name, _)) = d.member() {
+                    self.text(self.a.name(name));
+                }
                 if !d.generics.is_empty() {
                     self.text("<");
                     for (i, g) in d.generics.iter().enumerate() {

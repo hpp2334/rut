@@ -8,7 +8,7 @@ mod fstring;
 mod lit;
 mod ops;
 
-pub use access::{CallNode, FieldNode, IndexNode, MethodNode};
+pub use access::{CallNode, FieldNode, IndexNode, MemberIdent, MethodNode};
 pub use control::{
     AsyncBlockNode, AwaitNode, CastNode, IfExprNode, IsNode, WhenArmNode, WhenExprNode,
 };
@@ -39,6 +39,7 @@ pub enum ExprRef {
     Block(Handle<BlockNode>),
     Lit(Handle<LitNode>),
     Path(Handle<PathNode>),
+    Self_(Handle<SelfNode>),
     Call(Handle<CallNode>),
     Method(Handle<MethodNode>),
     Field(Handle<FieldNode>),
@@ -69,6 +70,7 @@ impl ExprRef {
             ExprRef::Block,
             ExprRef::Lit,
             ExprRef::Path,
+            ExprRef::Self_,
             ExprRef::Call,
             ExprRef::Method,
             ExprRef::Field,
@@ -98,6 +100,7 @@ impl ExprRef {
             ExprRef::Block,
             ExprRef::Lit,
             ExprRef::Path,
+            ExprRef::Self_,
             ExprRef::Call,
             ExprRef::Method,
             ExprRef::Field,
@@ -122,6 +125,11 @@ impl ExprRef {
     }
     pub fn is_error(self) -> bool {
         matches!(self, ExprRef::Error(_))
+    }
+    /// the receiver `self` (or the `Self` type spelling — `is_ty`)
+    /// — the tree-driven kind; no text comparison downstream
+    pub fn is_self(self) -> bool {
+        matches!(self, ExprRef::Self_(_))
     }
     pub fn as_block(self) -> Option<Handle<BlockNode>> {
         match self {
@@ -168,11 +176,21 @@ pub struct BlockNode {
 }
 
 /// dotted path, possibly with generic args on any segment: `primes`,
-/// `Color.Red`, `Vec.from`, `MyMap<K, V>.new`, `Self`
+/// `Color.Red`, `Vec.from`, `MyMap<K, V>.new`
 #[derive(Clone, Debug)]
 pub struct PathNode {
     pub span: Span,
     pub segs: Vec<PathSeg>,
+}
+
+/// `self` — the receiver value — or the `Self` type spelling in value
+/// position (`is_ty`; lowering diagnoses it outside a type body). One
+/// token, no segments.
+#[derive(Clone, Copy, Debug)]
+pub struct SelfNode {
+    pub span: Span,
+    /// the TYPE spelling `Self` (vs the receiver `self`)
+    pub is_ty: bool,
 }
 
 /// tuple expression `(a, b, ..)` — a record with numeric fields
@@ -233,6 +251,7 @@ impl Handle<BlockNode> {
 use crate::{plain_alloc, slot_alloc};
 plain_alloc!(BlockNode);
 slot_alloc!(PathNode, ExprRef::Path);
+slot_alloc!(SelfNode, ExprRef::Self_);
 slot_alloc!(TupleNode, ExprRef::Tuple);
 slot_alloc!(StructLitNode, ExprRef::Struct);
 slot_alloc!(ArrayLitNode, ExprRef::ArrayLit);

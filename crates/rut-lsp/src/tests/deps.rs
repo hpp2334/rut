@@ -567,12 +567,11 @@ fn dep_impl_methods_ride_the_dep_index() {
     let dm = crate::mods::DocMods::default();
     let ctx = crate::query::definition::Ctx {
         doc_uri: "file:///ws/main.rut",
-        doc: &doc_file.doc,
         chain: &chain,
         doc_mods: &dm,
     };
     let byte = doc_file.doc.lines().byte(doc_file.doc.src(), line, ch);
-    let hits = crate::query::definition::definition(&ctx, byte);
+    let hits = crate::query::definition::get_definition(&ctx, byte);
     assert_eq!(hits.len(), 1, "the .info click resolves: {hits:?}");
     assert_eq!(hits[0].uri, "file:///deps/ink/src/mod.rut");
 }

@@ -180,14 +180,13 @@ fn definition_over_a_qualified_host_use_jumps_into_the_tree() {
     let dm = crate::mods::DocMods::default();
     let ctx = crate::query::definition::Ctx {
         doc_uri,
-        doc: &doc_idx.doc,
         chain: &chain,
         doc_mods: &dm,
     };
     let normalized = doc_idx.doc.src();
     // the leaf: the `connect` inside the braces
     let leaf = normalized.find("connect").expect("the leaf") as u32;
-    let hits = crate::query::definition::definition(&ctx, leaf);
+    let hits = crate::query::definition::get_definition(&ctx, leaf);
     assert_eq!(hits.len(), 1, "{hits:?}");
     assert_eq!(
         hits[0].uri, "rut/myhost/src/net/mod.d.rut",
@@ -195,7 +194,7 @@ fn definition_over_a_qualified_host_use_jumps_into_the_tree() {
     );
     // the segment: `net` in the use path — the declaring edge
     let seg = normalized.find("net").expect("the segment") as u32;
-    let hits = crate::query::definition::definition(&ctx, seg);
+    let hits = crate::query::definition::get_definition(&ctx, seg);
     assert_eq!(hits.len(), 1, "{hits:?}");
     assert_eq!(
         hits[0].uri, "rut/myhost/src/myhost.d.rut",

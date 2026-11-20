@@ -123,6 +123,18 @@ impl Document {
         self.doc.text(self.doc.span())
     }
 
+    /// the locals pass — lazy per version over the pipeline (the rows
+    /// carry written annotations; inference is the resolver's lane)
+    pub fn bindings(&self) -> &[rut_ast::Binding] {
+        self.doc.bindings()
+    }
+
+    /// the fence residue — the lexeme under the cursor when the tree
+    /// landed on an `ErrorNode` (the token store's one public read)
+    pub fn name_at(&self, pos: u32) -> Option<(Span, &str)> {
+        self.doc.name_at(pos)
+    }
+
     // the join doors — span × src × lines, one door each: no consumer
     // pairs `lines()`+`src()` by hand
 

@@ -334,6 +334,7 @@ fn ty_text(ast: &Ast, t: TyRef) -> String {
             let names: Vec<&str> = d.segs.iter().map(|s| ast.name(s.name)).collect();
             names.join(".")
         }
+        TyRef::Self_(_) => "Self".to_string(),
         TyRef::Fn(_) => "fn(..)".to_string(),
         // the prefix spelling renders with its payload: `?i32`, `??str`
         TyRef::Opt(h) => format!("?{}", ty_text(ast, h.get(ast).inner)),

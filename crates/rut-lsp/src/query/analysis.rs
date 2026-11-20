@@ -202,11 +202,10 @@ pub fn definition_on(
 ) -> Vec<definition::DefLocation> {
     let ctx = definition::Ctx {
         doc_uri: chain.head().origin(),
-        doc,
         chain,
         doc_mods: dm,
     };
-    definition::definition(&ctx, byte_at(doc, line, ch))
+    definition::get_definition(&ctx, byte_at(doc, line, ch))
 }
 
 /// type definitions at an LSP position: the expression's type head →
@@ -220,11 +219,10 @@ pub fn type_definition_on(
 ) -> Vec<definition::DefLocation> {
     let ctx = definition::Ctx {
         doc_uri: chain.head().origin(),
-        doc,
         chain,
         doc_mods: dm,
     };
-    definition::type_definition(&ctx, byte_at(doc, line, ch))
+    definition::get_type_definition(&ctx, byte_at(doc, line, ch))
 }
 
 /// inlay hints over a document range (the survey §4.3): TYPE hints on
@@ -263,7 +261,6 @@ pub fn references_on(
 ) -> Vec<definition::DefLocation> {
     let ctx = definition::Ctx {
         doc_uri: chain.head().origin(),
-        doc,
         chain,
         doc_mods: dm,
     };

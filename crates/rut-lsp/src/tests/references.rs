@@ -65,7 +65,6 @@ fn refs(d: &Doc, pos: u32, extra: &[MountedFile], include_decl: bool) -> Vec<Def
     let dm = crate::mods::DocMods::default();
     let ctx = definition::Ctx {
         doc_uri: DOC,
-        doc: &d.file.doc,
         chain: &chain,
         doc_mods: &dm,
     };
@@ -380,7 +379,6 @@ fn cross_file_refs_find_the_importing_files() {
     let dm = crate::mods::DocMods::default();
     let ctx = definition::Ctx {
         doc_uri: DOC,
-        doc: &main.file.doc,
         chain: &chain,
         doc_mods: &dm,
     };
@@ -408,7 +406,6 @@ fn refs_from_the_decl_side_reach_the_importing_doc() {
     let dm = crate::mods::DocMods::default();
     let ctx = definition::Ctx {
         doc_uri: WIDGET_URI,
-        doc: &lib.file.doc,
         chain: &chain,
         doc_mods: &dm,
     };
@@ -440,7 +437,6 @@ fn an_unrelated_same_named_type_does_not_leak_in() {
     let dm = crate::mods::DocMods::default();
     let ctx = definition::Ctx {
         doc_uri: DOC,
-        doc: &main.file.doc,
         chain: &chain,
         doc_mods: &dm,
     };

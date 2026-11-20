@@ -18,16 +18,26 @@ use std::collections::HashSet;
 
 use rut_ast::{
     AliasNode, AnyHandle, Ast, BuiltinPrimitiveNode, BuiltinTyNode, ClassNode, DocData,
-    EnumMemberNode, EnumNode, FieldDeclNode, FieldRef, FnNode, Handle, ImplNode, InterfaceNode,
-    ItemRef, MemberRef, MethodDeclNode, MethodRef, ModDeclNode, ModuleLetNode, ParamRef,
-    StructNode, SurfaceFnNode, SurfaceStructNode, UseNode, Vis,
+    EnumMemberNode, EnumNode, ExprRef, FieldDeclNode, FieldNode, FieldRef, FnNode, Handle, IdentId,
+    ImplNode, InterfaceNode, ItemRef, Lit, MemberRef, MethodDeclNode, MethodNode, MethodRef,
+    ModDeclNode, ModuleLetNode, ParamRef, PathNode, StructNode, SurfaceFnNode, SurfaceStructNode,
+    UseNode, Vis,
 };
 
-use crate::hover::bindings::Binding;
+use crate::hover::bindings::{BindKind, Binding};
 use crate::hover::types::{ty_head, ty_src, Mount, TyForm};
 use crate::semantic::{mode_of, Document};
 
 use super::infer;
+
+/// a member door's receiver — the node-derived spelling: the receiver
+/// expression (a method/field access), or the `::` path segment
+/// immediately before the member
+#[derive(Clone, Copy)]
+pub(crate) enum RecvNode {
+    Expr(ExprRef),
+    Seg(IdentId),
+}
 
 // ---- the decl map — name → node address, one pass per file version ----
 
@@ -351,20 +361,33 @@ impl<'a> Chain<'a> {
         }
     }
 
-    /// THE MEMBER DOOR — where a member of `recv` actually declares:
-    /// the receiver resolver, the member law (own surface → enum
-    /// members → inherent impl methods → interface signatures), and
-    /// every gate (the use-both rule) live INSIDE; the caller hands
-    /// the member name and the receiver spelling it found. One rule
-    /// for every host — hover and definition share it.
-    pub(crate) fn member(
-        &self,
-        binds: &[Binding],
-        pos: u32,
-        member: &str,
-        recv: &str,
-    ) -> MemberHit<'a> {
-        let Some(ty_name) = super::lookup::recv_type(self, binds, pos, recv) else {
+    /// THE MEMBER DOOR — where a member of the receiver actually
+    /// declares. Doors consume NODES, not derived facts: the caller
+    /// hands the node the cursor's walk found (a method call, a field
+    /// access, or a `::` path's tail segment); the member + receiver
+    /// derive INSIDE, the receiver's type resolves INSIDE (self → the
+    /// enclosing type, literals → primitives, paths → the bindings —
+    /// read internally, never a caller-run pass — then module lets),
+    /// and the member law (own surface → enum members → inherent impl
+    /// methods → interface signatures) with every gate (the use-both
+    /// rule) lives here. One rule for every host — hover, definition,
+    /// and completion share it.
+    pub(crate) fn member(&self, pos: u32, node: AnyHandle) -> MemberHit<'a> {
+        let ast = self.head().doc.ast();
+        // the member + the receiver, from the node itself — the
+        // cursor's own segment decides for a path (the head segment is
+        // a name position, never a member lane)
+        let derived = self.member_at(pos, node);
+        let Some((member, recv)) = derived else {
+            return MemberHit::UnknownReceiver;
+        };
+        let Some(member) = member else {
+            // the incomplete shape (`recv.` at the typing edge): the
+            // member is being typed — nothing to resolve yet
+            return MemberHit::UnknownReceiver;
+        };
+        let member_text = ast.name(member);
+        let Some(ty_name) = self.recv_ty_name(pos, recv) else {
             return MemberHit::UnknownReceiver;
         };
         // an interface receiver: the declared signatures ARE the members —
@@ -379,7 +402,11 @@ impl<'a> Chain<'a> {
             {
                 return MemberHit::None;
             }
-            if let Some(m) = iface.methods().into_iter().find(|m| m.name() == member) {
+            if let Some(m) = iface
+                .methods()
+                .into_iter()
+                .find(|m| m.name() == member_text)
+            {
                 return MemberHit::Found(MemberTarget::IfaceMember(iface, m));
             }
             return MemberHit::None;
@@ -388,17 +415,17 @@ impl<'a> Chain<'a> {
             return MemberHit::UnknownReceiver;
         };
         // own surface first
-        if let Some(m) = ty.methods().into_iter().find(|m| m.name() == member) {
+        if let Some(m) = ty.methods().into_iter().find(|m| m.name() == member_text) {
             return MemberHit::Found(MemberTarget::Member(ty, m, None));
         }
         if ty.form() == TyForm::Enum {
             // `Color::Red` — the member IS an enum member; hover shows the enum
-            if let Some(m) = ty.fields().into_iter().find(|f| f.name() == member) {
+            if let Some(m) = ty.fields().into_iter().find(|f| f.name() == member_text) {
                 return MemberHit::Found(MemberTarget::EnumMember(ty, m));
             }
             return MemberHit::None;
         }
-        if let Some(m) = ty.fields().into_iter().find(|f| f.name() == member) {
+        if let Some(m) = ty.fields().into_iter().find(|f| f.name() == member_text) {
             return MemberHit::Found(MemberTarget::Member(ty, m, None));
         }
         // inherent impl-block methods — where methods live since type
@@ -410,7 +437,7 @@ impl<'a> Chain<'a> {
         let mut fallback: Option<FnView<'a>> = None;
         for f in self.iter() {
             for f in f.fns() {
-                if f.name() == member && f.owner().as_deref() == Some(ty_name.as_str()) {
+                if f.name() == member_text && f.owner().as_deref() == Some(ty_name.as_str()) {
                     if f.file.mount.src_path.is_none() {
                         return MemberHit::Found(MemberTarget::ImplFn(f));
                     }
@@ -424,6 +451,150 @@ impl<'a> Chain<'a> {
             Some(f) => MemberHit::Found(MemberTarget::ImplFn(f)),
             None => MemberHit::None,
         }
+    }
+
+    /// the (member, receiver) pair a member-position node carries —
+    /// `None` when the node is not a member position or the cursor is
+    /// not on its member segment (a path's head is a name position)
+    fn member_at(&self, pos: u32, node: AnyHandle) -> Option<(Option<IdentId>, RecvNode)> {
+        let ast = self.head().doc.ast();
+        if let Some(m) = node.downcast::<MethodNode>() {
+            let d = m.get(ast);
+            // the cursor rides the member name (the token-scan's
+            // boundary convention: a name ends its own position)
+            let on_member = d
+                .member()
+                .is_some_and(|(_, nsp)| nsp.lo <= pos && pos <= nsp.hi);
+            return on_member.then(|| (d.member().map(|(n, _)| n), RecvNode::Expr(d.recv)));
+        }
+        if let Some(f) = node.downcast::<FieldNode>() {
+            let d = f.get(ast);
+            let on_member = d.name_span.lo <= pos && pos <= d.name_span.hi;
+            return if on_member {
+                Some((Some(d.name), RecvNode::Expr(d.recv)))
+            } else {
+                None
+            };
+        }
+        if let Some(p) = node.downcast::<PathNode>() {
+            let segs = &p.get(ast).segs;
+            if segs.len() >= 2 {
+                if let Some(i) = segs
+                    .iter()
+                    .position(|s| s.name_span.lo <= pos && pos <= s.name_span.hi)
+                {
+                    if i + 1 == segs.len() {
+                        // the tail segment IS the member lane
+                        return Some((Some(segs[i].name), RecvNode::Seg(segs[i - 1].name)));
+                    }
+                }
+            }
+        }
+        None
+    }
+
+    /// the receiver's type name — the node-derived spelling: the
+    /// receiver value (`self` → the enclosing type), a path segment
+    /// (capitalized and primitive names spell themselves, locals ride
+    /// the bindings — read internally, never a caller-run pass — then
+    /// module lets)
+    pub(crate) fn recv_ty_name(&self, pos: u32, recv: RecvNode) -> Option<String> {
+        let ast = self.head().doc.ast();
+        match recv {
+            RecvNode::Expr(e) => match e {
+                ExprRef::Self_(h) if !h.get(ast).is_ty => {
+                    super::lookup::enclosing_type(self.iter(), pos).map(|t| t.name().to_string())
+                }
+                ExprRef::Path(ph) => {
+                    let segs = &ph.get(ast).segs;
+                    if segs.len() != 1 {
+                        return None;
+                    }
+                    self.named_recv(pos, segs[0].name)
+                }
+                ExprRef::Lit(h) => match h.get(ast).lit {
+                    // every string-literal form is a `str` receiver
+                    Lit::Str(_) | Lit::RawStr(_) => Some("str".to_string()),
+                    _ => None,
+                },
+                ExprRef::FStr(_) => Some("str".to_string()),
+                _ => None,
+            },
+            RecvNode::Seg(id) => self.named_recv(pos, id),
+        }
+    }
+
+    /// a plain name receiver — capitalized and primitive spellings
+    /// name themselves; anything else is the bindings' resolve (the
+    /// declared-or-inferred head) then the module lets
+    pub(crate) fn named_recv(&self, pos: u32, id: IdentId) -> Option<String> {
+        let ast = self.head().doc.ast();
+        let text = ast.name(id);
+        if super::infer::is_cap(text) || crate::semantic::is_primitive_ty(text) {
+            return Some(text.to_string());
+        }
+        let b = rut_ast::resolve_binding(self.head().doc.bindings(), pos, id)?;
+        self.binding_ty(b)
+            .map(|t| crate::hover::types::head_of_ty(&t))
+            .or_else(|| super::infer::module_let_ty(self.iter(), text))
+    }
+
+    /// a binding row's type — declared-or-inferred, the chain as the
+    /// inference window (the hover/tooltip text for a local). A loop
+    /// variable's iterated ELEMENT is the answer (`[Point]` iterates
+    /// `Point`), the survey's for-of rule
+    pub(crate) fn binding_ty(&self, b: &Binding) -> Option<String> {
+        let head = self.head();
+        if let Some(sp) = b.ty_span {
+            return Some(head.doc.text(sp).to_string());
+        }
+        // a destructured row takes its TUPLE element positionally
+        if let (Some(i), Some(ExprRef::Tuple(th))) = (b.destructure_index, b.init) {
+            let ast = head.doc.ast();
+            if let Some(&elem) = th.get(ast).elems.get(i) {
+                return self.expr_ty(head, elem);
+            }
+        }
+        let ty = b.init.and_then(|init| self.expr_ty(head, init))?;
+        if matches!(b.kind, BindKind::IterVar) {
+            if let Some(elem) = super::infer::elem_ty(&ty) {
+                return Some(elem);
+            }
+        }
+        Some(ty)
+    }
+
+    /// the resolver family's expression door — the display-side type
+    /// of `e`, the chain as the file window (the receiver resolver
+    /// generalized: literals → primitives, paths → the bindings (read
+    /// internally) and module lets, calls → the callee's written ret,
+    /// member chains → the member lanes)
+    pub(crate) fn expr_ty(&self, home: &MountedFile, e: ExprRef) -> Option<String> {
+        let files: Vec<&MountedFile> = self.iter().collect();
+        super::infer::expr_ty(home, &files, e)
+    }
+
+    /// the inherent impl-block fn `impl ty_name { fn member(..) }` —
+    /// the callee door's method half (the old `impl_method_fn` rule's
+    /// one home). Own-surface methods (interface bodies,
+    /// builtin/primitive surfaces) have no recorded params: a hit there
+    /// is FINAL (the known-receiver-is-final law) and yields `None`,
+    /// never a wrong signature from a same-named impl fn in another
+    /// file.
+    pub(crate) fn impl_method_fn(&self, ty_name: &str, member: &str) -> Option<FnView<'a>> {
+        for i in self.iter() {
+            if let Some(t) = i.ty(ty_name) {
+                if t.methods().iter().any(|m| m.name() == member) {
+                    return None;
+                }
+            }
+            for f in i.fns() {
+                if f.name() == member && f.owner().as_deref() == Some(ty_name) {
+                    return Some(f);
+                }
+            }
+        }
+        None
     }
 
     /// the interface named `name` — [`type_decl`](Self::type_decl) cut
@@ -1173,7 +1344,7 @@ impl<'a> LetView<'a> {
             .get(ast);
         match d.ty {
             Some(t) => Some(ty_src(ast, t)),
-            None => infer::expr_ty(ast, &[], &[self.file], d.init),
+            None => infer::expr_ty(self.file, &[self.file], d.init),
         }
     }
 
@@ -1226,39 +1397,24 @@ impl<'a> UseView<'a> {
         ast.name(d.names[self.i])
     }
 
-    /// byte span of the imported name's identifier — a definition
-    /// target (`Ctrl+click` on `Vec` in the use jumps to the pouch decl)
-    pub(crate) fn name_span(&self) -> Option<rut_lexer::span::Span> {
-        let ast = self.file.doc.ast();
-        let d = self.d().get(ast);
-        d.name_spans.get(self.i).copied()
-    }
-
-    /// the use's declared visibility (`Vis::Self_` = a private import)
     pub(crate) fn vis(&self) -> Vis {
         self.d().get(self.file.doc.ast()).vis()
     }
 
-    /// the spelled path's package head
     pub(crate) fn pkg(&self) -> &'a str {
         let ast = self.file.doc.ast();
         let d = self.d().get(ast);
         ast.name(d.path[0])
     }
 
-    /// the spelled path, pkg head included (`["pouch", "layout"]`)
     pub(crate) fn path(&self) -> Vec<String> {
         let ast = self.file.doc.ast();
-        let d = self.d().get(ast);
-        d.path.iter().map(|p| ast.name(*p).to_string()).collect()
-    }
-
-    /// the path segments' spans, same order — the use segment
-    /// hover/definition targets (the parse's own verdict, recorded on
-    /// the node)
-    pub(crate) fn path_spans(&self) -> Vec<Option<rut_lexer::span::Span>> {
-        let d = self.d().get(self.file.doc.ast());
-        d.path_spans.iter().map(|s| Some(*s)).collect()
+        self.d()
+            .get(ast)
+            .path
+            .iter()
+            .map(|id| ast.name(*id).to_string())
+            .collect()
     }
 }
 

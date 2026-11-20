@@ -10,6 +10,7 @@ use rut_lexer::span::Span;
 #[derive(Clone, Copy, Debug)]
 pub enum TyRef {
     Path(Handle<TyPathNode>),
+    Self_(Handle<SelfTyNode>),
     Fn(Handle<TyFnNode>),
     Opt(Handle<TyOptNode>),
     Array(Handle<TyArrayNode>),
@@ -24,6 +25,7 @@ impl TyRef {
             self,
             ctx,
             TyRef::Path,
+            TyRef::Self_,
             TyRef::Fn,
             TyRef::Opt,
             TyRef::Array,
@@ -37,6 +39,7 @@ impl TyRef {
         crate::slot_any!(
             self,
             TyRef::Path,
+            TyRef::Self_,
             TyRef::Fn,
             TyRef::Opt,
             TyRef::Array,
@@ -47,6 +50,11 @@ impl TyRef {
     }
     pub fn is_error(self) -> bool {
         matches!(self, TyRef::Error(_))
+    }
+    /// the `Self` type spelling — the enclosing type's own name (the
+    /// tree-driven kind; no text comparison downstream)
+    pub fn is_self(self) -> bool {
+        matches!(self, TyRef::Self_(_))
     }
     pub fn as_path(self) -> Option<Handle<TyPathNode>> {
         match self {
@@ -61,6 +69,14 @@ impl TyRef {
 pub struct TyPathNode {
     pub span: Span,
     pub segs: Vec<PathSeg>,
+}
+
+/// `Self` — the enclosing type's own name in type position (`-> Self`,
+/// `?Self`, `impl Self`, the `Self { .. }` literal's head). One token,
+/// no segments.
+#[derive(Clone, Debug)]
+pub struct SelfTyNode {
+    pub span: Span,
 }
 
 /// fn type: `fn(Store, P) -> R` — params are bare types; an omitted
@@ -101,6 +117,7 @@ pub struct TyUnionNode {
 }
 
 slot_alloc!(TyPathNode, TyRef::Path);
+slot_alloc!(SelfTyNode, TyRef::Self_);
 slot_alloc!(TyFnNode, TyRef::Fn);
 slot_alloc!(TyOptNode, TyRef::Opt);
 slot_alloc!(TyArrayNode, TyRef::Array);

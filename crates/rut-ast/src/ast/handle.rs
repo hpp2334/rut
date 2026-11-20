@@ -31,6 +31,18 @@ pub trait NodeKind {
     const NAME: &'static str;
 }
 
+/// The generic completeness query, absence-derived per kind: a node
+/// whose optional slots are absent (`MethodNode` without its member,
+/// a call without its `rparen`, a use without leaf names) answers
+/// `true`. The default is complete; kinds with optional slots
+/// override — the `arenas!` inventory stamps the impl beside the
+/// arena, so a new kind answers the question from the day it exists.
+pub trait IsIncomplete {
+    fn is_incomplete(&self) -> bool {
+        false
+    }
+}
+
 /// A typed index into one per-kind arena. Zero-sized marker; `Copy`.
 pub struct Handle<T> {
     pub(crate) idx: u32,

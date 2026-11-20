@@ -2028,6 +2028,11 @@ impl<'a> Ctx<'a> {
             segs.len() == 1 && segs[0].generics.is_empty() && segs[0].name == sym::SELF_TY
         };
         match node {
+            TyRef::Self_(_) => {
+                if let Some(t) = self_ty {
+                    return t;
+                }
+            }
             TyRef::Path(h) if is_self(&h.get(self.ast).segs) => {
                 if let Some(t) = self_ty {
                     return t;
@@ -2035,11 +2040,14 @@ impl<'a> Ctx<'a> {
             }
             TyRef::Opt(h) => {
                 let inner = h.get(self.ast).inner;
-                if let TyRef::Path(ih) = inner {
-                    if is_self(&ih.get(self.ast).segs) {
-                        if let Some(t) = self_ty {
-                            return self.mk_opt(t);
-                        }
+                let inner_self = match inner {
+                    TyRef::Self_(_) => true,
+                    TyRef::Path(ih) => is_self(&ih.get(self.ast).segs),
+                    _ => false,
+                };
+                if inner_self {
+                    if let Some(t) = self_ty {
+                        return self.mk_opt(t);
                     }
                 }
                 let elem = self.resolve_sig_ty_deep(inner, env, self_ty);

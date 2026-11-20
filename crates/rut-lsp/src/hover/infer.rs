@@ -1,27 +1,25 @@
-//! Display-side type inference over initializer expressions — the
-//! scoping ruling's engine: surface only what the AST + these
-//! heuristics derive, never wire rut-lir in. `init_ty`'s three shapes
-//! (`Type.new(..)`, struct literals, string literals) extend to what
-//! the survey §4.1 names: field reads, unique fn-call results, chained
-//! method calls via ret types, indexing, casts, and the literal
-//! defaults (unsuffixed ints are `i32`, unsuffixed floats
-//! take the `f32` default). Names resolve through the binding pass.
+//! Display-side type inference — the resolver family's inference half:
+//! surface only what the AST + these heuristics derive, never wire
+//! rut-lir in. `init_ty`'s three shapes (`Type.new(..)`, struct
+//! literals, string literals) extend to what the survey §4.1 names:
+//! field reads, unique fn-call results, chained method calls via ret
+//! types, indexing, casts, and the literal defaults (unsuffixed ints
+//! are `i32`, unsuffixed floats take the `f32` default). Names resolve
+//! through `Doc::bindings()` (read internally — callers never run the
+//! pass); an un-annotated binding's type consults its recorded init.
 //! A miss is `None` — never wrong text.
 
 use crate::semantic::IntSuffix;
-use rut_ast::{Ast, BinOp, ExprRef, Lit, PathSeg};
+use rut_ast::{Ast, BinOp, Binding, ExprRef, Lit, PathSeg, SelfNode};
 
-use super::bindings::{elem_ty, resolve, Binding};
 use super::collection::MountedFile;
 use super::types::{head_of_ty, ty_src, TyForm};
 
-/// the type an expression suggests, as display text
-pub(crate) fn expr_ty(
-    ast: &Ast,
-    binds: &[Binding],
-    idxs: &[&MountedFile],
-    e: ExprRef,
-) -> Option<String> {
+/// the type an expression suggests, as display text. `home` is the
+/// document whose bindings resolve the walk's names (the doc the expr
+/// lives in); `idxs` the file window the member/module-let lanes read.
+pub(crate) fn expr_ty(home: &MountedFile, idxs: &[&MountedFile], e: ExprRef) -> Option<String> {
+    let ast = home.doc.ast();
     match e {
         // the literal defaults are the engine's own law
         ExprRef::Lit(h) => match &h.get(ast).lit {
@@ -32,14 +30,28 @@ pub(crate) fn expr_ty(
             Lit::Nil => None,
         },
         ExprRef::FStr(_) => Some("str".to_string()),
-        ExprRef::Path(h) => path_ty(ast, binds, idxs, h.span(ast).lo, &h.get(ast).segs),
+        // `self` — the receiver: the enclosing type (the walk's own
+        // law); the `Self` type spelling has no value type
+        ExprRef::Self_(h) => {
+            let d: &SelfNode = h.get(ast);
+            if d.is_ty {
+                return None;
+            }
+            super::lookup::enclosing_type(idxs.iter().copied(), d.span.lo)
+                .map(|t| t.name().to_string())
+        }
+        ExprRef::Path(h) => {
+            let segs = &h.get(ast).segs;
+            path_ty(home, idxs, h.span(ast).lo, segs)
+        }
         ExprRef::Call(h) => {
             let d = h.get(ast);
             call_ty(idxs, ast, d.callee)
         }
         ExprRef::Method(h) => {
             let d = h.get(ast);
-            if ast.name(d.name) == "new" {
+            let (name, _) = d.member()?;
+            if ast.name(name) == "new" {
                 // `Type.new(..)` — the original init_ty shape
                 if let ExprRef::Path(ph) = d.recv {
                     return ph
@@ -50,36 +62,34 @@ pub(crate) fn expr_ty(
                 }
                 return None;
             }
-            let ty = expr_ty(ast, binds, idxs, d.recv)?;
-            member_ret(idxs, &head_of_ty(&ty), ast.name(d.name))
+            let ty = expr_ty(home, idxs, d.recv)?;
+            member_ret(idxs, &head_of_ty(&ty), ast.name(name))
         }
         ExprRef::Field(h) => {
             let d = h.get(ast);
-            let ty = expr_ty(ast, binds, idxs, d.recv)?;
+            let ty = expr_ty(home, idxs, d.recv)?;
             field_ty(idxs, &head_of_ty(&ty), ast.name(d.name))
         }
         ExprRef::Index(h) => {
             let d = h.get(ast);
-            expr_ty(ast, binds, idxs, d.recv).and_then(|t| elem_ty(&t))
+            expr_ty(home, idxs, d.recv).and_then(|t| elem_ty(&t))
         }
         ExprRef::Struct(h) => Some(ty_src(ast, h.get(ast).ty)),
         ExprRef::Tuple(h) => {
             let elems = &h.get(ast).elems;
-            let parts: Option<Vec<String>> = elems
-                .iter()
-                .map(|&e| expr_ty(ast, binds, idxs, e))
-                .collect();
+            let parts: Option<Vec<String>> =
+                elems.iter().map(|&e| expr_ty(home, idxs, e)).collect();
             parts.map(|p| format!("({})", p.join(", ")))
         }
         ExprRef::ArrayLit(h) => h
             .get(ast)
             .elems
             .first()
-            .and_then(|&e| expr_ty(ast, binds, idxs, e))
+            .and_then(|&e| expr_ty(home, idxs, e))
             .map(|t| format!("[{t}]")),
         ExprRef::ArrayRepeat(h) => {
             let d = h.get(ast);
-            expr_ty(ast, binds, idxs, d.value).map(|t| format!("[{t}]"))
+            expr_ty(home, idxs, d.value).map(|t| format!("[{t}]"))
         }
         ExprRef::Cast(h) => Some(ty_src(ast, h.get(ast).ty)),
         ExprRef::Is(_) => Some("bool".to_string()),
@@ -95,11 +105,23 @@ pub(crate) fn expr_ty(
                 | BinOp::And
                 | BinOp::Or => Some("bool".to_string()),
                 // same-type arithmetic; the left operand decides
-                _ => expr_ty(ast, binds, idxs, d.lhs).or_else(|| expr_ty(ast, binds, idxs, d.rhs)),
+                _ => expr_ty(home, idxs, d.lhs).or_else(|| expr_ty(home, idxs, d.rhs)),
             }
         }
         _ => None,
     }
+}
+
+/// a binding row's type, declared-or-inferred: the WRITTEN annotation
+/// verbatim (`Doc::text` join), else the recorded init through the
+/// resolver over `idxs` (the window the caller rides — the old pass
+/// inferred against the whole chain). `None` when nothing derives —
+/// never wrong text.
+pub(crate) fn binding_ty(home: &MountedFile, idxs: &[&MountedFile], b: &Binding) -> Option<String> {
+    if let Some(sp) = b.ty_span {
+        return Some(home.doc.text(sp).to_string());
+    }
+    b.init.and_then(|init| expr_ty(home, idxs, init))
 }
 
 /// a `::` path names a module-qualified member: an enum-member value
@@ -107,34 +129,26 @@ pub(crate) fn expr_ty(
 /// head's fn or const (a call site resolves through `call_ty`), or a
 /// plain local read (the lone-seg tail). Value access after `.` rides
 /// `ExprRef::Field` — those resolve as field-of-field reads through
-/// the binding pass, never here
+/// the bindings, never here
 fn path_ty(
-    ast: &Ast,
-    binds: &[Binding],
+    home: &MountedFile,
     idxs: &[&MountedFile],
     pos: u32,
     segs: &[PathSeg],
 ) -> Option<String> {
+    let ast = home.doc.ast();
     let head = segs.first()?.name;
     let text = ast.name(head);
-    // `self` spells the enclosing type — the same answer recv_type gives
-    let self_ty = || -> Option<String> {
-        if text == "self" {
-            return Some(
-                super::lookup::enclosing_type(idxs.iter().copied(), pos)?
-                    .name()
-                    .to_string(),
-            );
-        }
-        None
-    };
     if segs.len() >= 2 {
         // a RESOLVED head leads the walk — a binding head before `::`
         // is not a name-resolution shape (locals are not namespaces),
         // so this answers only when the head really binds a type text
-        let head_ty = resolve(binds, pos, text)
-            .and_then(|b| b.ty.clone())
-            .or_else(self_ty);
+        let head_ty = rut_ast::resolve_binding(home.doc.bindings(), pos, head)
+            .and_then(|b| binding_ty(home, idxs, b))
+            .or_else(|| {
+                // a capitalized head is the type itself (`Color::Red`)
+                is_cap(text).then(|| text.to_string())
+            });
         if let Some(start) = head_ty {
             let mut cur = start;
             for seg in &segs[1..] {
@@ -142,16 +156,11 @@ fn path_ty(
             }
             return Some(cur);
         }
-        // `Color::Red` — the head is the type; the member IS the enum
-        if is_cap(text) {
-            return Some(text.to_string());
-        }
         return None;
     }
-    resolve(binds, pos, text)
-        .and_then(|b| b.ty.clone())
-        .or_else(self_ty)
-        .or_else(|| module_let_ty(idxs.iter().copied(), text))
+    let own = rut_ast::resolve_binding(home.doc.bindings(), pos, head)
+        .and_then(|b| binding_ty(home, idxs, b));
+    own.or_else(|| module_let_ty(idxs.iter().copied(), text))
 }
 
 /// `f(..)` — a free fn's declared ret, unique match only (ambiguity is
@@ -186,21 +195,22 @@ fn call_ty(idxs: &[&MountedFile], ast: &Ast, callee: ExprRef) -> Option<String> 
                     }
                 }
             }
+            return None;
         }
-        // `Type::new(..)` — the static constructor call (the `::`-law
-        // shape of the old `Type.new(..)` Method): the head names the
-        // type, the binding takes it
-        if segs.len() == 2 && ast.name(segs[segs.len() - 1].name) == "new" {
+        // `Type::new(..)` — the two-seg shape IS the head's type
+        if segs.len() == 2 && ast.name(segs[1].name) == "new" {
             return Some(ast.name(segs[0].name).to_string());
         }
+        return None;
     }
     None
 }
 
 /// a member's declared type on `ty_name`: own-surface methods and
-/// fields, then inherent impl-block methods. Interface members stay
-/// out — the use-gate is member_hover's call to make with the full
-/// answer; inference stays conservative
+/// fields, then inherent impl-block methods — per file, the same
+/// order the old window walk kept. Interface members stay out — the
+/// use-gate is the member door's call to make with the full answer;
+/// inference stays conservative
 fn member_ret(idxs: &[&MountedFile], ty_name: &str, member: &str) -> Option<String> {
     for i in idxs.iter() {
         if let Some(t) = i.ty(ty_name) {
@@ -217,6 +227,7 @@ fn member_ret(idxs: &[&MountedFile], ty_name: &str, member: &str) -> Option<Stri
     None
 }
 
+/// a field's written type — the first file that declares it
 fn field_ty(idxs: &[&MountedFile], ty_name: &str, field: &str) -> Option<String> {
     idxs.iter().copied().find_map(|i| {
         i.ty(ty_name)?
@@ -245,6 +256,36 @@ where
     }
 }
 
+/// the element type of a sequence type text — the survey's for-of rule:
+/// `[T]` → `T`, `Vec<T>` → `T` (first generic argument). `None` when the
+/// text isn't a sequence spelling (a bare head iterates nothing we can
+/// name — a miss, never wrong members)
+pub(crate) fn elem_ty(text: &str) -> Option<String> {
+    let t = text.trim_start_matches('?');
+    if t.starts_with('[') && t.ends_with(']') {
+        return Some(t[1..t.len() - 1].trim().to_string());
+    }
+    let open = t.find('<')?;
+    if !t.ends_with('>') {
+        return None;
+    }
+    let inner = &t[open + 1..t.len() - 1];
+    let mut depth = 0i32;
+    for (i, c) in inner.char_indices() {
+        match c {
+            '<' => depth += 1,
+            '>' => depth -= 1,
+            ',' if depth == 0 => return Some(inner[..i].trim().to_string()),
+            _ => {}
+        }
+    }
+    Some(inner.trim().to_string())
+}
+
+pub(crate) fn is_cap(s: &str) -> bool {
+    s.chars().next().is_some_and(|c| c.is_uppercase())
+}
+
 fn int_suffix(sfx: IntSuffix) -> &'static str {
     match sfx {
         IntSuffix::U8 => "u8",
@@ -263,11 +304,4 @@ fn float_suffix(sfx: crate::semantic::FloatSuffix) -> &'static str {
         crate::semantic::FloatSuffix::F32 => "f32",
         crate::semantic::FloatSuffix::F64 => "f64",
     }
-}
-
-pub(crate) fn is_cap(s: &str) -> bool {
-    s.chars()
-        .next()
-        .map(|c| c.is_ascii_uppercase())
-        .unwrap_or(false)
 }

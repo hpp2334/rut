@@ -34,13 +34,10 @@
 
 use std::collections::HashMap;
 
-use crate::hover::bindings;
 use crate::hover::collection::{Chain, MemberHit, MemberTarget, MountedFile};
-use crate::hover::lookup;
 use crate::hover::types::head_of_ty;
 use crate::mods::DocMods;
 use crate::semantic::Span;
-use crate::semantic::{Tok, Token};
 use ls_types::Range;
 
 /// one resolved jump target — the uri is the doc itself, a workspace
@@ -58,10 +55,8 @@ pub struct DefLocation {
 /// file, so the matcher runs unchanged there.
 pub struct Ctx<'a> {
     pub doc_uri: &'a str,
-    /// the open document (the chain head's — the fresh entry the sync
-    /// lane keeps)
-    pub doc: &'a crate::semantic::Document,
     /// the lookup chain: the open document first, then the prelude + workspace
+    /// (the head's kept document owns the tree the walk reads)
     pub chain: &'a Chain<'a>,
     /// the face's knowledge of the open document's place in its
     /// package's mod tree — keys the OWN-package lanes (the
@@ -74,15 +69,6 @@ impl<'a> Ctx<'a> {
     /// the document's own mounted file — the chain head
     pub(crate) fn doc_file(&self) -> &'a MountedFile {
         self.chain.head()
-    }
-
-    /// the tokens the query positions speak (the doc's own lex)
-    pub(crate) fn toks(&self) -> &[Token] {
-        self.doc.toks()
-    }
-
-    pub(crate) fn ast(&self) -> &rut_ast::Ast {
-        self.doc.ast()
     }
 }
 
@@ -198,8 +184,8 @@ pub(crate) fn fn_span(f: &crate::hover::collection::FnView) -> Span {
 /// `textDocument/definition` — the ident at `pos` to its declaration.
 /// Empty when nothing resolves (keywords, unknown names, primitives
 /// with no surface decl).
-pub fn definition(ctx: &Ctx, pos: u32) -> Vec<DefLocation> {
-    dedupe_hits(definition_targets(ctx, pos))
+pub fn get_definition(ctx: &Ctx, pos: u32) -> Vec<DefLocation> {
+    dedupe_hits(get_definition_targets(ctx, pos))
 }
 
 /// identical answers are one answer. The chain lawfully carries a
@@ -218,36 +204,42 @@ fn dedupe_hits(locs: Vec<DefLocation>) -> Vec<DefLocation> {
     out
 }
 
-fn definition_targets(ctx: &Ctx, pos: u32) -> Vec<DefLocation> {
-    let Some(t) = lookup::tok_at(ctx.toks(), pos) else {
-        return Vec::new();
-    };
-    let Tok::Ident(name) = &t.tok else {
-        return Vec::new();
-    };
-    if crate::semantic::is_keyword(name) {
-        return Vec::new();
-    }
+fn get_definition_targets(ctx: &Ctx, pos: u32) -> Vec<DefLocation> {
     let chain = ctx.chain;
     let doc = ctx.doc_file();
+    let ast = doc.doc.ast();
+    // the cursor's node — the byte under it, else the byte just before
+    // (the token scan's boundary convention). The fence residue names
+    // nothing.
+    let Some(h) = cursor_node(ast, pos) else {
+        return Vec::new();
+    };
+    if h.is::<rut_ast::ErrorNode>() {
+        return Vec::new();
+    }
+    // the `Self` spellings name no declaration of their own (the
+    // keyword law the token scan carried)
+    if h.is::<rut_ast::SelfNode>() || h.is::<rut_ast::SelfTyNode>() {
+        return Vec::new();
+    }
     let imported = import_map(doc);
 
-    // 1. decl sites — the hovered span EXACTLY equals a recorded name
-    //    span (field / enum member / module let / fn decl — free fns,
-    //    impl methods, `[constructor]`s alike): the declaration IS
-    //    the answer (go-to-def on a decl → itself)
-    if decl_site(doc, t.span, name) {
+    // 1. decl sites — the cursor rides a decl node's OWN name span
+    //    (field / enum member / module let / fn decl / `mod` edge —
+    //    free fns, impl methods, `[constructor]`s alike): the
+    //    declaration IS the answer (go-to-def on a decl → itself)
+    if let Some(name_span) = decl_site_span(ast, h, pos) {
         return vec![DefLocation {
             uri: ctx.doc_uri.to_string(),
-            range: range_of(doc.doc.lines(), doc.doc.src(), t.span),
+            range: range_of(doc.doc.lines(), doc.doc.src(), name_span),
         }];
     }
 
-    // 1b. the mod-edge click — the hovered ident IS a `mod NAME;`
-    //     edge's declaring ident: the mounted child's file top (the
+    // 1b. the mod-edge click — the cursor rides a `mod NAME;` edge's
+    //     own name span: the mounted child's file top (the
     //     own-package lanes; an unstamped doc or an unmounted child is
     //     a miss, never a wrong jump)
-    if let Some(loc) = mod_edge_target(ctx, t.span, name) {
+    if let Some(loc) = mod_edge_target(ctx, h, pos) {
         return vec![loc];
     }
 
@@ -258,33 +250,17 @@ fn definition_targets(ctx: &Ctx, pos: u32) -> Vec<DefLocation> {
     //    MOD PATH segment jumps to the `mod NAME;` edge that mounts
     //    it, and the PKG HEAD jumps to the pkg's root file at the
     //    file top
-    if let Some(locs) = use_site_targets(ctx, t.span, name) {
+    if let Some(locs) = use_site_targets(ctx, h, pos) {
         return locs;
     }
 
-    let binds = bindings::collect(ctx.ast(), ctx.toks(), chain);
-
-    // decl sites of the binding layer — the hovered ident IS a recorded
-    // declaring ident (a param's, or a let the decl_site spans missed):
-    // go-to-def on a decl → itself. Params sit before their scope body,
-    // so the scope-containment resolve can't see them
-    if binds
-        .iter()
-        .any(|b| b.name == *name && b.decl_ident_span == t.span)
-    {
-        return vec![DefLocation {
-            uri: ctx.doc_uri.to_string(),
-            range: range_of(doc.doc.lines(), doc.doc.src(), t.span),
-        }];
-    }
-
-    // 3. member position — `recv.member` resolves through the
-    //    receiver inference (params, lets, field reads, chained calls,
-    //    for-of vars); a resolved receiver never falls through (the
-    //    use-gate law hover established), an unknown one keeps hover's
-    //    bare-name fallback
-    if let Some(recv) = lookup::member_context(ctx.toks(), t) {
-        match chain.member(&binds, pos, name, &recv) {
+    // 3. member position — the walk found a member node (or a path's
+    //    tail segment) and the cursor rides its member: the door
+    //    derives member + receiver INSIDE. A resolved receiver never
+    //    falls through (the use-gate law hover established), an
+    //    unknown one keeps the bare-name fallback
+    if member_name_span(ast, h, pos).is_some() {
+        match chain.member(pos, h) {
             MemberHit::Found(target) => {
                 return member_locations(ctx, &target);
             }
@@ -293,22 +269,30 @@ fn definition_targets(ctx: &Ctx, pos: u32) -> Vec<DefLocation> {
         }
     }
 
+    // the name lanes key on the node's own recorded name — a path
+    // segment, a param name, a local let's name
+    let Some((name_id, _)) = node_name(ast, h, pos) else {
+        return Vec::new();
+    };
+    let name = ast.name(name_id).to_string();
+
     // 4. type position — capitalized / primitive names, restricted to
     //    the use graph for imported names
-    if crate::hover::infer::is_cap(name) || crate::semantic::is_primitive_ty(name) {
-        if let Some(locs) = ty_name_locations(ctx, chain, &imported, name) {
+    if crate::hover::infer::is_cap(&name) || crate::semantic::is_primitive_ty(&name) {
+        if let Some(locs) = ty_name_locations(ctx, chain, &imported, &name) {
             return locs;
         }
         // a primitive token with no surface decl (i32, bool …) is a
         // miss — never a wrong jump
-        if crate::semantic::is_primitive_ty(name) {
+        if crate::semantic::is_primitive_ty(&name) {
             return Vec::new();
         }
     }
 
-    // 5. the binding layer — locals/params/iter-vars, shadow-correct;
-    //    the declaring ident span is the span-first contract
-    if let Some(b) = bindings::resolve(&binds, pos, name) {
+    // 5. the binding layer — locals/params/iter-vars, shadow-correct
+    //    (the doc's rows read internally); the declaring ident span is
+    //    the span-first contract
+    if let Some(b) = rut_ast::resolve_binding(doc.doc.bindings(), pos, name_id) {
         return vec![DefLocation {
             uri: ctx.doc_uri.to_string(),
             range: range_of(doc.doc.lines(), doc.doc.src(), b.decl_ident_span),
@@ -317,10 +301,10 @@ fn definition_targets(ctx: &Ctx, pos: u32) -> Vec<DefLocation> {
 
     // 6. module-let use sites — every hit (the candidate list), the
     //    body over the decl surface (`prefer_bodies`)
-    let scoped = chain_for(chain, &imported, name);
+    let scoped = chain_for(chain, &imported, &name);
     let mut lets: Vec<(&MountedFile, Span)> = Vec::new();
     for f in &scoped {
-        for l in f.lets().into_iter().filter(|l| l.name() == *name) {
+        for l in f.lets().into_iter().filter(|l| l.name() == name) {
             lets.push((f, l.name_span().unwrap_or(l.span())));
         }
     }
@@ -337,7 +321,7 @@ fn definition_targets(ctx: &Ctx, pos: u32) -> Vec<DefLocation> {
     //    decl surface (`prefer_bodies`)
     let mut fns: Vec<(&MountedFile, Span)> = Vec::new();
     for f in &scoped {
-        for fv in f.fns().into_iter().filter(|f| f.name() == *name) {
+        for fv in f.fns().into_iter().filter(|f| f.name() == name) {
             fns.push((f, fn_span(&fv)));
         }
     }
@@ -352,29 +336,29 @@ fn definition_targets(ctx: &Ctx, pos: u32) -> Vec<DefLocation> {
 /// is: resolve the expression's type head (the receiver rules — member
 /// declared types, binding types, module lets), then jump to that
 /// type's declaration. The same layers, one step further.
-pub fn type_definition(ctx: &Ctx, pos: u32) -> Vec<DefLocation> {
-    dedupe_hits(type_definition_targets(ctx, pos))
+pub fn get_type_definition(ctx: &Ctx, pos: u32) -> Vec<DefLocation> {
+    dedupe_hits(get_type_definition_targets(ctx, pos))
 }
 
-fn type_definition_targets(ctx: &Ctx, pos: u32) -> Vec<DefLocation> {
-    let Some(t) = lookup::tok_at(ctx.toks(), pos) else {
+fn get_type_definition_targets(ctx: &Ctx, pos: u32) -> Vec<DefLocation> {
+    let chain = ctx.chain;
+    let doc = ctx.doc_file();
+    let ast = doc.doc.ast();
+    let Some(h) = cursor_node(ast, pos) else {
         return Vec::new();
     };
-    let Tok::Ident(name) = &t.tok else {
-        return Vec::new();
-    };
-    if crate::semantic::is_keyword(name) {
+    if h.is::<rut_ast::ErrorNode>() || h.is::<rut_ast::SelfNode>() || h.is::<rut_ast::SelfTyNode>()
+    {
         return Vec::new();
     }
-    let chain = ctx.chain;
-    let imported = import_map(ctx.doc_file());
-    let binds = bindings::collect(ctx.ast(), ctx.toks(), chain);
+    let imported = import_map(doc);
 
     // member position: the member's DECLARED type — `w.item` (a
     // `?Circle` field) jumps to the `Circle` decl; a resolved receiver
     // is final (the use-gate law)
-    if let Some(recv) = lookup::member_context(ctx.toks(), t) {
-        match chain.member(&binds, pos, name, &recv) {
+    if let Some(name_span) = member_name_span(ast, h, pos) {
+        let _ = name_span;
+        match chain.member(pos, h) {
             MemberHit::Found(target) => {
                 let ty_text = match &target {
                     MemberTarget::Member(_, m, _)
@@ -393,27 +377,228 @@ fn type_definition_targets(ctx: &Ctx, pos: u32) -> Vec<DefLocation> {
         }
     }
 
+    // the name lanes key on the node's own recorded name
+    let Some((name_id, _)) = node_name(ast, h, pos) else {
+        return Vec::new();
+    };
+    let name = ast.name(name_id).to_string();
+
     // a type token: its own declaration (definition's answer)
-    if crate::hover::infer::is_cap(name) || crate::semantic::is_primitive_ty(name) {
-        if let Some(locs) = ty_name_locations(ctx, chain, &imported, name) {
+    if crate::hover::infer::is_cap(&name) || crate::semantic::is_primitive_ty(&name) {
+        if let Some(locs) = ty_name_locations(ctx, chain, &imported, &name) {
             return locs;
         }
-        if crate::semantic::is_primitive_ty(name) {
+        if crate::semantic::is_primitive_ty(&name) {
             return Vec::new();
         }
     }
 
     // locals / module lets — their type head's declaration
-    if let Some(b) = bindings::resolve(&binds, pos, name) {
-        return b
-            .ty_head()
+    if let Some(b) = rut_ast::resolve_binding(doc.doc.bindings(), pos, name_id) {
+        let files: Vec<&MountedFile> = chain.iter().collect();
+        return crate::hover::infer::binding_ty(doc, &files, b)
+            .as_deref()
+            .map(head_of_ty)
             .and_then(|head| ty_name_locations(ctx, chain, &imported, &head))
             .unwrap_or_default();
     }
-    match crate::hover::infer::module_let_ty(chain.iter(), name) {
+    match crate::hover::infer::module_let_ty(chain.iter(), &name) {
         Some(head) => ty_name_locations(ctx, chain, &imported, &head).unwrap_or_default(),
         None => Vec::new(),
     }
+}
+
+// ---- the cursor walk ----
+
+/// the cursor's node — the byte under it, else the byte just before
+/// (a cursor sitting on a token's end reads that token — the old
+/// token scan's boundary convention)
+pub(crate) fn cursor_node(ast: &rut_ast::Ast, pos: u32) -> Option<rut_ast::AnyHandle> {
+    ast.node_at(pos)
+        .or_else(|| pos.checked_sub(1).and_then(|p| ast.node_at(p)))
+}
+
+/// the name-position convention the old token scan kept: a name ends
+/// its own position
+pub(crate) fn on_name(sp: Span, pos: u32) -> bool {
+    sp.lo <= pos && pos <= sp.hi
+}
+
+/// the name span of the decl node the cursor rides — the self-jump
+/// lane (the declaration IS the answer)
+fn decl_site_span(ast: &rut_ast::Ast, h: rut_ast::AnyHandle, pos: u32) -> Option<Span> {
+    macro_rules! decl {
+        ($t:ty) => {
+            if let Some(d) = h.downcast::<$t>() {
+                let dd = d.get(ast);
+                return on_name(dd.name_span, pos).then_some(dd.name_span);
+            }
+        };
+    }
+    decl!(rut_ast::FieldDeclNode);
+    decl!(rut_ast::EnumMemberNode);
+    decl!(rut_ast::ModuleLetNode);
+    decl!(rut_ast::FnNode);
+    decl!(rut_ast::MethodDeclNode);
+    // the binding layer's decls: a param/let/loop-var whose NAME the
+    // cursor rides is its own declaration (params sit before their
+    // scope, so the scope-containment resolve can't see them)
+    if let Some(d) = h.downcast::<rut_ast::ParamNode>() {
+        let dd = d.get(ast);
+        return on_name(dd.name_span, pos).then_some(dd.name_span);
+    }
+    if let Some(d) = h.downcast::<rut_ast::LetStmtNode>() {
+        let dd = d.get(ast);
+        if on_name(dd.name_span, pos) {
+            return Some(dd.name_span);
+        }
+        if let Some(ns) = &dd.destructure {
+            for (_, sp) in ns {
+                if on_name(*sp, pos) {
+                    return Some(*sp);
+                }
+            }
+        }
+        return None;
+    }
+    if let Some(d) = h.downcast::<rut_ast::ForOfNode>() {
+        let dd = d.get(ast);
+        return on_name(dd.name_span, pos).then_some(dd.name_span);
+    }
+    if let Some(d) = h.downcast::<rut_ast::ForCNode>() {
+        let dd = d.get(ast);
+        return on_name(dd.name_span, pos).then_some(dd.name_span);
+    }
+    None
+}
+
+/// the (name id, name span) the cursor's node records — a path
+/// segment, a param name, a let's name (destructured members
+/// included), a loop variable
+pub(crate) fn node_name(
+    ast: &rut_ast::Ast,
+    h: rut_ast::AnyHandle,
+    pos: u32,
+) -> Option<(rut_core::IdentId, Span)> {
+    if let Some(p) = h.downcast::<rut_ast::PathNode>() {
+        for s in &p.get(ast).segs {
+            if on_name(s.name_span, pos) {
+                return Some((s.name, s.name_span));
+            }
+        }
+        return None;
+    }
+    if let Some(p) = h.downcast::<rut_ast::ParamNode>() {
+        let d = p.get(ast);
+        return on_name(d.name_span, pos).then_some((d.name, d.name_span));
+    }
+    if let Some(l) = h.downcast::<rut_ast::LetStmtNode>() {
+        let d = l.get(ast);
+        if on_name(d.name_span, pos) {
+            return Some((d.name, d.name_span));
+        }
+        if let Some(ns) = &d.destructure {
+            for (n, sp) in ns {
+                if on_name(*sp, pos) {
+                    return Some((*n, *sp));
+                }
+            }
+        }
+        return None;
+    }
+    if let Some(f) = h.downcast::<rut_ast::ForOfNode>() {
+        let d = f.get(ast);
+        return on_name(d.name_span, pos).then_some((d.var, d.name_span));
+    }
+    if let Some(f) = h.downcast::<rut_ast::ForCNode>() {
+        let d = f.get(ast);
+        return on_name(d.name_span, pos).then_some((d.var, d.name_span));
+    }
+    // struct-literal field labels are name positions (the FieldInit
+    // rides the literal as data — no node of its own)
+    if let Some(sl) = h.downcast::<rut_ast::StructLitNode>() {
+        for fi in &sl.get(ast).fields {
+            if on_name(fi.name_span, pos) {
+                return Some((fi.name, fi.name_span));
+            }
+        }
+        return None;
+    }
+    // type positions are name positions too (`x: i32|` — the slot's
+    // own path node)
+    if let Some(t) = h.downcast::<rut_ast::TyPathNode>() {
+        for seg in &t.get(ast).segs {
+            if on_name(seg.name_span, pos) {
+                return Some((seg.name, seg.name_span));
+            }
+        }
+        return None;
+    }
+    // the type-decl nodes: the cursor on the declared NAME is a name
+    // position like any other (the decl-site self-jump answers fields,
+    // lets, fns, and mod edges — types and aliases ride here)
+    // the decl nodes: the cursor on the declared NAME is a name
+    // position (definition's decl-site lane answers first; references
+    // keys its targets on these)
+    macro_rules! decl_node {
+        ($t:ty) => {
+            if let Some(d) = h.downcast::<$t>() {
+                let dd = d.get(ast);
+                return on_name(dd.name_span, pos).then_some((dd.name, dd.name_span));
+            }
+        };
+    }
+    decl_node!(rut_ast::FieldDeclNode);
+    decl_node!(rut_ast::EnumMemberNode);
+    decl_node!(rut_ast::ModuleLetNode);
+    decl_node!(rut_ast::MethodDeclNode);
+    macro_rules! ty_decl {
+        ($t:ty) => {
+            if let Some(d) = h.downcast::<$t>() {
+                let dd = d.get(ast);
+                return on_name(dd.name_span, pos).then_some((dd.name, dd.name_span));
+            }
+        };
+    }
+    ty_decl!(rut_ast::ClassNode);
+    ty_decl!(rut_ast::StructNode);
+    ty_decl!(rut_ast::InterfaceNode);
+    ty_decl!(rut_ast::EnumNode);
+    ty_decl!(rut_ast::BuiltinTyNode);
+    ty_decl!(rut_ast::BuiltinPrimitiveNode);
+    ty_decl!(rut_ast::SurfaceStructNode);
+    ty_decl!(rut_ast::AliasNode);
+    ty_decl!(rut_ast::MethodDeclNode);
+    ty_decl!(rut_ast::FnNode);
+    ty_decl!(rut_ast::ModDeclNode);
+    ty_decl!(rut_ast::ModuleLetNode);
+    None
+}
+
+/// the member name span the cursor rides — the member lane's position
+/// test (a method call, a field access, or a path's tail segment)
+fn member_name_span(ast: &rut_ast::Ast, h: rut_ast::AnyHandle, pos: u32) -> Option<Span> {
+    if let Some(m) = h.downcast::<rut_ast::MethodNode>() {
+        let d = m.get(ast);
+        return d
+            .member()
+            .and_then(|(_, nsp)| on_name(nsp, pos).then_some(nsp));
+    }
+    if let Some(f) = h.downcast::<rut_ast::FieldNode>() {
+        let d = f.get(ast);
+        return on_name(d.name_span, pos).then_some(d.name_span);
+    }
+    if let Some(p) = h.downcast::<rut_ast::PathNode>() {
+        let segs = &p.get(ast).segs;
+        if segs.len() >= 2 {
+            if let Some(i) = segs.iter().position(|s| on_name(s.name_span, pos)) {
+                if i + 1 == segs.len() {
+                    return Some(segs[i].name_span);
+                }
+            }
+        }
+    }
+    None
 }
 
 /// a type head's declaration location(s) — the use graph restricts the
@@ -517,98 +702,106 @@ fn pkg_root_index<'a>(chain: &'a Chain<'a>, pkg: &str) -> Option<&'a MountedFile
     roots.into_iter().next()
 }
 
-/// the use-statement layer: the hovered ident is a leaf name (jump to
-/// the exporting decl through the walked mod path), the pkg head
-/// (jump to the pkg's root file at the file top), or a middle path
-/// segment (jump to the `mod NAME;` edge that mounts it). An OWN
-/// package head — the doc's own pkg name, or one of its own mod edges
-/// (the ancestor-walk spelling) — commits to the intra-package lanes:
-/// the head opens the resolved module's file top, a middle segment
-/// lands on its mounting edge, and a dead end is an honest empty,
-/// never a foreign fallback.
-fn use_site_targets(ctx: &Ctx, span: Span, name: &str) -> Option<Vec<DefLocation>> {
+/// the use-statement layer: the cursor rides one of the use node's own
+/// recorded spans — a leaf name (jump to the exporting decl through the
+/// walked mod path), the pkg head (jump to the pkg's root file at the
+/// file top), or a middle path segment (jump to the `mod NAME;` edge
+/// that mounts it). An OWN package head — the doc's own pkg name, or
+/// one of its own mod edges (the ancestor-walk spelling) — commits to
+/// the intra-package lanes: the head opens the resolved module's file
+/// top, a middle segment lands on its mounting edge, and a dead end is
+/// an honest empty, never a foreign fallback.
+fn use_site_targets(ctx: &Ctx, h: rut_ast::AnyHandle, pos: u32) -> Option<Vec<DefLocation>> {
+    let uh = h.downcast::<rut_ast::UseNode>()?;
     let doc = ctx.doc_file();
     let chain = ctx.chain;
-    for u in doc.uses() {
-        // the leaf name
-        if u.name() == name && u.name_span() == Some(span) {
-            let pkg = u.pkg().to_string();
-            // the OWN lane — the walk is the intra-package one (any
-            // declared edge; the doc's own rows read for its own scope)
-            if let Some(start) = own_lane_start(ctx, &pkg) {
-                let walked = crate::mods::walk_position_mods(
+    let ast = doc.doc.ast();
+    let u_node = uh.get(ast);
+    let segs: Vec<String> = u_node
+        .path
+        .iter()
+        .map(|id| ast.name(*id).to_string())
+        .collect();
+    // the leaf name
+    for (k, nsp) in u_node.name_spans.iter().enumerate() {
+        if !on_name(*nsp, pos) {
+            continue;
+        }
+        let name = ast.name(u_node.names[k]);
+        let pkg = segs[0].clone();
+        // the OWN lane — the walk is the intra-package one (any
+        // declared edge; the doc's own rows read for its own scope)
+        if let Some(start) = own_lane_start(ctx, &pkg) {
+            let walked = crate::mods::walk_position_mods(
+                chain,
+                ctx.doc_mods.pkg.as_deref(),
+                &start,
+                &segs[1..],
+            );
+            return Some(match walked {
+                Some(p) => own_leaf_targets(ctx, &p, name),
+                None => Vec::new(),
+            });
+        }
+        let walked = if u_node.path.len() == 1 {
+            Some(String::new())
+        } else {
+            crate::mods::walk_use_mods(chain, &pkg, &segs[1..])
+        };
+        return Some(
+            use_graph_targets(chain, &pkg, walked.as_deref(), name)
+                .into_iter()
+                .map(|(f, sp)| loc_at(ctx.doc_uri, f, sp))
+                .collect(),
+        );
+    }
+    // a path segment — the pkg head included: `k == 0` opens the
+    // pkg's ROOT file at the file top (`Span::new(0, 0)`, the
+    // convention a pkg-root row uses)
+    for (k, sp) in u_node.path_spans.iter().enumerate() {
+        if !on_name(*sp, pos) {
+            continue;
+        }
+        let pkg = segs[0].clone();
+        // the OWN lane — `k == 0` opens the resolved module's file
+        // top (the root for the pkg name, the child file for an own
+        // mod edge), deeper segments the mounting edge
+        if let Some(start) = own_lane_start(ctx, &pkg) {
+            return Some(if k == 0 {
+                match own_scope(ctx, &start) {
+                    Some(f) => vec![loc_at(ctx.doc_uri, f, Span::new(0, 0))],
+                    None => Vec::new(),
+                }
+            } else {
+                match crate::mods::walk_position_mods(
                     chain,
                     ctx.doc_mods.pkg.as_deref(),
                     &start,
-                    &u.path()[1..],
-                );
-                return Some(match walked {
-                    Some(p) => own_leaf_targets(ctx, &p, name),
+                    &segs[1..=k],
+                ) {
+                    Some(p) => own_edge_target(ctx, &p)
+                        .map(|l| vec![l])
+                        .unwrap_or_default(),
                     None => Vec::new(),
-                });
-            }
-            let walked = if u.path().len() == 1 {
-                Some(String::new())
-            } else {
-                crate::mods::walk_use_mods(chain, &pkg, &u.path()[1..])
-            };
+                }
+            });
+        }
+        if k == 0 {
             return Some(
-                use_graph_targets(chain, &pkg, walked.as_deref(), name)
-                    .into_iter()
-                    .map(|(f, sp)| loc_at(ctx.doc_uri, f, sp))
-                    .collect(),
+                pkg_root_index(chain, &pkg)
+                    .map(|f| vec![loc_at(ctx.doc_uri, f, Span::new(0, 0))])
+                    .unwrap_or_default(),
             );
         }
-        // a path segment — the pkg head included: `k == 0` opens the
-        // pkg's ROOT file at the file top (`Span::new(0, 0)`, the
-        // convention a pkg-root row uses)
-        for (k, sp) in u.path_spans().iter().enumerate() {
-            if *sp != Some(span) {
-                continue;
-            }
-            let pkg = u.pkg().to_string();
-            // the OWN lane — `k == 0` opens the resolved module's file
-            // top (the root for the pkg name, the child file for an own
-            // mod edge), deeper segments the mounting edge
-            if let Some(start) = own_lane_start(ctx, &pkg) {
-                return Some(if k == 0 {
-                    match own_scope(ctx, &start) {
-                        Some(f) => vec![loc_at(ctx.doc_uri, f, Span::new(0, 0))],
-                        None => Vec::new(),
-                    }
-                } else {
-                    match crate::mods::walk_position_mods(
-                        chain,
-                        ctx.doc_mods.pkg.as_deref(),
-                        &start,
-                        &u.path()[1..=k],
-                    ) {
-                        Some(p) => own_edge_target(ctx, &p)
-                            .map(|l| vec![l])
-                            .unwrap_or_default(),
-                        None => Vec::new(),
-                    }
-                });
-            }
-            if k == 0 {
-                return Some(
-                    pkg_root_index(chain, &pkg)
-                        .map(|f| vec![loc_at(ctx.doc_uri, f, Span::new(0, 0))])
-                        .unwrap_or_default(),
-                );
-            }
-            let walked = crate::mods::walk_use_mods(chain, &pkg, &u.path()[1..=k])?;
-            let parent = crate::mods::find_mod(chain, Some(&pkg), crate::mods::parent_of(&walked))?;
-            let edge = parent
-                .mods()
-                .into_iter()
-                .find(|m| m.name() == u.path()[k])?;
-            return Some(vec![loc_at(
-                ctx.doc_uri,
-                parent,
-                edge.name_span().unwrap_or(edge.span()),
-            )]);
-        }
+        let walked = crate::mods::walk_use_mods(chain, &pkg, &segs[1..=k])?;
+        let parent = crate::mods::find_mod(chain, Some(&pkg), crate::mods::parent_of(&walked))?;
+        let edge_name = ast.name(u_node.path[k]);
+        let edge = parent.mods().into_iter().find(|m| m.name() == edge_name)?;
+        return Some(vec![loc_at(
+            ctx.doc_uri,
+            parent,
+            edge.name_span().unwrap_or(edge.span()),
+        )]);
     }
     None
 }
@@ -676,40 +869,24 @@ fn own_edge_target(ctx: &Ctx, walked: &str) -> Option<DefLocation> {
     ))
 }
 
-/// the `mod NAME;` edge click — the hovered ident IS one of the doc's
-/// own edges (the exact recorded name span): the child's mod path is
+/// the `mod NAME;` edge click — the cursor rides one of the doc's own
+/// edges' recorded name spans: the child's mod path is
 /// `child_path(doc's mod path, NAME)` and the jump opens the mounted
 /// child at its file top (`Span::new(0, 0)`, the pkg-head convention).
 /// Honest misses: an unstamped doc answers nothing; a child the chain
 /// does not carry an empty jump; the `(pkg, mod_path)` pair keys the
 /// match — another package's same-path child never leaks in.
-fn mod_edge_target(ctx: &Ctx, span: Span, name: &str) -> Option<DefLocation> {
-    ctx.doc_file()
-        .mods()
-        .into_iter()
-        .find(|m| m.name() == name && m.name_span() == Some(span))?;
+fn mod_edge_target(ctx: &Ctx, h: rut_ast::AnyHandle, pos: u32) -> Option<DefLocation> {
+    let mh = h.downcast::<rut_ast::ModDeclNode>()?;
+    let doc = ctx.doc_file();
+    let ast = doc.doc.ast();
+    let m = mh.get(ast);
+    on_name(m.name_span, pos).then_some(())?;
+    let name = ast.name(m.name);
     let from = ctx.doc_mods.mod_path.as_deref()?;
     let child = crate::mods::child_path(from, name);
     let mounted = crate::mods::find_mod(ctx.chain, ctx.doc_mods.pkg.as_deref(), &child)?;
     Some(loc_at(ctx.doc_uri, mounted, Span::new(0, 0)))
-}
-
-fn decl_site(doc: &MountedFile, span: Span, name: &str) -> bool {
-    doc.types().iter().any(|t| {
-        t.fields()
-            .iter()
-            .any(|f| f.name() == name && f.name_span() == Some(span))
-    }) || doc
-        .lets()
-        .iter()
-        .any(|l| l.name() == name && l.name_span() == Some(span))
-        // fn decls ride the same law — the name a ctor shares with
-        // every other class's ctor is exactly the case the name layers
-        // must never answer with a cross-pkg fan-out
-        || doc
-            .fns()
-            .iter()
-            .any(|f| f.name() == name && f.name_span() == Some(span))
 }
 
 fn member_locations(ctx: &Ctx, target: &MemberTarget) -> Vec<DefLocation> {

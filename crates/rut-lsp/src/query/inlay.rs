@@ -1,43 +1,44 @@
 //! Inlay hints — the inference display, inline (the lsp-features survey
-//! §4.3). The client renders; the server supplies position + label + the
-//! colon. Two kinds:
+//! §4.3). A DOCUMENT PASS, not a position query: one walk over the
+//! document's lets and calls produces every hint; the viewport filter
+//! at the ABI edge is presentation. The client renders; the server
+//! supplies position + label + the colon. Two kinds:
 //!
-//! * **TYPE** (`InlayHintKind::TYPE`) — unannotated `let`s, for-of /
-//!   for-c loop variables, and module lets: the inferred type rendered
-//!   at the binding's end (`let c⌊: Circle⌋ = Circle::new(..)`). An
-//!   explicit annotation is never restated. `Binding::inferred` IS the
-//!   unannotated-and-derived law for fn-locals; for module lets the
-//!   AST's `ty: None` decides and `LetDef::ty` supplies the text.
+//! * **TYPE** (`InlayHintKind::TYPE`) — the bindings pass's
+//!   unannotated rows (`LetStmtNode { ty: None }` — a normal absent
+//!   slot, the trigger) and loop variables, plus the module lets whose
+//!   annotation is absent: the resolver's declared-or-inferred type
+//!   rendered at the binding's end (`let c⌊: Circle⌋ =
+//!   Circle::new(..)`). An explicit annotation is never restated.
 //! * **PARAMETER** (`InlayHintKind::PARAMETER`) — the callee's
 //!   parameter names before the args at call sites, only on the
 //!   exact-arity match (mismatch → no hints, never wrong hints). The
-//!   callee resolves by the same rules phase 1 prices: free fns by
-//!   unique match (the `call_ty` law), methods through the receiver's
-//!   type head (self / capitalized / primitive / binding / module let /
-//!   the display-side expression inference). Own-surface methods (interface
-//!   bodies, builtin/primitive surfaces) carry no recorded params — a
-//!   hit there is FINAL (the known-receiver-is-final law) and yields no
-//!   hints.
+//!   callee resolves through the resolver family's doors —
+//!   [`Chain::expr_ty`] (literals → primitives, paths → the bindings
+//!   read internally and module lets, calls → the callee's written
+//!   ret, member chains → the member lanes) for receivers and
+//!   [`Chain::impl_method_fn`] for the method rule (own-surface hits
+//!   are FINAL — no hints, never wrong names).
 //!
-//! The consistency law: a type hint's text is the SAME string phase 1's
-//! hover shows for the binding — one source (`Binding::ty` /
-//! `LetDef::ty`, literal defaults included) — and the tooltip
-//! IS the binding's hover markdown. Divergence would be a bug.
+//! The consistency law: a type hint's text is the SAME string hover
+//! shows for the binding — one source (the declared annotation's span
+//! join, else the resolver's answer), literal defaults included — and
+//! the tooltip IS the binding's hover markdown. Divergence would be a
+//! bug. Inlay text is the sanctioned source-less rendering (inferred);
+//! tooltips render the written decl verbatim via the views.
 
 use ls_types::{
     InlayHint, InlayHintKind, InlayHintLabel, InlayHintTooltip, MarkupContent, MarkupKind, Position,
 };
 
-use rut_ast::{Ast, ElseBranch, ExprRef, ItemRef, StmtRef};
+use rut_ast::{ElseBranch, ExprRef, ItemRef, StmtRef};
 
 use crate::hover::collection::{Chain, MountedFile};
-use crate::hover::lookup::{self, recv_type};
 use crate::hover::types::head_of_ty;
-use crate::hover::{bindings, infer, BindKind, Binding};
 
 /// everything one inlay query needs — the chain the collection handed
 /// out (the open document at the head; its kept document owns the
-/// tokens, the tree, the line index, and the text)
+/// tree, the line index, and the text)
 pub struct Ctx<'a> {
     /// the document's own mounted file — module-let hints and their
     /// renders
@@ -48,7 +49,7 @@ pub struct Ctx<'a> {
 
 impl Ctx<'_> {
     /// the open document's tree (the chain head's kept document)
-    fn ast(&self) -> &Ast {
+    fn ast(&self) -> &rut_ast::Ast {
         self.doc.doc.ast()
     }
 }
@@ -64,16 +65,13 @@ struct Raw {
 
 /// `textDocument/inlayHint` for `[lo, hi]` (byte offsets into the
 /// normalized source — the full document when the face passes 0..len).
-/// Sorted by position; a hint outside the range is dropped.
+/// THE PASS runs over the whole document once; the range filter is the
+/// client's viewport (presentation). Sorted by position.
 pub fn hints(ctx: &Ctx, lo: u32, hi: u32) -> Vec<InlayHint> {
     let (index, src) = (ctx.doc.doc.lines(), ctx.doc.doc.src());
     let mut raw: Vec<Raw> = Vec::new();
-    let binds = bindings::collect(ctx.doc.doc.ast(), ctx.doc.doc.toks(), ctx.chain);
-    type_hints(ctx, &binds, &mut raw);
-    // the inference pass's file window — one pointer slice over the
-    // chain (the call-site type hints' decl lookups)
-    let files: Vec<&MountedFile> = ctx.chain.iter().collect();
-    call_hints(ctx, &binds, &files, &mut raw);
+    type_hints(ctx, &mut raw);
+    call_hints(ctx, &mut raw);
     raw.sort_by_key(|h| index.position(src, h.byte));
     raw.into_iter()
         .filter(|h| h.byte >= lo && h.byte <= hi)
@@ -98,34 +96,39 @@ pub fn hints(ctx: &Ctx, lo: u32, hi: u32) -> Vec<InlayHint> {
         .collect()
 }
 
-/// TYPE hints — the binding pass's unannotated lets and loop variables,
-/// then the decl layer's module lets. Position: the end of the binding's
-/// declaring ident (VS Code's dotted-decoration spot). Label: `: Type` —
-/// the server supplies the colon. Tooltip: the hover markdown.
-fn type_hints(ctx: &Ctx, binds: &[Binding], out: &mut Vec<Raw>) {
-    for b in binds {
-        // `inferred` = no written annotation AND something derived — an
-        // annotated binding is never restated, a miss never guessed
-        if !b.inferred {
+/// TYPE hints — the bindings pass's unannotated rows (the doc's own
+/// lazy pass read internally) and the decl layer's module lets whose
+/// annotation is absent. Position: the end of the binding's declaring
+/// ident (VS Code's dotted-decoration spot). Label: `: Type` — the
+/// server supplies the colon. Tooltip: the hover markdown.
+fn type_hints(ctx: &Ctx, out: &mut Vec<Raw>) {
+    let doc = ctx.doc;
+    for b in doc.doc.bindings() {
+        // an unannotated row IS the trigger (`ty_span` absent — a
+        // normal absent slot); the label only lands when the resolver
+        // derives something (a miss never guesses)
+        if b.ty_span.is_some() {
             continue;
         }
-        if !matches!(b.kind, BindKind::Let | BindKind::IterVar) {
+        if !matches!(b.kind, rut_ast::BindKind::Let | rut_ast::BindKind::IterVar) {
             continue;
         }
-        let Some(ty) = b.ty.as_deref().filter(|t| !t.trim().is_empty()) else {
+        let Some(ty) = ctx.chain.binding_ty(b).filter(|t| !t.trim().is_empty()) else {
             continue;
         };
+        let name = doc.doc.ast().name(b.name);
+        let tooltip = crate::hover::binding_markdown(b, name, Some(ty.clone()));
         out.push(Raw {
             byte: b.decl_ident_span.hi,
             label: format!(": {ty}"),
             kind: InlayHintKind::TYPE,
-            tooltip: Some(crate::hover::binding_markdown(b)),
+            tooltip: Some(tooltip),
         });
     }
-    // module lets — the AST's `ty: None` is the unannotated law;
-    // the view's annotation-or-inferred type text (the hover render's
-    // own source) supplies the label
-    for l in ctx.doc.lets() {
+    // module lets — the AST's `ty: None` is the unannotated law; the
+    // view's annotation-or-inferred type text (the hover render's own
+    // source) supplies the label
+    for l in doc.lets() {
         if l.h
             .downcast::<rut_ast::ModuleLetNode>()
             .map(|n| n.get(ctx.ast()).ty.is_some())
@@ -149,13 +152,8 @@ fn type_hints(ctx: &Ctx, binds: &[Binding], out: &mut Vec<Raw>) {
 /// PARAMETER hints — one walk over every body (fns, methods, lambdas,
 /// module-let initializers), a hint per arg where the callee's recorded
 /// params match the arity exactly.
-fn call_hints(ctx: &Ctx, binds: &[Binding], files: &[&MountedFile], out: &mut Vec<Raw>) {
-    let mut cx = CallCx {
-        ctx,
-        binds,
-        files,
-        out,
-    };
+fn call_hints(ctx: &Ctx, out: &mut Vec<Raw>) {
+    let mut cx = CallCx { ctx, out };
     for item in ctx.ast().root().items(ctx.ast()) {
         match item {
             ItemRef::Fn(h) => cx.walk_block(h.get(ctx.ast()).body),
@@ -171,9 +169,6 @@ fn call_hints(ctx: &Ctx, binds: &[Binding], files: &[&MountedFile], out: &mut Ve
 
 struct CallCx<'a> {
     ctx: &'a Ctx<'a>,
-    binds: &'a [Binding],
-    /// the inference pass's file window (the chain's pointer slice)
-    files: &'a [&'a MountedFile],
     out: &'a mut Vec<Raw>,
 }
 
@@ -238,7 +233,7 @@ impl CallCx<'_> {
                 }
             }
             StmtRef::Return(h) => {
-                if let Some(v) = h.get(self.ctx.ast()).value {
+                if let Some(v) = h.get(self.ast()).value {
                     self.walk_expr(v);
                 }
             }
@@ -248,31 +243,44 @@ impl CallCx<'_> {
     }
 
     fn walk_expr(&mut self, e: ExprRef) {
+        let ast = self.ctx.ast();
         match e {
             ExprRef::Call(h) => {
-                let d = h.get(self.ctx.ast());
-                self.free_call(d.callee, &d.args);
-                self.walk_expr(d.callee);
-                for a in d.args.clone() {
+                let (callee, args) = {
+                    let d = h.get(ast);
+                    (d.callee, d.args.clone())
+                };
+                self.free_call(callee, &args);
+                self.walk_expr(callee);
+                for a in args {
                     self.walk_expr(a);
                 }
             }
             ExprRef::Method(h) => {
-                let d = h.get(self.ctx.ast());
-                self.method_call(e, d.recv, d.name, &d.args);
-                self.walk_expr(d.recv);
-                for a in d.args.clone() {
+                let (member, recv, args) = {
+                    let d = h.get(ast);
+                    (d.member(), d.recv, d.args.clone())
+                };
+                if let Some((name, _)) = member {
+                    self.method_call(e, recv, name, &args);
+                }
+                self.walk_expr(recv);
+                for a in args {
                     self.walk_expr(a);
                 }
             }
             ExprRef::Block(bh) => self.walk_block(bh),
-            ExprRef::Lambda(h) => self.walk_expr(h.get(self.ctx.ast()).body),
+            ExprRef::Lambda(h) => self.walk_expr(h.get(self.ast()).body),
             _ => {
-                for c in bindings::expr_children(self.ctx.ast(), e) {
+                for c in rut_ast::expr_children(self.ast(), e) {
                     self.walk_expr(c);
                 }
             }
         }
+    }
+
+    fn ast(&self) -> &rut_ast::Ast {
+        self.ctx.ast()
     }
 
     /// `f(..)` — a free fn by unique match (the `call_ty` law:
@@ -281,11 +289,11 @@ impl CallCx<'_> {
         let ExprRef::Path(h) = callee else {
             return;
         };
-        let segs = &h.get(self.ctx.ast()).segs;
+        let segs = &h.get(self.ast()).segs;
         if segs.len() != 1 {
             return;
         }
-        let name = self.ctx.ast().name(segs[0].name);
+        let name = self.ast().name(segs[0].name);
         let hits: Vec<_> = self
             .ctx
             .chain
@@ -299,7 +307,10 @@ impl CallCx<'_> {
     }
 
     /// `recv.m(..)` — the receiver's type head, then the inherent impl
-    /// fn's recorded params
+    /// fn's recorded params. A named receiver resolves through the
+    /// resolver family (self, capitalized, primitive, the bindings —
+    /// read internally — module let); anything else (chained calls,
+    /// field paths) through the expression door
     fn method_call(
         &mut self,
         call: ExprRef,
@@ -307,34 +318,34 @@ impl CallCx<'_> {
         name: rut_ast::IdentId,
         args: &[ExprRef],
     ) {
-        let pos = call.span(self.ctx.ast()).lo;
-        // a named receiver resolves through the phase-1 recv rule
-        // (`self`, capitalized, primitive, binding, module let);
-        // anything else (chained calls, field paths) through the
-        // display-side expression inference
+        let ast = self.ctx.ast();
+        let pos = call.span(ast).lo;
         let head = match recv {
-            ExprRef::Path(ph) if ph.get(self.ctx.ast()).segs.len() == 1 => recv_type(
-                self.ctx.chain,
-                self.binds,
-                pos,
-                self.ctx.ast().name(ph.get(self.ctx.ast()).segs[0].name),
-            ),
-            _ => {
-                infer::expr_ty(self.ctx.ast(), self.binds, self.files, recv).map(|t| head_of_ty(&t))
+            ExprRef::Path(ph) if ph.get(ast).segs.len() == 1 => {
+                let id = ph.get(ast).segs[0].name;
+                self.ctx.chain.named_recv(pos, id)
             }
+            _ => self
+                .ctx
+                .chain
+                .expr_ty(self.ctx.doc, recv)
+                .map(|t| head_of_ty(&t)),
         };
         let Some(ty_name) = head else { return };
-        let Some(params) = self.method_params(&ty_name, self.ctx.ast().name(name)) else {
+        let Some(params) = self.method_params(&ty_name, ast.name(name)) else {
             return;
         };
         self.arg_hints(&params, args);
     }
 
     /// the callee's parameter names, `self` excluded — inherent
-    /// impl-block methods only, via the shared `impl_method_fn` rule
-    /// (own-surface methods are FINAL with no hints, never wrong names)
+    /// impl-block methods only, via the shared door (own-surface
+    /// methods are FINAL with no hints, never wrong names)
     fn method_params(&self, ty_name: &str, member: &str) -> Option<Vec<String>> {
-        lookup::impl_method_fn(self.ctx.chain, ty_name, member).map(|f| f.params())
+        self.ctx
+            .chain
+            .impl_method_fn(ty_name, member)
+            .map(|f| f.params())
     }
 
     /// one PARAMETER hint per arg, at the arg's first byte — only on
@@ -346,7 +357,7 @@ impl CallCx<'_> {
         }
         for (p, a) in params.iter().zip(args) {
             self.out.push(Raw {
-                byte: a.span(self.ctx.ast()).lo,
+                byte: a.span(self.ast()).lo,
                 label: format!("{p}:"),
                 kind: InlayHintKind::PARAMETER,
                 tooltip: None,

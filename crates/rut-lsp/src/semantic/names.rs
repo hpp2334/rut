@@ -313,6 +313,9 @@ fn classify_ty(ast: &Ast, t: TyRef, out: &mut Vec<(Span, TokenType)>) {
             let d = h.get(ast);
             classify_path_segs(ast, &d.segs, out, TypeRule::Type);
         }
+        // `Self` — the tree's own kind: the position classifies from
+        // the node (the type spelling reads as a type everywhere)
+        TyRef::Self_(h) => out.push((h.get(ast).span, TokenType::Type)),
         TyRef::Fn(h) => {
             let d = h.get(ast);
             for p in &d.params {
@@ -351,10 +354,24 @@ fn classify_pat(ast: &Ast, p: PatRef, out: &mut Vec<(Span, TokenType)>) {
 
 fn classify_expr(ast: &Ast, e: ExprRef, out: &mut Vec<(Span, TokenType)>) {
     match e {
+        // `self` — the receiver — and the `Self` type spelling: the
+        // tree's own kinds, classified from the node (the AST pass
+        // runs after the token pass, so its class stands here)
+        ExprRef::Self_(h) => {
+            let d = h.get(ast);
+            let ty = if d.is_ty {
+                TokenType::Type
+            } else {
+                TokenType::Keyword
+            };
+            out.push((d.span, ty));
+        }
         // `d.draw(g)`, `Vec.from(..)` — the name trails its receiver
         ExprRef::Method(h) => {
             let d = h.get(ast);
-            emit(ast.name(d.name), d.name_span, TokenType::Method, out);
+            if let Some((name, name_span)) = d.member() {
+                emit(ast.name(name), name_span, TokenType::Method, out);
+            }
             classify_expr(ast, d.recv, out);
             for a in &d.args {
                 classify_expr(ast, *a, out);
@@ -535,8 +552,9 @@ enum TypeRule {
 }
 
 /// Emit each segment at its recorded `name_span`, in source order.
-/// Segments the token layer already owns by text (keywords, `Self`)
-/// do not emit — their token class stands.
+/// Segments the token layer already owns by text (the keywords) do not
+/// emit — their token class stands; the `Self` segments are the tree's
+/// own kinds and classify through the capitalization law like any head.
 fn classify_path_segs(
     ast: &Ast,
     segs: &[rut_ast::PathSeg],

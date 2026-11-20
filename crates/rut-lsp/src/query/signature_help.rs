@@ -1,25 +1,24 @@
-//! Signature help — the phase-3 callee machinery, read at a call's
-//! argument position (the lsp-features survey §4.4). The call SHAPE is
-//! detected token-level (the AST is unreliable exactly when this fires:
-//! mid-edit, with the call still unclosed), the CALLEE resolves through
-//! the machinery phase 3 landed:
+//! Signature help — the callee machinery, read at a call's argument
+//! position (the lsp-features survey §4.4). The call SHAPE is the
+//! tree's: the cursor's node walks its ancestors to the innermost
+//! [`CallNode`]/[`MethodNode`], unclosed calls riding their `rparen:
+//! None` shape, and the ACTIVE argument counts from the child spans —
+//! the comma/paren archaeology this replaces could not see the tree
+//! exactly when it fired (mid-edit); now the partial call IS a node.
+//! The CALLEE resolves through the resolver family:
 //!
 //! * free calls by unique-name match over the recorded index params
 //!   (the `call_ty` law — ambiguity is a miss, never a wrong signature);
-//! * methods through the receiver's type head (`self`/`Self`,
-//!   capitalized, primitive, binding, module let — `recv_type`), then
-//!   the inherent impl fn via the shared `impl_method_fn` rule;
+//! * methods through the receiver's type head (a plain-ident receiver
+//!   only — the chained-receiver law's honest miss stays), then the
+//!   inherent impl fn via the shared `impl_method_fn` rule;
 //!   own-surface hits (interface bodies, builtin/primitive surfaces) are
 //!   FINAL with no recorded params → no help, so a same-named impl fn's
 //!   signature can never leak through (the known-receiver-is-final law).
 //!
 //! The signature renders verbatim (the fn view's own slice — the fn
-//! name and params as written, the hover render's source); the ACTIVE
-//! parameter is the comma/paren depth at the request position. F-strings
-//! cannot miscount — the lexer hands an f-string over as ONE token, so
-//! commas and parens inside its holes are invisible to the scan. Nested
-//! calls each answer at their own depth (the innermost unclosed paren
-//! wins). The never-wrong guard is phase 3's: ambiguity, unknown receiver,
+//! name and params as written, the hover render's source). The
+//! never-wrong guard is phase 3's: ambiguity, unknown receiver,
 //! own-surface finality, or MORE arguments than the signature has
 //! parameters — no help, never wrong help. A call still being typed
 //! (fewer args than parameters) is the help's whole point and shows the
@@ -30,15 +29,13 @@ use ls_types::{
     SignatureInformation,
 };
 
-use crate::semantic::{Tok, Token};
+use rut_ast::{CallNode, ExprRef, MethodNode};
 
-use crate::hover::bindings;
 use crate::hover::collection::Chain;
-use crate::hover::lookup::{self, recv_type};
 
 /// everything one signature-help query needs — the chain the
 /// collection handed out (the open document at the head; its kept
-/// document owns the tokens and the tree)
+/// document owns the tree)
 pub struct Ctx<'a> {
     /// the lookup chain: the open document first, then the prelude + workspace
     pub chain: &'a Chain<'a>,
@@ -48,48 +45,96 @@ pub struct Ctx<'a> {
 /// a byte offset). `None` when there is no call to help with, or when
 /// the callee does not resolve to exactly one known signature.
 pub fn signature_help(ctx: &Ctx, pos: u32) -> Option<SignatureHelp> {
-    let toks = ctx.chain.head().doc.toks();
-    let (open_i, commas) = enclosing_call(toks, pos)?;
-    let head = toks.get(open_i.checked_sub(1)?)?;
-    let Tok::Ident(name) = &head.tok else {
-        return None;
+    let d = ctx.chain.head();
+    let ast = d.doc.ast();
+    // the cursor's node — the byte under it, else the byte just before
+    // (a cursor sitting on a token's end reads that token) — then the
+    // innermost call ancestor: nested calls each answer at their own
+    // depth, and a control paren (`if (`) is no call at all — its
+    // condition simply walks up PAST it
+    let probe = ast
+        .node_at(pos)
+        .or_else(|| pos.checked_sub(1).and_then(|p| ast.node_at(p)))?;
+    // the cursor ON a callee's name belongs to the ENCLOSING call
+    // (the old paren scan's adjacency: pos before the callee's `(` is
+    // not inside its arg list) — a callee whose own name covers pos is
+    // skipped in favor of the next call up
+    let call = ast.ancestors(probe).find(|h| is_call_at(h, ast, pos));
+    let call = match call {
+        Some(c) => {
+            // a closed call answers only while the cursor is still
+            // inside — past the closer the request is out of the call
+            let inside = if let Some(m) = c.downcast::<MethodNode>() {
+                m.get(ast).rparen.is_none_or(|rp| pos <= rp.lo)
+            } else if let Some(cc) = c.downcast::<CallNode>() {
+                cc.get(ast).rparen.is_none_or(|rp| pos <= rp.lo)
+            } else {
+                unreachable!("the ancestor probe found a call kind")
+            };
+            if !inside {
+                return None;
+            }
+            c
+        }
+        None => {
+            // the DECL site: the cursor on a fn/method's own name or
+            // param list answers with THAT signature (the active slot
+            // rides the param the cursor names)
+            return signature_help_at_decl(ctx, probe, pos);
+        }
     };
-    if crate::semantic::is_keyword(name) {
-        return None;
-    }
-    // method call iff a dot sits between the head and what's before it
-    let is_method = open_i >= 2 && toks[open_i - 2].tok == Tok::Dot;
 
-    let (fndef, params, fndef_doc) = if is_method {
-        // the receiver must be ONE plain identifier (`c`, `Circle`,
-        // `self`) — a dot before it means a multi-segment path, anything
-        // else (a `)`, a literal) a chained/complex receiver; both stay
-        // honest misses mid-typing (the AST the chained rules need is
-        // exactly what a half-typed call does not have)
-        let recv_tok = toks.get(open_i.checked_sub(3)?)?;
-        let recv = match &recv_tok.tok {
-            Tok::Ident(s) if !crate::semantic::is_keyword(s) => s.clone(),
-            _ => return None,
-        };
-        if open_i >= 4 && toks[open_i - 4].tok == Tok::Dot {
+    // the callee + the args, from the node
+    let (fndef, params, fndef_doc, args, is_method) = if let Some(m) = call.downcast::<MethodNode>()
+    {
+        let md = m.get(ast);
+        let (name, _) = md.member()?;
+        // the receiver must be ONE plain identifier (`c`, `Circle`) —
+        // a chained receiver (`c.grown(2).grown(`) or a complex one is
+        // an honest miss (the known-receiver law the tests pin); `self`
+        // and the other keywords are not receivers here either
+        let recv_id = match md.recv {
+            ExprRef::Path(ph) => {
+                let segs = &ph.get(ast).segs;
+                (segs.len() == 1).then(|| segs[0].name)
+            }
+            _ => None,
+        }?;
+        let recv_text = ast.name(recv_id);
+        if crate::semantic::is_keyword(recv_text) {
             return None;
         }
-        let binds = bindings::collect(ctx.chain.head().doc.ast(), toks, ctx.chain);
-        let ty_name = recv_type(ctx.chain, &binds, pos, &recv)?;
+        let ty_name = ctx.chain.named_recv(pos, recv_id)?;
         // own-surface finality: `None` here is FINAL — no help, never
         // a same-named impl fn's signature
-        let f = lookup::impl_method_fn(ctx.chain, &ty_name, name)?;
-        (f.src(), f.params(), f.doc_lines())
+        let f = ctx.chain.impl_method_fn(&ty_name, ast.name(name))?;
+        (f.src(), f.params(), f.doc_lines(), md.args.clone(), true)
     } else {
-        // free fn by unique match (the call_ty law: ambiguity is a miss)
+        let cd = call.downcast::<CallNode>()?.get(ast);
+        // free fn by unique match (the call_ty law: ambiguity is a
+        // miss); the callee must be a plain single-seg name
+        let callee_id = match cd.callee {
+            ExprRef::Path(ph) => {
+                let segs = &ph.get(ast).segs;
+                (segs.len() == 1).then(|| segs[0].name)
+            }
+            _ => None,
+        }?;
+        let name = ast.name(callee_id);
         let hits: Vec<_> = ctx
             .chain
             .iter()
             .flat_map(|f| f.fns())
-            .filter(|f| f.name() == name.as_str() && f.owner().is_none())
+            .filter(|f| f.name() == name && f.owner().is_none())
             .collect();
         match hits.as_slice() {
-            [one] => (one.src(), one.params(), one.doc_lines()),
+            [one] => (
+                one.src(),
+                one.params(),
+                one.doc_lines(),
+                cd.args.clone(),
+                false,
+            ),
             _ => return None,
         }
     };
@@ -97,20 +142,31 @@ pub fn signature_help(ctx: &Ctx, pos: u32) -> Option<SignatureHelp> {
     // render: the verbatim signature, params as written
     let (label, pieces) = signature_parts(&fndef, &params, is_method)?;
 
-    // the active parameter: depth-0 commas at-or-before the cursor. A
-    // call still being typed has fewer args than params — that IS the
-    // help's moment; MORE commas than params is a mismatch → no help
+    // the ACTIVE parameter from the child spans: the argument the
+    // cursor rides (closed on both ends — a cursor at an arg's start
+    // or end reads that arg), else the separators before it (the
+    // depth-0 comma count this replaces). A call still being typed has
+    // fewer args than params — that IS the help's moment; MORE
+    // arguments than params is a mismatch → no help
+    let separators = args.iter().filter(|a| a.span(ast).hi < pos).count() as u32;
+    let ride = args
+        .iter()
+        .position(|a| {
+            let sp = a.span(ast);
+            sp.lo <= pos && pos <= sp.hi
+        })
+        .map(|i| i as u32)
+        .unwrap_or(separators);
     let active_parameter = if params.is_empty() {
-        if commas > 0 {
+        if separators > 0 {
             return None; // arguments where none belong
         }
         None
     } else {
-        let c = commas as usize;
-        if c >= params.len() {
+        if ride >= params.len() as u32 {
             return None;
         }
-        Some(c as u32)
+        Some(ride)
     };
 
     Some(SignatureHelp {
@@ -133,49 +189,122 @@ pub fn signature_help(ctx: &Ctx, pos: u32) -> Option<SignatureHelp> {
     })
 }
 
-/// the innermost call whose argument list contains `pos`, token-level:
-/// scan backwards counting unclosed parens. Returns the open paren's
-/// token index and the commas at-or-before `pos` that sit at the call's
-/// own depth — paren depth 0 AND outside any `{}` / `[]` block, so a
-/// when-arm commas or a struct literal's field commas can never
-/// pose as argument separators. An f-string is ONE token (its holes live
-/// inside it), so it can never miscount either. A non-call paren (`if
-/// (`/`while (`/`when (` — the head is a keyword) is skipped so an
-/// enclosing call still answers.
-fn enclosing_call(toks: &[Token], pos: u32) -> Option<(usize, u32)> {
-    let mut depth = 0i32;
-    let mut braces = 0i32;
-    let mut brackets = 0i32;
-    let mut commas = 0u32;
-    for (i, t) in toks.iter().enumerate().rev() {
-        if t.span.lo > pos {
-            continue; // strictly after the request position
+/// the DECL-site signature help: the cursor rides a fn/method's own
+/// name or param list — THAT signature answers (the recorded params as
+/// written; the paren itself = the first slot). A surface fn's view
+/// resolves through the same index the call lane reads.
+fn signature_help_at_decl(ctx: &Ctx, probe: rut_ast::AnyHandle, pos: u32) -> Option<SignatureHelp> {
+    let d = ctx.chain.head();
+    let ast = d.doc.ast();
+    for a in ast.ancestors(probe) {
+        if a.is::<rut_ast::ModuleNode>() {
+            return None;
         }
-        match &t.tok {
-            Tok::LParen => {
-                if depth == 0 {
-                    match toks.get(i.checked_sub(1)?).map(|p| &p.tok) {
-                        Some(Tok::Ident(s)) if !crate::semantic::is_keyword(s) => {
-                            return Some((i, commas));
-                        }
-                        _ => {} // not a call — keep scanning for an enclosing one
-                    }
-                } else {
-                    depth -= 1;
+        // the fn/method the cursor rides — its name position or param
+        // region decides; the view (recorded params, verbatim slice)
+        // comes from the chain
+        let (name, nsp, param_spans, is_method) = if let Some(f) = a.downcast::<rut_ast::FnNode>() {
+            let fd = f.get(ast);
+            (fd.name, fd.name_span, fd.params.clone(), false)
+        } else if let Some(m) = a.downcast::<rut_ast::MethodDeclNode>() {
+            let md = m.get(ast);
+            (md.name, md.name_span, md.params.clone(), true)
+        } else {
+            continue;
+        };
+        let on_slot = crate::query::definition::on_name(nsp, pos)
+            || param_spans
+                .iter()
+                .any(|pm| pm.span(ast).lo <= pos && pos <= pm.span(ast).hi);
+        if !on_slot {
+            continue;
+        }
+        let name_text = ast.name(name);
+        let (view, is_method) = if is_method {
+            // the impl fn's view — the owner derives from the parent
+            // impl's target (an interface decl surfaces FINAL: no
+            // recorded params, no help)
+            let owner = ast.parent(a).and_then(|p| {
+                if let Some(t) = p.downcast::<rut_ast::ImplNode>() {
+                    let td = t.get(ast);
+                    return Some(crate::hover::types::head_of_ty(
+                        &crate::hover::types::ty_src(ast, td.target),
+                    ));
                 }
-            }
-            Tok::RParen => depth += 1,
-            Tok::LBrace => braces = (braces - 1).max(0),
-            Tok::RBrace => braces += 1,
-            Tok::LBracket => brackets = (brackets - 1).max(0),
-            Tok::RBracket => brackets += 1,
-            Tok::Comma if depth == 0 && braces == 0 && brackets == 0 && t.span.hi <= pos => {
-                commas += 1;
-            }
-            _ => {}
-        }
+                p.downcast::<rut_ast::InterfaceNode>()
+                    .map(|t| ast.name(t.get(ast).name).to_string())
+            })?;
+            (ctx.chain.impl_method_fn(&owner, name_text)?, true)
+        } else {
+            let hits: Vec<_> = ctx
+                .chain
+                .iter()
+                .flat_map(|i| i.fns())
+                .filter(|v| v.name() == name_text && v.owner().is_none())
+                .collect();
+            let [one] = hits.as_slice() else {
+                return None;
+            };
+            (*one, false)
+        };
+        let params = view.params();
+        let (label, pieces) = signature_parts(&view.src(), &params, is_method)?;
+        let active_parameter = if params.is_empty() {
+            None
+        } else {
+            let ride = param_spans
+                .iter()
+                .position(|pm| {
+                    let sp = pm.span(ast);
+                    sp.lo <= pos && pos <= sp.hi
+                })
+                .map(|i| i as u32)
+                .unwrap_or(0);
+            (ride < params.len() as u32).then_some(ride)
+        };
+        return Some(SignatureHelp {
+            signatures: vec![SignatureInformation {
+                label,
+                documentation: doc_markdown(&view.doc_lines()),
+                parameters: Some(
+                    pieces
+                        .into_iter()
+                        .map(|p| ParameterInformation {
+                            label: ParameterLabel::Simple(p),
+                            documentation: None,
+                        })
+                        .collect(),
+                ),
+                active_parameter,
+            }],
+            active_signature: Some(0),
+            active_parameter,
+        });
     }
     None
+}
+
+/// is `h` the call node the cursor rides — a call/method whose CALLEE
+/// name does not itself cover `pos` (on the callee's name = the
+/// enclosing call's argument region)
+fn is_call_at(h: &rut_ast::AnyHandle, ast: &rut_ast::Ast, pos: u32) -> bool {
+    let on_callee = if let Some(c) = h.downcast::<CallNode>() {
+        match c.get(ast).callee {
+            ExprRef::Path(ph) => ph
+                .get(ast)
+                .segs
+                .iter()
+                .any(|s| s.name_span.lo <= pos && pos <= s.name_span.hi),
+            _ => false,
+        }
+    } else if let Some(m) = h.downcast::<MethodNode>() {
+        m.get(ast)
+            .member()
+            .is_some_and(|(_, nsp)| nsp.lo <= pos && pos <= nsp.hi)
+    } else {
+        return false;
+    };
+    !on_callee
 }
 
 /// the verbatim signature as the label, plus each parameter's as-written

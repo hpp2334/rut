@@ -648,7 +648,7 @@ fn stmt_dump(a: &Ast, r: StmtRef, next: &mut u32) -> PrintNode {
                     PrintVal::Str(
                         names
                             .iter()
-                            .map(|n| a.name(*n).to_string())
+                            .map(|(n, _)| a.name(*n).to_string())
                             .collect::<Vec<_>>()
                             .join(", "),
                     ),
@@ -835,6 +835,10 @@ fn ty_dump(a: &Ast, r: TyRef, next: &mut u32) -> PrintNode {
             fields.push(field("segs", PrintVal::Segs(segs_dump(a, &d.segs, next))));
             <TyPathNode as NodeKind>::NAME
         }
+        TyRef::Self_(h) => {
+            let _d: &crate::ast::ty::SelfTyNode = h.get(a);
+            <crate::ast::ty::SelfTyNode as NodeKind>::NAME
+        }
         TyRef::Fn(h) => {
             let d: &TyFnNode = h.get(a);
             fields.push(field(
@@ -912,6 +916,10 @@ fn expr_dump(a: &Ast, r: ExprRef, next: &mut u32) -> PrintNode {
             fields.push(field("segs", PrintVal::Segs(segs_dump(a, &d.segs, next))));
             <PathNode as NodeKind>::NAME
         }
+        ExprRef::Self_(h) => {
+            let _d: &crate::ast::expr::SelfNode = h.get(a);
+            <crate::ast::expr::SelfNode as NodeKind>::NAME // value derived: src[lo..hi]
+        }
         ExprRef::Call(h) => {
             let d: &CallNode = h.get(a);
             fields.push(field(
@@ -930,7 +938,9 @@ fn expr_dump(a: &Ast, r: ExprRef, next: &mut u32) -> PrintNode {
                 "recv",
                 PrintVal::Node(Box::new(expr_dump(a, d.recv, next))),
             ));
-            fields.push(field("name", PrintVal::Str(a.name(d.name).to_string())));
+            if let Some((name, _)) = d.member() {
+                fields.push(field("name", PrintVal::Str(a.name(name).to_string())));
+            }
             if !d.generics.is_empty() {
                 fields.push(field(
                     "generics",

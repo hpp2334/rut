@@ -406,6 +406,7 @@ fn ty_ast_text(ast: &Ast, t: TyRef) -> String {
             }
             s
         }
+        TyRef::Self_(_) => "Self".to_string(),
         TyRef::Fn(h) => {
             let d = h.get(ast);
             let ps: Vec<String> = d.params.iter().map(|&p| ty_ast_text(ast, p)).collect();

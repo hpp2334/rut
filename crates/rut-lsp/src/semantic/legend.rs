@@ -107,13 +107,15 @@ pub fn is_primitive_ty(s: &str) -> bool {
     rut_ast::parser::is_primitive_ty(s)
 }
 
-/// A word the token layer already owns by text (keywords, `Self`) — never
+/// A word the token layer already owns by text (the keywords) — never
 /// a name position. Primitives (`str`, `bytes`, …) are contextual type
 /// names, NOT reserved: a field or param may legally carry one, and the
 /// AST pass then overrides the token layer's `type` class. (`nil` is
-/// reserved, so it never needs that rescue.)
+/// reserved, so it never needs that rescue.) The receiver `self` rides
+/// `is_keyword`; the `Self` type spelling is the tree's own node kind —
+/// the AST pass classifies those positions from the nodes.
 pub(crate) fn owned_by_tokens(s: &str) -> bool {
-    is_keyword(s) || s == "Self"
+    is_keyword(s)
 }
 
 pub(crate) fn is_cap(s: &str) -> bool {

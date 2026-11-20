@@ -27,6 +27,7 @@
 //! `src()`/`toks()`/`line_starts()` — the pipeline's own lanes read the
 //! `Source` directly, nothing above this crate touches the storage.
 
+use once_cell::sync::OnceCell;
 use rut_lexer::diag::Diag;
 use rut_lexer::lexer::{lex_canonical, lex_normalized};
 use rut_lexer::source::{Edit, Source};
@@ -34,6 +35,7 @@ use rut_lexer::span::Span;
 use rut_lexer::splice::{splice_tokens, TokenChange};
 use rut_lexer::token::{Tok, Token};
 
+use crate::bindings::{self, Binding};
 use crate::parser::{graft_table, parse_item_window, Mode};
 use crate::{children_of, remove_any, Ast, ErrorNode, ItemRef, ModuleNode};
 
@@ -62,6 +64,9 @@ pub struct Doc {
     /// where the flat error panel's PARSE tier begins (the lex tier is
     /// everything before it — rebuilt wholesale on every edit)
     parse_from: usize,
+    /// the locals pass — lazy, per version (dropped by `edit`; the
+    /// next read recomputes over the edited tree)
+    bindings: OnceCell<Vec<Binding>>,
 }
 
 impl Doc {
@@ -105,6 +110,7 @@ impl Doc {
             mode,
             n_lex_items,
             parse_from,
+            bindings: OnceCell::new(),
         }
     }
 
@@ -209,6 +215,8 @@ impl Doc {
         self.ast.set_errors(all);
         // 9. the tree index — invalidated; the next read rebuilds
         self.ast.index_invalidate();
+        // the locals pass is a per-version lazy too
+        self.bindings = OnceCell::new();
     }
 
     // ---- text — questions, not storage ----
@@ -297,6 +305,15 @@ impl Doc {
     /// derived tree index)
     pub fn ast(&self) -> &Ast {
         &self.ast
+    }
+
+    /// the locals pass — every fn-local binding, lazy per version (the
+    /// first read computes; `edit` drops it). Pure tree+text facts: the
+    /// rows carry the WRITTEN annotations — inference for the
+    /// un-annotated bindings consults the resolver (see
+    /// [`Binding::init`]), never this pass.
+    pub fn bindings(&self) -> &[Binding] {
+        self.bindings.get_or_init(|| bindings::compute(self))
     }
 
     // ---- the edit lane's privates ----

@@ -11,8 +11,8 @@
 use crate::{
     ArrayLitNode, ArrayRepeatNode, AssignNode, AsyncBlockNode, AwaitNode, BinOp, BinaryNode,
     CallNode, CastNode, ExprRef, FPartAst, FStrNode, FieldInit, FieldNode, IfExprNode, IndexNode,
-    IsNode, LambdaNode, Lit, LitNode, MethodNode, ParamNode, ParamRef, PathNode, PathSeg,
-    StructLitNode, TupleNode, UnOp, UnaryNode, WhenExprNode,
+    IsNode, LambdaNode, Lit, LitNode, MemberIdent, MethodNode, ParamNode, ParamRef, PathNode,
+    PathSeg, SelfNode, StructLitNode, TupleNode, UnOp, UnaryNode, WhenExprNode,
 };
 use rut_lexer::span::Span;
 use rut_lexer::token::{FPart, FStrTok, FloatSuffix, Tok, Token};
@@ -22,7 +22,6 @@ use crate::parser::item::ParamsFrame;
 use crate::parser::stmt::{BlockFrame, IfFrame, WhenFrame};
 use crate::parser::ty::TypeFrame;
 use crate::parser::{is_reserved_kw, Name, Parser, EXPR_MAX};
-use rut_core::sym;
 
 /// The ten numeric primitive names — the only spellings an `as` cast
 /// accepts as its right-hand side.
@@ -143,7 +142,10 @@ impl ExprFrame {
         self.fetch_operand(p)
     }
 
-    /// sweep prefix operators, then fetch an atom.
+    /// sweep prefix operators, then fetch an atom. The atom's lo is
+    /// the OPERAND's own first token (post the prefix sweep) — an
+    /// operand's nodes span the operand, never the whole expression
+    /// they sit in.
     fn fetch_operand(&mut self, p: &mut Parser) -> Step {
         self.stage = ExprStage::Operand;
         self.operand_pos = p.pos;
@@ -151,7 +153,7 @@ impl ExprFrame {
         if let Some(f) = self.sweep(p) {
             return Step::Push(f);
         }
-        Step::Push(Frame::Atom(AtomFrame::new(self.lo, AtomMode::Postfix)))
+        Step::Push(Frame::Atom(AtomFrame::new(p.span(), AtomMode::Postfix)))
     }
 
     fn sweep(&mut self, p: &mut Parser) -> Option<Frame> {
@@ -456,18 +458,20 @@ enum AtomStage {
     },
     PostDotGen {
         recv: ExprRef,
-        name: Name,
+        name: MemberIdent,
         args: Vec<crate::TyRef>,
     },
     PostDotCall {
         recv: ExprRef,
-        name: Name,
+        name: MemberIdent,
         generics: Vec<crate::TyRef>,
         args: Vec<ExprRef>,
+        rparen: Option<Span>,
     },
     PostCall {
         callee: ExprRef,
         args: Vec<ExprRef>,
+        rparen: Option<Span>,
     },
     PostIndex {
         recv: ExprRef,
@@ -595,13 +599,9 @@ impl AtomFrame {
                 }
                 if name == "self" {
                     p.bump();
-                    let e = PathNode {
+                    let e = SelfNode {
                         span: sp,
-                        segs: vec![PathSeg {
-                            name: sym::SELF,
-                            name_span: sp,
-                            generics: Vec::new(),
-                        }],
+                        is_ty: false,
                     }
                     .allocate(&mut p.ast);
                     return self.finish(p, e);
@@ -610,16 +610,11 @@ impl AtomFrame {
                     p.bump();
                     // `Self { .. }` — the class-private literal
                     if matches!(p.tok(), Tok::LBrace) {
-                        let ty_name = sym::SELF_TY;
-                        return self.struct_enter(p, ty_name, sp);
+                        return self.struct_enter_self(p, sp);
                     }
-                    let e = PathNode {
+                    let e = SelfNode {
                         span: sp,
-                        segs: vec![PathSeg {
-                            name: sym::SELF_TY,
-                            name_span: sp,
-                            generics: Vec::new(),
-                        }],
+                        is_ty: true,
                     }
                     .allocate(&mut p.ast);
                     return self.finish(p, e);
@@ -686,26 +681,44 @@ impl AtomFrame {
                     p.bump();
                     // `.0`/`.1` — tuple field access (the int token's
                     // span IS the member's recorded span)
-                    let (name, name_span) = match p.tok().clone() {
+                    let member = match p.tok().clone() {
                         Tok::Int(v, None) => {
                             let sp = p.bump().span;
-                            (p.ast.intern(&v.to_string()), sp)
+                            MemberIdent {
+                                name: p.ast.intern(&v.to_string()),
+                                name_span: sp,
+                            }
                         }
                         _ => {
                             let Some(n) = p.expect_ident("a member name") else {
-                                return Step::Pop(Done::Failed);
+                                // the incomplete rung: the member is
+                                // being typed — the partial METHOD
+                                // shape (absent member) keeps a real
+                                // node at the cursor instead of
+                                // fencing the whole statement
+                                let node = MethodNode {
+                                    span: Span::new(self.lo.lo, p.prev_end.max(self.lo.lo)),
+                                    recv: e,
+                                    member: None,
+                                    generics: Vec::new(),
+                                    args: Vec::new(),
+                                    rparen: None,
+                                }
+                                .allocate(&mut p.ast);
+                                e = node;
+                                continue;
                             };
-                            (n.id, n.span)
+                            MemberIdent {
+                                name: n.id,
+                                name_span: n.span,
+                            }
                         }
                     };
                     if matches!(p.tok(), Tok::Lt) && p.scan_is_generic_args() {
                         p.bump();
                         self.stage = AtomStage::PostDotGen {
                             recv: e,
-                            name: Name {
-                                id: name,
-                                span: name_span,
-                            },
+                            name: member,
                             args: Vec::new(),
                         };
                         return self.genarg_top(p);
@@ -714,20 +727,18 @@ impl AtomFrame {
                         p.bump();
                         self.stage = AtomStage::PostDotCall {
                             recv: e,
-                            name: Name {
-                                id: name,
-                                span: name_span,
-                            },
+                            name: member,
                             generics: Vec::new(),
                             args: Vec::new(),
+                            rparen: None,
                         };
                         return self.call_top(p);
                     }
                     e = FieldNode {
                         span: Span::new(self.lo.lo, p.prev_end.max(self.lo.lo)),
                         recv: e,
-                        name,
-                        name_span,
+                        name: member.name,
+                        name_span: member.name_span,
                     }
                     .allocate(&mut p.ast);
                 }
@@ -736,6 +747,7 @@ impl AtomFrame {
                     self.stage = AtomStage::PostCall {
                         callee: e,
                         args: Vec::new(),
+                        rparen: None,
                     };
                     return self.call_top(p);
                 }
@@ -828,6 +840,18 @@ impl AtomFrame {
         self.struct_enter_gen(p, ty_name, Vec::new(), name_span)
     }
 
+    /// `Self { .. }` — the literal's head is the `Self` TYPE node, not
+    /// a path spelling
+    fn struct_enter_self(&mut self, p: &mut Parser, name_span: Span) -> Step {
+        p.bump(); // {
+        let ty = crate::SelfTyNode { span: name_span }.allocate(&mut p.ast);
+        self.stage = AtomStage::Struct {
+            ty,
+            fields: Vec::new(),
+        };
+        self.struct_top(p)
+    }
+
     fn struct_enter_gen(
         &mut self,
         p: &mut Parser,
@@ -836,9 +860,8 @@ impl AtomFrame {
         name_span: Span,
     ) -> Step {
         // the type ident is consumed at every call site; its OWN token
-        // span rides in as `name_span` — the frame's `self.lo` is the
-        // EXPRESSION's first token, not the ident (an infix operand
-        // `q == Point { .. }` enters with lo at `q`)
+        // span rides in as `name_span` — the literal's head type node
+        // spans the operand's own first token
         p.bump(); // {
         let ty = crate::TyPathNode {
             span: self.lo,
@@ -933,7 +956,19 @@ impl AtomFrame {
                 return self.finish(p, node);
             }
             let Some(name) = p.expect_ident("a path segment") else {
-                return Step::Pop(Done::Failed);
+                // the incomplete rung: the path continues (`Color::`
+                // at the typing edge) — the partial path keeps a real
+                // node at the cursor instead of fencing
+                let segs = match &mut self.stage {
+                    AtomStage::PathColons { segs } => std::mem::take(segs),
+                    _ => Vec::new(),
+                };
+                let node = PathNode {
+                    span: Span::new(self.lo.lo, p.prev_end.max(self.lo.lo)),
+                    segs,
+                }
+                .allocate(&mut p.ast);
+                return self.finish(p, node);
             };
             if matches!(p.tok(), Tok::Lt) && p.scan_is_generic_args() {
                 p.bump();
@@ -1014,14 +1049,15 @@ impl AtomFrame {
                         name,
                         generics,
                         args: Vec::new(),
+                        rparen: None,
                     };
                     self.call_top(p)
                 } else {
                     let node = FieldNode {
                         span: Span::new(self.lo.lo, p.prev_end.max(self.lo.lo)),
                         recv,
-                        name: name.id,
-                        name_span: name.span,
+                        name: name.name,
+                        name_span: name.name_span,
                     }
                     .allocate(&mut p.ast);
                     self.stage = AtomStage::Postfix { e: node };
@@ -1034,7 +1070,8 @@ impl AtomFrame {
 
     /// call-argument list top: `)` finishes, otherwise an expression
     fn call_top(&mut self, p: &mut Parser) -> Step {
-        if p.eat_punct(Tok::RParen) {
+        if matches!(p.tok(), Tok::RParen) {
+            self.record_rparen(p.expect(Tok::RParen));
             return self.call_done(p);
         }
         Step::Push(Frame::Expr(ExprFrame::new(p, ExprMode::Full)))
@@ -1044,20 +1081,90 @@ impl AtomFrame {
         if p.eat_punct(Tok::Comma) {
             self.call_top(p)
         } else {
-            p.expect(Tok::RParen);
+            self.record_rparen(p.expect(Tok::RParen));
             self.call_done(p)
         }
     }
 
+    /// the closer lands — `Some` (complete) or `None` (the incomplete
+    /// shape rides on)
+    fn record_rparen(&mut self, rp: Option<Span>) {
+        match &mut self.stage {
+            AtomStage::PostCall { rparen, .. } | AtomStage::PostDotCall { rparen, .. } => {
+                *rparen = rp;
+            }
+            _ => unreachable!("call closer at the wrong stage"),
+        }
+    }
+
+    /// a failed operand inside a free call — the partial call node
+    /// (args so far, `rparen: None`) keeps the tree real at the cursor
+    fn call_failed_partial(&mut self, p: &mut Parser) -> Step {
+        let stage = std::mem::replace(&mut self.stage, AtomStage::Primary);
+        let AtomStage::PostCall {
+            callee,
+            args,
+            rparen,
+        } = stage
+        else {
+            unreachable!("call failure at the wrong stage")
+        };
+        let node = CallNode {
+            span: Span::new(self.lo.lo, p.prev_end.max(self.lo.lo)),
+            callee,
+            args,
+            rparen,
+        }
+        .allocate(&mut p.ast);
+        self.stage = AtomStage::Postfix { e: node };
+        self.postfix_top(p)
+    }
+
+    /// a failed operand inside a member call (or its generic args) —
+    /// the partial method shape, member present when it parsed
+    fn dotcall_failed_partial(&mut self, p: &mut Parser) -> Step {
+        let stage = std::mem::replace(&mut self.stage, AtomStage::Primary);
+        let (recv, member, generics, args, rparen) = match stage {
+            AtomStage::PostDotCall {
+                recv,
+                name,
+                generics,
+                args,
+                rparen,
+            } => (recv, Some(name), generics, args, rparen),
+            AtomStage::PostDotGen { recv, name, args } => {
+                (recv, Some(name), args, Vec::new(), None)
+            }
+            _ => unreachable!("member-call failure at the wrong stage"),
+        };
+        let node = MethodNode {
+            span: Span::new(self.lo.lo, p.prev_end.max(self.lo.lo)),
+            recv,
+            member,
+            generics,
+            args,
+            rparen,
+        }
+        .allocate(&mut p.ast);
+        self.stage = AtomStage::Postfix { e: node };
+        self.postfix_top(p)
+    }
+
     fn call_done(&mut self, p: &mut Parser) -> Step {
         match &mut self.stage {
-            AtomStage::PostCall { callee, args } => {
+            AtomStage::PostCall {
+                callee,
+                args,
+                rparen,
+            } => {
                 let callee = *callee;
                 let args = std::mem::take(args);
+                let rparen = *rparen;
                 let node = CallNode {
                     span: Span::new(self.lo.lo, p.prev_end.max(self.lo.lo)),
                     callee,
                     args,
+                    rparen,
                 }
                 .allocate(&mut p.ast);
                 self.stage = AtomStage::Postfix { e: node };
@@ -1068,18 +1175,20 @@ impl AtomFrame {
                 name,
                 generics,
                 args,
+                rparen,
             } => {
                 let recv = *recv;
                 let name = *name;
                 let generics = std::mem::take(generics);
                 let args = std::mem::take(args);
+                let rparen = *rparen;
                 let node = MethodNode {
                     span: Span::new(self.lo.lo, p.prev_end.max(self.lo.lo)),
                     recv,
-                    name: name.id,
-                    name_span: name.span,
+                    member: Some(name),
                     generics,
                     args,
+                    rparen,
                 }
                 .allocate(&mut p.ast);
                 self.stage = AtomStage::Postfix { e: node };
@@ -1235,6 +1344,14 @@ impl AtomFrame {
                             None => Step::Pop(Done::Failed),
                         }
                     }
+                }
+                // the incomplete rung: a failed operand INSIDE a call
+                // still yields the partial call shape (the args so
+                // far, `rparen: None`) — the tree keeps a real node at
+                // the typing edge instead of a block-level fence
+                AtomStage::PostCall { .. } => self.call_failed_partial(p),
+                AtomStage::PostDotCall { .. } | AtomStage::PostDotGen { .. } => {
+                    self.dotcall_failed_partial(p)
                 }
                 _ => Step::Pop(Done::Failed),
             },

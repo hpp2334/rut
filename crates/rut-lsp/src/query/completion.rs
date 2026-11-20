@@ -24,11 +24,12 @@
 
 use std::collections::HashSet;
 
-use crate::semantic::{Tok, Token};
 use ls_types::Range;
-use rut_ast::{Ast, ItemRef, Vis};
+use rut_ast::{
+    Ast, ExprRef, FieldNode, IdentId, ItemRef, MethodNode, PathNode, Span, TyRef, UseNode, Vis,
+};
 
-use crate::hover::collection::Chain;
+use crate::hover::collection::{Chain, FnView, MemberView, TyView};
 use crate::hover::types::TyForm;
 use crate::mods::{self, DocMods};
 use crate::semantic::LineIndex;
@@ -63,6 +64,107 @@ impl CompletionOut {
             additional_text_edits: Vec::new(),
         }
     }
+    /// THE conversion — a tier row into the wire item. Every tier
+    /// assembles rows; this is the one place a label allocates.
+    fn of(row: &Row) -> Self {
+        CompletionOut::plain(row.name().to_string(), row.detail(), row.docs(), row.kind())
+    }
+}
+
+/// The wire's question set, asked of every tier's row — the name and
+/// kind borrowed from the view's own node, the detail/docs rendered
+/// verbatim from the spans. The tiers produce ROWS (views over the
+/// decls they found); the ONLY conversion to the owned wire item is
+/// [`CompletionOut::of`], at the ABI edge — one vocabulary, one
+/// allocation point.
+pub(crate) trait CompletionRow {
+    fn name(&self) -> &str;
+    fn detail(&self) -> String;
+    fn docs(&self) -> Vec<String>;
+    fn kind(&self) -> CompletionKind;
+}
+
+/// A binding row — the rows carry interner ids, the wire spells them;
+/// the detail rides the doc's own text join
+pub(crate) struct BindRow<'a> {
+    pub b: &'a crate::hover::Binding,
+    pub doc: &'a crate::hover::collection::MountedFile,
+    /// the resolver's declared-or-inferred answer (the tier's one
+    /// resolver read per row)
+    pub ty: Option<String>,
+}
+
+/// One tier row — the view the tier door found it from. The variants
+/// are the tier views themselves; the wire item is one
+/// [`CompletionOut::of`] away.
+pub(crate) enum Row<'a> {
+    Ty(TyView<'a>),
+    Fn(FnView<'a>),
+    Member(MemberView<'a>),
+    Bind(BindRow<'a>),
+    Kw(&'static str),
+}
+
+impl CompletionRow for Row<'_> {
+    fn name(&self) -> &str {
+        match self {
+            Row::Ty(t) => t.name(),
+            Row::Fn(f) => f.name(),
+            Row::Member(m) => m.name(),
+            Row::Bind(r) => r.doc.doc.ast().name(r.b.name),
+            Row::Kw(k) => k,
+        }
+    }
+    fn detail(&self) -> String {
+        match self {
+            Row::Ty(t) => t.head(),
+            Row::Fn(f) => f.src(),
+            Row::Member(m) => m.src(),
+            Row::Bind(r) => match r.ty.clone() {
+                Some(ty) => format!("{} — {ty}", r.b.kind.label()),
+                None => r.b.kind.label().to_string(),
+            },
+            Row::Kw(_) => String::new(),
+        }
+    }
+    fn docs(&self) -> Vec<String> {
+        match self {
+            Row::Ty(t) => t.doc_lines(),
+            Row::Fn(f) => f.doc_lines(),
+            Row::Member(m) => m.doc_lines(),
+            Row::Bind(_) => Vec::new(),
+            Row::Kw(_) => Vec::new(),
+        }
+    }
+    fn kind(&self) -> CompletionKind {
+        match self {
+            Row::Ty(t) => match t.form() {
+                TyForm::Interface => CompletionKind::Interface,
+                _ => CompletionKind::Type,
+            },
+            Row::Fn(f) => {
+                if f.owner().is_some() {
+                    CompletionKind::Method
+                } else {
+                    CompletionKind::Fn
+                }
+            }
+            Row::Member(m) => {
+                if m.h.is::<rut_ast::MethodDeclNode>() {
+                    CompletionKind::Method
+                } else {
+                    CompletionKind::Field
+                }
+            }
+            Row::Bind(r) => match r.b.kind {
+                crate::hover::BindKind::Param => CompletionKind::Parameter,
+                crate::hover::BindKind::Let | crate::hover::BindKind::IterVar => {
+                    CompletionKind::Variable
+                }
+            },
+            Row::Kw(_) => CompletionKind::Keyword,
+        }
+    }
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -82,16 +184,45 @@ pub enum CompletionKind {
     Parameter,
 }
 
+/// The typing edge, from the tree: the byte before the cursor names
+/// the context — a `use` ancestor (the use tiers), a member node (the
+/// incomplete `recv.` shape included: the member is being typed), a
+/// `::` path's tail segment (the qualified tier), a type slot at an
+/// annotation boundary (the type tier), else the bare tiers with the
+/// partial ident (the fence residue riding `Doc::name_at`). No token
+/// scans.
+enum Edge {
+    /// inside a `use` statement: the spelled path + the typed prefix
+    Use { segs: Vec<String>, prefix: String },
+    /// a `::` run's tail: the head segments + the typed prefix
+    Qualified { segs: Vec<String>, prefix: String },
+    /// `recv.` / `recv.na`: the receiver NODE + the typed prefix (the
+    /// incomplete method shape's absent member is the empty prefix)
+    Member { recv: ExprRef, prefix: String },
+    /// the annotation boundary — a type position (`let x: ⏐`,
+    /// `fn f() -> T⏐`)
+    Annotation { prefix: String },
+    /// the bare tiers, with the partial ident if one is mid-typed
+    Bare { prefix: String },
+    /// the type slot's `.`/`::` member request (`let c: layout.Co⏐`):
+    /// the head segments for the mod tier, the tail ident for the
+    /// member tier — no bare fallthrough (a miss is an empty list)
+    TypeDot {
+        head: Vec<String>,
+        tail: IdentId,
+        prefix: String,
+    },
+}
+
 /// Completions at `pos`: use-path tiers inside a `use` statement
 /// (walking a package's mod namespaces), qualified-position tiers
 /// after `modname::` in the package's own files, member items after
 /// `recv.` (filtered by the typed prefix), the type tier at an
-/// annotation boundary, otherwise the visible
-/// fn-local bindings ahead of the keyword table plus the visible decls
-/// under the bare-name law plus the auto-import tier, deduped by
-/// label. `src` is the NORMALIZED source — the
-/// auto-import edits' coordinates ride the same text the tokens were
-/// lexed from. `doc` is the open document's file-module context (the
+/// annotation boundary, otherwise the visible fn-local bindings ahead
+/// of the keyword table plus the visible decls under the bare-name law
+/// plus the auto-import tier, deduped by label. `src` is the NORMALIZED
+/// source — the auto-import edits' coordinates ride the same text the
+/// spans index. `doc` is the open document's file-module context (the
 /// face's knowledge; the default keeps position-path completion off).
 /// `direct_deps` is the open document's own dep set (its manifest's
 /// rows) — the auto-import tier derives its gate from it live.
@@ -102,120 +233,539 @@ pub fn complete(
     doc: &DocMods,
     direct_deps: &HashSet<String>,
 ) -> Vec<CompletionOut> {
-    // the doc's own tokens + tree — the chain head's kept document
-    let (toks, ast) = (chain.head().doc.toks(), chain.head().doc.ast());
-    // the binding pass, computed once: the member tier keys receivers on
-    // it and the bare position's locals tier enumerates it
-    let binds = crate::hover::bindings::collect(ast, toks, chain);
-    if let Some((segs, prefix)) = use_path_before(toks, pos) {
-        // the OWN lane first — a head that speaks for the doc's own
-        // package (its own name, or an own mod edge) rides the
-        // position-path machinery: the intra-package walk and the
-        // visible-members gate, exactly what the compiler's own-use
-        // check accepts (`use imp::⏐` offers the module's visible
-        // members). A foreign head keeps the cross-package tier.
-        if let Some(out) = position_path_completions(chain, doc, &segs, &prefix) {
-            return out;
+    let head = chain.head();
+    let ast = head.doc.ast();
+    match typing_edge(chain, pos, src) {
+        Edge::Use { segs, prefix } => {
+            // the OWN lane first — a head that speaks for the doc's own
+            // package (its own name, or an own mod edge) rides the
+            // position-path machinery: the intra-package walk and the
+            // visible-members gate, exactly what the compiler's own-use
+            // check accepts (`use imp::⏐` offers the module's visible
+            // members). A foreign head keeps the cross-package tier.
+            if let Some(out) = position_path_completions(chain, doc, &segs, &prefix) {
+                return out;
+            }
+            use_path_completions(chain, &segs, &prefix)
         }
-        return use_path_completions(chain, &segs, &prefix);
-    }
-    // a lone `:` (or the `->` arrow) under the cursor is the
-    // annotation boundary — the type tier answers it: the primitive
-    // table, the document's types, and the imported foreign types
-    // (no keywords, fns, or locals — values never ride a type
-    // position). `Vec<⏐` stays ambiguous at token level (`<` vs the
-    // comparison) and is not this tier.
-    if let Some(prefix) = annotation_boundary_before(toks, pos) {
-        return type_tier_completions(chain, &prefix);
-    }
-    if let Some((segs, prefix)) = qualified_path_before(toks, pos) {
-        if let Some(out) = position_path_completions(chain, doc, &segs, &prefix) {
-            return out;
+        // a lone `:` (or the `->` arrow) under the cursor is the
+        // annotation boundary — the type tier answers it: the primitive
+        // table, the document's types, and the imported foreign types
+        // (no keywords, fns, or locals — values never ride a type
+        // position). `Vec<⏐` stays ambiguous (`<` vs the comparison)
+        // and is not this tier.
+        Edge::Annotation { prefix } => type_tier_completions(chain, &prefix),
+        Edge::Qualified { segs, prefix } => {
+            if let Some(out) = position_path_completions(chain, doc, &segs, &prefix) {
+                return out;
+            }
+            // the head did not resolve to a module — the `::` law's
+            // other member lists ride the same trigger: enum members,
+            // namespace statics, a type head's associated fns
+            if let Some(out) = type_head_completions(chain, &segs, &prefix) {
+                return out;
+            }
+            // the head resolved to nothing known — `::` in an unknown
+            // context falls through to the tiers below, the typed
+            // prefix riding along (the bare tier does not filter; the
+            // auto-import tier does)
+            let mut out = local_completions(chain, pos);
+            out.extend(bare_completions(chain));
+            out.extend(auto_import_completions(
+                chain,
+                ast,
+                src,
+                &prefix,
+                direct_deps,
+            ));
+            let mut seen: HashSet<String> = HashSet::new();
+            out.retain(|c| seen.insert(c.label.clone()));
+            out
         }
-        // the head did not resolve to a module — the `::` law's other
-        // member lists ride the same trigger: enum members, namespace
-        // statics, a type head's associated fns
-        if let Some(out) = type_head_completions(chain, &segs, &prefix) {
-            return out;
+        Edge::TypeDot { head, tail, prefix } => {
+            if let Some(out) = position_path_completions(chain, doc, &head, &prefix) {
+                return out;
+            }
+            member_completions(
+                chain,
+                pos,
+                crate::hover::collection::RecvNode::Seg(tail),
+                &prefix,
+            )
         }
-        // the head resolved to nothing known — `::` in an unknown
-        // context falls through to the tiers below
-    }
-    let Some((recv, prefix)) = recv_before(toks, pos) else {
-        // the dot guard: the request sits after a `.` the token tiers
-        // could not parse a `recv.` pair out of (the receiver's token is
-        // not a name — `f().`, `]` — or the text before the cursor ends
-        // `.` / `.` + a half-typed member). That is a MEMBER request
-        // with an unresolved receiver: a miss is an empty list, never
-        // the bare keyword/host-fn dump. Text-backed, so a stale sync
-        // (the tail still short the dot) cannot route around it.
-        if dot_context_before(src, pos) {
-            return Vec::new();
+        Edge::Member { recv, prefix } => {
+            // the qualified-position spelling: positions qualify with
+            // `::` — `helpers::mk(`, `let c: layout::Column` — so a
+            // receiver that resolves as a MOD HEAD offers the module's
+            // members (the same tier the `::` form rides). A resolved
+            // head is final; an unknown one falls through to the
+            // member tier
+            if let ExprRef::Path(ph) = recv {
+                let segs = &ph.get(ast).segs;
+                if segs.len() == 1 {
+                    let name = ast.name(segs[0].name).to_string();
+                    if let Some(out) =
+                        position_path_completions(chain, doc, std::slice::from_ref(&name), &prefix)
+                    {
+                        return out;
+                    }
+                }
+            }
+            // member completion shares hover's receiver inference (the
+            // door types the receiver INSIDE — field reads, chained
+            // calls, loop variables)
+            member_completions(
+                chain,
+                pos,
+                crate::hover::collection::RecvNode::Expr(recv),
+                &prefix,
+            )
         }
-        // the locals tier rides AHEAD of the keyword table — the name
-        // being typed is most often a binding just declared
-        let mut out = local_completions(&binds, pos);
-        out.extend(bare_completions(chain));
-        out.extend(auto_import_completions(
-            chain,
-            ast,
-            toks,
-            pos,
-            src,
-            direct_deps,
-        ));
-        // one final retain-by-label over the merged list (A4): the
-        // extend order IS the precedence — locals > keywords >
-        // document decls > imported > auto-import — so the first
-        // occurrence of a label wins and a name reachable two ways
-        // (e.g. bare via a `use`, and again via the auto-import tier)
-        // offers exactly one item.
-        let mut seen: HashSet<String> = HashSet::new();
-        out.retain(|c| seen.insert(c.label.clone()));
-        return out;
-    };
-    // the qualified-position spelling: positions qualify with `::` —
-    // `helpers::mk(`, `let c: layout::Column` — so a receiver that
-    // resolves as a MOD HEAD offers the module's members (the same
-    // tier the `::` form rides). A resolved head is final; an unknown
-    // one falls through to the member tier
-    if let Some(out) = position_path_completions(chain, doc, std::slice::from_ref(&recv), &prefix) {
-        return out;
+        Edge::Bare { prefix } => {
+            // the dot guard: the request sits after a `.` the tree
+            // could not shape into a member node (a fence swallowed the
+            // receiver). That is a MEMBER request with an unresolved
+            // receiver: a miss is an empty list, never the bare
+            // keyword/host-fn dump. Text-backed, so a stale sync (the
+            // tail still short the dot) cannot route around it.
+            if dot_context_before(src, pos) {
+                return Vec::new();
+            }
+            // the locals tier rides AHEAD of the keyword table — the
+            // name being typed is most often a binding just declared
+            let mut out = local_completions(chain, pos);
+            out.extend(bare_completions(chain));
+            out.extend(auto_import_completions(
+                chain,
+                ast,
+                src,
+                &prefix,
+                direct_deps,
+            ));
+            // one final retain-by-label over the merged list (A4): the
+            // extend order IS the precedence — locals > keywords >
+            // document decls > imported > auto-import — so the first
+            // occurrence of a label wins and a name reachable two ways
+            // (e.g. bare via a `use`, and again via the auto-import
+            // tier) offers exactly one item.
+            let mut seen: HashSet<String> = HashSet::new();
+            out.retain(|c| seen.insert(c.label.clone()));
+            out
+        }
     }
-    // the binding pass already ran at the top — member completion shares
-    // hover's receiver inference (field reads, chained calls, loop
-    // variables)
-    member_completions(chain, &binds, pos, &recv, &prefix)
 }
 
-/// The member-completion context at `pos`: the receiver's source text
-/// when the tokens before the cursor end with `recv.` — either the dot
-/// just typed (`recv.⏐`) or a possibly partial member after it
-/// (`recv.na⏐`, prefix `na`). A string receiver is the `str` primitive.
-fn recv_before(toks: &[Token], pos: u32) -> Option<(String, String)> {
-    let i = toks.iter().rposition(|t| t.span.lo < pos)?;
-    let (recv_i, prefix) = match &toks[i].tok {
-        Tok::Dot => (i.checked_sub(1)?, String::new()),
-        Tok::Ident(s) if i >= 2 && toks[i - 1].tok == Tok::Dot => (i - 2, s.clone()),
-        _ => return None,
+/// the typing edge — the walk: the byte before the cursor lands the
+/// probe, and the probe's own node kind (or its ancestors') names the
+/// tier. A use node carries its own spans; a partial member is the
+/// tree's `member: None` shape; the annotation boundary reads the one
+/// punct the tree does not record (the `:`/`->` between the binding
+/// head and the cursor — a text probe, the dot guard's precedent).
+fn typing_edge(chain: &Chain, pos: u32, src: &str) -> Edge {
+    let head = chain.head();
+    let ast = head.doc.ast();
+    // the byte before the cursor names the context. A STRUCTURAL
+    // wrapper (the block, the fn, the root) under the cursor means the
+    // byte sits in dead space — the walk looks a little further back
+    // for the node the cursor is actually typing into (the blank after
+    // a colon, the gap at EOF); the first non-wrapper stands.
+    const CONTEXT_KINDS: [&str; 10] = [
+        "LetStmt",
+        "Fn",
+        "Use",
+        "Param",
+        "FieldDecl",
+        "Method",
+        "Field",
+        "Path",
+        "TyPath",
+        "Call",
+    ];
+    let mut p0 = None;
+    for back in 1..=16u32 {
+        match pos.checked_sub(back).and_then(|p| ast.node_at(p)) {
+            Some(h) if matches!(h.kind_name(), "Module" | "Block") => continue,
+            Some(h) if CONTEXT_KINDS.contains(&h.kind_name()) => {
+                p0 = Some(h);
+                break;
+            }
+            Some(h) => {
+                p0 = Some(h);
+                break;
+            }
+            None => continue,
+        }
+    }
+    let Some(p0) = p0 else {
+        return Edge::Bare {
+            prefix: String::new(),
+        };
     };
-    let recv = match &toks[recv_i].tok {
-        Tok::Ident(s) => s.clone(),
-        // every string-literal form is a `str` receiver — `"a".len()`,
-        // `r#"b"#.len()`, `f"{x}".len()`
-        Tok::Str(_) | Tok::RawStr(_) | Tok::FStr(_) => "str".to_string(),
-        _ => return None,
+    // the use tier — a Use ancestor (uses are ITEMS: only a probe
+    // inside the use statement itself has one)
+    for a in ast.ancestors(p0) {
+        if let Some(u) = a.downcast::<UseNode>() {
+            return use_edge(head, ast, u.get(ast), pos);
+        }
+        if a.is::<rut_ast::ModuleNode>() {
+            break;
+        }
+    }
+    // the member lane — a method call (the partial shape rides its
+    // absent member as the empty prefix) or a field access
+    if let Some(m) = p0.downcast::<MethodNode>() {
+        let d = m.get(ast);
+        let prefix = d
+            .member()
+            .map(|(_, nsp)| partial_text(head, nsp, pos))
+            .unwrap_or_default();
+        return Edge::Member {
+            recv: d.recv,
+            prefix,
+        };
+    }
+    if let Some(f) = p0.downcast::<FieldNode>() {
+        let d = f.get(ast);
+        return Edge::Member {
+            recv: d.recv,
+            prefix: partial_text(head, d.name_span, pos),
+        };
+    }
+    // the qualified lane — a `::` path whose TAIL segment the cursor
+    // rides (a single-seg path is a bare position; the head segments
+    // are the walk)
+    if let Some(p) = p0.downcast::<PathNode>() {
+        let segs = &p.get(ast).segs;
+        if segs.len() >= 2 {
+            if let Some(i) = segs.iter().position(|s| on_name(s.name_span, pos)) {
+                if i + 1 == segs.len() {
+                    return Edge::Qualified {
+                        segs: segs[..i]
+                            .iter()
+                            .map(|s| ast.name(s.name).to_string())
+                            .collect(),
+                        prefix: partial_text(head, segs[i].name_span, pos),
+                    };
+                }
+            }
+        }
+        // the cursor strictly past the last segment — the dangling
+        // `::` (the head's members tier): every seg is the walk, the
+        // prefix empty. (A cursor ON the name's end is the bare
+        // typing edge, not a `::` request.)
+        if let Some(last) = segs.last() {
+            if last.name_span.hi < pos {
+                return Edge::Qualified {
+                    segs: segs.iter().map(|s| ast.name(s.name).to_string()).collect(),
+                    prefix: String::new(),
+                };
+            }
+        }
+    }
+    // the annotation boundary — the let's (or fn ret's) type slot: the
+    // cursor rides the slot's tail segment (the partial type), or the
+    // slot is ABSENT with the `:`/`->` spelled between the head and the
+    // cursor
+    for a in ast.ancestors(p0) {
+        if a.is::<rut_ast::ModuleNode>() {
+            break;
+        }
+        if let Some(l) = a.downcast::<rut_ast::LetStmtNode>() {
+            let d = l.get(ast);
+            if let Some(t) = d.ty {
+                if let Some(prefix) = ty_slot_prefix(head, t, pos) {
+                    return Edge::Annotation { prefix };
+                }
+                if let Some(e) = ty_slot_dot(head, t, pos) {
+                    return e;
+                }
+            } else if gap_spells(head, d.name_span.hi, pos, ':') {
+                return Edge::Annotation {
+                    prefix: String::new(),
+                };
+            }
+        }
+        // params and fields annotate like lets (`fn f(x: ⏐)`,
+        // `struct S { id: u⏐ }`); the gap probe keys on the node's own
+        // name span
+        let slots = [
+            a.downcast::<rut_ast::ParamNode>().map(|h| {
+                let d = h.get(ast);
+                (d.name_span, d.ty)
+            }),
+            a.downcast::<rut_ast::FieldDeclNode>()
+                .map(|h| (h.get(ast).name_span, Some(h.get(ast).ty))),
+        ];
+        for (name_span, ty) in slots.into_iter().flatten() {
+            if let Some(t) = ty {
+                if let Some(prefix) = ty_slot_prefix(head, t, pos) {
+                    return Edge::Annotation { prefix };
+                }
+                if let Some(e) = ty_slot_dot(head, t, pos) {
+                    return e;
+                }
+            } else if gap_spells(head, name_span.hi, pos, ':') {
+                return Edge::Annotation {
+                    prefix: String::new(),
+                };
+            }
+        }
+        // fn rets ride the same slot lanes; an ABSENT ret with the
+        // arrow spelled (the gap between the param list and the
+        // cursor) is the arrow boundary
+        let fn_lane = |h: Option<rut_ast::AnyHandle>| -> Option<Edge> {
+            let fh = h?;
+            let ret = if let Some(f) = fh.downcast::<rut_ast::FnNode>() {
+                f.get(ast).ret
+            } else {
+                fh.downcast::<rut_ast::SurfaceFnNode>()?.get(ast).ret
+            };
+            let anchor = if let Some(f) = fh.downcast::<rut_ast::FnNode>() {
+                let d = f.get(ast);
+                d.params
+                    .last()
+                    .map(|p| p.span(ast).hi)
+                    .unwrap_or(d.name_span.hi)
+            } else {
+                let d = fh.downcast::<rut_ast::SurfaceFnNode>()?.get(ast);
+                d.params
+                    .last()
+                    .map(|p| p.span(ast).hi)
+                    .unwrap_or(d.name_span.hi)
+            };
+            if let Some(t) = ret {
+                if let Some(prefix) = ty_slot_prefix(head, t, pos) {
+                    return Some(Edge::Annotation { prefix });
+                }
+                if let Some(e) = ty_slot_dot(head, t, pos) {
+                    return Some(e);
+                }
+            } else if anchor < pos {
+                let end = (pos as usize).min(head.doc.src().len());
+                let gap = head.doc.src()[anchor as usize..end].trim_end();
+                if gap.ends_with("->") && !gap.contains('{') {
+                    return Some(Edge::Annotation {
+                        prefix: String::new(),
+                    });
+                }
+            }
+            None
+        };
+        for h in [
+            a.downcast::<rut_ast::FnNode>().map(|h| h.any()),
+            a.downcast::<rut_ast::SurfaceFnNode>().map(|h| h.any()),
+        ] {
+            if let Some(e) = fn_lane(h) {
+                return e;
+            }
+        }
+    }
+    Edge::Bare {
+        prefix: bare_prefix_walk(head, p0, pos, src),
+    }
+}
+
+/// the name-position convention: a name ends its own position
+fn on_name(sp: Span, pos: u32) -> bool {
+    sp.lo <= pos && pos <= sp.hi
+}
+
+/// the typed part of `sp` — the slice up to the cursor (a cursor past
+/// the span's end typed the whole name and moved on: the prefix is the
+/// whole name, the tier filters on it)
+fn partial_text(head: &crate::hover::collection::MountedFile, sp: Span, pos: u32) -> String {
+    let end = (pos as usize).clamp(sp.lo as usize, sp.hi as usize);
+    head.doc.text(Span::new(sp.lo, end as u32)).to_string()
+}
+
+/// the use tier's context, off the node's own recorded spans: a path
+/// segment under the cursor walks the path BEFORE it with the partial
+/// seg as the prefix; a leaf name (brace list or flat form) walks the
+/// FULL path with the partial name as the prefix; past a separator
+/// with nothing typed, the full path and an empty prefix.
+fn use_edge(
+    head: &crate::hover::collection::MountedFile,
+    ast: &Ast,
+    u: &UseNode,
+    pos: u32,
+) -> Edge {
+    // the walk carries only the segments BEFORE the cursor (a sync
+    // that ran past the incomplete leaf can leave later tokens in the
+    // path — the statement's recovery — and they are not the walk)
+    let before: Vec<String> = u
+        .path
+        .iter()
+        .zip(&u.path_spans)
+        .filter(|(_, sp)| sp.hi <= pos)
+        .map(|(id, _)| ast.name(*id).to_string())
+        .collect();
+    for (k, sp) in u.path_spans.iter().enumerate() {
+        if on_name(*sp, pos) {
+            return Edge::Use {
+                segs: before[..k.min(before.len())].to_vec(),
+                prefix: partial_text(head, *sp, pos),
+            };
+        }
+    }
+    for sp in &u.name_spans {
+        if on_name(*sp, pos) {
+            return Edge::Use {
+                segs: before,
+                prefix: partial_text(head, *sp, pos),
+            };
+        }
+    }
+    Edge::Use {
+        segs: before,
+        prefix: String::new(),
+    }
+}
+
+/// the type slot's tail prefix — the cursor rides the slot's LAST
+/// segment (a single-seg partial is the annotation tier's prefix; a
+/// multi-seg path's tail is the qualified tier's, which the walk
+/// answered before this lane)
+fn ty_slot_prefix(
+    head: &crate::hover::collection::MountedFile,
+    t: TyRef,
+    pos: u32,
+) -> Option<String> {
+    let TyRef::Path(h) = t else {
+        return None;
     };
-    Some((recv, prefix))
+    let ast = head.doc.ast();
+    let segs = &h.get(ast).segs;
+    if segs.len() != 1 {
+        return None; // multi-seg: the qualified lane answers
+    }
+    let sp = segs[0].name_span;
+    on_name(sp, pos).then(|| partial_text(head, sp, pos))
+}
+
+/// the type slot's `.`-qualified spelling — positions qualify with `.`
+/// (`let c: layout.Co⏐`, the editor's real spelling): the cursor past
+/// the slot's tail segment with a `.` plus at most a partial ident
+/// between — the same members tier the `::` form rides, headed by the
+/// slot's own segments (text-backed, the dot guard's precedent: the
+/// TYPE grammar spells no `.` access, so the punct lives in the
+/// statement's recovery region)
+fn ty_slot_dot(head: &crate::hover::collection::MountedFile, t: TyRef, pos: u32) -> Option<Edge> {
+    _ty_slot_dot_impl(head, t, pos)
+}
+
+fn _ty_slot_dot_impl(
+    head: &crate::hover::collection::MountedFile,
+    t: TyRef,
+    pos: u32,
+) -> Option<Edge> {
+    let TyRef::Path(h) = t else {
+        return None;
+    };
+    let ast = head.doc.ast();
+    let segs = &h.get(ast).segs;
+    let last = segs.last()?;
+    if last.name_span.hi >= pos {
+        return None; // the cursor rides the slot itself — not a `.` run
+    }
+    let end = (pos as usize).min(head.doc.src().len());
+    let gap = head.doc.src()[last.name_span.hi as usize..end].trim_end();
+    // the `::` spelling rides the same tier (the plan's letter)
+    let after = if let Some(stripped) = gap.strip_suffix("::") {
+        if !stripped.is_empty() {
+            return None;
+        }
+        ""
+    } else {
+        let dot = gap.rfind('.')?;
+        let after = &gap[dot + 1..];
+        if !after.chars().all(|c| c.is_ascii_alphanumeric() || c == '_') {
+            return None;
+        }
+        after
+    };
+    Some(Edge::TypeDot {
+        head: segs.iter().map(|s| ast.name(s.name).to_string()).collect(),
+        tail: last.name,
+        prefix: after.to_string(),
+    })
+}
+
+/// does the text between `from` and `pos` spell the boundary punct
+/// before any `=`? (the annotation probe — the tree records the
+/// slots, not the punct that introduced them)
+fn gap_spells(
+    head: &crate::hover::collection::MountedFile,
+    from: u32,
+    pos: u32,
+    punct: char,
+) -> bool {
+    if pos <= from {
+        return false;
+    }
+    let end = (pos as usize).min(head.doc.src().len());
+    let lo = (from as usize).min(end);
+    let gap = head.doc.src()[lo..end].trim_end();
+    // the `=` ends the binding head — a gap that crossed it is the
+    // initializer's side, never an annotation boundary
+    if gap.contains('=') {
+        return false;
+    }
+    gap.rfind(punct).is_some()
+}
+
+/// the bare tiers' prefix: the partial ident the cursor sits in
+/// (`Ve⏐` → `Ve`), from the tree — a path segment, a let/param name —
+/// else the fence residue (`Doc::name_at`)
+fn bare_prefix_walk(
+    head: &crate::hover::collection::MountedFile,
+    p0: rut_ast::AnyHandle,
+    pos: u32,
+    src: &str,
+) -> String {
+    let ast = head.doc.ast();
+    if let Some(p) = p0.downcast::<PathNode>() {
+        for s in &p.get(ast).segs {
+            if on_name(s.name_span, pos) {
+                return partial_text(head, s.name_span, pos);
+            }
+        }
+    }
+    if let Some(l) = p0.downcast::<rut_ast::LetStmtNode>() {
+        let d = l.get(ast);
+        if on_name(d.name_span, pos) {
+            return partial_text(head, d.name_span, pos);
+        }
+        if let Some(ns) = &d.destructure {
+            for (_, sp) in ns {
+                if on_name(*sp, pos) {
+                    return partial_text(head, *sp, pos);
+                }
+            }
+        }
+    }
+    if let Some(p) = p0.downcast::<rut_ast::ParamNode>() {
+        let d = p.get(ast);
+        if on_name(d.name_span, pos) {
+            return partial_text(head, d.name_span, pos);
+        }
+    }
+    // the fence residue: the word under the byte before the cursor
+    if p0.is::<rut_ast::ErrorNode>() {
+        if let Some((sp, _)) = head.doc.name_at(pos.saturating_sub(1)) {
+            let end = (pos as usize).clamp(sp.lo as usize, sp.hi as usize);
+            return src[sp.lo as usize..end].to_string();
+        }
+    }
+    let _ = ast;
+    String::new()
 }
 
 /// the dot context, text-backed: the source before `pos` ends with a
 /// `.` — right against the cursor (`recv.⏐`) or under one trailing
-/// identifier run (`recv.na⏐`). The token tiers' backstop: when the
-/// lexed stream carries no parsable `recv.` pair before the cursor (a
-/// receiver that is not a name, a snapshot whose tail is short the
-/// dot), this still tells a member request from a bare one. `pos` past
-/// the source (a stale snapshot's tail) clamps to the end.
+/// identifier run (`recv.na⏐`). The tree walk's backstop: when the
+/// tree carries no member node before the cursor (a fence swallowed
+/// the receiver), this still tells a member request from a bare one.
+/// `pos` past the source (a stale snapshot's tail) clamps to the end.
 fn dot_context_before(src: &str, pos: u32) -> bool {
     let end = (pos as usize).min(src.len());
     let before = src[..end].trim_end();
@@ -225,19 +775,28 @@ fn dot_context_before(src: &str, pos: u32) -> bool {
     let stripped = before.trim_end_matches(|c: char| c.is_ascii_alphanumeric() || c == '_');
     before.len() > stripped.len() && stripped.ends_with('.')
 }
-
 /// Members of the receiver's type: on an interface receiver, exactly
 /// its declared signatures (the use-both gate keeps foreign interfaces
 /// honest); on a type, fields, own methods, and inherent impl-block
-/// methods — the mirror of hover's `member_target`.
+/// methods — the mirror of hover's `member_target`. The DOOR types the
+/// receiver INSIDE (the node the walk found — a path, the receiver
+/// `self`, a string literal — or a chained shape through the
+/// expression resolver); the bindings are read internally, never a
+/// caller-run pass.
 fn member_completions(
     chain: &Chain,
-    binds: &[crate::hover::Binding],
     pos: u32,
-    recv: &str,
+    recv: crate::hover::collection::RecvNode,
     prefix: &str,
 ) -> Vec<CompletionOut> {
-    let Some(ty_name) = crate::hover::lookup::recv_type(chain, binds, pos, recv) else {
+    let head = chain.head();
+    let ty_name = chain.recv_ty_name(pos, recv).or_else(|| match recv {
+        crate::hover::collection::RecvNode::Expr(e) => chain
+            .expr_ty(head, e)
+            .map(|t| crate::hover::types::head_of_ty(&t)),
+        _ => None,
+    });
+    let Some(ty_name) = ty_name else {
         return vec![];
     };
     // an interface receiver: the declared signatures are the whole
@@ -251,15 +810,7 @@ fn member_completions(
             || crate::hover::collection::used_ifaces(chain.head()).contains(iface.name())
         {
             for m in iface.methods() {
-                push_item(
-                    &mut out,
-                    CompletionOut::plain(
-                        m.name().to_string(),
-                        m.src(),
-                        m.doc_lines(),
-                        CompletionKind::Method,
-                    ),
-                );
+                push_item(&mut out, CompletionOut::of(&Row::Member(m)));
             }
         }
         if !prefix.is_empty() {
@@ -273,41 +824,17 @@ fn member_completions(
     };
     let mut out: Vec<CompletionOut> = Vec::new();
     for f in ty.fields() {
-        push_item(
-            &mut out,
-            CompletionOut::plain(
-                f.name().to_string(),
-                f.src(),
-                f.doc_lines(),
-                CompletionKind::Field,
-            ),
-        );
+        push_item(&mut out, CompletionOut::of(&Row::Member(f)));
     }
     for m in ty.methods() {
-        push_item(
-            &mut out,
-            CompletionOut::plain(
-                m.name().to_string(),
-                m.src(),
-                m.doc_lines(),
-                CompletionKind::Method,
-            ),
-        );
+        push_item(&mut out, CompletionOut::of(&Row::Member(m)));
     }
     // inherent impl-block methods — where methods live since type bodies
     // went fields-only; the owner string IS the target type's name
     for i in chain.iter() {
         for f in i.fns() {
             if f.owner().as_deref() == Some(ty_name.as_str()) {
-                push_item(
-                    &mut out,
-                    CompletionOut::plain(
-                        f.name().to_string(),
-                        f.src(),
-                        f.doc_lines(),
-                        CompletionKind::Method,
-                    ),
-                );
+                push_item(&mut out, CompletionOut::of(&Row::Fn(f)));
             }
         }
     }
@@ -325,14 +852,16 @@ fn member_completions(
 /// name is gone), and a binding whose own declaring ident holds the
 /// cursor stays off (don't offer the name mid-typing at its own
 /// declaration). Emitted ahead of the keyword table — the name being
-/// typed is most often a binding just declared.
-fn local_completions(binds: &[crate::hover::Binding], pos: u32) -> Vec<CompletionOut> {
+/// typed is most often a binding just declared. The doc's own pass is
+/// read internally (`Doc::bindings()` — lazy per version).
+fn local_completions(chain: &Chain, pos: u32) -> Vec<CompletionOut> {
+    let doc = chain.head();
     let mut best: Vec<&crate::hover::Binding> = Vec::new();
-    for b in binds {
-        if b.decl_ident_span.lo > pos || !crate::hover::lookup::contains(b.scope_span, pos) {
+    for b in doc.doc.bindings() {
+        if b.decl_ident_span.lo > pos || !(b.scope_span.lo <= pos && pos < b.scope_span.hi) {
             continue; // declared later, or its scope ended before the cursor
         }
-        if crate::hover::lookup::contains(b.decl_ident_span, pos) {
+        if b.decl_ident_span.lo <= pos && pos <= b.decl_ident_span.hi {
             continue; // the cursor sits in the declaration's own ident
         }
         match best.iter().position(|x| x.name == b.name) {
@@ -347,21 +876,12 @@ fn local_completions(binds: &[crate::hover::Binding], pos: u32) -> Vec<Completio
     let mut out: Vec<CompletionOut> = best
         .into_iter()
         .map(|b| {
-            let kind = match b.kind {
-                crate::hover::BindKind::Param => CompletionKind::Parameter,
-                crate::hover::BindKind::Let | crate::hover::BindKind::IterVar => {
-                    CompletionKind::Variable
-                }
-            };
-            CompletionOut::plain(
-                b.name.clone(),
-                match &b.ty {
-                    Some(ty) => format!("{} — {ty}", b.kind.label()),
-                    None => b.kind.label().to_string(),
-                },
-                Vec::new(),
-                kind,
-            )
+            let row = Row::Bind(BindRow {
+                b,
+                doc,
+                ty: chain.binding_ty(b),
+            });
+            CompletionOut::of(&row)
         })
         .collect();
     out.sort_by(|a, b| a.label.cmp(&b.label));
@@ -382,12 +902,7 @@ fn local_completions(binds: &[crate::hover::Binding], pos: u32) -> Vec<Completio
 fn bare_completions(chain: &Chain) -> Vec<CompletionOut> {
     let mut out: Vec<CompletionOut> = Vec::new();
     for kw in crate::semantic::RESERVED_KW {
-        out.push(CompletionOut::plain(
-            (*kw).to_string(),
-            String::new(),
-            Vec::new(),
-            CompletionKind::Keyword,
-        ));
+        out.push(CompletionOut::of(&Row::Kw(kw)));
     }
     let doc = chain.head();
     let imported = crate::query::definition::import_map(doc);
@@ -410,18 +925,7 @@ fn bare_completions(chain: &Chain) -> Vec<CompletionOut> {
             if !offered(t.name(), t.ambient()) {
                 continue;
             }
-            push_item(
-                &mut out,
-                CompletionOut::plain(
-                    t.name().to_string(),
-                    t.head(),
-                    t.doc_lines(),
-                    match t.form() {
-                        TyForm::Interface => CompletionKind::Interface,
-                        _ => CompletionKind::Type,
-                    },
-                ),
-            );
+            push_item(&mut out, CompletionOut::of(&Row::Ty(t)));
         }
         for f in i.fns() {
             if f.owner().is_some() {
@@ -430,15 +934,7 @@ fn bare_completions(chain: &Chain) -> Vec<CompletionOut> {
             if !offered(f.name(), f.ambient()) {
                 continue;
             }
-            push_item(
-                &mut out,
-                CompletionOut::plain(
-                    f.name().to_string(),
-                    f.src(),
-                    f.doc_lines(),
-                    CompletionKind::Fn,
-                ),
-            );
+            push_item(&mut out, CompletionOut::of(&Row::Fn(f)));
         }
     }
     out.sort_by(|a, b| a.label.cmp(&b.label));
@@ -446,87 +942,6 @@ fn bare_completions(chain: &Chain) -> Vec<CompletionOut> {
 }
 
 // ---- the use-path tiers ----
-
-/// the use-path context at `pos`: the spelled path segments plus the
-/// typed prefix when the tokens before the cursor run back to a `use`
-/// keyword — `use ⏐` (no segments, the module-name tier), `use
-/// pouch::⏐` / `use pouch::V⏐` / `use pouch::layout::V⏐` /
-/// `use pouch::{V⏐` (segments `["pouch"]` / `["pouch", "layout"]`, the
-/// names tier). The walk crosses idents, `::`, braces, and commas
-/// only — any other token ends the path.
-fn use_path_before(toks: &[Token], pos: u32) -> Option<(Vec<String>, String)> {
-    let i = toks.iter().rposition(|t| t.span.lo < pos)?;
-    let mut seg: Vec<&Token> = Vec::new();
-    let mut j = i;
-    loop {
-        let t = &toks[j];
-        match &t.tok {
-            // the anchor: the reserved `use`
-            Tok::Ident(s) if crate::semantic::is_reserved_kw(s) => {
-                if s != "use" {
-                    return None;
-                }
-                break;
-            }
-            Tok::Ident(_) | Tok::Colon | Tok::Colon2 | Tok::LBrace | Tok::Comma => seg.insert(0, t),
-            _ => return None,
-        }
-        if j == 0 {
-            return None;
-        }
-        j -= 1;
-    }
-    // no `::` typed yet — still the module-NAME tier (the partial
-    // ident is the prefix, the segments stay empty); a `::` anywhere
-    // switches to the names tier of the spelled path. The BRACE form
-    // (`use pkg::{ A, B⏐`) splits at the `{`: the path is what runs
-    // before it — the names inside the braces are the use-leaf list,
-    // never path segments (`use gadgets::{ tag, ⏐` still answers the
-    // root exports) — and the typed prefix is the list's trailing
-    // ident, if any.
-    let brace = seg.iter().rposition(|t| t.tok == Tok::LBrace);
-    let (path_seg, list_seg) = match brace {
-        Some(b) => (&seg[..b], &seg[b + 1..]),
-        None => (&seg[..], &seg[..]),
-    };
-    let has_sep = path_seg
-        .iter()
-        .any(|t| matches!(t.tok, Tok::Colon | Tok::Colon2));
-    let mut segments: Vec<String> = if has_sep {
-        path_seg
-            .iter()
-            .filter_map(|t| match &t.tok {
-                Tok::Ident(s) if !crate::semantic::is_reserved_kw(s) => Some(s.clone()),
-                _ => None,
-            })
-            .collect()
-    } else {
-        Vec::new()
-    };
-    // the flat spelling's trailing ident is the prefix carrier, never
-    // a segment to walk (`use pkg::layout::Co⏐` walks `layout` only);
-    // the brace form's path never carries one (the list's partial
-    // leaf is the prefix alone)
-    if let Some(Token {
-        tok: Tok::Ident(s), ..
-    }) = path_seg.last()
-    {
-        if !crate::semantic::is_reserved_kw(s) {
-            segments.pop();
-        }
-    }
-    let prefix = match list_seg.last() {
-        Some(Token {
-            tok: Tok::Ident(s),
-            span,
-        }) if !crate::semantic::is_reserved_kw(s) => {
-            let end = (pos as usize).min(span.hi as usize).max(span.lo as usize);
-            s.get(..end - span.lo as usize).unwrap_or(s).to_string()
-        }
-        _ => String::new(),
-    };
-    Some((segments, prefix))
-}
 
 /// `use <cursor>`: the chain's module names — every NAMED index (the
 /// names come from the uniform index set, no hardcoded table).
@@ -698,99 +1113,6 @@ fn use_path_completions(chain: &Chain, segs: &[String], prefix: &str) -> Vec<Com
 }
 
 // ---- the qualified-position tier (intra-package) ----
-
-/// the qualified-position context at `pos`: the path segments plus the
-/// typed prefix when the tokens before the cursor end a `a::b::` run
-/// OUTSIDE a `use` — type positions spell `::` (`let c: layout::Co⏐`,
-/// `Vec<layout::⏐`). The walk-back accepts non-reserved idents and
-/// colons only; a `::` separator is exactly TWO colons (a single `:` —
-/// an annotation — ends the path, and two idents without a separator
-/// are not a path run).
-fn qualified_path_before(toks: &[Token], pos: u32) -> Option<(Vec<String>, String)> {
-    let i = toks.iter().rposition(|t| t.span.lo < pos)?;
-    let mut run: Vec<&Token> = Vec::new();
-    let mut j = i;
-    loop {
-        match &toks[j].tok {
-            Tok::Ident(s) if !crate::semantic::is_reserved_kw(s) => run.insert(0, &toks[j]),
-            Tok::Colon | Tok::Colon2 => run.insert(0, &toks[j]),
-            // the anchor — anything else (including reserved keywords)
-            _ => break,
-        }
-        if j == 0 {
-            break;
-        }
-        j -= 1;
-    }
-    let mut segs: Vec<String> = Vec::new();
-    let mut pending: Option<String> = None;
-    let mut colons = 0usize;
-    let mut ended_on_ident = false;
-    for t in &run {
-        match &t.tok {
-            // `::` lexes as ONE Colon2 token now — the same two-colon
-            // count the separator law reads
-            Tok::Colon => colons += 1,
-            Tok::Colon2 => colons += 2,
-            Tok::Ident(s) => {
-                match colons {
-                    0 => {}
-                    // exactly two = the separator; ONE before an ident
-                    // is the annotation boundary (`let c: layout::`) —
-                    // the path STARTS at that ident, the run before it
-                    // is the anchor's side
-                    2 => segs.push(pending.take()?), // `::` with no head is not a path
-                    _ => {
-                        segs.clear();
-                    }
-                }
-                pending = Some(s.clone());
-                colons = 0;
-                ended_on_ident = true;
-            }
-            _ => unreachable!("the run collected idents and colons only"),
-        }
-    }
-    // a trailing separator: exactly `::` completes the head (a single
-    // trailing `:` is an annotation, not a path)
-    if colons > 0 {
-        if colons != 2 {
-            return None;
-        }
-        segs.push(pending.take()?);
-    }
-    if segs.is_empty() {
-        return None; // no `::` — the bare tiers answer
-    }
-    let prefix = if ended_on_ident {
-        pending.take().unwrap_or_default()
-    } else {
-        String::new()
-    };
-    Some((segs, prefix))
-}
-
-/// the annotation boundary: a lone `:` (one colon — `::` lexes as its
-/// own Colon2) or the `->` arrow immediately before the cursor, with
-/// at most a partial ident riding it (`let c: ⏐`, `id: u⏐`,
-/// `fn f() -> T⏐`). Returns the typed partial ident (possibly empty) —
-/// the type tier's prefix. Any other shape is not a type position.
-fn annotation_boundary_before(toks: &[Token], pos: u32) -> Option<String> {
-    let i = toks.iter().rposition(|t| t.span.lo < pos)?;
-    match &toks[i].tok {
-        Tok::Colon | Tok::Arrow => Some(String::new()),
-        Tok::Ident(s) if !crate::semantic::is_reserved_kw(s) && i >= 1 => {
-            // the ident's predecessor must be the boundary itself
-            if !(toks[i - 1].tok == Tok::Colon || toks[i - 1].tok == Tok::Arrow) {
-                return None;
-            }
-            let span = toks[i].span;
-            let end = (pos as usize).min(span.hi as usize).max(span.lo as usize);
-            Some(s.get(..end - span.lo as usize).unwrap_or(s).to_string())
-        }
-        _ => None,
-    }
-}
 
 /// The type tier at an annotation boundary — `let x: ⏐`, `id: u⏐`,
 /// `fn f() -> ⏐`: the parser's primitive table (the ONE
@@ -1126,9 +1448,8 @@ fn position_path_completions(
 fn auto_import_completions(
     chain: &Chain,
     ast: &Ast,
-    toks: &[Token],
-    pos: u32,
     src: &str,
+    prefix: &str,
     direct_deps: &HashSet<String>,
 ) -> Vec<CompletionOut> {
     // the gate itself: the ambient prelude (origin `core` — a walked
@@ -1141,7 +1462,6 @@ fn auto_import_completions(
                 .as_deref()
                 .is_some_and(|m| direct_deps.contains(m))
     };
-    let prefix = bare_prefix(toks, pos);
     let imported: HashSet<(&str, &str)> = chain
         .head()
         .uses()
@@ -1164,7 +1484,7 @@ fn auto_import_completions(
             if gated.contains(name) {
                 return; // the ambient split keeps holding
             }
-            if !prefix.is_empty() && !name.starts_with(&prefix) {
+            if !prefix.is_empty() && !name.starts_with(prefix) {
                 return;
             }
             // a fresh line either way: after a use the newline leads,
@@ -1219,29 +1539,6 @@ fn auto_import_completions(
 
 /// the bare-position prefix: the partial ident the cursor sits in
 /// (`Ve⏐` → `Ve`), else empty
-fn bare_prefix(toks: &[Token], pos: u32) -> String {
-    let Some(t) = toks.iter().rposition(|t| t.span.lo < pos).map(|i| &toks[i]) else {
-        return String::new();
-    };
-    match &t.tok {
-        Tok::Ident(s) if !crate::semantic::is_reserved_kw(s) => {
-            let end = (pos as usize)
-                .min(t.span.hi as usize)
-                .max(t.span.lo as usize);
-            s.get(..end - t.span.lo as usize).unwrap_or(s).to_string()
-        }
-        _ => String::new(),
-    }
-}
-
-/// where an auto-import's `use mod::Name;` inserts: after the last
-/// LEADING `use` (the AST's leading Use run — the edit lands right
-/// after its `;`, on a fresh line), else at the top of the file body —
-/// after the leading comment/blank lines. Returns the insertion range
-/// over the normalized source (the same LineIndex every other range
-/// rides) plus which side the newline goes on: after a use the text
-/// leads with `\n` (the line continues below), at the body top it
-/// trails with `\n`.
 fn import_insert(src: &str, ast: &Ast) -> (Range, bool) {
     let lines = LineIndex::new(src);
     let after_use = leading_use_end(ast);

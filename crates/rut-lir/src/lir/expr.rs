@@ -97,6 +97,18 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
             ExprRef::Path(ph) => {
                 self.compile_path(node, ph.get(self.ctx.ast).segs.clone(), expected, sp)
             }
+            ExprRef::Self_(sh) => {
+                // the receiver reads through the same single-name lane a
+                // `self` path did (the synthesized binding; `Self` in
+                // value position keeps its old unknown-name diagnostic)
+                let is_ty = sh.get(self.ctx.ast).is_ty;
+                let seg = PathSeg {
+                    name: if is_ty { sym::SELF_TY } else { sym::SELF },
+                    name_span: sp,
+                    generics: Vec::new(),
+                };
+                self.compile_path(node, vec![seg], expected, sp)
+            }
             ExprRef::Call(ch) => {
                 let (callee, args) = {
                     let n = ch.get(self.ctx.ast);
@@ -107,7 +119,10 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
             ExprRef::Method(mh) => {
                 let (recv, name, generics, args) = {
                     let n = mh.get(self.ctx.ast);
-                    (n.recv, n.name, n.generics.clone(), n.args.clone())
+                    let (name, _nsp) = n
+                        .member()
+                        .expect("a broken tree never lowers — is_clean gates first");
+                    (n.recv, name, n.generics.clone(), n.args.clone())
                 };
                 self.compile_method(recv, name, generics, args, expected, sp)
             }
