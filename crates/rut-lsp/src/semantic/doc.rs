@@ -55,6 +55,10 @@ pub struct Document {
     spans: OnceCell<Vec<(Span, TokenType)>>,
     /// `symbols` over the tree, on first read — the document-symbol tree
     symbols: OnceCell<Vec<Symbol>>,
+    /// the inlay pass over the whole document, on first read — the
+    /// per-version lazy view (dropped by sync; the viewport filter is
+    /// the caller's presentation)
+    inlays: OnceCell<Vec<crate::query::inlay::RawInlay>>,
 }
 
 impl Document {
@@ -72,6 +76,7 @@ impl Document {
             lines,
             spans: OnceCell::new(),
             symbols: OnceCell::new(),
+            inlays: OnceCell::new(),
         }
     }
 
@@ -93,6 +98,7 @@ impl Document {
         self.lines = LineIndex::of(&self.doc);
         self.spans = OnceCell::new();
         self.symbols = OnceCell::new();
+        self.inlays = OnceCell::new();
     }
 
     /// the leaf layer, lexed once (the Doc's own token stream)
@@ -116,6 +122,17 @@ impl Document {
     /// (`OnceCell`), and a lane that never reads it never pays.
     pub fn symbols(&self) -> &[Symbol] {
         self.symbols.get_or_init(|| symbols(self.ast()))
+    }
+
+    /// the inlay pass — LAZY, per version: `compute` runs at the first
+    /// read after a sync (the caller closure carries the chain the
+    /// resolver doors need); the viewport filter over the cached rows
+    /// is the caller's presentation
+    pub(crate) fn inlays_view(
+        &self,
+        compute: impl FnOnce() -> Vec<crate::query::inlay::RawInlay>,
+    ) -> &[crate::query::inlay::RawInlay] {
+        self.inlays.get_or_init(compute)
     }
 
     /// the artifact's own normalized text — every span indexes this

@@ -26,10 +26,11 @@ use std::collections::HashSet;
 
 use ls_types::Range;
 use rut_ast::{
-    Ast, ExprRef, FieldNode, IdentId, ItemRef, MethodNode, PathNode, Span, TyRef, UseNode, Vis,
+    AnyHandle, Ast, ExprRef, FieldNode, IdentId, ItemRef, MethodNode, PathNode, Span, TyRef,
+    UseNode,
 };
 
-use crate::hover::collection::{Chain, FnView, MemberView, TyView};
+use crate::hover::collection::{Chain, FnView, LetView, MemberView, TyView};
 use crate::hover::types::TyForm;
 use crate::mods::{self, DocMods};
 use crate::semantic::LineIndex;
@@ -101,6 +102,7 @@ pub(crate) enum Row<'a> {
     Ty(TyView<'a>),
     Fn(FnView<'a>),
     Member(MemberView<'a>),
+    Let(LetView<'a>),
     Bind(BindRow<'a>),
     Kw(&'static str),
 }
@@ -111,6 +113,7 @@ impl CompletionRow for Row<'_> {
             Row::Ty(t) => t.name(),
             Row::Fn(f) => f.name(),
             Row::Member(m) => m.name(),
+            Row::Let(l) => l.name(),
             Row::Bind(r) => r.doc.doc.ast().name(r.b.name),
             Row::Kw(k) => k,
         }
@@ -120,6 +123,7 @@ impl CompletionRow for Row<'_> {
             Row::Ty(t) => t.head(),
             Row::Fn(f) => f.src(),
             Row::Member(m) => m.src(),
+            Row::Let(l) => l.src(),
             Row::Bind(r) => match r.ty.clone() {
                 Some(ty) => format!("{} — {ty}", r.b.kind.label()),
                 None => r.b.kind.label().to_string(),
@@ -132,6 +136,7 @@ impl CompletionRow for Row<'_> {
             Row::Ty(t) => t.doc_lines(),
             Row::Fn(f) => f.doc_lines(),
             Row::Member(m) => m.doc_lines(),
+            Row::Let(l) => l.doc_lines(),
             Row::Bind(_) => Vec::new(),
             Row::Kw(_) => Vec::new(),
         }
@@ -156,6 +161,7 @@ impl CompletionRow for Row<'_> {
                     CompletionKind::Field
                 }
             }
+            Row::Let(_) => CompletionKind::Const,
             Row::Bind(r) => match r.b.kind {
                 crate::hover::BindKind::Param => CompletionKind::Parameter,
                 crate::hover::BindKind::Let | crate::hover::BindKind::IterVar => {
@@ -192,13 +198,24 @@ pub enum CompletionKind {
 /// partial ident (the fence residue riding `Doc::name_at`). No token
 /// scans.
 enum Edge {
-    /// inside a `use` statement: the spelled path + the typed prefix
-    Use { segs: Vec<String>, prefix: String },
+    /// inside a `use` statement: the use NODE (the tier door's key),
+    /// the spelled path + the typed prefix
+    Use {
+        node: AnyHandle,
+        segs: Vec<String>,
+        prefix: String,
+    },
     /// a `::` run's tail: the head segments + the typed prefix
     Qualified { segs: Vec<String>, prefix: String },
-    /// `recv.` / `recv.na`: the receiver NODE + the typed prefix (the
-    /// incomplete method shape's absent member is the empty prefix)
-    Member { recv: ExprRef, prefix: String },
+    /// `recv.` / `recv.na`: the member NODE (the tier door's key) +
+    /// the receiver expression (the mod-head attempt's key) + the
+    /// typed prefix (the incomplete method shape's absent member is
+    /// the empty prefix)
+    Member {
+        node: AnyHandle,
+        recv: ExprRef,
+        prefix: String,
+    },
     /// the annotation boundary — a type position (`let x: ⏐`,
     /// `fn f() -> T⏐`)
     Annotation { prefix: String },
@@ -236,17 +253,17 @@ pub fn complete(
     let head = chain.head();
     let ast = head.doc.ast();
     match typing_edge(chain, pos, src) {
-        Edge::Use { segs, prefix } => {
+        Edge::Use { node, segs, prefix } => {
             // the OWN lane first — a head that speaks for the doc's own
             // package (its own name, or an own mod edge) rides the
             // position-path machinery: the intra-package walk and the
             // visible-members gate, exactly what the compiler's own-use
             // check accepts (`use imp::⏐` offers the module's visible
             // members). A foreign head keeps the cross-package tier.
-            if let Some(out) = position_path_completions(chain, doc, &segs, &prefix) {
-                return out;
+            if let Some(out) = position_path_completions(chain, doc, &segs) {
+                return filtered(out, &prefix);
             }
-            use_path_completions(chain, &segs, &prefix)
+            use_tier_out(chain, chain.use_exports(node, pos), &prefix)
         }
         // a lone `:` (or the `->` arrow) under the cursor is the
         // annotation boundary — the type tier answers it: the primitive
@@ -254,23 +271,23 @@ pub fn complete(
         // (no keywords, fns, or locals — values never ride a type
         // position). `Vec<⏐` stays ambiguous (`<` vs the comparison)
         // and is not this tier.
-        Edge::Annotation { prefix } => type_tier_completions(chain, &prefix),
+        Edge::Annotation { prefix } => filtered(type_tier_completions(chain), &prefix),
         Edge::Qualified { segs, prefix } => {
-            if let Some(out) = position_path_completions(chain, doc, &segs, &prefix) {
-                return out;
+            if let Some(out) = position_path_completions(chain, doc, &segs) {
+                return filtered(out, &prefix);
             }
             // the head did not resolve to a module — the `::` law's
             // other member lists ride the same trigger: enum members,
             // namespace statics, a type head's associated fns
-            if let Some(out) = type_head_completions(chain, &segs, &prefix) {
-                return out;
+            if let Some(out) = type_head_completions(chain, &segs) {
+                return filtered(out, &prefix);
             }
             // the head resolved to nothing known — `::` in an unknown
             // context falls through to the tiers below, the typed
             // prefix riding along (the bare tier does not filter; the
             // auto-import tier does)
             let mut out = local_completions(chain, pos);
-            out.extend(bare_completions(chain));
+            out.extend(bare_tier_out(chain));
             out.extend(auto_import_completions(
                 chain,
                 ast,
@@ -283,17 +300,17 @@ pub fn complete(
             out
         }
         Edge::TypeDot { head, tail, prefix } => {
-            if let Some(out) = position_path_completions(chain, doc, &head, &prefix) {
-                return out;
+            if let Some(out) = position_path_completions(chain, doc, &head) {
+                return filtered(out, &prefix);
             }
-            member_completions(
-                chain,
-                pos,
-                crate::hover::collection::RecvNode::Seg(tail),
+            member_tier_out(
+                chain
+                    .members_for(pos, crate::hover::collection::RecvNode::Seg(tail))
+                    .unwrap_or_default(),
                 &prefix,
             )
         }
-        Edge::Member { recv, prefix } => {
+        Edge::Member { node, recv, prefix } => {
             // the qualified-position spelling: positions qualify with
             // `::` — `helpers::mk(`, `let c: layout::Column` — so a
             // receiver that resolves as a MOD HEAD offers the module's
@@ -305,21 +322,16 @@ pub fn complete(
                 if segs.len() == 1 {
                     let name = ast.name(segs[0].name).to_string();
                     if let Some(out) =
-                        position_path_completions(chain, doc, std::slice::from_ref(&name), &prefix)
+                        position_path_completions(chain, doc, std::slice::from_ref(&name))
                     {
-                        return out;
+                        return filtered(out, &prefix);
                     }
                 }
             }
             // member completion shares hover's receiver inference (the
             // door types the receiver INSIDE — field reads, chained
             // calls, loop variables)
-            member_completions(
-                chain,
-                pos,
-                crate::hover::collection::RecvNode::Expr(recv),
-                &prefix,
-            )
+            member_tier_out(chain.members(pos, node).unwrap_or_default(), &prefix)
         }
         Edge::Bare { prefix } => {
             // the dot guard: the request sits after a `.` the tree
@@ -334,7 +346,7 @@ pub fn complete(
             // the locals tier rides AHEAD of the keyword table — the
             // name being typed is most often a binding just declared
             let mut out = local_completions(chain, pos);
-            out.extend(bare_completions(chain));
+            out.extend(bare_tier_out(chain));
             out.extend(auto_import_completions(
                 chain,
                 ast,
@@ -405,7 +417,7 @@ fn typing_edge(chain: &Chain, pos: u32, src: &str) -> Edge {
     // inside the use statement itself has one)
     for a in ast.ancestors(p0) {
         if let Some(u) = a.downcast::<UseNode>() {
-            return use_edge(head, ast, u.get(ast), pos);
+            return use_edge(head, ast, a, u.get(ast), pos);
         }
         if a.is::<rut_ast::ModuleNode>() {
             break;
@@ -420,6 +432,7 @@ fn typing_edge(chain: &Chain, pos: u32, src: &str) -> Edge {
             .map(|(_, nsp)| partial_text(head, nsp, pos))
             .unwrap_or_default();
         return Edge::Member {
+            node: p0,
             recv: d.recv,
             prefix,
         };
@@ -427,6 +440,7 @@ fn typing_edge(chain: &Chain, pos: u32, src: &str) -> Edge {
     if let Some(f) = p0.downcast::<FieldNode>() {
         let d = f.get(ast);
         return Edge::Member {
+            node: p0,
             recv: d.recv,
             prefix: partial_text(head, d.name_span, pos),
         };
@@ -586,23 +600,37 @@ fn partial_text(head: &crate::hover::collection::MountedFile, sp: Span, pos: u32
 fn use_edge(
     head: &crate::hover::collection::MountedFile,
     ast: &Ast,
+    node: AnyHandle,
     u: &UseNode,
     pos: u32,
 ) -> Edge {
-    // the walk carries only the segments BEFORE the cursor (a sync
-    // that ran past the incomplete leaf can leave later tokens in the
-    // path — the statement's recovery — and they are not the walk)
-    let before: Vec<String> = u
-        .path
+    // the walk carries the path BEFORE the segment the cursor rides
+    // (the riding segment is the typed prefix — `use po⏐` is the
+    // module-NAME tier; a sync that ran past the incomplete leaf can
+    // leave later tokens in the path — the statement's recovery — and
+    // they are not the walk)
+    let ridden = u
+        .path_spans
         .iter()
-        .zip(&u.path_spans)
-        .filter(|(_, sp)| sp.hi <= pos)
-        .map(|(id, _)| ast.name(*id).to_string())
-        .collect();
-    for (k, sp) in u.path_spans.iter().enumerate() {
+        .position(|sp| sp.lo <= pos && pos <= sp.hi);
+    let before: Vec<String> = match ridden {
+        Some(k) => u.path[..k]
+            .iter()
+            .map(|id| ast.name(*id).to_string())
+            .collect(),
+        None => u
+            .path
+            .iter()
+            .zip(&u.path_spans)
+            .filter(|(_, sp)| sp.hi <= pos)
+            .map(|(id, _)| ast.name(*id).to_string())
+            .collect(),
+    };
+    for sp in &u.path_spans {
         if on_name(*sp, pos) {
             return Edge::Use {
-                segs: before[..k.min(before.len())].to_vec(),
+                node,
+                segs: before,
                 prefix: partial_text(head, *sp, pos),
             };
         }
@@ -610,12 +638,14 @@ fn use_edge(
     for sp in &u.name_spans {
         if on_name(*sp, pos) {
             return Edge::Use {
+                node,
                 segs: before,
                 prefix: partial_text(head, *sp, pos),
             };
         }
     }
     Edge::Use {
+        node,
         segs: before,
         prefix: String::new(),
     }
@@ -775,74 +805,27 @@ fn dot_context_before(src: &str, pos: u32) -> bool {
     let stripped = before.trim_end_matches(|c: char| c.is_ascii_alphanumeric() || c == '_');
     before.len() > stripped.len() && stripped.ends_with('.')
 }
-/// Members of the receiver's type: on an interface receiver, exactly
-/// its declared signatures (the use-both gate keeps foreign interfaces
-/// honest); on a type, fields, own methods, and inherent impl-block
-/// methods — the mirror of hover's `member_target`. The DOOR types the
-/// receiver INSIDE (the node the walk found — a path, the receiver
-/// `self`, a string literal — or a chained shape through the
-/// expression resolver); the bindings are read internally, never a
-/// caller-run pass.
-fn member_completions(
-    chain: &Chain,
-    pos: u32,
-    recv: crate::hover::collection::RecvNode,
+/// The member tier — the enumeration and the gates live in the
+/// collection door (`Chain::members`, keyed on the walk's node); this
+/// maps its view rows to the wire items and applies the typed prefix
+/// (presentation, at the call site).
+fn member_tier_out(
+    rows: Vec<crate::hover::collection::MemberRow>,
     prefix: &str,
 ) -> Vec<CompletionOut> {
-    let head = chain.head();
-    let ty_name = chain.recv_ty_name(pos, recv).or_else(|| match recv {
-        crate::hover::collection::RecvNode::Expr(e) => chain
-            .expr_ty(head, e)
-            .map(|t| crate::hover::types::head_of_ty(&t)),
-        _ => None,
-    });
-    let Some(ty_name) = ty_name else {
-        return vec![];
-    };
-    // an interface receiver: the declared signatures are the whole
-    // member list — satisfaction is structural, so no impl lookup
-    // rides along. The use-both gate: a foreign interface's members
-    // complete only when this document names the interface in a `use`;
-    // an interface declared here is in scope natively
-    if let Some(iface) = chain.iface_decl(&ty_name) {
-        let mut out: Vec<CompletionOut> = Vec::new();
-        if std::ptr::eq(iface.file, chain.head())
-            || crate::hover::collection::used_ifaces(chain.head()).contains(iface.name())
-        {
-            for m in iface.methods() {
+    let mut out: Vec<CompletionOut> = Vec::new();
+    for r in rows {
+        match r {
+            crate::hover::collection::MemberRow::Field(m)
+            | crate::hover::collection::MemberRow::Method(m) => {
                 push_item(&mut out, CompletionOut::of(&Row::Member(m)));
             }
-        }
-        if !prefix.is_empty() {
-            out.retain(|c| c.label.starts_with(prefix));
-        }
-        out.sort_by(|a, b| a.label.cmp(&b.label));
-        return out;
-    }
-    let Some(ty) = chain.type_decl(&ty_name) else {
-        return vec![];
-    };
-    let mut out: Vec<CompletionOut> = Vec::new();
-    for f in ty.fields() {
-        push_item(&mut out, CompletionOut::of(&Row::Member(f)));
-    }
-    for m in ty.methods() {
-        push_item(&mut out, CompletionOut::of(&Row::Member(m)));
-    }
-    // inherent impl-block methods — where methods live since type bodies
-    // went fields-only; the owner string IS the target type's name
-    for i in chain.iter() {
-        for f in i.fns() {
-            if f.owner().as_deref() == Some(ty_name.as_str()) {
+            crate::hover::collection::MemberRow::ImplFn(f) => {
                 push_item(&mut out, CompletionOut::of(&Row::Fn(f)));
             }
         }
     }
-    if !prefix.is_empty() {
-        out.retain(|c| c.label.starts_with(prefix));
-    }
-    out.sort_by(|a, b| a.label.cmp(&b.label));
-    out
+    filtered(out, prefix)
 }
 
 /// The locals tier at a bare position: every fn-local binding visible at
@@ -888,54 +871,21 @@ fn local_completions(chain: &Chain, pos: u32) -> Vec<CompletionOut> {
     out
 }
 
-/// Bare position: the keyword table (the grammar's reserved
-/// set, one canonical list), then the visible decls under the
-/// compiler's own bare-name law: the open document's decls
-/// (`idxs[0]`), the chain's AMBIENT builtin rows (`prelude builtin` —
-/// bound in every unit, no `use` needed), and the names the document
-/// already `use`s (matched `(name, pkg)` against `idxs[0].uses` — the
-/// same set shape the auto-import tier dedups against). Every other
-/// foreign name rides ONLY the auto-import tier (with the `use`
-/// insert edit): a plain offer the compile would reject is a trap.
-/// Free fns and types only; methods are reached through a receiver,
-/// not named bare.
-fn bare_completions(chain: &Chain) -> Vec<CompletionOut> {
+/// The bare tier — the keyword table (the grammar's reserved set, one
+/// canonical list) ahead of the collection door's visible decls
+/// (`Chain::bare`: the bare-name gates — own, ambient, used-from —
+/// live inside). The label filter is the call site's.
+fn bare_tier_out(chain: &Chain) -> Vec<CompletionOut> {
     let mut out: Vec<CompletionOut> = Vec::new();
     for kw in crate::semantic::RESERVED_KW {
         out.push(CompletionOut::of(&Row::Kw(kw)));
     }
-    let doc = chain.head();
-    let imported = crate::query::definition::import_map(doc);
-    for i in chain.iter() {
-        let own = std::ptr::eq(i, doc);
-        // the names this document's `use`s bound FROM this file's
-        // package — the same (name, pkg) match the definition layer's
-        // use-graph walk reads (`matches_pkg`, module name first, the
-        // origin/stem derivation on an unnamed file)
-        let used_from: HashSet<&str> = imported
-            .iter()
-            .filter(|(_, pkg)| crate::query::definition::matches_pkg(i, pkg))
-            .map(|(name, _)| *name)
-            .collect();
-        // the bare gate per row: own decls always; foreign rows only
-        // when the ambient linkage bound them or the document's `use`
-        // named them from this package
-        let offered = |name: &str, ambient: bool| own || ambient || used_from.contains(name);
-        for t in i.types() {
-            if !offered(t.name(), t.ambient()) {
-                continue;
-            }
-            push_item(&mut out, CompletionOut::of(&Row::Ty(t)));
-        }
-        for f in i.fns() {
-            if f.owner().is_some() {
-                continue;
-            }
-            if !offered(f.name(), f.ambient()) {
-                continue;
-            }
-            push_item(&mut out, CompletionOut::of(&Row::Fn(f)));
-        }
+    let bare = chain.bare();
+    for t in bare.types {
+        push_item(&mut out, CompletionOut::of(&Row::Ty(t)));
+    }
+    for f in bare.fns {
+        push_item(&mut out, CompletionOut::of(&Row::Fn(f)));
     }
     out.sort_by(|a, b| a.label.cmp(&b.label));
     out
@@ -943,173 +893,79 @@ fn bare_completions(chain: &Chain) -> Vec<CompletionOut> {
 
 // ---- the use-path tiers ----
 
-/// `use <cursor>`: the chain's module names — every NAMED index (the
-/// names come from the uniform index set, no hardcoded table).
-///
-/// `use pkg::<cursor>`: the module's exported public names — pub
-/// types, free fns, module lets — PLUS its `pub mod` children as
-/// walkable path segments. Deeper paths (`use pkg::a::b::<cursor>`)
-/// walk the pub edges first (a bare `mod`/`pub(pkg)` child is never
-/// offered cross-package) and answer the resolved module's exports —
-/// the `pub` gate on fns/lets/re-exports holds on walked AND flat
-/// spellings alike: the gate the compiler's qualified-use check
-/// applies. No index is special-cased.
-fn use_path_completions(chain: &Chain, segs: &[String], prefix: &str) -> Vec<CompletionOut> {
-    let Some(pkg) = segs.first() else {
-        let mut out: Vec<CompletionOut> = Vec::new();
-        for f in chain.iter() {
-            let Some(m) = &f.mount.module else { continue };
-            push_item(
-                &mut out,
-                CompletionOut::plain(
-                    m.clone(),
-                    f.mount.origin.clone(),
-                    Vec::new(),
-                    CompletionKind::Module,
-                ),
-            );
-        }
-        out.retain(|c| prefix.is_empty() || c.label.starts_with(prefix));
-        out.sort_by(|a, b| a.label.cmp(&b.label));
-        return out;
-    };
-    // the import is the gate-opener, so the `pub builtin` gate does
-    // not bind here (this IS the use that names them)
-    let scoped: Vec<&crate::hover::collection::MountedFile> = chain
-        .iter()
-        .filter(|f| crate::query::definition::matches_pkg(f, pkg))
-        .collect();
-    if scoped.is_empty() {
+/// The use tier — the enumeration, the walk and the pub gates live in
+/// the collection door (`Chain::use_exports`, keyed on the walk's use
+/// node); this maps its view rows to the wire items and applies the
+/// typed prefix (presentation, at the call site).
+fn use_tier_out(
+    chain: &Chain,
+    ux: Option<crate::hover::collection::UseExports>,
+    prefix: &str,
+) -> Vec<CompletionOut> {
+    let Some(ux) = ux else {
         return Vec::new();
-    }
-    // resolve the walked module: the flat spelling answers the root —
-    // for a mod-carrying package that is the ROOT file only (members
-    // live under their module path), for a flat package today's whole
-    // chain; deeper segments walk the pub edges (`use_path_before`
-    // stripped the trailing PARTIAL ident already — `use pkg::V⏐`
-    // offers the root; `use pkg::layout::Co⏐` walks `layout` only)
-    let carrying = scoped.iter().any(|f| f.mount.mod_path.is_some());
-    // the walked interior: the segments minus the pkg head —
-    // `use_path_before` already stripped the trailing PARTIAL ident
-    // (`use pkg::layout::Co⏐` walks `layout` only; the brace form's
-    // path never carries one)
-    let interior: &[String] = &segs[1..];
-    let walked = if interior.is_empty() {
-        Some(String::new())
-    } else {
-        mods::walk_use_mods(chain, pkg, interior)
-    };
-    let Some(path) = walked else {
-        return Vec::new();
-    };
-    let scope: Vec<&crate::hover::collection::MountedFile> = if carrying {
-        scoped
-            .into_iter()
-            .filter(|f| mods::mod_path_of(f) == path)
-            .collect()
-    } else {
-        scoped
     };
     let mut out: Vec<CompletionOut> = Vec::new();
-    for f in &scope {
-        // the walkable children — pub edges only (cross-package law)
-        for m in f.mods() {
-            if m.vis() != Vis::Pub {
-                continue;
+    match ux {
+        crate::hover::collection::UseExports::Modules(list) => {
+            for (m, origin) in list {
+                push_item(
+                    &mut out,
+                    CompletionOut::plain(m, origin, Vec::new(), CompletionKind::Module),
+                );
             }
-            let child = mods::child_path(&path, m.name());
-            push_item(
-                &mut out,
-                CompletionOut::plain(
-                    m.name().to_string(),
-                    format!(
-                        "file module — {}",
-                        mods::display_of(chain, Some(pkg.as_str()), &child)
+        }
+        crate::hover::collection::UseExports::Exports { pkg, path, rows } => {
+            for r in rows {
+                match r {
+                    // the walkable children — the detail renders the
+                    // mounted display from the child's mod path
+                    crate::hover::collection::ExportRow::Mod(m, child) => push_item(
+                        &mut out,
+                        CompletionOut::plain(
+                            m.name().to_string(),
+                            format!(
+                                "file module — {}",
+                                mods::display_of(chain, Some(pkg.as_str()), &child)
+                            ),
+                            m.doc_lines(),
+                            CompletionKind::Module,
+                        ),
                     ),
-                    m.doc_lines(),
-                    CompletionKind::Module,
-                ),
-            );
-        }
-        for t in f.types() {
-            if !t.is_pub() {
-                continue;
+                    crate::hover::collection::ExportRow::Ty(t) => {
+                        push_item(&mut out, CompletionOut::of(&Row::Ty(t)));
+                    }
+                    crate::hover::collection::ExportRow::Fn(fv) => {
+                        push_item(&mut out, CompletionOut::of(&Row::Fn(fv)));
+                    }
+                    crate::hover::collection::ExportRow::Let(l) => {
+                        push_item(&mut out, CompletionOut::of(&Row::Let(l)));
+                    }
+                    // a `pub use` re-export: the imported name joined
+                    // the module's surface. The cap law picks the icon
+                    // until real resolution (same as the use classifier)
+                    crate::hover::collection::ExportRow::ReExport(u) => {
+                        let src = u.path().join("::");
+                        push_item(
+                            &mut out,
+                            CompletionOut::plain(
+                                u.name().to_string(),
+                                format!("re-export of {src}::{}", u.name()),
+                                Vec::new(),
+                                if crate::hover::infer::is_cap(u.name()) {
+                                    CompletionKind::Type
+                                } else {
+                                    CompletionKind::Fn
+                                },
+                            ),
+                        );
+                    }
+                }
             }
-            push_item(
-                &mut out,
-                CompletionOut::plain(
-                    t.name().to_string(),
-                    t.head(),
-                    t.doc_lines(),
-                    match t.form() {
-                        TyForm::Interface => CompletionKind::Interface,
-                        _ => CompletionKind::Type,
-                    },
-                ),
-            );
-        }
-        for fv in f.fns() {
-            if fv.owner().is_some() {
-                continue;
-            }
-            // the walked path binds through the compiler's qualified-use
-            // gate: only `pub` names cross — on walked AND flat spellings
-            // alike (one gate, no ungated legacy shape)
-            if fv.vis() != Vis::Pub {
-                continue;
-            }
-            push_item(
-                &mut out,
-                CompletionOut::plain(
-                    fv.name().to_string(),
-                    fv.src(),
-                    fv.doc_lines(),
-                    CompletionKind::Fn,
-                ),
-            );
-        }
-        for l in f.lets() {
-            if l.vis() != Vis::Pub {
-                continue;
-            }
-            push_item(
-                &mut out,
-                CompletionOut::plain(
-                    l.name().to_string(),
-                    l.src(),
-                    l.doc_lines(),
-                    CompletionKind::Const,
-                ),
-            );
-        }
-        // a `pub use` re-export: the imported name joined the module's
-        // surface — the tier's gate mirrors the fns/lets above (a
-        // walked path binds only `pub` edges across packages, flat
-        // spellings included). The cap law picks
-        // the icon until real resolution (same as the use classifier)
-        for u in f.uses() {
-            if u.vis() != Vis::Pub {
-                continue;
-            }
-            let src = u.path().join("::");
-            push_item(
-                &mut out,
-                CompletionOut::plain(
-                    u.name().to_string(),
-                    format!("re-export of {src}::{}", u.name()),
-                    Vec::new(),
-                    if crate::hover::infer::is_cap(u.name()) {
-                        CompletionKind::Type
-                    } else {
-                        CompletionKind::Fn
-                    },
-                ),
-            );
+            let _ = path;
         }
     }
-    out.retain(|c| prefix.is_empty() || c.label.starts_with(prefix));
-    out.sort_by(|a, b| a.label.cmp(&b.label));
-    out
+    filtered(out, prefix)
 }
 
 // ---- the qualified-position tier (intra-package) ----
@@ -1120,7 +976,7 @@ fn use_path_completions(chain: &Chain, segs: &[String], prefix: &str) -> Vec<Com
 /// document's own types, the chain's AMBIENT builtin rows, and the
 /// foreign types the document already `use`s. Keywords, fns, and
 /// locals stay off: values never ride a type position.
-fn type_tier_completions(chain: &Chain, prefix: &str) -> Vec<CompletionOut> {
+fn type_tier_completions(chain: &Chain) -> Vec<CompletionOut> {
     let mut out: Vec<CompletionOut> = Vec::new();
     for p in crate::semantic::PRIMITIVE_TYS {
         push_item(
@@ -1162,7 +1018,6 @@ fn type_tier_completions(chain: &Chain, prefix: &str) -> Vec<CompletionOut> {
             );
         }
     }
-    out.retain(|c| prefix.is_empty() || c.label.starts_with(prefix));
     out.sort_by(|a, b| a.label.cmp(&b.label));
     out
 }
@@ -1177,11 +1032,7 @@ fn type_tier_completions(chain: &Chain, prefix: &str) -> Vec<CompletionOut> {
 /// caller falls through); a resolved head is FINAL — the filtered
 /// list is the answer even when empty (the known-head law, like the
 /// module tier's).
-fn type_head_completions(
-    chain: &Chain,
-    segs: &[String],
-    prefix: &str,
-) -> Option<Vec<CompletionOut>> {
+fn type_head_completions(chain: &Chain, segs: &[String]) -> Option<Vec<CompletionOut>> {
     let (head, rest) = segs.split_first()?;
     let ty = chain.type_decl(head)?;
     let mut out: Vec<CompletionOut> = Vec::new();
@@ -1241,7 +1092,6 @@ fn type_head_completions(
             }
         }
     }
-    out.retain(|c| prefix.is_empty() || c.label.starts_with(prefix));
     out.sort_by(|a, b| a.label.cmp(&b.label));
     Some(out)
 }
@@ -1319,7 +1169,6 @@ fn position_path_completions(
     chain: &Chain,
     doc: &DocMods,
     segs: &[String],
-    prefix: &str,
 ) -> Option<Vec<CompletionOut>> {
     let (head, rest) = segs.split_first()?;
     let doc_file = chain.head();
@@ -1419,7 +1268,6 @@ fn position_path_completions(
             ),
         );
     }
-    out.retain(|c| prefix.is_empty() || c.label.starts_with(prefix));
     out.sort_by(|a, b| a.label.cmp(&b.label));
     Some(out)
 }
@@ -1593,6 +1441,16 @@ fn body_start(src: &str) -> u32 {
 }
 
 /// first definition wins — the document shadows the chain
+/// the call site's prefix filter + the label sort — presentation over
+/// a tier's rows (the doors enumerate unfiltered)
+fn filtered(mut out: Vec<CompletionOut>, prefix: &str) -> Vec<CompletionOut> {
+    if !prefix.is_empty() {
+        out.retain(|c| c.label.starts_with(prefix));
+    }
+    out.sort_by(|a, b| a.label.cmp(&b.label));
+    out
+}
+
 fn push_item(out: &mut Vec<CompletionOut>, c: CompletionOut) {
     if !out.iter().any(|x| x.label == c.label) {
         out.push(c);

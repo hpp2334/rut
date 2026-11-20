@@ -139,13 +139,19 @@ pub fn hover(chain: &Chain, doc: &DocMods, pos: u32) -> Option<HoverOut> {
 
         // identifier hover — the binding layer's shadow-correct resolve
         // (params, lets, loop variables; decl and use sites alike)
-        if let Some((md, span)) = binding_hover(chain, pos, name_id) {
-            return Some(HoverOut { markdown: md, span });
+        if let Some(md) = binding_hover(chain, pos, name_id) {
+            return Some(HoverOut {
+                markdown: md,
+                span: node_span(ast, h, pos),
+            });
         }
 
         // module-let use sites — a unique name match across the chain
-        if let Some((md, span)) = module_let_hover(chain, name) {
-            return Some(HoverOut { markdown: md, span });
+        if let Some(md) = module_let_hover(chain, name) {
+            return Some(HoverOut {
+                markdown: md,
+                span: node_span(ast, h, pos),
+            });
         }
 
         // bare name: unique fn match (free fns, methods); ambiguity lists
@@ -319,13 +325,12 @@ fn member_position(ast: &rut_ast::Ast, h: AnyHandle, pos: u32) -> bool {
 
 /// a local binding's hover — the shadow-correct resolve, the type
 /// declared-or-inferred (the resolver reads the doc's bindings)
-fn binding_hover(chain: &Chain<'_>, pos: u32, id: rut_ast::IdentId) -> Option<(String, Span)> {
+fn binding_hover(chain: &Chain<'_>, pos: u32, id: rut_ast::IdentId) -> Option<String> {
     let d = chain.head();
     let b = rut_ast::resolve_binding(d.doc.bindings(), pos, id)?;
     let ty = chain.binding_ty(b);
-    let span = b.decl_ident_span;
     let name = d.doc.ast().name(b.name);
-    Some((binding_markdown(b, name, ty), span))
+    Some(binding_markdown(b, name, ty))
 }
 
 /// the decl node at the cursor — the name-position downcasts, the
@@ -464,10 +469,8 @@ fn use_segment_hover(
 
 /// module-let use sites: a unique name match across the chain renders
 /// the decl; ambiguity stays a miss (the flat chain's honesty rule)
-fn module_let_hover(chain: &Chain<'_>, name: &str) -> Option<(String, Span)> {
-    let l = chain.module_let(name)?;
-    let span = l.name_span()?;
-    Some((render_let(&l), span))
+fn module_let_hover(chain: &Chain<'_>, name: &str) -> Option<String> {
+    chain.module_let(name).map(|l| render_let(&l))
 }
 
 /// the type whose body contains `pos` — a class/struct/interface body,

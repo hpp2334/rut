@@ -26,7 +26,17 @@
 //! Layering mirrors `hover` exactly (decl sites, then member position
 //! with the known-receiver-is-final law, then type position, then the
 //! binding pass, then the bare-name chain) so the two queries can't
-//! disagree about what an ident means. Multiple hits come back as
+//! disagree about what an ident means.
+//!
+//! The plan's API surface names a third door, `get_declaration(pos)` —
+//! the same walk with the surface preference inverted. CONSCIOUS
+//! SUPERSESSION: the wire this face serves spells no
+//! `textDocument/declaration` request (the three-lane ABI is frozen),
+//! so the door has no caller and does not exist; the family's
+//! body-vs-surface pick policy lives in the ONE decision point
+//! (`DefIndexCollection::prefer_bodies`), and the declaration flavor is
+//! this walk with that policy inverted — it lands the day a face grows
+//! the request, with no other change. Multiple hits come back as
 //! multiple locations — the LSP-native candidate list (a peek), never a
 //! wrong silent jump. A miss is an empty vector. Honest limits (the
 //! survey §3.3): no visibility checking (the engine's `pub(super)`/
@@ -184,6 +194,14 @@ pub(crate) fn fn_span(f: &crate::hover::collection::FnView) -> Span {
 /// `textDocument/definition` — the ident at `pos` to its declaration.
 /// Empty when nothing resolves (keywords, unknown names, primitives
 /// with no surface decl).
+///
+/// The resolver family's bodies-flavored door: body-vs-surface is the
+/// pick policy INSIDE (`prefer_bodies` — the mounted-over-embed rule,
+/// then the body over the `.d.rut` surface). The plan's declaration
+/// flavor (`get_declaration`) is consciously superseded — see the
+/// module doc: the ABI spells no declaration request, and the pick
+/// policy's single decision point makes the inverted walk a local
+/// change when one arrives.
 pub fn get_definition(ctx: &Ctx, pos: u32) -> Vec<DefLocation> {
     dedupe_hits(get_definition_targets(ctx, pos))
 }

@@ -55,33 +55,40 @@ impl Ctx<'_> {
 }
 
 /// one hint before position/label conversion — byte-based so the range
-/// filter runs in the spans' currency
-struct Raw {
-    byte: u32,
-    label: String,
-    kind: InlayHintKind,
-    tooltip: Option<String>,
+/// filter runs in the spans' currency. The PER-VERSION lazy view's row
+/// (the shell caches the computed pass beside its other lazies and
+/// drops it on sync)
+pub(crate) struct RawInlay {
+    pub byte: u32,
+    pub label: String,
+    pub kind: InlayHintKind,
+    pub tooltip: Option<String>,
 }
 
 /// `textDocument/inlayHint` for `[lo, hi]` (byte offsets into the
 /// normalized source — the full document when the face passes 0..len).
-/// THE PASS runs over the whole document once; the range filter is the
-/// client's viewport (presentation). Sorted by position.
+/// THE PASS is the shell's lazy per-version view: computed at first
+/// read over the whole document, cached beside the doc's other lazies
+/// (dropped by sync — a new version recomputes), and the range filter
+/// rides the cache (presentation). Sorted by position.
 pub fn hints(ctx: &Ctx, lo: u32, hi: u32) -> Vec<InlayHint> {
     let (index, src) = (ctx.doc.doc.lines(), ctx.doc.doc.src());
-    let mut raw: Vec<Raw> = Vec::new();
-    type_hints(ctx, &mut raw);
-    call_hints(ctx, &mut raw);
-    raw.sort_by_key(|h| index.position(src, h.byte));
-    raw.into_iter()
+    let raw = ctx.doc.doc.inlays_view(|| {
+        let mut raw: Vec<RawInlay> = Vec::new();
+        type_hints(ctx, &mut raw);
+        call_hints(ctx, &mut raw);
+        raw.sort_by_key(|h| index.position(src, h.byte));
+        raw
+    });
+    raw.iter()
         .filter(|h| h.byte >= lo && h.byte <= hi)
         .map(|h| {
             let (line, character) = index.position(src, h.byte);
             InlayHint {
                 position: Position { line, character },
-                label: InlayHintLabel::String(h.label),
+                label: InlayHintLabel::String(h.label.clone()),
                 kind: Some(h.kind),
-                tooltip: h.tooltip.map(|value| {
+                tooltip: h.tooltip.clone().map(|value| {
                     InlayHintTooltip::MarkupContent(MarkupContent {
                         kind: MarkupKind::Markdown,
                         value,
@@ -101,7 +108,7 @@ pub fn hints(ctx: &Ctx, lo: u32, hi: u32) -> Vec<InlayHint> {
 /// annotation is absent. Position: the end of the binding's declaring
 /// ident (VS Code's dotted-decoration spot). Label: `: Type` — the
 /// server supplies the colon. Tooltip: the hover markdown.
-fn type_hints(ctx: &Ctx, out: &mut Vec<Raw>) {
+fn type_hints(ctx: &Ctx, out: &mut Vec<RawInlay>) {
     let doc = ctx.doc;
     for b in doc.doc.bindings() {
         // an unannotated row IS the trigger (`ty_span` absent — a
@@ -118,7 +125,7 @@ fn type_hints(ctx: &Ctx, out: &mut Vec<Raw>) {
         };
         let name = doc.doc.ast().name(b.name);
         let tooltip = crate::hover::binding_markdown(b, name, Some(ty.clone()));
-        out.push(Raw {
+        out.push(RawInlay {
             byte: b.decl_ident_span.hi,
             label: format!(": {ty}"),
             kind: InlayHintKind::TYPE,
@@ -140,7 +147,7 @@ fn type_hints(ctx: &Ctx, out: &mut Vec<Raw>) {
             continue;
         };
         let Some(name) = l.name_span() else { continue };
-        out.push(Raw {
+        out.push(RawInlay {
             byte: name.hi,
             label: format!(": {text}"),
             kind: InlayHintKind::TYPE,
@@ -152,7 +159,7 @@ fn type_hints(ctx: &Ctx, out: &mut Vec<Raw>) {
 /// PARAMETER hints — one walk over every body (fns, methods, lambdas,
 /// module-let initializers), a hint per arg where the callee's recorded
 /// params match the arity exactly.
-fn call_hints(ctx: &Ctx, out: &mut Vec<Raw>) {
+fn call_hints(ctx: &Ctx, out: &mut Vec<RawInlay>) {
     let mut cx = CallCx { ctx, out };
     for item in ctx.ast().root().items(ctx.ast()) {
         match item {
@@ -169,7 +176,7 @@ fn call_hints(ctx: &Ctx, out: &mut Vec<Raw>) {
 
 struct CallCx<'a> {
     ctx: &'a Ctx<'a>,
-    out: &'a mut Vec<Raw>,
+    out: &'a mut Vec<RawInlay>,
 }
 
 impl CallCx<'_> {
@@ -356,7 +363,7 @@ impl CallCx<'_> {
             return;
         }
         for (p, a) in params.iter().zip(args) {
-            self.out.push(Raw {
+            self.out.push(RawInlay {
                 byte: a.span(self.ast()).lo,
                 label: format!("{p}:"),
                 kind: InlayHintKind::PARAMETER,

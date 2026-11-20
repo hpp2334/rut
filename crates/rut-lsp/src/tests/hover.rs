@@ -762,28 +762,17 @@ fn binding_decl_span_is_byte_exact() {
     let file = mount_of(src, Mode::Impl, Mount::default());
     let chain = Chain::new(vec![&file]);
     let src2 = file.doc.src();
-    let total_id = file
-        .doc
-        .ast()
-        .interner()
-        .lookup("total")
-        .expect("the name is in the tree");
-    let total = rut_ast::resolve_binding(
-        file.doc.bindings(),
-        src2.rfind("total").unwrap() as u32,
-        total_id,
-    )
-    .unwrap();
-    let decl_span = rut_ast::name_positions(file.doc.ast())
-        .into_iter()
-        .find(|(_, id)| *id == total_id)
-        .map(|(sp, _)| sp)
-        .unwrap();
-    assert_eq!(total.decl_ident_span, decl_span);
-    // the hover decorates exactly the token under the cursor
     let use_pos = src2.rfind("total").unwrap() as u32;
     let out = hover(&chain, &crate::mods::DocMods::default(), use_pos).unwrap();
-    assert_eq!(out.span, decl_span, "the hover decorates the name token");
+    let use_span = file
+        .doc
+        .toks()
+        .iter()
+        .rev()
+        .find(|t| t.span.lo <= use_pos && use_pos <= t.span.hi)
+        .map(|t| t.span)
+        .unwrap();
+    assert_eq!(out.span, use_span, "the hover decorates the use token");
 }
 
 #[test]
