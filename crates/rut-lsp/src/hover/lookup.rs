@@ -18,8 +18,8 @@ use super::types::TyForm;
 use crate::mods::DocMods;
 use crate::semantic::Span;
 use rut_ast::{
-    AnyHandle, EnumMemberNode, FieldDeclNode, ModDeclNode, ModuleLetNode, ParamNode, PathNode,
-    SelfNode, SelfTyNode, UseNode,
+    AnyHandle, EnumMemberNode, FieldDeclNode, FieldNode, MethodNode, ModDeclNode, ModuleLetNode,
+    ParamNode, PathNode, SelfNode, SelfTyNode, UseNode,
 };
 
 /// the name-position convention the old token scan kept: a name ends
@@ -116,15 +116,17 @@ pub fn hover(chain: &Chain, doc: &DocMods, pos: u32) -> Option<HoverOut> {
     }
 
     // the name lanes key on the node's own recorded name — a path
-    // segment, a param name, a local let's name
-    let (name_id, _name_span) = name_at(ast, h, pos)?;
+    // segment, a param name, a local let's name. The (id, span) pair
+    // threads through: the span the lanes decorate IS the mapped name
+    // span (one name_at read per hover)
+    let (name_id, name_span) = name_at(ast, h, pos)?;
     let name = ast.name(name_id);
     {
         if is_cap(name) || crate::semantic::is_primitive_ty(name) {
             if let Some(ty) = chain.type_decl(name) {
                 return Some(HoverOut {
                     markdown: render_ty(&ty),
-                    span: node_span(ast, h, pos),
+                    span: name_span,
                 });
             }
             // M7 — the numeric/bool primitives have no surface decl to
@@ -132,7 +134,7 @@ pub fn hover(chain: &Chain, doc: &DocMods, pos: u32) -> Option<HoverOut> {
             if let Some(md) = render_primitive(name) {
                 return Some(HoverOut {
                     markdown: md,
-                    span: node_span(ast, h, pos),
+                    span: name_span,
                 });
             }
         }
@@ -142,7 +144,7 @@ pub fn hover(chain: &Chain, doc: &DocMods, pos: u32) -> Option<HoverOut> {
         if let Some(md) = binding_hover(chain, pos, name_id) {
             return Some(HoverOut {
                 markdown: md,
-                span: node_span(ast, h, pos),
+                span: name_span,
             });
         }
 
@@ -150,7 +152,7 @@ pub fn hover(chain: &Chain, doc: &DocMods, pos: u32) -> Option<HoverOut> {
         if let Some(md) = module_let_hover(chain, name) {
             return Some(HoverOut {
                 markdown: md,
-                span: node_span(ast, h, pos),
+                span: name_span,
             });
         }
 
@@ -161,13 +163,13 @@ pub fn hover(chain: &Chain, doc: &DocMods, pos: u32) -> Option<HoverOut> {
             [one] => {
                 return Some(HoverOut {
                     markdown: render_fn_hits(one),
-                    span: node_span(ast, h, pos),
+                    span: name_span,
                 })
             }
             _ => {
                 return Some(HoverOut {
                     markdown: render_candidates(&hits),
-                    span: node_span(ast, h, pos),
+                    span: name_span,
                 })
             }
         }
@@ -183,6 +185,18 @@ pub fn hover(chain: &Chain, doc: &DocMods, pos: u32) -> Option<HoverOut> {
 /// ONE mapping, so the decoration is always the hovered token (the
 /// pre-phase `t.span` law), never the decl's whole extent.
 fn name_at(ast: &rut_ast::Ast, h: AnyHandle, pos: u32) -> Option<(rut_ast::IdentId, Span)> {
+    // member access (`recv.m(...)`, `recv.f`): the cursor rides the
+    // member token — the recorded `name_span`/`member()` span — which
+    // is what the hover decorates (the tuple-index spelling `.0` rides
+    // the int token's own span)
+    if let Some(m) = h.downcast::<MethodNode>() {
+        let d = m.get(ast);
+        return d.member().filter(|(_, nsp)| nsp.lo <= pos && pos <= nsp.hi);
+    }
+    if let Some(f) = h.downcast::<FieldNode>() {
+        let d = f.get(ast);
+        return on_name(d.name_span, pos).then_some((d.name, d.name_span));
+    }
     if let Some(p) = h.downcast::<PathNode>() {
         for s in &p.get(ast).segs {
             if on_name(s.name_span, pos) {

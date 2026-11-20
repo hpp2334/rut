@@ -786,7 +786,6 @@ fn bare_prefix_walk(
             return src[sp.lo as usize..end].to_string();
         }
     }
-    let _ = ast;
     String::new()
 }
 

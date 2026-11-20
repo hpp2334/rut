@@ -1076,3 +1076,35 @@ x: f64;
         );
     }
 }
+
+#[test]
+fn member_hovers_decorate_the_member_token() {
+    // the round-3 pin: hovering a member USE — a method call, a field
+    // read — decorates exactly the member token, never the whole
+    // call/field-access node
+    let src = "class Circle {
+r: f64;
+}
+impl Circle {
+fn area(self) -> f64 { return self.r; }
+}
+fn go(c: Circle) -> f64 {
+return c.area(1.0) + c.r;
+}
+";
+    let file = mount_of(src, Mode::Impl, Mount::default());
+    let chain = Chain::new(vec![&file]);
+    for (name, n) in [("area", 1usize), ("r", 2usize)] {
+        let pos = find_ident_pos(file.doc.toks(), name, n).unwrap();
+        let out = hover(&chain, &crate::mods::DocMods::default(), pos).unwrap();
+        let lo = pos;
+        let hi = pos + name.len() as u32;
+        assert_eq!(
+            (out.span.lo, out.span.hi),
+            (lo, hi),
+            "`{name}` must decorate the member token: {}..{}",
+            out.span.lo,
+            out.span.hi
+        );
+    }
+}
