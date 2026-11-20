@@ -20,11 +20,10 @@ pub fn name_positions(ast: &crate::Ast) -> Vec<(Span, IdentId)> {
     out
 }
 
-fn put(ast: &crate::Ast, span: Span, id: IdentId, out: &mut Vec<(Span, IdentId)>) {
+fn put(span: Span, id: IdentId, out: &mut Vec<(Span, IdentId)>) {
     // the synthesized forms carry a degenerate extent (the newtype's
     // `inner` — no token exists); an empty span is not a position
     if span.hi > span.lo {
-        let _ = ast;
         out.push((span, id));
     }
 }
@@ -33,7 +32,7 @@ fn item_names(ast: &crate::Ast, item: ItemRef, out: &mut Vec<(Span, IdentId)>) {
     macro_rules! decl {
         ($t:ty, $h:expr) => {{
             let d = $h.get(ast);
-            put(ast, d.name_span, d.name, out);
+            put(d.name_span, d.name, out);
         }};
     }
     match item {
@@ -117,12 +116,12 @@ fn item_names(ast: &crate::Ast, item: ItemRef, out: &mut Vec<(Span, IdentId)>) {
             let d = h.get(ast);
             for (i, sp) in d.path_spans.iter().enumerate() {
                 if let Some(id) = d.path.get(i) {
-                    put(ast, *sp, *id, out);
+                    put(*sp, *id, out);
                 }
             }
             for (i, sp) in d.name_spans.iter().enumerate() {
                 if let Some(id) = d.names.get(i) {
-                    put(ast, *sp, *id, out);
+                    put(*sp, *id, out);
                 }
             }
         }
@@ -148,7 +147,7 @@ fn field_names(ast: &crate::Ast, fields: &[crate::FieldRef], out: &mut Vec<(Span
             continue; // the recovery slot carries no name
         };
         let d = h.get(ast);
-        put(ast, d.name_span, d.name, out);
+        put(d.name_span, d.name, out);
         ty_names(ast, d.ty, out);
         if let Some(init) = d.init {
             expr_names(ast, init, out);
@@ -162,7 +161,7 @@ fn method_names(ast: &crate::Ast, methods: &[MethodRef], out: &mut Vec<(Span, Id
             continue;
         };
         let d = h.get(ast);
-        put(ast, d.name_span, d.name, out);
+        put(d.name_span, d.name, out);
         for (_, b) in &d.bounds {
             ty_names(ast, *b, out);
         }
@@ -182,7 +181,7 @@ fn param_names(ast: &crate::Ast, params: &[ParamRef], out: &mut Vec<(Span, Ident
             continue; // `self` — a keyword, never a name position
         };
         let d = h.get(ast);
-        put(ast, d.name_span, d.name, out);
+        put(d.name_span, d.name, out);
         if let Some(t) = d.ty {
             ty_names(ast, t, out);
         }
@@ -207,10 +206,10 @@ fn stmt_names(ast: &crate::Ast, s: StmtRef, out: &mut Vec<(Span, IdentId)>) {
     match s {
         StmtRef::Let(h) => {
             let d = h.get(ast);
-            put(ast, d.name_span, d.name, out);
+            put(d.name_span, d.name, out);
             if let Some(ns) = &d.destructure {
                 for (n, sp) in ns {
-                    put(ast, *sp, *n, out);
+                    put(*sp, *n, out);
                 }
             }
             if let Some(t) = d.ty {
@@ -220,13 +219,13 @@ fn stmt_names(ast: &crate::Ast, s: StmtRef, out: &mut Vec<(Span, IdentId)>) {
         }
         StmtRef::ForOf(h) => {
             let d = h.get(ast);
-            put(ast, d.name_span, d.var, out);
+            put(d.name_span, d.var, out);
             expr_names(ast, d.iter, out);
             block_names(ast, d.body, out);
         }
         StmtRef::ForC(h) => {
             let d = h.get(ast);
-            put(ast, d.name_span, d.var, out);
+            put(d.name_span, d.var, out);
             expr_names(ast, d.init, out);
             expr_names(ast, d.cond, out);
             expr_names(ast, d.update, out);
@@ -274,7 +273,7 @@ fn pat_names(ast: &crate::Ast, p: PatRef, out: &mut Vec<(Span, IdentId)>) {
         // the type it rides on
         PatRef::Path(h) => {
             for seg in &h.get(ast).segs {
-                put(ast, seg.name_span, seg.name, out);
+                put(seg.name_span, seg.name, out);
                 for g in &seg.generics {
                     ty_names(ast, *g, out);
                 }
@@ -289,7 +288,7 @@ fn ty_names(ast: &crate::Ast, t: TyRef, out: &mut Vec<(Span, IdentId)>) {
     match t {
         TyRef::Path(h) => {
             for seg in &h.get(ast).segs {
-                put(ast, seg.name_span, seg.name, out);
+                put(seg.name_span, seg.name, out);
                 for g in &seg.generics {
                     ty_names(ast, *g, out);
                 }
@@ -325,7 +324,7 @@ fn expr_names(ast: &crate::Ast, e: ExprRef, out: &mut Vec<(Span, IdentId)>) {
         ExprRef::Method(h) => {
             let d = h.get(ast);
             if let Some((name, nsp)) = d.member() {
-                put(ast, nsp, name, out);
+                put(nsp, name, out);
             }
             for g in &d.generics {
                 ty_names(ast, *g, out);
@@ -337,14 +336,14 @@ fn expr_names(ast: &crate::Ast, e: ExprRef, out: &mut Vec<(Span, IdentId)>) {
         }
         ExprRef::Field(h) => {
             let d = h.get(ast);
-            put(ast, d.name_span, d.name, out);
+            put(d.name_span, d.name, out);
             expr_names(ast, d.recv, out);
         }
         // struct literal labels lead their values
         ExprRef::Struct(h) => {
             let d = h.get(ast);
             for fi in &d.fields {
-                put(ast, fi.name_span, fi.name, out);
+                put(fi.name_span, fi.name, out);
                 expr_names(ast, fi.value, out);
             }
             ty_names(ast, d.ty, out);
@@ -352,7 +351,7 @@ fn expr_names(ast: &crate::Ast, e: ExprRef, out: &mut Vec<(Span, IdentId)>) {
         // `::` value paths and plain reads — every segment is a name
         ExprRef::Path(h) => {
             for seg in &h.get(ast).segs {
-                put(ast, seg.name_span, seg.name, out);
+                put(seg.name_span, seg.name, out);
                 for g in &seg.generics {
                     ty_names(ast, *g, out);
                 }

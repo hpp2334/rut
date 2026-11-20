@@ -680,14 +680,6 @@ fn ty_slot_prefix(
 /// TYPE grammar spells no `.` access, so the punct lives in the
 /// statement's recovery region)
 fn ty_slot_dot(head: &crate::hover::collection::MountedFile, t: TyRef, pos: u32) -> Option<Edge> {
-    _ty_slot_dot_impl(head, t, pos)
-}
-
-fn _ty_slot_dot_impl(
-    head: &crate::hover::collection::MountedFile,
-    t: TyRef,
-    pos: u32,
-) -> Option<Edge> {
     let TyRef::Path(h) = t else {
         return None;
     };

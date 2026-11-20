@@ -19,28 +19,82 @@ these fail loudly on drift). Practical consequences:
 
 **Call the layer whose abstraction you consume.** Document semantics
 (classify, symbols, mode derivation, position math) → rut-lsp's
-`semantic` module.
-Syntax only (reprint, transform) → the grammar's entry pair
-`rut_ast::parser::parse` / `parse_with_recover` (fmt does exactly
-this). Nobody outside `rut-ast`'s `parser` module drives
-`normalize → lex → parse` by hand.
+`semantic` module. Syntax only (reprint, transform) → the grammar's
+entry pair `rut_ast::parser::parse` / `parse_with_recover` (fmt does
+exactly this), or `Doc::parse` directly. Nobody outside `rut-ast`'s
+`parser` module drives `normalize → lex → parse` by hand — the
+pipeline lives in the `Doc`.
 
 - **One crate, two halves**: `rut-ast` is the tree AND its grammar —
-  `src/ast/` is the vocabulary (the store, node structs, handles,
-  dump), `src/parser/` is the grammar (the frame machine, the entry
-  pair, keyword tables). They co-change on every syntax edit, so they
-  live together; the halves stay nameable so the layer law below can
-  forbid reaching into the grammar from read-only lanes. The `ast`
-  module is a sealed `mod` (the same privacy wall as rut-lsp's
-  `semantic`), so the tree vocabulary is reachable ONLY through the
-  flat crate-root re-exports.
-- **The AST artifact law (v3)**: `Ast` stores PURE STRUCTURE — the
-  nodes and nothing else; it holds NO src and no text. The artifact is
-  the PAIR `Parsed { ast, src }` — `src` is the NORMALIZED text every
-  span indexes (never the caller's raw input), and `Span::text(&src)`
-  is the join (text queries are span×src joins; nothing else stores
-  text). The leaf layer (tokens + comments) stays one deterministic
-  linear pass away: `rut_lexer::lexer::lex_normalized(&src, collect)`.
+  `src/ast/` is the vocabulary (the store, node structs, handles, the
+  `AstPrinter`, the `Doc`), `src/parser/` is the grammar (the frame
+  machine, the window entry, keyword tables). They co-change on every
+  syntax edit, so they live together; the halves stay nameable so the
+  layer law below can forbid reaching into the grammar from read-only
+  lanes. The `ast` module is a sealed `mod` (the same privacy wall as
+  rut-lsp's `semantic`), so the tree vocabulary is reachable ONLY
+  through the flat crate-root re-exports.
+- **The AST artifact law (v4)**: `Ast` stores PURE STRUCTURE — the
+  typed nodes, their spans/verdicts, the interner vocabulary, the
+  derived `TreeIndex`. NO src, no text, no tokens. The artifact is the
+  `Doc { src, toks, ast }` — `src` is the NORMALIZED text every span
+  indexes (never the caller's raw input), and `Doc::text(span)` is the
+  join (text queries are span×src joins over the doc's own text;
+  nothing else stores text). The leaf layer lives IN the doc: one
+  deterministic linear pass (`rut_lexer::lexer::lex_normalized`)
+  derives it cold, the splice maintains it edited.
+- **The capsule law (v4)**: nodes are POD; mutation is MODELED — parse
+  constructs, `Doc::edit` repairs; no field pokes anywhere. `Ast`'s
+  mut doors (`new`/`alloc`/`intern`/`set_root`/`set_errors` + the edit
+  lane's repair doors `reseal_root`/`remove_any`/`index_invalidate`)
+  are `pub(crate)` — the parse/edit lane is INSIDE the crate, so the
+  compiler enforces the capsule: outside crates can only read
+  (`root`/`name`/`errors`/`is_clean`/`interner` and the geometry
+  doors), even holding an owned `Ast`. Handles are stable for the
+  tree's lifetime (slot-map arenas; removal punches holes — a stale
+  handle dies loudly on read, never reads yesterday's node). Behavior
+  lives on nodes and handles with the store as ctx (`h.get(ast)`,
+  `root().items(ast)`, `slot.span(ast)`) — no smart objects, no
+  per-node back-pointers, no builder ceremony. The same law governs
+  the computed artifacts — `Doc` and `Document` (read doors only;
+  consumers hold the doc and borrow) carry private fields. Plain
+  records (node structs, index rows, driver/lir rows, rut-lsp's
+  wire-bound `Analysis`) stay open — many construction sites, no
+  invariant.
+- **One grammar engine**: the one entry is `parse_item_window`
+  (pub(crate)) — a token window in, root-level items out; a cold parse
+  is just the window that covers everything. `Doc::parse` rides it,
+  the edit lane rides it with the dirty tail into FRESH slots of the
+  live store — no second parser to drift.
+- **One mutator**: `Doc::edit(Edit)` is the only way a document
+  changes. Inside (all private): `src.edit` → the token splice
+  (`splice_tokens` → `TokenChange`) → the lex-fence prefix rebuilt →
+  the dirty reuse unit found (v1 granularity: the ROOT ITEM; recovery
+  backtracks past fences) → dropped subtrees punched into holes → the
+  window reparse into fresh slots → splice under the surviving parent
+  → the tree index INVALIDATED (the next read rebuilds it with the
+  same deterministic walk a cold parse runs — the plan's in-place
+  patch is consciously superseded; a finer reuse-unit granularity is a
+  later knob). The wire shell adapts protocol → `Edit`
+  (`Document::sync` = `Edit::between` + `doc.edit` + the lazy views
+  dropped) — never diffs below the adapter. Edit ≡ cold is
+  property-tested per stage: token splice ≡ cold lex
+  (`crates/rut-lexer/tests/splice_props.rs`), edited doc ≡ cold parse
+  (`crates/rut-ast/tests/doc_edit_props.rs`).
+- **Doors are questions**: no raw `src()`/`toks()`/`line_starts()`
+  handouts on `Doc` — text is `text(span)`, lines are
+  `line_of`/`line_span`, tokens are `tokens_in(span)`, `name_at(pos)`
+  the fence residue, `bindings()` the locals pass. The tree geometry
+  lives on `Ast` (`node_at`/`parent`/`span_of`/`ancestors`/
+  `is_incomplete` over `AnyHandle`); position questions walk the
+  generic machinery (`node_at` → `ancestors` → `downcast`) — there is
+  no `context_at` and no position-verdict enum (the `Ctx` rows in
+  rut-lsp's `query/` are chain+mods bundles a query needs, not
+  verdicts).
+- **Scoped token lane**: `name_at` is the fence residue, `tokens_in`
+  the classifier's window — no other token interpretation crosses
+  rut-ast. Outside the classifier (rut-lsp's `semantic/tokens.rs` +
+  `legend.rs`), no lsp code matches `Tok::`.
 - **The span law (v3.1)**: a decl's span starts at its FIRST source
   token — modifiers included — and ends at its own terminator (`}` /
   `;`). The brace-bodied type decls (class/struct/interface/enum and
@@ -50,50 +104,38 @@ this). Nobody outside `rut-ast`'s `parser` module drives
   (`ModifierNode`/`ModKind`) riding the decl in source order; the old
   flag fields are gone — flags are DERIVED accessors on the node
   structs (`vis()`/`is_async()`/`is_static()`/`marker()`/`linkage()`/
-  `ambient()`), single truth in the tree.
+  `ambient()`), single truth in the tree. Views derive `ambient`/vis
+  the same way — nothing stored, nothing stale.
 - **The LSP verbatim law**: decl text in hover/completion is a
-  span×src slice; only source-less text (inferred/semantic/absent) is
-  rendered.
-- **The capsule law**: `Ast` is the capsule store. Its mut doors
-  (`new`/`intern`/`set_root`/`alloc*`/`set_errors`) are `pub(crate)` —
-  the parse lane is the parser module INSIDE the crate, so the
-  compiler enforces the capsule: outside crates can only read
-  (`root`/`name`/`errors`/`is_clean`/`interner`), even holding an
-  owned `Ast` from `into_parts()`. Behavior lives on nodes and
-  handles with the store as ctx (`h.get(ast)`, `root().items(ast)`,
-  `slot.span(ast)`) — no smart objects, no per-node back-pointers, no
-  builder ceremony. The same law governs the computed artifacts —
-  `Parsed` (`ast()`/`src()`/`into_parts()`) and `Document` (read
-  doors only; consumers hold the doc and borrow) carry private
-  fields. Plain records (node structs, index rows, `ParseOpts`,
-  driver/lir rows, rut-lsp's wire-bound `Analysis` — private impl
-  now, but its rows exist to move to the wire, so the event loop
-  reads the fields) stay open —
-  many construction sites, no invariant.
-- **The parse-opts row**: recovery is NOT a knob — the ENTRY is the
-  choice. `parse` is fail-fast (`Err` = the first diag, no tree; `Ok`
-  implies `is_clean()`); `parse_with_recover` is ALWAYS a tree, and
-  production lanes pair it with `ast.is_clean()` / `ast.errors()`. The
-  one knob is `ParseOpts { include_comments }` — docs graft onto decl
-  nodes at allocation; the grammar never consults comments. The
-  recovery ladder: part damage → `Error` slots beside the survivors
-  (every slot enum carries `Error(Handle<ErrorNode>)`), identity
-  damage → fences (an `ErrorNode` covering the unparseable region, in
-  the list it belongs to), lex rows → root-level. `ast.errors()` is
-  the flat ordered view of every diag.
-- **`rut-lsp`'s `semantic` module is the only grammar lane**, and
-  production src spells `rut_ast::parser::` ONLY inside
-  `semantic/doc.rs` (the `Document::parse` lane — mode from the
-  filename convention (`mode_of`), editor opts baked) — grep the src
-  tree. The module is SEALED (`mod semantic;` — a private decl hides
-  even its own `pub` items), so the queries spell
-  `crate::semantic::…` and no consumer reaches past the ABI;
-  `rut-ast` stays as shared tree vocabulary, `rut-driver`/`rut-core`
-  are other lanes. The grammar/corpus tests drive the parser via the
-  crate's unit-test tree (the sanctioned seam, like the futures
-  LocalPool); the fail-fast `parse` door exists for "a diag means
-  stop" callers — today only its own crate's tests — while
-  fmt/semantic/driver ride the recovering entry. (The wasm face
+  `Doc::text(span)` slice on the OWNING document; only source-less
+  text (inferred/semantic/absent — e.g. inlay hints) is rendered.
+- **The parse entry law**: recovery is NOT a knob — the ENTRY is the
+  choice, and both take the source BY VALUE (it moves into the
+  artifact). `parse(src, mode) -> Result<Doc, Diag>` is fail-fast
+  (`Err` = the first diag; `Ok` implies `is_clean()`);
+  `parse_with_recover(src, mode) -> Doc` is ALWAYS a tree — both are
+  thin wrappers over `Doc::parse`. There is no opts row: docs ALWAYS
+  graft (the enriched `graft_table` rows ride every parse; the grammar
+  never consults comments). Production lanes ride the recovering entry
+  and pair it with `ast.is_clean()` / `ast.errors()`. The recovery
+  ladder: part damage → `Error` slots beside the survivors (every slot
+  enum carries `Error(Handle<ErrorNode>)`); identity damage → fences
+  (an `ErrorNode` covering the unparseable region, in the list it
+  belongs to); lex rows → root-level pre-seeded fences (the doc's
+  managed prefix, rebuilt wholesale by the edit lane). `ast.errors()`
+  is the flat ordered view of every diag (the panel); the
+  positional view is the `ErrorNode`s in the streams.
+- **`rut-lsp`'s `semantic` module is the only grammar lane**, and its
+  parse lane is `Document::parse` (mode from the filename convention
+  `mode_of`, editor opts baked — recovering always). The module is
+  SEALED (`mod semantic;` — a private decl hides even its own `pub`
+  items), so the queries spell `crate::semantic::…` and no consumer
+  reaches past the ABI; `rut-ast` stays as shared tree vocabulary,
+  `rut-driver`/`rut-core` are other lanes. The grammar/corpus tests
+  drive the parser via the crate's unit-test tree (the sanctioned
+  seam, like the futures LocalPool); the fail-fast `parse` door exists
+  for "a diag means stop" callers — today only its own crate's tests —
+  while fmt/semantic/driver ride the recovering entry. (The wasm face
   `rut-lsp-wasm` layers one crate higher: its only language dep is
   `rut-lsp`.) And since the privacy wall the WHOLE crate is sealed
   the way `semantic` is: **rut-lsp's public surface is `Lsp` +
@@ -103,6 +145,29 @@ this). Nobody outside `rut-ast`'s `parser` module drives
   the JSON envelopes are `String`s, so `wire` carries no public type
   either. The face's deps (rut-lsp + the wasm trio) are the layer
   proof: it spells `rut_lsp::{Lsp, env::…}` and nothing else.
+- **The collection law**: every file in the session's world — the
+  open doc, the prelude, walked deps — is a
+  `MountedFile { doc: Document, mount, decls }` in the session's
+  `DefIndexCollection` (rut-lsp's `hover/collection.rs`); the session
+  cache is `SessionState.docs: HashMap<String, MountedFile>` — ONE
+  composition for open docs and mounts alike (the plan's separate
+  `HashMap<String, Document>` shell cache is consciously superseded).
+  The row types (`DefIndex`/`TyDef`/`FnDef`/…) are gone; the doors
+  answer through typed views over `(doc, AnyHandle)` — a view's
+  verbatim text is a span×src join on the owning file's document, its
+  line is `doc.line_of`, its `ambient`/vis derives from the modifier
+  chain. Chain preferences have ONE home each: `type_decl` the
+  mounted-over-embed rule, `functions` the 0/1/many honesty rule
+  (a `Vec`, not a row), `module_let` unique-or-none, `member`/`members`
+  the member law, `use_exports` the mod-walk gates, `bare` the
+  locals+ambient+auto-import merge — and `prefer_bodies` the
+  body-over-decl preference. The feature doors (`get_definition`,
+  `references` in `query/`) consume the collection; the plan's
+  `get_declaration` is consciously ABSENT — the wire spells no
+  declaration request, and `prefer_bodies`' single decision point
+  makes the inverted walk a local change when one arrives. The
+  collection rebuilds on sync / dep-walk completion — never per
+  query.
 
 ## Browser drives: use `agent-browser`, not hand-rolled WebDriver
 
