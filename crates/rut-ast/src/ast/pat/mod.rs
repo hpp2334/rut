@@ -2,7 +2,7 @@
 
 use crate::ast::error::ErrorNode;
 use crate::ast::expr::{ExprRef, PathSeg};
-use crate::ast::handle::Handle;
+use crate::ast::handle::{AnyHandle, Handle};
 use crate::slot_alloc;
 use rut_lexer::span::Span;
 
@@ -20,6 +20,17 @@ impl PatRef {
         crate::slot_span!(
             self,
             ctx,
+            PatRef::Lit,
+            PatRef::Path,
+            PatRef::Wild,
+            PatRef::Else,
+            PatRef::Error,
+        )
+    }
+    /// the universal address — the tree index's walk currency
+    pub fn any(self) -> AnyHandle {
+        crate::slot_any!(
+            self,
             PatRef::Lit,
             PatRef::Path,
             PatRef::Wild,

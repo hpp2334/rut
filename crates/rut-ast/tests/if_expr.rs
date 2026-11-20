@@ -8,9 +8,7 @@ mod common;
 
 use common::{last_fn_body, parse};
 use rut_ast::parser::Mode;
-use rut_ast::{
-    render_text, to_dump_tree, Ast, BlockNode, ElseBranch, ExprRef, Handle, Lit, StmtRef,
-};
+use rut_ast::{Ast, AstPrinter, BlockNode, ElseBranch, ExprRef, Handle, Lit, StmtRef};
 
 fn fn_body(src: &str) -> (Ast, Handle<BlockNode>) {
     let (ast, diags) = parse(src, Mode::Impl);
@@ -192,9 +190,8 @@ fn when_guard_shape_untouched() {
 
 #[test]
 fn if_expression_dump_arm() {
-    // the dump mapping covers the new kind end to end (no panic)
+    // the print mapping covers the new kind end to end (no panic)
     let (ast, _) = fn_body("fn f(c: bool) -> i32 { let x = if (c) { 1 } else { 2 }; x }");
-    let tree = to_dump_tree(&ast);
-    let text = render_text(&tree, "");
+    let text = AstPrinter::text_of(&ast, "");
     assert!(text.contains("If"), "the if node is in the dump: {text}");
 }

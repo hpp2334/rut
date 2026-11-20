@@ -25,19 +25,20 @@
 //! stays free to move.
 
 mod doc;
-mod dump;
 mod error;
 mod expr;
 mod handle;
+mod index;
 mod item;
 mod pat;
+mod printer;
 mod stmt;
 mod store;
 mod ty;
 
 pub use doc::{CommentData, DocData};
 pub use error::ErrorNode;
-pub use handle::{Arena, Handle, NodeStore};
+pub use handle::{AnyHandle, Arena, Handle, NodeKind, NodeKindId, NodeStore};
 pub use store::Ast;
 // the construction macros ride the same chain (crate-root reachable
 // via the root gate, crate-only visible — the capsule's allocation
@@ -45,7 +46,7 @@ pub use store::Ast;
 // items are module-private at definition (no vis syntax), so a `pub
 // use` binding of one caps at pub(crate) and E0364 refuses the `pub`
 // spelling — the seal alone cannot publicize this chain.
-pub(crate) use handle::{plain_alloc, slot_alloc, slot_span};
+pub(crate) use handle::{plain_alloc, slot_alloc, slot_any, slot_span};
 pub use rut_core::IdentId;
 pub use rut_lexer::span::Span;
 
@@ -73,4 +74,6 @@ pub use expr::{
 pub use pat::{PatElseNode, PatLitNode, PatPathNode, PatRef, PatWildNode};
 pub use ty::{TyArrayNode, TyFnNode, TyOptNode, TyPathNode, TyRef, TyTupleNode, TyUnionNode};
 
-pub use dump::{render_json, render_text, to_dump_tree, DumpNode};
+// the tree renderer — AstPrinter + PrintNode are the whole face; the
+// value companions are private impl
+pub use printer::{AstPrinter, PrintNode};

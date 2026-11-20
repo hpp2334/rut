@@ -17,7 +17,7 @@ pub use lit::{Lit, LitNode};
 pub use ops::{AssignNode, BinOp, BinaryNode, UnOp, UnaryNode};
 
 use crate::ast::error::ErrorNode;
-use crate::ast::handle::Handle;
+use crate::ast::handle::{AnyHandle, Handle};
 use rut_lexer::span::Span;
 
 /// one dotted-path segment, generic args included — shared by expr
@@ -66,6 +66,35 @@ impl ExprRef {
         crate::slot_span!(
             self,
             ctx,
+            ExprRef::Block,
+            ExprRef::Lit,
+            ExprRef::Path,
+            ExprRef::Call,
+            ExprRef::Method,
+            ExprRef::Field,
+            ExprRef::Index,
+            ExprRef::Unary,
+            ExprRef::Binary,
+            ExprRef::Assign,
+            ExprRef::Lambda,
+            ExprRef::FStr,
+            ExprRef::Struct,
+            ExprRef::Tuple,
+            ExprRef::ArrayLit,
+            ExprRef::ArrayRepeat,
+            ExprRef::WhenExpr,
+            ExprRef::If,
+            ExprRef::Await,
+            ExprRef::AsyncBlock,
+            ExprRef::Is,
+            ExprRef::Cast,
+            ExprRef::Error,
+        )
+    }
+    /// the universal address — the tree index's walk currency
+    pub fn any(self) -> AnyHandle {
+        crate::slot_any!(
+            self,
             ExprRef::Block,
             ExprRef::Lit,
             ExprRef::Path,

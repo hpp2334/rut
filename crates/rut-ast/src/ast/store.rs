@@ -4,8 +4,9 @@
 //! joins), no flat kind enum, no public fields.
 //!
 //! THE ARTIFACT LAW (v3): `Ast` stores PURE STRUCTURE — the typed
-//! nodes, their spans/verdicts, the interner vocabulary. Every door is
-//! a method; reads live on nodes/handles with the store as ctx.
+//! nodes, their spans/verdicts, the interner vocabulary, the derived
+//! [`TreeIndex`]. Every door is a method; reads live on
+//! nodes/handles with the store as ctx.
 //!
 //! THE MUTATION LAW: `&ctx` methods ask the store, `&mut ctx` methods
 //! tell it — and only the parse lane tells (`intern`, `set_root`,
@@ -15,18 +16,48 @@
 //! the PATHS, a method's own visibility gates the CALL — drop the
 //! marker and the door is method-private, unreachable even in-crate.
 
+use once_cell::sync::OnceCell;
 use rut_core::{IdentId, Interner};
 use rut_lexer::diag::Diag;
+use rut_lexer::span::Span;
 
-use crate::ast::handle::{Arena, Handle, NodeStore};
+use crate::ast::handle::{AnyHandle, Arena, Handle, HasSpan, NodeKind, NodeKindId, NodeStore};
+use crate::ast::index::TreeIndex;
 
 // ---- the node inventory: one private arena per kind ----
 //
-// Every node kind in the tree, exactly once. The macro wires the
-// fields, the NodeStore impls (typed `allocate`/`get`), nothing else —
-// behavior lives on the nodes.
+// Every node kind in the tree, exactly once, as `field: Ty => "Wire"`.
+// The macro wires the fields, the NodeStore impls (typed
+// `allocate`/`get`), and the NodeKind stamps — `KIND` is the running
+// index over this list (dense, unique by construction: a kind CANNOT
+// lack an id) and `NAME` the single printable-name table (a kind
+// CANNOT lack a name — the arity forces the literal). The wire labels
+// and `AnyHandle::kind_name` both read that one table.
 macro_rules! arenas {
-    ($( $field:ident : $ty:ty ),* $(,)?) => {
+    ($($rest:tt)*) => {
+        arenas_munch!(@emit [] 0u16; $($rest)*);
+    };
+}
+
+// the muncher — one expansion per kind (its own macro so the catch-all
+// entry above can never re-match the recursion)
+macro_rules! arenas_munch {
+    // step: carry one row (id, name, field, ty), bump the id
+    (@emit [$($acc:tt)*] $next:tt;
+        $field:ident : $ty:ty => $name:literal
+        $(, $($rest:tt)* )?
+    ) => {
+        arenas_munch!(
+            @emit
+            [$($acc)* [$next $name $field [$ty]]]
+            ($next + 1);
+            $( $($rest)* )?
+        );
+    };
+    // base: every kind carries its row — emit the store
+    (@emit [$(
+        [$n:tt $name:tt $field:ident [$ty:tt]]
+    )*] $next:tt;) => {
         pub struct Ast {
             $( $field: Arena<$ty>, )*
             interner: Interner,
@@ -35,6 +66,10 @@ macro_rules! arenas {
             /// POSITIONAL view is the `ErrorNode`s in the streams; the
             /// same rows, two shapes. Parse-lane-written only.
             errors: Vec<Diag>,
+            /// the derived tree index (parents + cursor rows) — plain
+            /// data, built lazily on first read (cold parses pay on
+            /// demand); the edit lane maintains it from Phase 3 on
+            index: OnceCell<TreeIndex>,
         }
 
         impl Ast {
@@ -48,15 +83,14 @@ macro_rules! arenas {
                     interner: Interner::default(),
                     root: None,
                     errors: Vec::new(),
+                    index: OnceCell::new(),
                 }
             }
             /// construction (parse lane): land a complete node in its
             /// arena — the one allocation door behind every
             /// `XNode { .. }.allocate(ctx)`
             pub(crate) fn alloc<T: NodeStore>(&mut self, node: T) -> Handle<T> {
-                let h = Handle::new(T::arena_mut(self).0.len() as u32);
-                T::arena_mut(self).0.push(node);
-                h
+                Handle::new(T::arena_mut(self).insert(node))
             }
             /// construction (parse lane): intern a name
             pub(crate) fn intern(&mut self, name: &str) -> IdentId {
@@ -106,79 +140,138 @@ macro_rules! arenas {
         $( impl crate::ast::handle::HasSpan for $ty {
             fn span(&self) -> rut_lexer::span::Span { self.span }
         } )*
+        $( impl NodeKind for $ty {
+            const KIND: NodeKindId = $n;
+            const NAME: &'static str = $name;
+        } )*
+
+        /// the kind dispatch — one probe per stamped kind, id-compared
+        /// (the ids are the macro's own running index). `None` = dead
+        /// slot or bogus id: the printer's `dead` row, never a
+        /// wrong-arena read.
+        pub(crate) fn span_of_any(ast: &Ast, h: AnyHandle) -> Option<Span> {
+            let kind = h.kind;
+            let idx = h.idx;
+            $(
+                if kind == <$ty as NodeKind>::KIND {
+                    return ast.$field.get(idx).map(|n| n.span());
+                }
+            )*
+            None
+        }
+
+        /// the printable name of a kind id — the same single table the
+        /// printer's labels read (`AnyHandle::kind_name` rides this)
+        pub(crate) fn kind_name_of(kind: NodeKindId) -> &'static str {
+            $(
+                if kind == <$ty as NodeKind>::KIND {
+                    return <$ty as NodeKind>::NAME;
+                }
+            )*
+            "unknown"
+        }
     };
 }
 
 arenas! {
     // items
-    modules: crate::ast::item::ModuleNode,
-    mod_decls: crate::ast::item::ModDeclNode,
-    uses: crate::ast::item::UseNode,
-    aliases: crate::ast::item::AliasNode,
-    module_lets: crate::ast::item::ModuleLetNode,
-    enums: crate::ast::item::EnumNode,
-    structs: crate::ast::item::StructNode,
-    classes: crate::ast::item::ClassNode,
-    interfaces: crate::ast::item::InterfaceNode,
-    impls: crate::ast::item::ImplNode,
-    fns: crate::ast::item::FnNode,
-    surface_fns: crate::ast::item::SurfaceFnNode,
-    surface_structs: crate::ast::item::SurfaceStructNode,
-    builtin_tys: crate::ast::item::BuiltinTyNode,
-    builtin_primitives: crate::ast::item::BuiltinPrimitiveNode,
-    builtin_impls: crate::ast::item::BuiltinImplNode,
+    modules: crate::ast::item::ModuleNode => "Module",
+    mod_decls: crate::ast::item::ModDeclNode => "ModDecl",
+    uses: crate::ast::item::UseNode => "Use",
+    aliases: crate::ast::item::AliasNode => "Alias",
+    module_lets: crate::ast::item::ModuleLetNode => "ModuleLet",
+    enums: crate::ast::item::EnumNode => "Enum",
+    structs: crate::ast::item::StructNode => "Struct",
+    classes: crate::ast::item::ClassNode => "Class",
+    interfaces: crate::ast::item::InterfaceNode => "Interface",
+    impls: crate::ast::item::ImplNode => "Impl",
+    fns: crate::ast::item::FnNode => "Fn",
+    surface_fns: crate::ast::item::SurfaceFnNode => "SurfaceFn",
+    surface_structs: crate::ast::item::SurfaceStructNode => "SurfaceStruct",
+    builtin_tys: crate::ast::item::BuiltinTyNode => "BuiltinTy",
+    builtin_primitives: crate::ast::item::BuiltinPrimitiveNode => "BuiltinPrimitive",
+    builtin_impls: crate::ast::item::BuiltinImplNode => "BuiltinImpl",
     // members
-    field_decls: crate::ast::item::FieldDeclNode,
-    method_decls: crate::ast::item::MethodDeclNode,
-    enum_members: crate::ast::item::EnumMemberNode,
-    params: crate::ast::item::ParamNode,
-    self_params: crate::ast::item::SelfParamNode,
+    field_decls: crate::ast::item::FieldDeclNode => "FieldDecl",
+    method_decls: crate::ast::item::MethodDeclNode => "MethodDecl",
+    enum_members: crate::ast::item::EnumMemberNode => "EnumMember",
+    params: crate::ast::item::ParamNode => "Param",
+    self_params: crate::ast::item::SelfParamNode => "SelfParam",
     // statements
-    let_stmts: crate::ast::stmt::LetStmtNode,
-    if_stmts: crate::ast::stmt::IfNode,
-    whiles: crate::ast::stmt::WhileNode,
-    for_ofs: crate::ast::stmt::ForOfNode,
-    for_cs: crate::ast::stmt::ForCNode,
-    returns: crate::ast::stmt::ReturnNode,
-    breaks: crate::ast::stmt::BreakNode,
-    continues: crate::ast::stmt::ContinueNode,
-    when_stmts: crate::ast::stmt::WhenStmtNode,
+    let_stmts: crate::ast::stmt::LetStmtNode => "LetStmt",
+    if_stmts: crate::ast::stmt::IfNode => "If",
+    whiles: crate::ast::stmt::WhileNode => "While",
+    for_ofs: crate::ast::stmt::ForOfNode => "ForOf",
+    for_cs: crate::ast::stmt::ForCNode => "ForC",
+    returns: crate::ast::stmt::ReturnNode => "Return",
+    breaks: crate::ast::stmt::BreakNode => "Break",
+    continues: crate::ast::stmt::ContinueNode => "Continue",
+    when_stmts: crate::ast::stmt::WhenStmtNode => "WhenStmt",
     // expressions
-    blocks: crate::ast::expr::BlockNode,
-    lits: crate::ast::expr::LitNode,
-    paths: crate::ast::expr::PathNode,
-    calls: crate::ast::expr::CallNode,
-    methods: crate::ast::expr::MethodNode,
-    fields: crate::ast::expr::FieldNode,
-    indexes: crate::ast::expr::IndexNode,
-    unaries: crate::ast::expr::UnaryNode,
-    binaries: crate::ast::expr::BinaryNode,
-    assigns: crate::ast::expr::AssignNode,
-    lambdas: crate::ast::expr::LambdaNode,
-    fstrs: crate::ast::expr::FStrNode,
-    struct_lits: crate::ast::expr::StructLitNode,
-    tuples: crate::ast::expr::TupleNode,
-    array_lits: crate::ast::expr::ArrayLitNode,
-    array_repeats: crate::ast::expr::ArrayRepeatNode,
-    when_exprs: crate::ast::expr::WhenExprNode,
-    if_exprs: crate::ast::expr::IfExprNode,
-    awaits: crate::ast::expr::AwaitNode,
-    async_blocks: crate::ast::expr::AsyncBlockNode,
-    is_exprs: crate::ast::expr::IsNode,
-    casts: crate::ast::expr::CastNode,
+    blocks: crate::ast::expr::BlockNode => "Block",
+    lits: crate::ast::expr::LitNode => "Lit",
+    paths: crate::ast::expr::PathNode => "Path",
+    calls: crate::ast::expr::CallNode => "Call",
+    methods: crate::ast::expr::MethodNode => "Method",
+    fields: crate::ast::expr::FieldNode => "Field",
+    indexes: crate::ast::expr::IndexNode => "Index",
+    unaries: crate::ast::expr::UnaryNode => "Unary",
+    binaries: crate::ast::expr::BinaryNode => "Binary",
+    assigns: crate::ast::expr::AssignNode => "Assign",
+    lambdas: crate::ast::expr::LambdaNode => "Lambda",
+    fstrs: crate::ast::expr::FStrNode => "FStr",
+    struct_lits: crate::ast::expr::StructLitNode => "Struct",
+    tuples: crate::ast::expr::TupleNode => "Tuple",
+    array_lits: crate::ast::expr::ArrayLitNode => "ArrayLit",
+    array_repeats: crate::ast::expr::ArrayRepeatNode => "ArrayRepeat",
+    when_exprs: crate::ast::expr::WhenExprNode => "WhenExpr",
+    if_exprs: crate::ast::expr::IfExprNode => "If",
+    awaits: crate::ast::expr::AwaitNode => "Await",
+    async_blocks: crate::ast::expr::AsyncBlockNode => "AsyncBlock",
+    is_exprs: crate::ast::expr::IsNode => "Is",
+    casts: crate::ast::expr::CastNode => "Cast",
     // types
-    ty_paths: crate::ast::ty::TyPathNode,
-    ty_fns: crate::ast::ty::TyFnNode,
-    ty_opts: crate::ast::ty::TyOptNode,
-    ty_arrays: crate::ast::ty::TyArrayNode,
-    ty_tuples: crate::ast::ty::TyTupleNode,
-    ty_unions: crate::ast::ty::TyUnionNode,
+    ty_paths: crate::ast::ty::TyPathNode => "TyPath",
+    ty_fns: crate::ast::ty::TyFnNode => "TyFn",
+    ty_opts: crate::ast::ty::TyOptNode => "TyOpt",
+    ty_arrays: crate::ast::ty::TyArrayNode => "TyArray",
+    ty_tuples: crate::ast::ty::TyTupleNode => "TyTuple",
+    ty_unions: crate::ast::ty::TyUnionNode => "TyUnion",
     // patterns
-    pat_lits: crate::ast::pat::PatLitNode,
-    pat_paths: crate::ast::pat::PatPathNode,
-    pat_wilds: crate::ast::pat::PatWildNode,
-    pat_elses: crate::ast::pat::PatElseNode,
+    pat_lits: crate::ast::pat::PatLitNode => "PatLit",
+    pat_paths: crate::ast::pat::PatPathNode => "PatPath",
+    pat_wilds: crate::ast::pat::PatWildNode => "PatWild",
+    pat_elses: crate::ast::pat::PatElseNode => "PatElse",
     // arms + recovery
-    when_arms: crate::ast::expr::WhenArmNode,
-    error_nodes: crate::ast::error::ErrorNode,
+    when_arms: crate::ast::expr::WhenArmNode => "WhenArm",
+    error_nodes: crate::ast::error::ErrorNode => "Error",
+}
+
+impl Ast {
+    /// the derived tree index — built on first read (the lazy cell);
+    /// the edit lane (Phase 3) maintains it across edits
+    pub(crate) fn index(&self) -> &TreeIndex {
+        self.index.get_or_init(|| TreeIndex::build(self))
+    }
+    /// the deepest node whose span contains `pos` — the cursor's door
+    /// (a position in dead space between nodes answers `None`)
+    pub fn node_at(&self, pos: u32) -> Option<AnyHandle> {
+        self.index().node_at(pos)
+    }
+    /// the node's parent address — `None` at the root (and for stale
+    /// addresses)
+    pub fn parent(&self, h: AnyHandle) -> Option<AnyHandle> {
+        self.index().parent(h)
+    }
+    /// the node's span — the kind dispatch over the arenas. A stale
+    /// (dead-slot) address is a caller bug: the printer probes
+    /// `span_of_any` first and prints the explicit `dead` row instead.
+    pub fn span_of(&self, h: AnyHandle) -> Span {
+        span_of_any(self, h).expect("stale AnyHandle — the slot is dead")
+    }
+    /// the ancestor chain, the node itself first — the generic walk's
+    /// spine (`node_at` → `ancestors` → `downcast`)
+    pub fn ancestors(&self, h: AnyHandle) -> impl Iterator<Item = AnyHandle> + '_ {
+        std::iter::successors(Some(h), |&cur| self.parent(cur))
+    }
 }

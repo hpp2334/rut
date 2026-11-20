@@ -6,7 +6,7 @@ mod common;
 
 use common::parse;
 use rut_ast::parser::Mode;
-use rut_ast::{render_json, render_text, to_dump_tree, ItemRef, MethodRef, TyRef, Vis};
+use rut_ast::{AstPrinter, ItemRef, MethodRef, TyRef, Vis};
 
 #[test]
 fn alias_parses_transparent_shape() {
@@ -241,7 +241,7 @@ fn dumper_renders_class_requires() {
     let src = "interface D { fn d(self) -> u64; }\nclass Box<K requires D, V> { k: K; v: V; }\n";
     let (ast, diags) = parse(src, Mode::Impl);
     assert!(diags.is_empty(), "expected a clean parse: {diags:?}");
-    let text = render_text(&to_dump_tree(&ast), src);
+    let text = AstPrinter::text_of(&ast, src);
     assert!(text.contains("Class"), "class node in the dump: {text}");
     assert!(
         text.contains("bounds:"),
@@ -254,14 +254,14 @@ fn dumper_renders_alias_bounds_and_union() {
     let src = "pub type Meters = i64;\ntype Num = i32 | str;\nfn f<T requires i32 | str>(x: T) -> i32 { return 0; }\n";
     let (ast, diags) = parse(src, Mode::Impl);
     assert!(diags.is_empty(), "expected a clean parse: {diags:?}");
-    let text = render_text(&to_dump_tree(&ast), src);
+    let text = AstPrinter::text_of(&ast, src);
     assert!(
         text.contains("Alias Meters"),
         "alias node in the dump: {text}"
     );
     assert!(text.contains("TyUnion"), "union node in the dump: {text}");
     assert!(text.contains("bounds:"), "bounds field in the dump: {text}");
-    let json = render_json(&to_dump_tree(&ast));
+    let json = AstPrinter::json_of(&ast);
     assert!(json.contains("\"Alias\""), "alias kind on the wire: {json}");
 }
 

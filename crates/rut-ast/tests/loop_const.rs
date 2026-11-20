@@ -9,7 +9,7 @@ mod common;
 
 use common::{last_fn_body, parse};
 use rut_ast::parser::Mode;
-use rut_ast::{render_json, to_dump_tree, Ast, StmtRef};
+use rut_ast::{Ast, AstPrinter, StmtRef};
 
 /// the first `for` statement of the last fn's body
 fn first_for(src: &str) -> (Ast, StmtRef) {
@@ -89,7 +89,7 @@ fn for_c_plain_header_is_unchanged() {
 fn dump_shows_the_const_flag_only_when_spelled() {
     let with = "fn f(xs: Vec<i32>) -> nil { for (const t of xs) { } }";
     let (ast, _) = first_for(with);
-    let json = render_json(&to_dump_tree(&ast));
+    let json = AstPrinter::json_of(&ast);
     assert!(json.contains("\"ForOf\""), "{json}");
     assert!(
         json.contains("\"const\""),
@@ -98,7 +98,7 @@ fn dump_shows_the_const_flag_only_when_spelled() {
 
     let without = "fn f(xs: Vec<i32>) -> nil { for (let t of xs) { } }";
     let (ast, _) = first_for(without);
-    let json = render_json(&to_dump_tree(&ast));
+    let json = AstPrinter::json_of(&ast);
     assert!(json.contains("\"ForOf\""), "{json}");
     assert!(
         !json.contains("\"const\""),

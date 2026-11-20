@@ -5,7 +5,7 @@
 use crate::ast::doc::DocData;
 use crate::ast::error::ErrorNode;
 use crate::ast::expr::{BlockNode, ExprRef};
-use crate::ast::handle::Handle;
+use crate::ast::handle::{AnyHandle, Handle};
 use crate::ast::item::{ItemRef, Vis};
 use crate::ast::ty::TyRef;
 use crate::slot_alloc;
@@ -229,6 +229,10 @@ pub enum FieldRef {
 }
 
 impl FieldRef {
+    /// the universal address — the tree index's walk currency
+    pub fn any(self) -> AnyHandle {
+        crate::slot_any!(self, FieldRef::Field, FieldRef::Error)
+    }
     pub fn span(self, ctx: &crate::Ast) -> Span {
         match self {
             FieldRef::Field(h) => h.span(ctx),
@@ -254,6 +258,10 @@ pub enum MethodRef {
 }
 
 impl MethodRef {
+    /// the universal address — the tree index's walk currency
+    pub fn any(self) -> AnyHandle {
+        crate::slot_any!(self, MethodRef::Method, MethodRef::Error)
+    }
     pub fn span(self, ctx: &crate::Ast) -> Span {
         match self {
             MethodRef::Method(h) => h.span(ctx),

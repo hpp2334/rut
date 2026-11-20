@@ -244,16 +244,16 @@ fn corpus_dump_trees_match_through_format() {
         let src = std::fs::read_to_string(f).unwrap();
         let mode = mode_of(f);
         let p1 = parse_with_recover(src.clone(), mode, ParseOpts::default());
-        let want = norm_lits(&span_free(&rut_ast::render_text(
-            &rut_ast::to_dump_tree(p1.ast()),
+        let want = norm_lits(&span_free(&rut_ast::AstPrinter::text_of(
+            p1.ast(),
             p1.src(),
         )));
         let Ok(out) = rut_fmt::format(&src, mode, &rut_fmt::Style::default()) else {
             continue; // covered by the other test's message
         };
         let p2 = parse_with_recover(out.clone(), mode, ParseOpts::default());
-        let got = norm_lits(&span_free(&rut_ast::render_text(
-            &rut_ast::to_dump_tree(p2.ast()),
+        let got = norm_lits(&span_free(&rut_ast::AstPrinter::text_of(
+            p2.ast(),
             p2.src(),
         )));
         if got != want {

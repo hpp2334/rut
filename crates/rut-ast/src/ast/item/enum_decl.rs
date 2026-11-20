@@ -4,7 +4,7 @@
 
 use crate::ast::doc::DocData;
 use crate::ast::error::ErrorNode;
-use crate::ast::handle::Handle;
+use crate::ast::handle::{AnyHandle, Handle};
 use crate::ast::item::class::{item_vis, ModifierNode};
 use crate::ast::item::ItemRef;
 use crate::slot_alloc;
@@ -52,6 +52,10 @@ pub enum MemberRef {
 }
 
 impl MemberRef {
+    /// the universal address — the tree index's walk currency
+    pub fn any(self) -> AnyHandle {
+        crate::slot_any!(self, MemberRef::Member, MemberRef::Error)
+    }
     pub fn span(self, ctx: &crate::Ast) -> Span {
         match self {
             MemberRef::Member(h) => h.span(ctx),

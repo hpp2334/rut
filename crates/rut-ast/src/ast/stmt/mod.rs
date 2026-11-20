@@ -4,7 +4,7 @@
 
 use crate::ast::error::ErrorNode;
 use crate::ast::expr::{BlockNode, ExprRef};
-use crate::ast::handle::Handle;
+use crate::ast::handle::{AnyHandle, Handle};
 use crate::ast::ty::TyRef;
 use crate::slot_alloc;
 use rut_core::IdentId;
@@ -67,6 +67,23 @@ impl StmtRef {
             _ => None,
         }
     }
+    /// the universal address — the tree index's walk currency
+    pub fn any(self) -> AnyHandle {
+        crate::slot_any!(
+            self,
+            StmtRef::Let,
+            StmtRef::If,
+            StmtRef::While,
+            StmtRef::ForOf,
+            StmtRef::ForC,
+            StmtRef::Return,
+            StmtRef::Break,
+            StmtRef::Continue,
+            StmtRef::When,
+            StmtRef::Error,
+            StmtRef::Expr,
+        )
+    }
 }
 
 /// `else if` chains re-enter the if statement; plain `else` is a block
@@ -74,6 +91,13 @@ impl StmtRef {
 pub enum ElseBranch {
     If(Handle<IfNode>),
     Block(Handle<BlockNode>),
+}
+
+impl ElseBranch {
+    /// the universal address — the tree index's walk currency
+    pub fn any(self) -> AnyHandle {
+        crate::slot_any!(self, ElseBranch::If, ElseBranch::Block)
+    }
 }
 
 #[derive(Clone, Debug)]

@@ -411,8 +411,7 @@ fn compile_playground(
         rut_ast::parser::ParseOpts::default(),
     );
     let parse_diags = p.ast().errors().to_vec();
-    let tree = rut_ast::to_dump_tree(p.ast());
-    let ast_json = rut_ast::render_json(&tree);
+    let ast_json = rut_ast::AstPrinter::json_of(p.ast());
     if !parse_diags.is_empty() {
         return (
             CompileOutput {

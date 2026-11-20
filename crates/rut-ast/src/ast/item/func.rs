@@ -6,7 +6,7 @@
 use crate::ast::doc::DocData;
 use crate::ast::error::ErrorNode;
 use crate::ast::expr::BlockNode;
-use crate::ast::handle::Handle;
+use crate::ast::handle::{AnyHandle, Handle};
 use crate::ast::item::class::{item_is_async, item_vis, ModKind, ModifierNode};
 use crate::ast::item::{ItemRef, Vis};
 use crate::ast::ty::TyRef;
@@ -76,6 +76,10 @@ pub enum ParamRef {
 }
 
 impl ParamRef {
+    /// the universal address — the tree index's walk currency
+    pub fn any(self) -> AnyHandle {
+        crate::slot_any!(self, ParamRef::Param, ParamRef::SelfParam, ParamRef::Error)
+    }
     pub fn span(self, ctx: &crate::Ast) -> Span {
         match self {
             ParamRef::Param(h) => h.span(ctx),

@@ -297,10 +297,10 @@ const EQUIV_SRC: &str = concat!(
     "}\n",
 );
 
-/// the tree AND every node span, as data — `render_json` carries the
+/// the tree AND every node span, as data — the JSON carries the
 /// span pair per node, so equal renders mean equal trees AND spans
 fn tree_spans(p: &Parsed) -> String {
-    rut_ast::render_json(&rut_ast::to_dump_tree(p.ast()))
+    rut_ast::AstPrinter::json_of(p.ast())
 }
 
 #[test]

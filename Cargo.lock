@@ -1155,6 +1155,7 @@ checksum = "cf54715a573b99ac80df0bc206da022bcd442c974952c7b9720069370852e21f"
 name = "rut-ast"
 version = "0.2.0"
 dependencies = [
+ "once_cell",
  "rut-core",
  "rut-lexer",
 ]

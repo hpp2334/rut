@@ -28,7 +28,7 @@ pub use surface::{
 pub use type_alias::AliasNode;
 
 use crate::ast::error::ErrorNode;
-use crate::ast::handle::Handle;
+use crate::ast::handle::{AnyHandle, Handle};
 use rut_lexer::span::Span;
 
 /// the item walk surface — a tagged handle per kind + the recovery
@@ -177,6 +177,29 @@ impl ItemRef {
             ItemRef::BuiltinImpl(h) => Some(h),
             _ => None,
         }
+    }
+    /// the universal address — the tree index's walk currency
+    pub fn any(self) -> AnyHandle {
+        crate::slot_any!(
+            self,
+            ItemRef::Module,
+            ItemRef::ModDecl,
+            ItemRef::Use,
+            ItemRef::Alias,
+            ItemRef::ModuleLet,
+            ItemRef::Enum,
+            ItemRef::Struct,
+            ItemRef::Class,
+            ItemRef::Interface,
+            ItemRef::Impl,
+            ItemRef::Fn,
+            ItemRef::SurfaceFn,
+            ItemRef::SurfaceStruct,
+            ItemRef::BuiltinTy,
+            ItemRef::BuiltinPrimitive,
+            ItemRef::BuiltinImpl,
+            ItemRef::Error,
+        )
     }
 }
 

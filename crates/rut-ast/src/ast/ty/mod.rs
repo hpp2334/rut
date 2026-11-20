@@ -3,7 +3,7 @@
 
 use crate::ast::error::ErrorNode;
 use crate::ast::expr::PathSeg;
-use crate::ast::handle::Handle;
+use crate::ast::handle::{AnyHandle, Handle};
 use crate::slot_alloc;
 use rut_lexer::span::Span;
 
@@ -23,6 +23,19 @@ impl TyRef {
         crate::slot_span!(
             self,
             ctx,
+            TyRef::Path,
+            TyRef::Fn,
+            TyRef::Opt,
+            TyRef::Array,
+            TyRef::Tuple,
+            TyRef::Union,
+            TyRef::Error,
+        )
+    }
+    /// the universal address — the tree index's walk currency
+    pub fn any(self) -> AnyHandle {
+        crate::slot_any!(
+            self,
             TyRef::Path,
             TyRef::Fn,
             TyRef::Opt,

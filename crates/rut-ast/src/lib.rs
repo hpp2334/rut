@@ -21,6 +21,10 @@
 //! trees (the LSP wasm rides `rut-lsp`) can be checked to
 //! never drive it directly.
 
+// the `arenas!` inventory munches one expansion per node kind (~63)
+// to stamp each `NodeKind` id — the default limit (128) is too tight
+#![recursion_limit = "256"]
+
 mod ast;
 pub mod parser;
 
@@ -28,4 +32,4 @@ pub use ast::*;
 
 // the parse lane's construction macros, crate-root reachable for the
 // `use crate::slot_alloc;` house style — never public
-pub(crate) use ast::{plain_alloc, slot_alloc, slot_span};
+pub(crate) use ast::{plain_alloc, slot_alloc, slot_any, slot_span};

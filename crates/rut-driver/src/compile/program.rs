@@ -4,7 +4,7 @@
 //! fight; the module owns the surface snapshot, the seed attach, and
 //! the debug dumps.
 
-use rut_ast::{render_json, render_text, to_dump_tree};
+use rut_ast::AstPrinter;
 use rut_core::binary::Program;
 use rut_core::ops::Op;
 use rut_core::types::{TyKind, TypeId, TY_I32, TY_NIL};
@@ -299,10 +299,7 @@ fn compile_program_inner(
     let (ast, text) = pre.into_parts();
     let mut diags: Vec<Diag> = Vec::new();
     let (ast_dump, ast_json) = if want_dumps {
-        let tree = to_dump_tree(&ast);
-        let t = render_text(&tree, &text);
-        let j = render_json(&tree);
-        (t, j)
+        (AstPrinter::text_of(&ast, &text), AstPrinter::json_of(&ast))
     } else {
         (String::new(), String::new())
     };

@@ -12,6 +12,9 @@ path = "src/lib.rs"
 [dependencies]
 rut-lexer = { path = "../rut-lexer" }
 rut-core = { path = "../rut-core" }
+# the lazy TreeIndex cell — cold parses build the index on first read;
+# sync plain data, so `Ast` stays Send + Sync
+once_cell = "1"
 
 # opt into the workspace lint gate (warnings = deny)
 [lints]

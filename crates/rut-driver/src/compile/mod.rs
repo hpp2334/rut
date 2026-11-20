@@ -16,7 +16,7 @@ pub use program::{compile_program, compile_program_pre, compile_program_resolved
 pub use seeds::{SeedGroup, Seeds};
 
 use rut_ast::parser::{parse_with_recover, Mode, ParseOpts};
-use rut_ast::{render_json as ast_render_json, render_text as ast_render_text, to_dump_tree};
+use rut_ast::AstPrinter;
 use rut_lexer::diag::Diag;
 use rut_lexer::span::Span;
 
@@ -45,9 +45,8 @@ pub fn compile_module(src: &str, mode: Mode, module_name: &str) -> CompileOutput
     // NORMALIZED text every span indexes — the renders slice it, never
     // the caller's raw input (the pair-artifact law, v2)
     let p = parse_with_recover(src.to_string(), mode, ParseOpts::default());
-    let tree = to_dump_tree(p.ast());
-    let ast_dump = ast_render_text(&tree, p.src());
-    let ast_json = ast_render_json(&tree);
+    let ast_dump = AstPrinter::text_of(p.ast(), p.src());
+    let ast_json = AstPrinter::json_of(p.ast());
     if !p.ast().is_clean() {
         return CompileOutput {
             diags: p.ast().errors().to_vec(),
