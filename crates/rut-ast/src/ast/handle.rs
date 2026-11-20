@@ -84,8 +84,7 @@ pub struct Arena<T> {
 
 enum Slot<T> {
     Full(T),
-    #[allow(dead_code)] // punched by remove — the edit lane's holes
-    Hole,
+    Hole, // punched by remove — the edit lane's holes
 }
 
 impl<T> Arena<T> {
@@ -111,10 +110,16 @@ impl<T> Arena<T> {
             }
         }
     }
+    /// the node at `idx`, mut — the edit lane's repair door (splicing
+    /// the surviving parent's child list). `None` = dead hole.
+    pub(crate) fn get_mut(&mut self, idx: u32) -> Option<&mut T> {
+        match self.slots.get_mut(idx as usize)? {
+            Slot::Full(n) => Some(n),
+            Slot::Hole => None,
+        }
+    }
     /// remove a node — the slot becomes a hole the next alloc reuses.
-    /// Defined NOW (the store law: holes bounded by dead nodes); the
-    /// edit lane (Phase 3) is the caller.
-    #[allow(dead_code)] // the edit lane's door — Phase 3 calls it
+    /// The edit lane (Phase 3) is the caller.
     pub(crate) fn remove(&mut self, idx: u32) -> Option<T> {
         match self.slots.get_mut(idx as usize)? {
             Slot::Full(_) => {

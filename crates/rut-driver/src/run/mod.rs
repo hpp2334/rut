@@ -459,11 +459,7 @@ impl RutRun {
                 // whole file's `use` heads even beside syntax diags
                 // the body stays mounted (the match borrows) — clone to
                 // move into the closure check's parse
-                let p = rut_ast::parser::parse_with_recover(
-                    text.to_string(),
-                    mode,
-                    rut_ast::parser::ParseOpts::default(),
-                );
+                let p = rut_ast::parser::parse_with_recover(text.to_string(), mode);
                 if p.ast().is_clean() {
                     let layout = layout_for("");
                     for name in crate::graph::dep_use_heads(&session, spec, &root, &layout, p.ast())
@@ -480,11 +476,7 @@ impl RutRun {
             for m in pkg.mods.values() {
                 // recovering: a file beside its syntax diags still
                 // joins the closure check
-                let p = rut_ast::parser::parse_with_recover(
-                    m.text.clone(),
-                    Mode::Impl,
-                    rut_ast::parser::ParseOpts::default(),
-                );
+                let p = rut_ast::parser::parse_with_recover(m.text.clone(), Mode::Impl);
                 if !p.ast().is_clean() {
                     continue; // the compile reports the syntax
                 }

@@ -33,9 +33,8 @@ use rut_lexer::diag::Diag;
 /// Format one rut source.
 ///
 /// `src` may carry `\r\n` — the facade's normalization law rides first
-/// (`parse_with_recover` returns the NORMALIZED text as `Parsed::src`,
-/// and every span indexes it), so the comment reattachment and the
-/// printer see the same offsets.
+/// (`Doc::parse` owns the NORMALIZED text every span indexes), so the
+/// comment reattachment and the printer see the same offsets.
 ///
 /// Errors are the frontend's own diagnostics (lex + parse), spans into
 /// the normalized text: a source with diags is refused, never guessed
@@ -43,19 +42,18 @@ use rut_lexer::diag::Diag;
 /// recovering parse collects every diag, not just the first). The
 /// caller renders them (`rut fmt` labels the group with the real path).
 pub fn format(src: &str, mode: Mode, style: &Style) -> Result<String, Vec<Diag>> {
-    let p = rut_ast::parser::parse_with_recover(
-        src.to_string(),
-        mode,
-        rut_ast::parser::ParseOpts::default(),
-    );
-    if !p.ast().is_clean() {
-        return Err(p.ast().errors().to_vec());
+    let doc = rut_ast::parser::parse_with_recover(src.to_string(), mode);
+    let ast = doc.ast();
+    if !ast.is_clean() {
+        return Err(ast.errors().to_vec());
     }
+    // the whole normalized text the Doc owns — every span indexes it
+    let text = doc.text(doc.span());
     // the leaf layer on demand: tokens + comments in one linear pass
-    // over the NORMALIZED text (`p.src()`) every span indexes
-    let (toks, _, comments, _) = rut_lexer::lexer::lex_normalized(p.src(), true);
-    let runs = comments::runs_from_comments(&comments, &toks, p.src());
-    let printer = printer::P::new(p.ast(), p.src(), &toks, style, runs);
+    // over that text
+    let (toks, _, comments, _) = rut_lexer::lexer::lex_normalized(text, true);
+    let runs = comments::runs_from_comments(&comments, &toks, text);
+    let printer = printer::P::new(ast, text, &toks, style, runs);
     Ok(printer.print_module())
 }
 

@@ -12,9 +12,12 @@
 //! every node value is built whole (span + name_span + doc inside) and
 //! takes its slot once; recovery FENCES unparseable regions as
 //! `ErrorNode`s into the very list they belong to (the recovery
-//! ladder); docs graft at allocation when `include_comments` is set
-//! (the grammar never consults comments); node spans end at the item's
-//! own terminator (`prev_end` — exact spans).
+//! ladder); docs graft at allocation — always on, from the enriched
+//! [`Graft`] rows (the grammar never consults comments); node spans end
+//! at the item's own terminator (`prev_end` — exact spans). The ONE
+//! engine entry is [`parse_item_window`]: a cold parse is the window
+//! covering everything, the `Doc` edit lane rides it with the dirty
+//! tail; `parse`/`parse_with_recover` are wrappers over `Doc::parse`.
 
 use crate::{CommentData, DocData, ErrorNode, Handle, ItemRef, ModuleNode};
 use rut_lexer::diag::Diag;
@@ -43,72 +46,69 @@ pub enum Mode {
 /// (AST dump, fused typecheck) do — the cap keeps trees they visit shallow.
 pub(crate) const EXPR_MAX: u32 = 64;
 
-/// The AST layer's opts — one knob: docs in the tree. `recover` is NOT
-/// a knob; the ENTRY is the choice (`parse` fail-fast /
-/// `parse_with_recover` always a tree).
-#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
-pub struct ParseOpts {
-    /// graft doc chains onto decl nodes at allocation (D7). The grammar
-    /// never consults comments; tree shape never depends on them.
-    pub include_comments: bool,
-}
-
-/// The pair artifact: the tree + ITS exact text. `src` is the
-/// NORMALIZED text every span indexes — the join target, never the
-/// caller's raw input. The halves ride named doors (the capsule law):
-/// reads borrow, `into_parts` moves.
-pub struct Parsed {
-    ast: crate::Ast,
-    src: String,
-}
-
-impl Parsed {
-    /// the tree half
-    pub fn ast(&self) -> &crate::Ast {
-        &self.ast
-    }
-
-    /// the text half — the NORMALIZED text every span indexes
-    pub fn src(&self) -> &str {
-        &self.src
-    }
-
-    /// the consuming door — both halves as owned values (the lanes
-    /// that store the pair's parts)
-    pub fn into_parts(self) -> (crate::Ast, String) {
-        (self.ast, self.src)
-    }
-}
-
 /// The fail-fast entry: `Err` carries the FIRST diag and no tree was
 /// built; `Ok` implies a clean tree (`ast.is_clean()`). Takes the
-/// source BY VALUE — it moves into the artifact (the pair law:
-/// `Parsed::src` is the normalized text every span indexes).
-pub fn parse(src: String, mode: Mode, opts: ParseOpts) -> Result<Parsed, Diag> {
-    let p = parse_with_recover(src, mode, opts);
-    match p.ast.errors().first().cloned() {
+/// source BY VALUE — it moves into the artifact (the [`Doc`](crate::Doc)
+/// law: the document owns the normalized text every span indexes).
+/// A wrapper over [`crate::Doc::parse`] kept for the "a diag means
+/// stop" callers (its own tests).
+pub fn parse(src: String, mode: Mode) -> Result<crate::Doc, Diag> {
+    let doc = crate::Doc::parse(mode, src);
+    match doc.ast().errors().first().cloned() {
         Some(first) => Err(first),
-        None => Ok(p),
+        None => Ok(doc),
     }
 }
 
 /// The recovering entry: ALWAYS a tree. Unparseable regions are
 /// `ErrorNode`s in the lists they belong to; every diag rides
 /// `ast.errors()` (the flat view) and the in-stream slots (the
-/// positional view). Takes the source BY VALUE and rides
-/// [`rut_lexer::lexer::lex_canonical`]: a clean (LF-only) input moves
-/// through with ZERO copies, a dirty one pays the one normalize pass —
-/// and `Parsed::src` is exactly the text the tokens (and every span)
-/// index.
-pub fn parse_with_recover(src: String, mode: Mode, opts: ParseOpts) -> Parsed {
-    let (normalized, toks, diags, comments, _) = rut_lexer::lexer::lex_canonical(src, true);
-    let comments = if opts.include_comments {
-        Some(comments)
-    } else {
-        None
-    };
+/// positional view). Takes the source BY VALUE — a wrapper over
+/// [`crate::Doc::parse`] (the one grammar engine; see there).
+pub fn parse_with_recover(src: String, mode: Mode) -> crate::Doc {
+    crate::Doc::parse(mode, src)
+}
+
+/// THE GRAMMAR ENGINE'S ONE ENTRY — a token WINDOW in, root-level
+/// items out. The whole stream is just the window that happens to
+/// cover everything: a cold parse rides it with the full range, the
+/// `Doc` edit lane rides it with the dirty tail (`[dirty item .. EOF]`)
+/// into FRESH SLOTS of the live store. One engine, no second parser to
+/// drift (law 3).
+///
+/// `toks` and `ast` are borrowed and swapped out for the frame
+/// machine's duration, then put back — the fresh nodes land in the
+/// caller's store. `grafts` is the enriched comment table the doc
+/// chains graft from ([`graft_table`]; the grammar never consults
+/// comments, but decl nodes carry their chains — always on). `pre_items`
+/// are the lex-tier fences seeded ahead of the window (cold parses
+/// only — an edit window's fences live in the `Doc`'s managed prefix).
+/// `prev_end` seeds the exact-span helper: 0 for a cold parse, the
+/// window's first token lo for an edit (a degenerate fence must not
+/// reach back before the window). `deep_already` presets the once-only
+/// nesting flags when the surviving subtrees already carry a "nesting
+/// too deep" row — the fresh parse then stays ≡ cold (the flat panel
+/// reports the global-first site, which survives the edit).
+///
+/// Returns the root-level ITEM LIST (the throwaway module frame's
+/// payload — its slot is punched back) and the window's parse diags.
+pub(crate) fn parse_item_window(
+    mode: Mode,
+    toks: &mut Vec<Token>,
+    ast: &mut crate::Ast,
+    grafts: Vec<Graft>,
+    pre_items: Vec<ItemRef>,
+    prev_end: u32,
+    deep_already: bool,
+) -> (Vec<ItemRef>, Vec<Diag>) {
+    let window = std::mem::take(toks);
+    let store = std::mem::replace(ast, crate::Ast::new());
+    // the parser gets a SCRATCH copy of the window: the grammar may
+    // rewrite it locally (expect_gt splits a `>>` into two `>`), and
+    // the caller's stream must stay the COLD LEX — the splice lane's
+    // convergence and the edit lane's mappings both key on it
     let mut p = Parser {
-        toks,
+        toks: window.clone(),
         pos: 0,
         max_pos: 0,
         diags: Vec::new(),
@@ -116,35 +116,91 @@ pub fn parse_with_recover(src: String, mode: Mode, opts: ParseOpts) -> Parsed {
         frames: Vec::new(),
         inbox: None,
         nest: 0,
-        nest_reported: false,
+        nest_reported: deep_already,
         expr_depth: 0,
-        expr_reported: false,
-        ast: crate::Ast::new(),
-        src: normalized,
-        comments,
-        prev_end: 0,
+        expr_reported: deep_already,
+        ast: store,
+        comments: grafts,
+        prev_end,
     };
-    // lex rows have no grammar home: one root-level ErrorNode each,
-    // pre-seeded into the module (the ladder's LEX tier)
-    let mut pre_items = Vec::new();
-    for d in &diags {
-        let h = ErrorNode {
-            span: d.span,
-            diags: vec![d.clone()],
-        }
-        .alloc_plain(&mut p.ast);
-        pre_items.push(ItemRef::Error(h));
-    }
     let root = p.run(pre_items);
-    // the ordered flat lane: lex rows first (as today), then the parse rows
-    let mut all = diags;
-    all.append(&mut p.diags);
-    p.ast.set_errors(all);
-    p.ast.set_root(root);
-    Parsed {
-        ast: p.ast,
-        src: p.src,
+    // the item list is the payload: take the throwaway module node out
+    // of its arena (the hole is reused by the next allocation) and
+    // hand the items back
+    let module = <ModuleNode as crate::NodeStore>::arena_mut(&mut p.ast)
+        .remove(root.idx)
+        .expect("the module frame always allocates its root");
+    // the PRISTINE window rides back out (the scratch copy — split
+    // tokens and all — is the parser's own and dies here)
+    *toks = window;
+    *ast = p.ast;
+    (module.items, p.diags)
+}
+
+/// One enriched comment row — the doc-graft's fuel. [`Parser::doc_above`]
+/// must answer "which `//` lines attach above this decl?" WITHOUT a
+/// text to slice, so the text-derived verdicts are computed ONCE per
+/// parse-lane entry (cold or edit window) into these rows: whether the
+/// comment starts its line, where the next code byte sits, and how
+/// many newlines the whitespace gap after the comment carries.
+pub(crate) struct Graft {
+    /// the comment's span, marker included
+    span: Span,
+    /// the rustc doc convention (`///` `//!` `/**` `/*!`)
+    doc: bool,
+    /// a `//` line comment — only line comments attach (the
+    /// Go-convention rule this graft implements)
+    line: bool,
+    /// only whitespace precedes the comment on its line
+    line_initial: bool,
+    /// the first non-whitespace byte at/after the comment's end —
+    /// `u32::MAX` when only whitespace follows (the EOF edge)
+    next_code: u32,
+    /// newlines between the comment's end and `next_code`
+    nl_after: u32,
+}
+
+/// Enrich the lex lane's comment table against the NORMALIZED text —
+/// the one place the doc-graft touches text. Called at the parse
+/// lane's entry (cold: `Doc::parse`; edit: the refreshed window
+/// table), so the grammar-side [`Parser::doc_above`] rides pure rows.
+pub(crate) fn graft_table(src: &str, comments: Vec<Comment>) -> Vec<Graft> {
+    let mut out = Vec::with_capacity(comments.len());
+    // the newline frontier — the lowest byte whose '\n' status is not
+    // yet recorded (comments arrive in source order, so one forward
+    // walk serves every row)
+    let mut frontier = 0usize;
+    let mut last_nl: Option<usize> = None;
+    for c in comments {
+        let lo = c.span.lo as usize;
+        let hi = c.span.hi as usize;
+        while frontier < lo {
+            if src.as_bytes()[frontier] == b'\n' {
+                last_nl = Some(frontier);
+            }
+            frontier += 1;
+        }
+        let line_start = last_nl.map(|i| i + 1).unwrap_or(0);
+        let line_initial = src[line_start..lo].trim().is_empty();
+        let (next_code, nl_after) =
+            match src[hi..].char_indices().find(|(_, ch)| !ch.is_whitespace()) {
+                Some((i, _)) => {
+                    let at = hi + i;
+                    let nls = src[hi..at].matches('\n').count() as u32;
+                    (at as u32, nls)
+                }
+                None => (u32::MAX, 0),
+            };
+        out.push(Graft {
+            span: c.span,
+            doc: c.doc,
+            line: src[lo..].starts_with("//"),
+            line_initial,
+            next_code,
+            nl_after,
+        });
     }
+    out
 }
 
 /// a name capture — the ident's interning id AND its span (the parse
@@ -170,10 +226,10 @@ pub(crate) struct Parser {
     expr_reported: bool,
     // the capsule store — nodes land here, complete, once
     pub(crate) ast: crate::Ast,
-    /// the NORMALIZED text (spans index it; moved into `Parsed`)
-    pub(crate) src: String,
-    /// the comment table — `Some` ⇔ include_comments (docs graft)
-    pub(crate) comments: Option<Vec<Comment>>,
+    /// the enriched comment table ([`graft_table`]) — docs graft from
+    /// these rows at allocation; the grammar itself never consults
+    /// them (D7)
+    pub(crate) comments: Vec<Graft>,
     /// hi of the last consumed token — exact item spans end here
     pub(crate) prev_end: u32,
 }
@@ -344,29 +400,22 @@ impl Parser {
     // ---- docs at allocation (D7) ----
 
     /// the doc chain directly above `lo` — the Go-convention rules,
-    /// byte-identical to the hover lane this replaces. Empty unless
-    /// `include_comments`.
+    /// byte-identical to the hover lane this replaced. Walks the
+    /// ENRICHED rows backwards from `lo`: only `//` line comments that
+    /// start their line attach, the gap to the next row (or the decl)
+    /// must be whitespace, and past the first row at most one blank
+    /// line may separate them.
     pub(crate) fn doc_above(&self, lo: u32) -> DocData {
-        let Some(cs) = &self.comments else {
-            return DocData::default();
-        };
-        let src = &self.src;
-        let line_initial = |c: &Comment| {
-            let line_start = src[..c.span.lo as usize]
-                .rfind('\n')
-                .map(|i| i + 1)
-                .unwrap_or(0);
-            src[line_start..c.span.lo as usize].trim().is_empty()
-        };
+        let cs = &self.comments;
         let mut out: Vec<CommentData> = Vec::new();
         let mut bound = lo;
         let mut first = true;
-        while let Some(c) = cs.iter().rev().find(|c| {
-            c.span.hi <= bound && src[c.span.lo as usize..].starts_with("//") && line_initial(c)
-        }) {
-            let gap = &src[c.span.hi as usize..bound as usize];
-            let attaches =
-                gap.chars().all(char::is_whitespace) && (first || gap.matches('\n').count() <= 1);
+        while let Some(c) = cs
+            .iter()
+            .rev()
+            .find(|c| c.span.hi <= bound && c.line && c.line_initial)
+        {
+            let attaches = c.next_code == bound && (first || c.nl_after <= 1);
             if !attaches {
                 break;
             }

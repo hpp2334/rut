@@ -50,8 +50,8 @@ impl CommentData {
 }
 
 /// the doc chain attached to a decl — spans only, in source order.
-/// Empty ⇒ no docs. Populated by the parse lane when
-/// `ParseOpts::include_comments` is set; `DocData::default()` otherwise.
+/// Empty ⇒ no docs. Populated by the parse lane at allocation (docs
+/// are always on — the editor law baked into the pipeline).
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
 pub struct DocData(pub Vec<CommentData>);
 

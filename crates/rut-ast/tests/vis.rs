@@ -30,22 +30,23 @@ impl Widget {
     fn secret(self) -> i32 { return self.plain; }
 }
 ";
-    let (ast, diags) = parse(src, Mode::Impl);
+    let (doc, diags) = parse(src, Mode::Impl);
+    let ast = doc.ast();
     assert!(diags.is_empty(), "expected a clean parse: {diags:?}");
-    let items = ast.root().items(&ast);
+    let items = ast.root().items(ast);
     let ItemRef::Class(ch) = items[0] else {
         panic!("expected a class, got {:?}", items[0]);
     };
-    let fields = ch.get(&ast).fields.clone();
+    let fields = ch.get(ast).fields.clone();
     let ItemRef::Impl(ih) = items[1] else {
         panic!("expected an impl block, got {:?}", items[1]);
     };
-    let methods = ih.get(&ast).methods.clone();
+    let methods = ih.get(ast).methods.clone();
     let field_vis = |r: FieldRef, want: Option<Vis>| {
         let FieldRef::Field(fh) = r else {
             panic!("a field, got {r:?}");
         };
-        assert_eq!(fh.get(&ast).vis(), want);
+        assert_eq!(fh.get(ast).vis(), want);
     };
     field_vis(fields[0], Some(Vis::Pub));
     field_vis(fields[1], Some(Vis::Pkg));
@@ -55,7 +56,7 @@ impl Widget {
         let MethodRef::Method(mh) = methods[i] else {
             panic!("a method, got {:?}", methods[i]);
         };
-        mh.get(&ast).vis()
+        mh.get(ast).vis()
     };
     assert_eq!(method_vis(0), Some(Vis::Pub));
     assert_eq!(method_vis(1), Some(Vis::Pub));
@@ -92,25 +93,26 @@ impl Sink {
     pub async fn later(self) -> nil { }
 }
 ";
-    let (ast, diags) = parse(src, Mode::Impl);
+    let (doc, diags) = parse(src, Mode::Impl);
+    let ast = doc.ast();
     assert!(diags.is_empty(), "expected a clean parse: {diags:?}");
-    let items = ast.root().items(&ast);
+    let items = ast.root().items(ast);
     let ItemRef::Class(ch) = items[0] else {
         panic!("expected a class, got {:?}", items[0]);
     };
-    let FieldRef::Field(fh) = ch.get(&ast).fields[0] else {
+    let FieldRef::Field(fh) = ch.get(ast).fields[0] else {
         panic!("a field");
     };
-    let fd = fh.get(&ast);
+    let fd = fh.get(ast);
     assert_eq!(fd.vis(), Some(Vis::Pub));
     assert!(fd.is_static());
     let ItemRef::Impl(ih) = items[1] else {
         panic!("expected an impl block, got {:?}", items[1]);
     };
-    let MethodRef::Method(mh) = ih.get(&ast).methods[0] else {
+    let MethodRef::Method(mh) = ih.get(ast).methods[0] else {
         panic!("a method");
     };
-    let md = mh.get(&ast);
+    let md = mh.get(ast);
     assert_eq!(md.vis(), Some(Vis::Pub));
     assert!(md.is_async());
 }
@@ -124,16 +126,17 @@ fn member_modifiers_are_spanned_nodes_and_the_span_starts_at_the_first() {
     // checker asks for are the node's own derived accessors)
     let src = "class C { pub static ready: bool; }\n\
                impl C {\n    [disposal] pub async fn drop_it(self) { }\n}\n";
-    let (ast, diags) = parse(src, Mode::Impl);
+    let (doc, diags) = parse(src, Mode::Impl);
+    let ast = doc.ast();
     assert!(diags.is_empty(), "expected a clean parse: {diags:?}");
-    let items = ast.root().items(&ast);
+    let items = ast.root().items(ast);
     let ItemRef::Class(ch) = items[0] else {
         panic!("expected a class, got {:?}", items[0]);
     };
-    let FieldRef::Field(fh) = ch.get(&ast).fields[0] else {
+    let FieldRef::Field(fh) = ch.get(ast).fields[0] else {
         panic!("a field");
     };
-    let fd = fh.get(&ast);
+    let fd = fh.get(ast);
     let field_lo = src.find("pub static").unwrap() as u32;
     assert_eq!(
         fd.span.lo, field_lo,
@@ -152,10 +155,10 @@ fn member_modifiers_are_spanned_nodes_and_the_span_starts_at_the_first() {
     let ItemRef::Impl(ih) = items[1] else {
         panic!("expected an impl block, got {:?}", items[1]);
     };
-    let MethodRef::Method(mh) = ih.get(&ast).methods[0] else {
+    let MethodRef::Method(mh) = ih.get(ast).methods[0] else {
         panic!("a method");
     };
-    let md = mh.get(&ast);
+    let md = mh.get(ast);
     let m_lo = src.find("[disposal]").unwrap() as u32;
     assert_eq!(
         md.span.lo, m_lo,
@@ -261,21 +264,22 @@ fn interface_bodies_accept_async_and_no_self_sigs() {
         async fn poll(self) -> bool;\n\
         fn yield_now(cx: u32);\n\
     }";
-    let (ast, diags) = parse(src, Mode::Impl);
+    let (doc, diags) = parse(src, Mode::Impl);
+    let ast = doc.ast();
     assert!(diags.is_empty(), "expected a clean parse: {diags:?}");
-    let items = ast.root().items(&ast);
+    let items = ast.root().items(ast);
     let ItemRef::Interface(ih) = items[0] else {
         panic!("expected an interface, got {:?}", items[0]);
     };
-    let methods = &ih.get(&ast).methods;
+    let methods = &ih.get(ast).methods;
     let MethodRef::Method(a) = methods[1] else {
         panic!("a method, got {:?}", methods[1]);
     };
-    assert!(a.get(&ast).is_async());
+    assert!(a.get(ast).is_async());
     let MethodRef::Method(b) = methods[2] else {
         panic!("a method, got {:?}", methods[2]);
     };
-    assert!(!b.get(&ast).is_async());
+    assert!(!b.get(ast).is_async());
 }
 
 #[test]
@@ -284,16 +288,17 @@ fn inherent_impl_is_the_one_form() {
         impl P { fn new(x: i32) -> Self { return Self { x: x }; } } \
         interface Show { fn show(self) -> str; } \
         impl P { fn show(self) -> str { return \"\"; } }";
-    let (ast, diags) = parse(src, Mode::Impl);
+    let (doc, diags) = parse(src, Mode::Impl);
+    let ast = doc.ast();
     assert!(diags.is_empty(), "expected a clean parse: {diags:?}");
-    let items = ast.root().items(&ast);
+    let items = ast.root().items(ast);
     let ItemRef::Impl(ih) = items[1] else {
         panic!("expected an inherent impl, got {:?}", items[1]);
     };
-    let TyRef::Path(t) = ih.get(&ast).target else {
-        panic!("expected a path target, got {:?}", ih.get(&ast).target);
+    let TyRef::Path(t) = ih.get(ast).target else {
+        panic!("expected a path target, got {:?}", ih.get(ast).target);
     };
-    assert_eq!(ast.name(t.get(&ast).segs[0].name), "P");
+    assert_eq!(ast.name(t.get(ast).segs[0].name), "P");
     assert!(matches!(items[3], ItemRef::Impl(_)));
 }
 
@@ -303,13 +308,14 @@ fn interface_vis_parses_into_the_item() {
     let src = "pub interface Show {\n\
         fn show(self) -> str;\n\
     }";
-    let (ast, diags) = parse(src, Mode::Impl);
+    let (doc, diags) = parse(src, Mode::Impl);
+    let ast = doc.ast();
     assert!(diags.is_empty(), "expected a clean parse: {diags:?}");
-    let items = ast.root().items(&ast);
+    let items = ast.root().items(ast);
     let ItemRef::Interface(ih) = items[0] else {
         panic!("expected an interface, got {:?}", items[0]);
     };
-    let d = ih.get(&ast);
+    let d = ih.get(ast);
     assert_eq!(d.vis(), Vis::Pub);
     assert_eq!(ast.name(d.name), "Show");
     assert_eq!(d.methods.len(), 1);
@@ -327,14 +333,15 @@ fn item_modifiers_are_spanned_nodes_and_the_span_starts_at_the_first() {
                pub(super) use pkg::{A};\n\
                pub mod net;\n\
                mod solo;\n";
-    let (ast, diags) = parse(src, Mode::Impl);
+    let (doc, diags) = parse(src, Mode::Impl);
+    let ast = doc.ast();
     assert!(diags.is_empty(), "expected a clean parse: {diags:?}");
-    let items = ast.root().items(&ast);
+    let items = ast.root().items(ast);
 
     let ItemRef::Fn(fh) = items[0] else {
         panic!("expected a fn, got {:?}", items[0]);
     };
-    let f = fh.get(&ast);
+    let f = fh.get(ast);
     let f_lo = src.find("pub async").unwrap() as u32;
     assert_eq!(f.span.lo, f_lo, "the fn span starts at its first modifier");
     assert_eq!(f.modifiers.len(), 2, "pub + async, in source order");
@@ -350,7 +357,7 @@ fn item_modifiers_are_spanned_nodes_and_the_span_starts_at_the_first() {
     let ItemRef::Fn(eh) = items[1] else {
         panic!("expected a fn, got {:?}", items[1]);
     };
-    let e = eh.get(&ast);
+    let e = eh.get(ast);
     let e_lo = src.find("entry fn").unwrap() as u32;
     assert_eq!(e.span.lo, e_lo, "the entry fn starts at `entry`");
     assert_eq!(e.modifiers.len(), 1, "entry alone");
@@ -361,7 +368,7 @@ fn item_modifiers_are_spanned_nodes_and_the_span_starts_at_the_first() {
     let ItemRef::Use(uh) = items[2] else {
         panic!("expected a use, got {:?}", items[2]);
     };
-    let u = uh.get(&ast);
+    let u = uh.get(ast);
     let u_lo = src.find("pub(super)").unwrap() as u32;
     assert_eq!(u.span.lo, u_lo, "the use span covers the scoped pub");
     assert_eq!(u.modifiers.len(), 1);
@@ -375,13 +382,13 @@ fn item_modifiers_are_spanned_nodes_and_the_span_starts_at_the_first() {
     let ItemRef::ModDecl(ph) = items[3] else {
         panic!("expected a mod decl, got {:?}", items[3]);
     };
-    let pd = ph.get(&ast);
+    let pd = ph.get(ast);
     assert_eq!(pd.span.lo, src.find("pub mod").unwrap() as u32);
     assert_eq!(pd.vis(), Vis::Pub);
     let ItemRef::ModDecl(sh) = items[4] else {
         panic!("expected a mod decl, got {:?}", items[4]);
     };
-    let sd = sh.get(&ast);
+    let sd = sh.get(ast);
     assert_eq!(
         sd.span.lo,
         src.find("mod solo").unwrap() as u32,

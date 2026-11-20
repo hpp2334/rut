@@ -92,12 +92,11 @@ pub fn lex_collect(src: &str, collect: bool) -> (Vec<Token>, Vec<Diag>, Vec<Comm
 }
 
 /// Lex ALREADY-normalized text — the path that normalizes once and
-/// shares: [`lex_canonical`] (and through it the parser's entry pair,
-/// `rut_ast::parser::parse` / `parse_with_recover`) and every consumer
-/// re-deriving the leaf layer over a `Parsed` artifact ride `p.src`
-/// (the normalized text every span indexes). `lex`/`lex_collect`
-/// normalize internally; passing their output here would
-/// only re-copy it.
+/// shares: [`lex_canonical`] (and through it rut-ast's parse lane —
+/// `Doc::parse` owns the normalized text every span indexes) and any
+/// consumer re-deriving the leaf layer over a text it already holds.
+/// `lex`/`lex_collect` normalize internally; passing their output here
+/// would only re-copy it.
 ///
 /// The line starts ride the SAME byte scan (a `\n` consumed anywhere
 /// records the line it opens) — the [`crate::source::Source`]

@@ -11,39 +11,41 @@ use rut_ast::{AstPrinter, ItemRef, MethodRef, TyRef, Vis};
 #[test]
 fn alias_parses_transparent_shape() {
     let src = "type Meters = i64;\n";
-    let (ast, diags) = parse(src, Mode::Impl);
+    let (doc, diags) = parse(src, Mode::Impl);
+    let ast = doc.ast();
     assert!(diags.is_empty(), "expected a clean parse: {diags:?}");
-    let items = ast.root().items(&ast);
+    let items = ast.root().items(ast);
     let ItemRef::Alias(h) = items[0] else {
         panic!("expected an alias");
     };
-    let d = h.get(&ast);
+    let d = h.get(ast);
     assert_eq!(d.vis(), Vis::Self_);
     assert_eq!(ast.name(d.name), "Meters");
     let TyRef::Path(t) = d.target else {
         panic!("expected a path target");
     };
-    assert_eq!(ast.name(t.get(&ast).segs[0].name), "i64");
+    assert_eq!(ast.name(t.get(ast).segs[0].name), "i64");
 }
 
 #[test]
 fn union_alias_parses_ty_union() {
     let src = "type Num = i32 | str;\n";
-    let (ast, diags) = parse(src, Mode::Impl);
+    let (doc, diags) = parse(src, Mode::Impl);
+    let ast = doc.ast();
     assert!(diags.is_empty(), "expected a clean parse: {diags:?}");
-    let items = ast.root().items(&ast);
+    let items = ast.root().items(ast);
     let ItemRef::Alias(h) = items[0] else {
         panic!("expected an alias");
     };
-    let TyRef::Union(u) = h.get(&ast).target else {
+    let TyRef::Union(u) = h.get(ast).target else {
         panic!("expected a union target");
     };
-    let elems = &u.get(&ast).elems;
+    let elems = &u.get(ast).elems;
     assert_eq!(elems.len(), 2);
     let names: Vec<&str> = elems
         .iter()
         .map(|&e| match e {
-            TyRef::Path(ph) => ast.name(ph.get(&ast).segs[0].name),
+            TyRef::Path(ph) => ast.name(ph.get(ast).segs[0].name),
             _ => panic!("expected path members"),
         })
         .collect();
@@ -57,9 +59,10 @@ fn alias_target_kinds_parse() {
 type Box = Vec;
 type Row = [?i32];
 ";
-    let (ast, diags) = parse(src, Mode::Impl);
+    let (doc, diags) = parse(src, Mode::Impl);
+    let ast = doc.ast();
     assert!(diags.is_empty(), "expected a clean parse: {diags:?}");
-    let items = ast.root().items(&ast);
+    let items = ast.root().items(ast);
     assert_eq!(items.len(), 2);
     for it in items {
         assert!(matches!(it, ItemRef::Alias(_)));
@@ -70,32 +73,34 @@ type Row = [?i32];
 fn inline_requires_on_fn_parses() {
     // one bound, single member
     let src = "interface Show { fn show(self) -> str; }\nfn tagged<T requires Show>(x: T) -> str { return \"\"; }\n";
-    let (ast, diags) = parse(src, Mode::Impl);
+    let (doc, diags) = parse(src, Mode::Impl);
+    let ast = doc.ast();
     assert!(diags.is_empty(), "expected a clean parse: {diags:?}");
-    let items = ast.root().items(&ast);
+    let items = ast.root().items(ast);
     let ItemRef::Fn(fh) = items[1] else {
         panic!("expected a fn");
     };
-    let f = fh.get(&ast);
+    let f = fh.get(ast);
     assert_eq!(f.bounds.len(), 1);
     assert_eq!(ast.name(f.bounds[0].0), "T");
     let TyRef::Path(t) = f.bounds[0].1 else {
         panic!("expected a path bound");
     };
-    assert_eq!(ast.name(t.get(&ast).segs[0].name), "Show");
+    assert_eq!(ast.name(t.get(ast).segs[0].name), "Show");
 }
 
 #[test]
 fn inline_union_bound_and_multiple_params_parse() {
     // a union bound spanning two members, plus an unbounded generic
     let src = "fn f<A, T requires i32 | str, B>(x: T) -> i32 { return 0; }\n";
-    let (ast, diags) = parse(src, Mode::Impl);
+    let (doc, diags) = parse(src, Mode::Impl);
+    let ast = doc.ast();
     assert!(diags.is_empty(), "expected a clean parse: {diags:?}");
-    let items = ast.root().items(&ast);
+    let items = ast.root().items(ast);
     let ItemRef::Fn(fh) = items[0] else {
         panic!("expected a fn");
     };
-    let f = fh.get(&ast);
+    let f = fh.get(ast);
     assert_eq!(
         f.generics.len(),
         3,
@@ -106,7 +111,7 @@ fn inline_union_bound_and_multiple_params_parse() {
     let TyRef::Union(u) = f.bounds[0].1 else {
         panic!("expected a union bound");
     };
-    assert_eq!(u.get(&ast).elems.len(), 2);
+    assert_eq!(u.get(ast).elems.len(), 2);
 }
 
 #[test]
@@ -117,16 +122,17 @@ impl Widget {
     fn wrap<T requires Enc>(self, x: T) -> bytes { return x.enc(); }
 }
 ";
-    let (ast, diags) = parse(src, Mode::Impl);
+    let (doc, diags) = parse(src, Mode::Impl);
+    let ast = doc.ast();
     assert!(diags.is_empty(), "expected a clean parse: {diags:?}");
-    let items = ast.root().items(&ast);
+    let items = ast.root().items(ast);
     let ItemRef::Impl(ih) = items[1] else {
         panic!("expected an impl block");
     };
-    let MethodRef::Method(mh) = ih.get(&ast).methods[0] else {
+    let MethodRef::Method(mh) = ih.get(ast).methods[0] else {
         panic!("expected a method");
     };
-    let md = mh.get(&ast);
+    let md = mh.get(ast);
     assert_eq!(md.bounds.len(), 1);
     assert_eq!(ast.name(md.bounds[0].0), "T");
 }
@@ -195,20 +201,21 @@ class Box<K requires D, V> {
     v: V;
 }
 ";
-    let (ast, diags) = parse(src, Mode::Impl);
+    let (doc, diags) = parse(src, Mode::Impl);
+    let ast = doc.ast();
     assert!(diags.is_empty(), "expected a clean parse: {diags:?}");
-    let items = ast.root().items(&ast);
+    let items = ast.root().items(ast);
     let ItemRef::Class(ch) = items[1] else {
         panic!("expected a class");
     };
-    let c = ch.get(&ast);
+    let c = ch.get(ast);
     assert_eq!(c.generics.len(), 2, "K, V both collected: {:?}", c.generics);
     assert_eq!(c.requires.len(), 1);
     assert_eq!(ast.name(c.requires[0].0), "K");
     let TyRef::Path(t) = c.requires[0].1 else {
         panic!("expected a path bound");
     };
-    assert_eq!(ast.name(t.get(&ast).segs[0].name), "D");
+    assert_eq!(ast.name(t.get(ast).segs[0].name), "D");
 }
 
 #[test]
@@ -216,13 +223,14 @@ fn class_union_bound_and_unbounded_params_parse() {
     // a union bound on one param, an unbounded param after it — the
     // list continues through the absorbed bounds like the fn grammar
     let src = "class C<A, T requires i32 | str, B> { v: T; }\n";
-    let (ast, diags) = parse(src, Mode::Impl);
+    let (doc, diags) = parse(src, Mode::Impl);
+    let ast = doc.ast();
     assert!(diags.is_empty(), "expected a clean parse: {diags:?}");
-    let items = ast.root().items(&ast);
+    let items = ast.root().items(ast);
     let ItemRef::Class(ch) = items[0] else {
         panic!("expected a class");
     };
-    let c = ch.get(&ast);
+    let c = ch.get(ast);
     assert_eq!(
         c.generics.len(),
         3,
@@ -233,15 +241,16 @@ fn class_union_bound_and_unbounded_params_parse() {
     let TyRef::Union(u) = c.requires[0].1 else {
         panic!("expected a union bound");
     };
-    assert_eq!(u.get(&ast).elems.len(), 2);
+    assert_eq!(u.get(ast).elems.len(), 2);
 }
 
 #[test]
 fn dumper_renders_class_requires() {
     let src = "interface D { fn d(self) -> u64; }\nclass Box<K requires D, V> { k: K; v: V; }\n";
-    let (ast, diags) = parse(src, Mode::Impl);
+    let (doc, diags) = parse(src, Mode::Impl);
+    let ast = doc.ast();
     assert!(diags.is_empty(), "expected a clean parse: {diags:?}");
-    let text = AstPrinter::text_of(&ast, src);
+    let text = AstPrinter::text_of(ast, src);
     assert!(text.contains("Class"), "class node in the dump: {text}");
     assert!(
         text.contains("bounds:"),
@@ -252,16 +261,17 @@ fn dumper_renders_class_requires() {
 #[test]
 fn dumper_renders_alias_bounds_and_union() {
     let src = "pub type Meters = i64;\ntype Num = i32 | str;\nfn f<T requires i32 | str>(x: T) -> i32 { return 0; }\n";
-    let (ast, diags) = parse(src, Mode::Impl);
+    let (doc, diags) = parse(src, Mode::Impl);
+    let ast = doc.ast();
     assert!(diags.is_empty(), "expected a clean parse: {diags:?}");
-    let text = AstPrinter::text_of(&ast, src);
+    let text = AstPrinter::text_of(ast, src);
     assert!(
         text.contains("Alias Meters"),
         "alias node in the dump: {text}"
     );
     assert!(text.contains("TyUnion"), "union node in the dump: {text}");
     assert!(text.contains("bounds:"), "bounds field in the dump: {text}");
-    let json = AstPrinter::json_of(&ast);
+    let json = AstPrinter::json_of(ast);
     assert!(json.contains("\"Alias\""), "alias kind on the wire: {json}");
 }
 
@@ -272,11 +282,12 @@ pub type A = i64;
 pub(super) type C = i64;
 pub(pkg) type P = i64;
 ";
-    let (ast, diags) = parse(src, Mode::Impl);
+    let (doc, diags) = parse(src, Mode::Impl);
+    let ast = doc.ast();
     assert!(diags.is_empty(), "expected a clean parse: {diags:?}");
-    let items = ast.root().items(&ast);
+    let items = ast.root().items(ast);
     let expect = |i: usize| match items[i] {
-        ItemRef::Alias(h) => h.get(&ast).vis(),
+        ItemRef::Alias(h) => h.get(ast).vis(),
         k => panic!("expected an alias, got {k:?}"),
     };
     assert_eq!(expect(0), Vis::Pub);
@@ -289,7 +300,7 @@ fn pub_mod_self_scopes_are_the_ordinary_scope_error() {
     // the repealed paren spellings draw the ordinary pub(..) scope
     // error (one per spelling) and the aliases still parse at the
     // default
-    let (ast, diags) = parse(
+    let (doc, diags) = parse(
         "pub(mod) type B = i64;\npub(self) type D = i64;\n",
         Mode::Impl,
     );
@@ -300,12 +311,13 @@ fn pub_mod_self_scopes_are_the_ordinary_scope_error() {
             .all(|d| d.msg.contains("expected `super` or `pkg` in pub(..)")),
         "each diag is the ordinary scope error: {diags:?}"
     );
-    let items = ast.root().items(&ast);
+    let ast = doc.ast();
+    let items = ast.root().items(ast);
     for item in items.iter().take(2) {
         match item {
             ItemRef::Alias(h) => {
                 assert_eq!(
-                    h.get(&ast).vis(),
+                    h.get(ast).vis(),
                     Vis::Self_,
                     "the default survives recovery"
                 )

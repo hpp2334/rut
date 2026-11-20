@@ -17,14 +17,21 @@ use crate::token::{FPart, Tok, Token};
 /// The dirty token range the splice reports: `[start, end)` indexes
 /// into the POST-splice stream — the tokens whose content came from
 /// the relexed window (everything outside the range is the untouched
-/// prefix or the delta-shifted suffix). The `Doc` pipeline maps it to
-/// its dirty reuse unit.
+/// prefix or the delta-shifted suffix). `window_lo` is the byte the
+/// relex window opened at — a line start, or a literal's own start
+/// when the line start sat inside it (0 for a full relex). Together
+/// they draw the reuse-unit line for the `Doc` pipeline: tokens before
+/// the window are byte-identical text (items built purely from them
+/// survive), everything at/after was relexed.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct TokenChange {
     /// first dirty token index (into the spliced stream)
     pub start: usize,
     /// one past the last dirty token
     pub end: usize,
+    /// the byte the relex window opened at (post-edit coordinates;
+    /// always ≤ the edit's start, so old-text spans compare directly)
+    pub window_lo: u32,
 }
 
 /// Splice ONE [`Edit`] into a token stream over the edited [`Source`].
@@ -47,7 +54,11 @@ pub fn splice_tokens(toks: &mut Vec<Token>, src: &Source, e: &Edit) -> TokenChan
         let (fresh, _, _, _) = lex_normalized(text, false);
         let end = fresh.len();
         *toks = fresh;
-        return TokenChange { start: 0, end };
+        return TokenChange {
+            start: 0,
+            end,
+            window_lo: 0,
+        };
     }
 
     // ── the window start ──
@@ -108,7 +119,11 @@ pub fn splice_tokens(toks: &mut Vec<Token>, src: &Source, e: &Edit) -> TokenChan
         let (whole, _, _, _) = lex_normalized(text, false);
         let end = whole.len();
         *toks = whole;
-        return TokenChange { start: 0, end };
+        return TokenChange {
+            start: 0,
+            end,
+            window_lo: 0,
+        };
     }
     let k = fresh.len() - suffix_len;
 
@@ -120,9 +135,15 @@ pub fn splice_tokens(toks: &mut Vec<Token>, src: &Source, e: &Edit) -> TokenChan
     toks.truncate(prefix);
     toks.extend_from_slice(&fresh[..k]);
     toks.extend(tail);
+    // the fresh tokens land at the truncate point — `prefix`, unless
+    // the drained suffix reached UNDER it (the append-at-EOF corner:
+    // the old Eof counts as kept prefix and rides the shifted tail at
+    // once, so the drain already shortened the stream past `prefix`)
+    let landed = prefix.min(suffix_from);
     TokenChange {
-        start: prefix,
-        end: prefix + k,
+        start: landed,
+        end: landed + k,
+        window_lo: ws as u32,
     }
 }
 

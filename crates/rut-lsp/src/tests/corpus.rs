@@ -9,18 +9,10 @@ use crate::semantic::{Document, TokenType};
 use rut_ast::parser::{is_reserved_kw, Mode};
 
 /// parse with doc grafting ON — the editor lane's shape (hover's index
-/// reads doc chains off the decl nodes) and the recovering entry (the
-/// tree survives broken snippets)
-fn doc_ast(src: &str, mode: rut_ast::parser::Mode) -> rut_ast::Ast {
-    rut_ast::parser::parse_with_recover(
-        src.to_string(),
-        mode,
-        rut_ast::parser::ParseOpts {
-            include_comments: true,
-        },
-    )
-    .into_parts()
-    .0
+/// reads doc chains off the decl nodes; rut-ast grafts them always)
+/// and the recovering entry (the tree survives broken snippets)
+fn doc_ast(src: &str, mode: rut_ast::parser::Mode) -> rut_ast::Doc {
+    rut_ast::Doc::parse(mode, src.to_string())
 }
 
 /// the document under test — the editor entry itself (`Document::parse`),
@@ -131,8 +123,8 @@ fn corpus_parses_clean_lsp() {
         } else {
             Mode::Impl
         };
-        let ast = doc_ast(&src, mode);
-        let diags = ast.errors();
+        let doc = doc_ast(&src, mode);
+        let diags = doc.ast().errors();
         if !diags.is_empty() {
             failures.push(format!(
                 "{}: {} diag(s): first = {}",

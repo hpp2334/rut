@@ -18,18 +18,19 @@ impl<T> Vec2<T> {
     pub fn new() -> Self { return Self { items: [] }; }
 }
 ";
-    let (ast, diags) = parse(src, Mode::Impl);
+    let (doc, diags) = parse(src, Mode::Impl);
+    let ast = doc.ast();
     assert!(diags.is_empty(), "expected a clean parse: {diags:?}");
-    let items = ast.root().items(&ast);
+    let items = ast.root().items(ast);
     let ItemRef::Impl(ih) = items[1] else {
         panic!("expected an inherent impl");
     };
-    let d = ih.get(&ast);
+    let d = ih.get(ast);
     assert_eq!(d.generics.len(), 1, "the inherent impl declares one binder");
     let TyRef::Path(t) = d.target else {
         panic!("expected a path target, got {:?}", d.target);
     };
-    assert_eq!(ast.name(t.get(&ast).segs[0].name), "Vec2");
+    assert_eq!(ast.name(t.get(ast).segs[0].name), "Vec2");
 }
 
 #[test]
@@ -40,13 +41,14 @@ impl<K, V> Map2<K, V> {
     pub fn new() -> Self { return Self { }; }
 }
 ";
-    let (ast, diags) = parse(src, Mode::Impl);
+    let (doc, diags) = parse(src, Mode::Impl);
+    let ast = doc.ast();
     assert!(diags.is_empty(), "expected a clean parse: {diags:?}");
-    let items = ast.root().items(&ast);
+    let items = ast.root().items(ast);
     let ItemRef::Impl(ih) = items[1] else {
         panic!("expected an impl block");
     };
-    assert_eq!(ih.get(&ast).generics.len(), 2);
+    assert_eq!(ih.get(ast).generics.len(), 2);
 }
 
 #[test]
@@ -61,13 +63,14 @@ impl<T requires Hash2> Box2<T> {
     pub fn new(v: T) -> Self { return Self { v: v }; }
 }
 ";
-    let (ast, diags) = parse(src, Mode::Impl);
+    let (doc, diags) = parse(src, Mode::Impl);
+    let ast = doc.ast();
     assert!(diags.is_empty(), "expected a clean parse: {diags:?}");
-    let items = ast.root().items(&ast);
+    let items = ast.root().items(ast);
     let ItemRef::Impl(ih) = items[2] else {
         panic!("expected an impl block");
     };
-    let d = ih.get(&ast);
+    let d = ih.get(ast);
     assert_eq!(d.generics.len(), 1);
     assert_eq!(d.bounds.len(), 1, "the bound node rides the impl item");
     assert_eq!(ast.name(d.bounds[0].0), "T");
@@ -81,14 +84,15 @@ impl P {
     fn zero() -> Self { return P { x: 0 }; }
 }
 ";
-    let (ast, diags) = parse(src, Mode::Impl);
+    let (doc, diags) = parse(src, Mode::Impl);
+    let ast = doc.ast();
     assert!(diags.is_empty(), "expected a clean parse: {diags:?}");
-    let items = ast.root().items(&ast);
+    let items = ast.root().items(ast);
     let ItemRef::Impl(ih) = items[1] else {
         panic!("expected an impl block");
     };
     assert!(
-        ih.get(&ast).generics.is_empty(),
+        ih.get(ast).generics.is_empty(),
         "a concrete impl declares no binders"
     );
 }

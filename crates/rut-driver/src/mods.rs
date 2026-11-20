@@ -34,8 +34,8 @@
 
 use std::collections::BTreeMap;
 
-use rut_ast::parser::{parse_with_recover, Mode, ParseOpts};
-use rut_ast::{Ast, ItemRef, Linkage, Vis};
+use rut_ast::parser::{parse_with_recover, Mode};
+use rut_ast::{Ast, Doc, ItemRef, Linkage, Vis};
 
 use crate::session::{Mounted, MountedBody};
 
@@ -134,7 +134,7 @@ pub fn mount_mod_children(
     child_file: &str,
     read: &mut dyn FnMut(&str, &str) -> Result<ChildLookup, String>,
 ) -> Result<BTreeMap<String, ModSource>, String> {
-    let p = parse_with_recover(root_text.to_string(), mode, ParseOpts::default());
+    let p = parse_with_recover(root_text.to_string(), mode);
     if !p.ast().is_clean() {
         return Ok(BTreeMap::new()); // the compile reports the syntax, loudly
     }
@@ -203,7 +203,7 @@ fn mount_rec(
                 // into its declarations, never splice it here
                 // the child's text rides the mounted row below — clone
                 // to move into THIS parse (the row keeps the original)
-                let cp = parse_with_recover(text.clone(), mode, ParseOpts::default());
+                let cp = parse_with_recover(text.clone(), mode);
                 if cp.ast().is_clean() {
                     mount_rec(
                         &child_path,
@@ -294,11 +294,11 @@ pub enum DeclKind {
 }
 
 /// One mounted file, parsed: its mod path (`""` = the pkg root), the
-/// AST (whose root is `ItemKind::Module` — never spliced into the
+/// parsed document (whose root is the module — never spliced into the
 /// parent's), and the declarations collected off it.
 pub struct ModuleUnit {
     pub path: String,
-    pub ast: Ast,
+    pub doc: Doc,
     pub decls: Vec<DeclRow>,
 }
 
@@ -351,7 +351,7 @@ pub fn collect_module_set(spec: &str, pkg: &Mounted) -> (ModuleSet, Vec<String>)
         MountedBody::Source { text, is_decl } => {
             let m = if *is_decl { Mode::Decl } else { Mode::Impl };
             // the body stays mounted (the match borrows) — clone to move
-            let p = parse_with_recover(text.to_string(), m, ParseOpts::default());
+            let p = parse_with_recover(text.to_string(), m);
             if !p.ast().is_clean() {
                 problems.extend(
                     p.ast()
@@ -369,7 +369,7 @@ pub fn collect_module_set(spec: &str, pkg: &Mounted) -> (ModuleSet, Vec<String>)
                     .collect();
                 set.units.push(ModuleUnit {
                     path: String::new(),
-                    ast: p.into_parts().0,
+                    doc: p,
                     decls,
                 });
                 declared
@@ -380,7 +380,7 @@ pub fn collect_module_set(spec: &str, pkg: &Mounted) -> (ModuleSet, Vec<String>)
             ..
         } => {
             // the surface stays mounted (the match borrows) — clone to move
-            let p = parse_with_recover(text.to_string(), Mode::Decl, ParseOpts::default());
+            let p = parse_with_recover(text.to_string(), Mode::Decl);
             if !p.ast().is_clean() {
                 problems.extend(
                     p.ast()
@@ -415,7 +415,7 @@ pub fn collect_module_set(spec: &str, pkg: &Mounted) -> (ModuleSet, Vec<String>)
                     .collect();
                 set.units.push(ModuleUnit {
                     path: String::new(),
-                    ast: p.into_parts().0,
+                    doc: p,
                     decls,
                 });
                 declared
@@ -428,7 +428,7 @@ pub fn collect_module_set(spec: &str, pkg: &Mounted) -> (ModuleSet, Vec<String>)
     for (path, m) in &pkg.mods {
         // the child file's text stays mounted (the map borrows) — clone
         // to move into the child parse
-        let p = parse_with_recover(m.text.clone(), mode, ParseOpts::default());
+        let p = parse_with_recover(m.text.clone(), mode);
         if !p.ast().is_clean() {
             problems.extend(
                 p.ast()
@@ -439,7 +439,7 @@ pub fn collect_module_set(spec: &str, pkg: &Mounted) -> (ModuleSet, Vec<String>)
             child_decls.insert(path.clone(), BTreeMap::new());
             set.units.push(ModuleUnit {
                 path: path.clone(),
-                ast: p.into_parts().0,
+                doc: p,
                 decls: vec![],
             });
             continue;
@@ -453,7 +453,7 @@ pub fn collect_module_set(spec: &str, pkg: &Mounted) -> (ModuleSet, Vec<String>)
         child_decls.insert(path.clone(), declared);
         set.units.push(ModuleUnit {
             path: path.clone(),
-            ast: p.into_parts().0,
+            doc: p,
             decls,
         });
     }

@@ -405,11 +405,7 @@ fn compile_playground(
     // the string lane's own render: the tree UI's structured AST rides
     // every envelope, diags or not — the recovering ENTRY is the
     // recover choice; always a tree
-    let p = rut_ast::parser::parse_with_recover(
-        src.to_string(),
-        rut_ast::parser::Mode::Impl,
-        rut_ast::parser::ParseOpts::default(),
-    );
+    let p = rut_ast::parser::parse_with_recover(src.to_string(), rut_ast::parser::Mode::Impl);
     let parse_diags = p.ast().errors().to_vec();
     let ast_json = rut_ast::AstPrinter::json_of(p.ast());
     if !parse_diags.is_empty() {

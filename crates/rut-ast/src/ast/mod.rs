@@ -13,12 +13,13 @@
 //!   itself is the enforcement), reads
 //!   (`root`/`name`/`errors`/`is_clean`) — behavior binds to
 //!   nodes/handles with the store as ctx (D4/D5)
-//! - `Ast` holds NO src — `Parsed { ast, src }` is the pair artifact;
-//!   text queries are span×src joins (`Span::text(src)`) (law v3)
+//! - `Ast` holds NO src — the [`Doc`](crate::Doc) is the artifact (the
+//!   pipeline owns text + tokens + tree); text queries are
+//!   `Doc::text(span)` joins (law v4)
 //! - every child list is SLOTS (`Vec<XxxRef>`), every slot enum carries
 //!   `Error(Handle<ErrorNode>)` — the recovery ladder (D10)
 //! - docs ride decl nodes as `DocData` (spans, never text), populated
-//!   at allocation when `include_comments` is set (D7)
+//!   at allocation — always on (D7)
 //!
 //! This module re-exports the whole vocabulary FLAT (and the crate
 //! root globs it) — consumers never spell a module path; file layout
@@ -47,8 +48,12 @@ pub use store::Ast;
 // use` binding of one caps at pub(crate) and E0364 refuses the `pub`
 // spelling — the seal alone cannot publicize this chain.
 pub(crate) use handle::{plain_alloc, slot_alloc, slot_any, slot_span};
+// the edit lane's dispatch — the Doc pipeline (crate::document) walks
+// and punches subtrees through these
+pub(crate) use index::children_of;
 pub use rut_core::IdentId;
 pub use rut_lexer::span::Span;
+pub(crate) use store::remove_any;
 
 // items
 pub use item::{

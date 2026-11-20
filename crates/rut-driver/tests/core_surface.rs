@@ -8,7 +8,7 @@
 //! says the surface is kept TRUE to the implementation; this test makes
 //! it enforced, not aspirational.
 
-use rut_ast::parser::{parse_with_recover, Mode, ParseOpts};
+use rut_ast::parser::{parse_with_recover, Mode};
 use rut_ast::{ItemRef, Linkage, MethodRef};
 
 const CORE_DECL: &str = include_str!("../../../rut/core/src/core.d.rut");
@@ -72,21 +72,21 @@ fn graph_of(c: Result<rut_driver::Compiled, rut_driver::RunError>) -> rut_driver
 /// `pub builtin`) so the lockstep can check VISIBILITY AGREEMENT
 /// against `Surface::core`'s rows.
 fn declared_names() -> DeclSurfaces {
-    let p = parse_with_recover(CORE_DECL.to_string(), Mode::Decl, ParseOpts::default());
+    let doc = parse_with_recover(CORE_DECL.to_string(), Mode::Decl);
     assert!(
-        p.ast().is_clean(),
+        doc.ast().is_clean(),
         "core.d.rut must parse cleanly: {:?}",
-        p.ast().errors()
+        doc.ast().errors()
     );
-    let (ast, _) = p.into_parts();
+    let ast = doc.ast();
     let mut builtin_fns = Vec::new();
     let mut builtin_types = Vec::new();
     let mut plain_ifaces = Vec::new();
     let mut builtin_impls = Vec::new();
-    for it in ast.root().items(&ast) {
+    for it in ast.root().items(ast) {
         match it {
             ItemRef::SurfaceFn(h) => {
-                let d = h.get(&ast);
+                let d = h.get(ast);
                 assert!(
                     matches!(d.linkage(), Linkage::Builtin { .. }),
                     "the prelude's fns are all engine-lowered"
@@ -99,7 +99,7 @@ fn declared_names() -> DeclSurfaces {
                 builtin_fns.push((ast.name(d.name).to_string(), ambient));
             }
             ItemRef::BuiltinTy(h) => {
-                let d = h.get(&ast);
+                let d = h.get(ast);
                 let n = ast.name(d.name).to_string();
                 // `str`/`bytes` are language primitives — their
                 // member contracts are doc surface, not registered natives
@@ -108,7 +108,7 @@ fn declared_names() -> DeclSurfaces {
                 }
             }
             ItemRef::BuiltinPrimitive(h) => {
-                let d = h.get(&ast);
+                let d = h.get(ast);
                 let n = ast.name(d.name).to_string();
                 // `str`/`bytes` are language primitives — their
                 // member contracts are doc surface, not registered natives
@@ -118,15 +118,15 @@ fn declared_names() -> DeclSurfaces {
                 builtin_types.push((n, d.ambient()));
             }
             ItemRef::Interface(h) => {
-                plain_ifaces.push(ast.name(h.get(&ast).name).to_string());
+                plain_ifaces.push(ast.name(h.get(ast).name).to_string());
             }
             ItemRef::BuiltinImpl(h) => {
-                let d = h.get(&ast);
+                let d = h.get(ast);
                 let names = d
                     .methods
                     .iter()
                     .filter_map(|&m| match m {
-                        MethodRef::Method(mh) => Some(ast.name(mh.get(&ast).name).to_string()),
+                        MethodRef::Method(mh) => Some(ast.name(mh.get(ast).name).to_string()),
                         MethodRef::Error(_) => None,
                     })
                     .collect();

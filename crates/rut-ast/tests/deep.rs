@@ -143,7 +143,8 @@ fn malformed_input_terminates() {
         "fn f<K where K",
     ];
     for src in cases {
-        let (ast, diags) = parse(src, Mode::Impl);
+        let (doc, diags) = parse(src, Mode::Impl);
+        let ast = doc.ast();
         let _ = std::format!("{:?}", ast.root());
         // termination itself is the contract; most cases also diagnose
         let _ = diags.len();

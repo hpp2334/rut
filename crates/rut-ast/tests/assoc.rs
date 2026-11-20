@@ -10,13 +10,14 @@ use rut_ast::parser::Mode;
 use rut_ast::{BinOp, ExprRef, StmtRef, UnOp};
 
 /// the fn's first statement's initializer expression
-fn init_of(src: &str) -> (rut_ast::Ast, ExprRef) {
-    let (ast, diags) = parse(src, Mode::Impl);
+fn init_of(src: &str) -> (rut_ast::Doc, ExprRef) {
+    let (doc, diags) = parse(src, Mode::Impl);
+    let ast = doc.ast();
     assert!(diags.is_empty(), "expected a clean parse: {diags:?}");
-    match first_fn_body(&ast).get(&ast).stmts[0] {
+    match first_fn_body(ast).get(ast).stmts[0] {
         StmtRef::Let(h) => {
-            let init = h.get(&ast).init;
-            (ast, init)
+            let init = h.get(ast).init;
+            (doc, init)
         }
         ref s => panic!("let stmt, got {s:?}"),
     }
@@ -49,11 +50,12 @@ fn is_is_non_associative() {
 #[test]
 fn relational_allowed_across_looser_ops() {
     // `a < b && c < d` — one relational per context, fresh on each side
-    let (ast, e) = init_of("fn f() -> nil { let x = 1 < 2 && 3 < 4; }");
+    let (doc, e) = init_of("fn f() -> nil { let x = 1 < 2 && 3 < 4; }");
+    let ast = doc.ast();
     let ExprRef::Binary(b) = e else {
         panic!("expected And(..) at the top, got {e:?}");
     };
-    assert_eq!(b.get(&ast).op, BinOp::And);
+    assert_eq!(b.get(ast).op, BinOp::And);
 }
 
 #[test]
@@ -70,9 +72,10 @@ fn relational_blocked_after_tighter_op() {
 #[test]
 fn assignment_is_right_associative() {
     let src = "fn f() -> nil { let x = 0; let y = 0; let z = 0; x = y = z; }";
-    let (ast, diags) = parse(src, Mode::Impl);
+    let (doc, diags) = parse(src, Mode::Impl);
+    let ast = doc.ast();
     assert!(diags.is_empty(), "expected a clean parse: {diags:?}");
-    let stmts = &first_fn_body(&ast).get(&ast).stmts;
+    let stmts = &first_fn_body(ast).get(ast).stmts;
     let StmtRef::Expr(outer) = stmts[3] else {
         panic!("expr stmt, got {:?}", stmts[3]);
     };
@@ -80,18 +83,18 @@ fn assignment_is_right_associative() {
     let ExprRef::Assign(oh) = outer else {
         panic!("outer Assign, got {outer:?}");
     };
-    let o = oh.get(&ast);
+    let o = oh.get(ast);
     let ExprRef::Assign(ih) = o.value else {
         panic!("inner Assign, got {:?}", o.value);
     };
     let ExprRef::Path(pt) = o.target else {
         panic!("x, got {:?}", o.target);
     };
-    assert_eq!(ast.name(pt.get(&ast).segs[0].name), "x");
-    let ExprRef::Path(it) = ih.get(&ast).target else {
-        panic!("y, got {:?}", ih.get(&ast).target);
+    assert_eq!(ast.name(pt.get(ast).segs[0].name), "x");
+    let ExprRef::Path(it) = ih.get(ast).target else {
+        panic!("y, got {:?}", ih.get(ast).target);
     };
-    assert_eq!(ast.name(it.get(&ast).segs[0].name), "y");
+    assert_eq!(ast.name(it.get(ast).segs[0].name), "y");
 }
 
 #[test]
@@ -108,40 +111,43 @@ fn invalid_assignment_target_diagnoses() {
 #[test]
 fn precedence_shapes() {
     // `1 + 2 * 3` → Add(1, Mul(2, 3))
-    let (ast, e) = init_of("fn f() -> nil { let x = 1 + 2 * 3; }");
+    let (doc, e) = init_of("fn f() -> nil { let x = 1 + 2 * 3; }");
+    let ast = doc.ast();
     let ExprRef::Binary(bh) = e else {
         panic!("Add at top, got {e:?}");
     };
-    let b = bh.get(&ast);
+    let b = bh.get(ast);
     assert_eq!(b.op, BinOp::Add);
     let ExprRef::Binary(rh) = b.rhs else {
         panic!("Mul on the right, got {:?}", b.rhs);
     };
-    assert_eq!(rh.get(&ast).op, BinOp::Mul);
+    assert_eq!(rh.get(ast).op, BinOp::Mul);
 
     // `1 * 2 + 3` → Add(Mul(1, 2), 3)
-    let (ast, e) = init_of("fn f() -> nil { let x = 1 * 2 + 3; }");
+    let (doc, e) = init_of("fn f() -> nil { let x = 1 * 2 + 3; }");
+    let ast = doc.ast();
     let ExprRef::Binary(bh) = e else {
         panic!("Add at top, got {e:?}");
     };
-    let b = bh.get(&ast);
+    let b = bh.get(ast);
     assert_eq!(b.op, BinOp::Add);
     let ExprRef::Binary(lh) = b.lhs else {
         panic!("Mul on the left, got {:?}", b.lhs);
     };
-    assert_eq!(lh.get(&ast).op, BinOp::Mul);
+    assert_eq!(lh.get(ast).op, BinOp::Mul);
 
     // `a || b && c` → Or(a, And(b, c)); `a && b || c` → Or(And(a, b), c)
-    let (ast, e) = init_of("fn f() -> nil { let x = a || b && c; }");
+    let (doc, e) = init_of("fn f() -> nil { let x = a || b && c; }");
+    let ast = doc.ast();
     let ExprRef::Binary(bh) = e else {
         panic!("Or at top, got {e:?}");
     };
-    let b = bh.get(&ast);
+    let b = bh.get(ast);
     assert_eq!(b.op, BinOp::Or);
     let ExprRef::Binary(rh) = b.rhs else {
         panic!("And on the right, got {:?}", b.rhs);
     };
-    assert_eq!(rh.get(&ast).op, BinOp::And);
+    assert_eq!(rh.get(ast).op, BinOp::And);
 }
 
 #[test]
@@ -150,20 +156,22 @@ fn prefix_and_postfix_compose() {
     // value access now: the path closes at `a`, the field chains as
     // the postfix loop's Field node; the unary wraps whatever the
     // operand grammar built
-    let (ast, e) = init_of("fn f() -> nil { let x = -a.b; }");
+    let (doc, e) = init_of("fn f() -> nil { let x = -a.b; }");
+    let ast = doc.ast();
     let ExprRef::Unary(uh) = e else {
         panic!("Unary at top, got {e:?}");
     };
-    let u = uh.get(&ast);
+    let u = uh.get(ast);
     assert_eq!(u.op, UnOp::Neg);
     assert!(matches!(u.expr, ExprRef::Field(_)));
 
     // postfix `.` on a non-path atom IS a Field node: `-(x).b`
-    let (ast, e) = init_of("fn f() -> nil { let x = -(x).b; }");
+    let (doc, e) = init_of("fn f() -> nil { let x = -(x).b; }");
+    let ast = doc.ast();
     let ExprRef::Unary(uh) = e else {
         panic!("Unary at top, got {e:?}");
     };
-    assert!(matches!(uh.get(&ast).expr, ExprRef::Field(_)));
+    assert!(matches!(uh.get(ast).expr, ExprRef::Field(_)));
 
     // `- - x` chains prefix ops
     let (_, diags) = parse("fn f() -> nil { let x = - -1; }", Mode::Impl);

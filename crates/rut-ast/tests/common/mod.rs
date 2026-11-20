@@ -1,16 +1,16 @@
-//! The v1-shaped test shorthand over the entry pair — TEST-ONLY (the
-//! production law is the entry pair itself; this exists so the
-//! ported grammar tests keep one spelling).
+//! The v1-shaped test shorthand over the parse entry — TEST-ONLY (the
+//! production law is the Doc pipeline; this exists so the ported
+//! grammar tests keep one spelling). Tests hold the `Doc` and borrow
+//! `doc.ast()`.
 
-use rut_ast::parser::{parse_with_recover, Mode, ParseOpts};
-use rut_ast::{Ast, BlockNode, ExprRef, Handle, ItemRef, StmtRef};
+use rut_ast::parser::{parse_with_recover, Mode};
+use rut_ast::{Ast, BlockNode, Doc, ExprRef, Handle, ItemRef, StmtRef};
 use rut_lexer::diag::Diag;
 
-pub fn parse(src: &str, mode: Mode) -> (Ast, Vec<Diag>) {
-    let p = parse_with_recover(src.to_string(), mode, ParseOpts::default());
-    let diags = p.ast().errors().to_vec();
-    let (ast, _) = p.into_parts();
-    (ast, diags)
+pub fn parse(src: &str, mode: Mode) -> (Doc, Vec<Diag>) {
+    let doc = parse_with_recover(src.to_string(), mode);
+    let diags = doc.ast().errors().to_vec();
+    (doc, diags)
 }
 
 /// the FIRST fn item's body block (clean parses — the grammar tests'

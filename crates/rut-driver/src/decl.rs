@@ -36,7 +36,7 @@
 
 use std::collections::{BTreeMap, BTreeSet};
 
-use rut_ast::parser::{parse_with_recover, Mode, ParseOpts};
+use rut_ast::parser::{parse_with_recover, Mode};
 use rut_ast::{Ast, ExprRef, ItemRef, Linkage, Lit, ParamRef, TyRef, UnOp};
 use rut_core::types::{
     TypeId, TY_BOOL, TY_BYTES, TY_F32, TY_F64, TY_I16, TY_I32, TY_I64, TY_I8, TY_NIL, TY_OPAQUE,
@@ -132,7 +132,7 @@ pub fn lower_decl_module(
     children: &BTreeMap<String, ModSource>,
     origin: &str,
 ) -> Result<Mounted, String> {
-    let p = parse_with_recover(src.to_string(), Mode::Decl, ParseOpts::default());
+    let p = parse_with_recover(src.to_string(), Mode::Decl);
     if !p.ast().is_clean() {
         let msgs: Vec<String> = p.ast().errors().iter().map(|d| d.msg.clone()).collect();
         return Err(format!(
@@ -140,14 +140,14 @@ pub fn lower_decl_module(
             msgs.join("; ")
         ));
     }
-    let (ast, _) = p.into_parts();
+    let ast = p.ast();
     let mut host_funcs: Vec<HostRow> = Vec::new();
     let mut consts: Vec<(String, TypeId, u64)> = Vec::new();
     // first mount wins, mirrored in the lowering: a repeated
     // `mod NAME;` names the same mounted child — lower it once
     let mut lowered: BTreeSet<String> = BTreeSet::new();
     lower_module(
-        &ast,
+        ast,
         "",
         children,
         origin,
@@ -351,7 +351,7 @@ fn lower_module(
                 }
                 // the child's text stays mounted (the map borrows) —
                 // clone to move into the child lowering's parse
-                let cp = parse_with_recover(child.text.clone(), Mode::Decl, ParseOpts::default());
+                let cp = parse_with_recover(child.text.clone(), Mode::Decl);
                 if !cp.ast().is_clean() {
                     let msgs: Vec<String> =
                         cp.ast().errors().iter().map(|d| d.msg.clone()).collect();
@@ -397,7 +397,7 @@ fn join_path(path: &str, name: &str) -> String {
 /// come from the host lane's own lowering.
 pub fn refuse_host_rows(src: &str, origin: &str) -> Result<(), String> {
     // the probe borrows — clone to move into the parse
-    let p = parse_with_recover(src.to_string(), Mode::Decl, ParseOpts::default());
+    let p = parse_with_recover(src.to_string(), Mode::Decl);
     if !p.ast().is_clean() {
         return Ok(()); // non-parsing surfaces stay inert (doc-only)
     }

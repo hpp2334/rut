@@ -123,14 +123,10 @@ fn run_case_keep_vm(
 fn compile_out(src: &str, module: &str) -> rut_driver::CompileOutput {
     let combined = with_logger_use(src);
     // the recovering ENTRY is the recover choice — always a tree; the
-    // dumps ride the pair (text slices the NORMALIZED `p.src`)
-    let p = rut_ast::parser::parse_with_recover(
-        combined,
-        rut_ast::parser::Mode::Impl,
-        rut_ast::parser::ParseOpts::default(),
-    );
+    // dumps slice the Doc's own normalized text
+    let p = rut_ast::parser::parse_with_recover(combined, rut_ast::parser::Mode::Impl);
     let diags = p.ast().errors().to_vec();
-    let ast_dump = rut_ast::AstPrinter::text_of(p.ast(), p.src());
+    let ast_dump = rut_ast::AstPrinter::text_of(p.ast(), p.text(p.span()));
     let ast_json = rut_ast::AstPrinter::json_of(p.ast());
     if !diags.is_empty() {
         return rut_driver::CompileOutput {

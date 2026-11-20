@@ -421,7 +421,6 @@ fn markers_outside_inherent_bodies_stay_parse_rejects() {
     let p = rut_ast::parser::parse_with_recover(
         "interface I { [constructor] fn make() -> i32; }".to_string(),
         Mode::Impl,
-        rut_ast::parser::ParseOpts::default(),
     );
     let diags = p.ast().errors().to_vec();
     assert!(
@@ -435,7 +434,6 @@ fn markers_outside_inherent_bodies_stay_parse_rejects() {
     let p = rut_ast::parser::parse_with_recover(
         "[constructor] fn make() -> i32 { return 0; }".to_string(),
         Mode::Impl,
-        rut_ast::parser::ParseOpts::default(),
     );
     assert!(
         !p.ast().is_clean(),
@@ -448,7 +446,6 @@ fn markers_outside_inherent_bodies_stay_parse_rejects() {
         "class C { }\ninterface I { fn m(self); }\nimpl I for C { [constructor] fn m(self) { } }"
             .to_string(),
         Mode::Impl,
-        rut_ast::parser::ParseOpts::default(),
     );
     assert!(
         p.ast()

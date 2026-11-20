@@ -7,16 +7,17 @@ mod common;
 
 use common::{first_fn_body, parse};
 use rut_ast::parser::Mode;
-use rut_ast::{Ast, ExprRef, FPartAst, Lit, StmtRef};
+use rut_ast::{Doc, ExprRef, FPartAst, Lit, StmtRef};
 
 /// the statement's initializer expression of `fn f() { let x = INIT; }`
-fn init_of(src: &str) -> (Ast, ExprRef) {
-    let (ast, diags) = parse(src, Mode::Impl);
+fn init_of(src: &str) -> (Doc, ExprRef) {
+    let (doc, diags) = parse(src, Mode::Impl);
+    let ast = doc.ast();
     assert!(diags.is_empty(), "expected a clean parse: {diags:?}");
-    match first_fn_body(&ast).get(&ast).stmts[0] {
+    match first_fn_body(ast).get(ast).stmts[0] {
         StmtRef::Let(h) => {
-            let init = h.get(&ast).init;
-            (ast, init)
+            let init = h.get(ast).init;
+            (doc, init)
         }
         ref s => panic!("let stmt, got {s:?}"),
     }
@@ -25,12 +26,13 @@ fn init_of(src: &str) -> (Ast, ExprRef) {
 #[test]
 fn multiline_raw_lands_in_the_ast_verbatim() {
     let src = "fn f() {\n    let s = r#\"a\nb\"c\"#;\n}";
-    let (ast, e) = init_of(src);
+    let (doc, e) = init_of(src);
+    let ast = doc.ast();
     let ExprRef::Lit(lh) = e else {
         panic!("raw literal, got {e:?}");
     };
-    let Lit::RawStr(s) = &lh.get(&ast).lit else {
-        panic!("raw literal, got {:?}", lh.get(&ast).lit);
+    let Lit::RawStr(s) = &lh.get(ast).lit else {
+        panic!("raw literal, got {:?}", lh.get(ast).lit);
     };
     assert_eq!(s, "a\nb\"c");
 }
@@ -38,11 +40,12 @@ fn multiline_raw_lands_in_the_ast_verbatim() {
 #[test]
 fn multiline_fstr_parts_keep_the_newlines() {
     let src = "fn f() {\n    let t = f#\"row {n}\nend\"#;\n}";
-    let (ast, e) = init_of(src);
+    let (doc, e) = init_of(src);
+    let ast = doc.ast();
     let ExprRef::FStr(fh) = e else {
         panic!("f-string, got {e:?}");
     };
-    let parts = &fh.get(&ast).parts;
+    let parts = &fh.get(ast).parts;
     assert_eq!(parts.len(), 3);
     let FPartAst::Lit(a) = &parts[0] else {
         panic!("first chunk, got {:?}", parts[0]);

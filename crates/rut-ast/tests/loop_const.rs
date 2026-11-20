@@ -9,28 +9,30 @@ mod common;
 
 use common::{last_fn_body, parse};
 use rut_ast::parser::Mode;
-use rut_ast::{Ast, AstPrinter, StmtRef};
+use rut_ast::{AstPrinter, Doc, StmtRef};
 
 /// the first `for` statement of the last fn's body
-fn first_for(src: &str) -> (Ast, StmtRef) {
-    let (ast, diags) = parse(src, Mode::Impl);
+fn first_for(src: &str) -> (Doc, StmtRef) {
+    let (doc, diags) = parse(src, Mode::Impl);
+    let ast = doc.ast();
     assert!(diags.is_empty(), "expected a clean parse: {diags:?}");
-    let s = last_fn_body(&ast).get(&ast).stmts[0];
+    let s = last_fn_body(ast).get(ast).stmts[0];
     assert!(
         matches!(s, StmtRef::ForOf(_) | StmtRef::ForC(_)),
         "expected a for statement, got {s:?}"
     );
-    (ast, s)
+    (doc, s)
 }
 
 #[test]
 fn for_of_takes_const() {
     let src = "fn f(xs: Vec<i32>) -> nil { for (const t of xs) { } }";
-    let (ast, s) = first_for(src);
+    let (doc, s) = first_for(src);
+    let ast = doc.ast();
     let StmtRef::ForOf(fh) = s else {
         panic!("expected a for-of, got {s:?}");
     };
-    let d = fh.get(&ast);
+    let d = fh.get(ast);
     assert!(d.is_const, "`const` must set the flag");
     assert_eq!(ast.name(d.var), "t");
     // the span covers the whole statement
@@ -45,11 +47,12 @@ fn for_of_takes_const() {
 fn for_of_without_const_is_the_default() {
     // mutability is the DEFAULT — a plain `let` header binds mutable
     let src = "fn f(xs: Vec<i32>) -> nil { for (let t of xs) { } }";
-    let (ast, s) = first_for(src);
+    let (doc, s) = first_for(src);
+    let ast = doc.ast();
     let StmtRef::ForOf(fh) = s else {
         panic!("expected a for-of, got {s:?}");
     };
-    let d = fh.get(&ast);
+    let d = fh.get(ast);
     assert!(!d.is_const, "no `const`, no flag");
     assert_eq!(ast.name(d.var), "t");
 }
@@ -71,11 +74,12 @@ fn for_c_refuses_const() {
 #[test]
 fn for_c_plain_header_is_unchanged() {
     let src = "fn f(n: i32) -> nil { for (let i = 0; i < n; i += 1) { } }";
-    let (ast, s) = first_for(src);
+    let (doc, s) = first_for(src);
+    let ast = doc.ast();
     let StmtRef::ForC(fh) = s else {
         panic!("expected a for-c, got {s:?}");
     };
-    let d = fh.get(&ast);
+    let d = fh.get(ast);
     assert_eq!(ast.name(d.var), "i");
     // exact spans: the statement ends at its own `}`
     assert_eq!(
@@ -88,8 +92,9 @@ fn for_c_plain_header_is_unchanged() {
 #[test]
 fn dump_shows_the_const_flag_only_when_spelled() {
     let with = "fn f(xs: Vec<i32>) -> nil { for (const t of xs) { } }";
-    let (ast, _) = first_for(with);
-    let json = AstPrinter::json_of(&ast);
+    let (doc, _) = first_for(with);
+    let ast = doc.ast();
+    let json = AstPrinter::json_of(ast);
     assert!(json.contains("\"ForOf\""), "{json}");
     assert!(
         json.contains("\"const\""),
@@ -97,8 +102,9 @@ fn dump_shows_the_const_flag_only_when_spelled() {
     );
 
     let without = "fn f(xs: Vec<i32>) -> nil { for (let t of xs) { } }";
-    let (ast, _) = first_for(without);
-    let json = AstPrinter::json_of(&ast);
+    let (doc, _) = first_for(without);
+    let ast = doc.ast();
+    let json = AstPrinter::json_of(ast);
     assert!(json.contains("\"ForOf\""), "{json}");
     assert!(
         !json.contains("\"const\""),

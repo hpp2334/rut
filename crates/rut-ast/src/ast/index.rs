@@ -1,9 +1,11 @@
 //! TreeIndex — the tree's derived geometry: a parent row per node and
 //! the cursor rows (every live node, sorted by span). Plain data over
 //! [`AnyHandle`]s — `Send + Sync` rides `Ast`. Cold parses leave the
-//! index LAZY (`Ast`'s `OnceCell`); the edit lane (Phase 3) maintains
-//! it across edits. Construction walks every child position from the
-//! root — the one enumeration, driven by the slot enums.
+//! index LAZY (`Ast`'s `OnceCell`); the edit lane invalidates it and
+//! the next read rebuilds — the same deterministic walk, so the index
+//! content is ≡ a cold parse's (pinned in `tests` below). Construction
+//! walks every child position from the root — the one enumeration,
+//! driven by the slot enums.
 
 use crate::ast::expr::{
     ArrayLitNode, ArrayRepeatNode, AssignNode, AsyncBlockNode, AwaitNode, BinaryNode, BlockNode,
@@ -335,4 +337,102 @@ pub(crate) fn children_of(ast: &Ast, h: AnyHandle) -> Vec<AnyHandle> {
         out.push(d.body.any());
     }
     out
+}
+
+#[cfg(test)]
+mod tests {
+    use super::TreeIndex;
+    use crate::document::Doc;
+    use crate::parser::Mode;
+    use rut_lexer::source::Edit;
+    use std::collections::BTreeMap;
+
+    /// one index row's canonical name — ((lo, hi), kind): slot indexes
+    /// differ between an edited tree and a cold rebuild, the shape may
+    /// not
+    type Row = ((u32, u32), &'static str);
+
+    /// the index's SHAPE — cursor rows and parent rows, projected
+    fn shape(idx: &TreeIndex, ast: &crate::Ast) -> (Vec<Row>, BTreeMap<Row, Row>) {
+        let name_span = |h: crate::AnyHandle| -> Row {
+            let s = ast.span_of(h);
+            ((s.lo, s.hi), h.kind_name())
+        };
+        let mut rows: Vec<Row> = idx.rows.iter().map(|&(_, h)| name_span(h)).collect();
+        rows.sort();
+        let mut parents: BTreeMap<Row, Row> = BTreeMap::new();
+        for &(_, h) in &idx.rows {
+            if let Some(p) = idx.parent(h) {
+                parents.insert(name_span(h), name_span(p));
+            }
+        }
+        (rows, parents)
+    }
+
+    /// the edit ≡ cold law at the index level: after every edit, the
+    /// rebuilt index equals the cold parse's — cursor rows AND parent
+    /// rows, exactly — and the cursor answers agree at every byte.
+    fn assert_index_edit_cold(src0: &str, edits: &[&str]) {
+        let mut doc = Doc::parse(Mode::Impl, src0.to_string());
+        let mut old = src0.to_string();
+        for (i, text) in edits.iter().enumerate() {
+            doc.edit(Edit::between(&old, text));
+            old = (*text).to_string();
+            let cold = Doc::parse(Mode::Impl, text.to_string());
+            let (edited_rows, edited_parents) = shape(doc.ast().index(), doc.ast());
+            let (cold_rows, cold_parents) = shape(cold.ast().index(), cold.ast());
+            assert_eq!(edited_rows, cold_rows, "step {i}: cursor rows differ");
+            assert_eq!(edited_parents, cold_parents, "step {i}: parent rows differ");
+            for pos in 0..=doc.len() {
+                let ea = doc
+                    .ast()
+                    .node_at(pos)
+                    .map(|h| (h.kind_name(), doc.ast().span_of(h)));
+                let ca = cold
+                    .ast()
+                    .node_at(pos)
+                    .map(|h| (h.kind_name(), cold.ast().span_of(h)));
+                assert_eq!(ea, ca, "step {i}: node_at({pos}) differs");
+            }
+        }
+    }
+
+    #[test]
+    fn edited_index_equals_the_cold_rebuild_on_split_merge_delete() {
+        // split: an item appended mid-file (two items where one was)
+        assert_index_edit_cold(
+            "let a = 1;\nlet b = 2;\nlet c = 3;\n",
+            &["let a = 1;\nlet b = 2;\nlet d = 4;\nlet c = 3;\n"],
+        );
+        // merge + delete: two items collapse into one, then vanish
+        assert_index_edit_cold(
+            "let a = 1;\nlet b = 2;\nlet c = 3;\n",
+            &["let a = 1;\nlet b = 2; let c = 3;\n", "let a = 1;\n"],
+        );
+        // the empty document, and back
+        assert_index_edit_cold("let a = 1;\n", &["\n", "let x = 0;\n"]);
+    }
+
+    #[test]
+    fn edited_index_equals_the_cold_rebuild_through_fences_and_docs() {
+        // a broken item (the fence is a real node in the index) beside
+        // good ones, a doc comment that must RE-ATTACH after the edit,
+        // and deep nesting after the boundary
+        let src0 = "let ok = 1;\noops here\n\n/// adds\nfn inc(x: i64) -> i64 { x + 1 }\n";
+        let step1 = "let ok = 1;\nlet more = true;\n\n/// adds\nfn inc(x: i64) -> i64 { x + 1 }\n";
+        // the doc chain re-grafted onto a CHANGED head
+        let step2 =
+            "let ok = 1;\nlet more = true;\n\n/// doubles\nfn inc(x: i64) -> i64 { x * 2 }\n";
+        assert_index_edit_cold(src0, &[step1, step2]);
+    }
+
+    #[test]
+    fn edited_index_equals_the_cold_rebuild_on_literal_and_eof_edits() {
+        // the window re-anchors inside a raw string; whitespace-only
+        // growth at EOF rides the module-span corner
+        let src0 = "let s = r#\"\nline one\nline two\n\"#;\nlet n = 2;\n";
+        let step1 = "let s = r#\"\nline one\nline TWO\n\"#;\nlet n = 2;\n";
+        let step2 = "let s = r#\"\nline one\nline TWO\n\"#;\nlet n = 2;   \n";
+        assert_index_edit_cold(src0, &[step1, step2]);
+    }
 }

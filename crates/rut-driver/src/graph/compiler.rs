@@ -17,7 +17,7 @@ type GraphOut = (
 /// `validate_qualified_uses`'s ok-result: the validated own-uses
 /// triples plus any ifaces needing consumer-side respell rows.
 type IfaceRespell = (Vec<String>, Vec<(String, String, String)>);
-use rut_ast::parser::{parse_with_recover, Mode, ParseOpts};
+use rut_ast::parser::{parse_with_recover, Mode};
 use rut_lexer::span::Span;
 
 use rut_ast::{Ast, ItemRef, Vis};
@@ -551,7 +551,7 @@ impl<'a> GraphCompiler<'a> {
         // arithmetic, text aside)
         let layout = mod_inputs_of(module, files);
         let mode = if is_decl { Mode::Decl } else { Mode::Impl };
-        let parsed = parse_with_recover(combined.clone(), mode, ParseOpts::default());
+        let parsed = parse_with_recover(combined.clone(), mode);
         if !parsed.ast().is_clean() {
             self.diags.extend(attribute_diags(
                 parsed.ast().errors().to_vec(),

@@ -20,7 +20,7 @@ type TraitMapRow<'a> = (
     String,
     String,
 );
-use rut_ast::parser::{parse_with_recover, Mode, ParseOpts};
+use rut_ast::parser::{parse_with_recover, Mode};
 use rut_lir::check::{Ctx, FnKey, Inst, AMBIENT_SITE};
 
 use super::dump::ir_dump_of;
@@ -196,7 +196,7 @@ pub fn compile_program_resolved(
     // opt-in and the parse can arrive pre-done (the graph walk already
     // parsed the unit once for use validation)
     compile_program_inner(
-        parse_with_recover(src.to_string(), mode, ParseOpts::default()),
+        parse_with_recover(src.to_string(), mode),
         module_name,
         scope,
         uses,
@@ -210,12 +210,12 @@ pub fn compile_program_resolved(
 }
 
 /// As [`compile_program_resolved`], but the caller may hand a
-/// pre-parsed module (the graph walk's validation parse — the pair
-/// artifact carries the tree AND the normalized text its spans index)
+/// pre-parsed module (the graph walk's validation parse — the Doc
+/// carries the tree AND the normalized text its spans index)
 /// and decline the AST dump renders (embedded lanes never read them).
 #[allow(clippy::too_many_arguments)]
 pub fn compile_program_pre(
-    parsed: rut_ast::parser::Parsed,
+    parsed: rut_ast::Doc,
     module_name: &str,
     scope: rut_core::ScopeId,
     uses: &[(rut_core::ScopeId, rut_core::binary::Surface, String, String)],
@@ -270,7 +270,7 @@ fn resolve_local_fn<'a>(
 
 #[allow(clippy::too_many_arguments)]
 fn compile_program_inner(
-    pre: rut_ast::parser::Parsed,
+    pre: rut_ast::Doc,
     module_name: &str,
     scope: rut_core::ScopeId,
     uses: &[(rut_core::ScopeId, rut_core::binary::Surface, String, String)],
@@ -293,13 +293,14 @@ fn compile_program_inner(
         requests: Vec::new(),
         template_failures: Vec::new(),
     };
-    // the pair artifact IS the unit's text: `src` is the NORMALIZED
-    // text every span indexes (the renders and the line/col table
-    // slice it — never a caller's raw input)
-    let (ast, text) = pre.into_parts();
+    // the Doc IS the unit's artifact: `text` is the NORMALIZED text
+    // every span indexes (the renders and the line/col table slice
+    // it — never a caller's raw input)
+    let text = pre.text(pre.span());
+    let ast = pre.ast();
     let mut diags: Vec<Diag> = Vec::new();
     let (ast_dump, ast_json) = if want_dumps {
-        (AstPrinter::text_of(&ast, &text), AstPrinter::json_of(&ast))
+        (AstPrinter::text_of(ast, text), AstPrinter::json_of(ast))
     } else {
         (String::new(), String::new())
     };
@@ -322,7 +323,7 @@ fn compile_program_inner(
     // the clone's tail order — parse names, dep names, then the ctx's
     // mints — is byte-identical to v1's, and every later lookup rides
     // `ctx.interner` (the same table v1's `ast.interner` reads served).
-    let mut ctx = Ctx::new_scoped(&ast, scope);
+    let mut ctx = Ctx::new_scoped(ast, scope);
     let mut dep_export_leaf_texts: Vec<String> = Vec::new();
     for (_, surface, ..) in uses {
         for f in &surface.funcs {
@@ -370,9 +371,9 @@ fn compile_program_inner(
     // the pkg names this unit's use statements name — a qualified head
     // spelling one of these is the cross-package door the position
     // grammar refuses; the diagnostic names the use fix
-    for it in ast.root().items(&ast) {
+    for it in ast.root().items(ast) {
         if let rut_ast::ItemRef::Use(uh) = it {
-            if let Some(&head) = uh.get(&ast).path.first() {
+            if let Some(&head) = uh.get(ast).path.first() {
                 ctx.used_pkgs.insert(ast.name(head).to_string());
             }
         }
@@ -408,13 +409,13 @@ fn compile_program_inner(
         .filter_map(|(site, name, _)| frozen.lookup(name).map(|id| (site.clone(), id)))
         .collect();
     let mut use_bindings: Vec<UseBinding> = Vec::new();
-    for it in ast.root().items(&ast) {
+    for it in ast.root().items(ast) {
         if let rut_ast::ItemRef::Use(uh) = it {
-            let u = uh.get(&ast);
+            let u = uh.get(ast);
             let (path, names) = (&u.path, &u.names);
             let head = ast.name(path[0]).to_string();
-            let file = ctx.mods.file_of(it.span(&ast).lo).to_string();
-            let span = it.span(&ast);
+            let file = ctx.mods.file_of(it.span(ast).lo).to_string();
+            let span = it.span(ast);
             let prefix = path[1..]
                 .iter()
                 .map(|&s| ast.name(s).to_string())
@@ -499,9 +500,9 @@ fn compile_program_inner(
     ctx.own_spec = module_name.to_string();
     // the binding gate: the names this module's `use` statements wrote
     // — read off the AST before any binding runs
-    for it in ast.root().items(&ast) {
+    for it in ast.root().items(ast) {
         if let rut_ast::ItemRef::Use(uh) = it {
-            ctx.used.extend(uh.get(&ast).names.iter().copied());
+            ctx.used.extend(uh.get(ast).names.iter().copied());
         }
     }
     // trait names resolve across ALL uses (an impl may live in a

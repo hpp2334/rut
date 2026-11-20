@@ -1,20 +1,22 @@
 //! The capsule store (D4): per-kind private arenas, the interner, the
-//! root — and NOTHING else. NO `src` (the text is the caller's —
-//! `Parsed { ast, src }` is the pair artifact; text queries are span×src
-//! joins), no flat kind enum, no public fields.
+//! root — and NOTHING else. NO `src` (the text is the [`Doc`](crate::Doc)'s
+//! — text queries are `Doc::text(span)` joins), no flat kind enum, no
+//! public fields.
 //!
-//! THE ARTIFACT LAW (v3): `Ast` stores PURE STRUCTURE — the typed
+//! THE ARTIFACT LAW (v4): `Ast` stores PURE STRUCTURE — the typed
 //! nodes, their spans/verdicts, the interner vocabulary, the derived
 //! [`TreeIndex`]. Every door is a method; reads live on
 //! nodes/handles with the store as ctx.
 //!
 //! THE MUTATION LAW: `&ctx` methods ask the store, `&mut ctx` methods
-//! tell it — and only the parse lane tells (`intern`, `set_root`,
-//! `allocate`, `set_errors`). Node fields are never mutated after
-//! allocation; there is no API for it. The doors' `pub(crate)`
-//! markers stay load-bearing under the seal: the sealed module gates
-//! the PATHS, a method's own visibility gates the CALL — drop the
-//! marker and the door is method-private, unreachable even in-crate.
+//! tell it — and only the in-crate pipeline tells (`intern`, `set_root`,
+//! `allocate`, `set_errors`, and the edit lane's repair doors:
+//! `reseal_root`/`touch_root_span`/`remove_any`/`index_invalidate`).
+//! Node fields are never mutated outside those doors. The doors'
+//! `pub(crate)` markers stay load-bearing under the seal: the sealed
+//! module gates the PATHS, a method's own visibility gates the CALL —
+//! drop the marker and the door is method-private, unreachable even
+//! in-crate.
 
 use once_cell::sync::OnceCell;
 use rut_core::{IdentId, Interner};
@@ -170,6 +172,21 @@ macro_rules! arenas_munch {
             )*
             "unknown"
         }
+
+        /// remove the node at a universal address — the kind dispatch
+        /// over the arenas, punching the slot's hole (stale handles
+        /// then die loudly on read, never read yesterday's node). The
+        /// edit lane's door; `false` = dead slot or bogus id.
+        pub(crate) fn remove_any(ast: &mut Ast, h: AnyHandle) -> bool {
+            let kind = h.kind;
+            let idx = h.idx;
+            $(
+                if kind == <$ty as NodeKind>::KIND {
+                    return <$ty as NodeStore>::arena_mut(ast).remove(idx).is_some();
+                }
+            )*
+            false
+        }
     };
 }
 
@@ -249,9 +266,29 @@ arenas! {
 
 impl Ast {
     /// the derived tree index — built on first read (the lazy cell);
-    /// the edit lane (Phase 3) maintains it across edits
+    /// the edit lane invalidates it across edits (the next read
+    /// rebuilds — the same deterministic walk a cold parse runs)
     pub(crate) fn index(&self) -> &TreeIndex {
         self.index.get_or_init(|| TreeIndex::build(self))
+    }
+    /// the edit lane's index door — drop the derived index so the next
+    /// read rebuilds it over the edited tree (v1 maintenance policy:
+    /// one deterministic rebuild per version)
+    pub(crate) fn index_invalidate(&mut self) {
+        self.index.take();
+    }
+    /// the edit lane's splice door — replace the root module's item
+    /// list wholesale (the lex-fence prefix, the surviving items, the
+    /// freshly reparsed window) and re-seal its span over the new
+    /// text. The root handle stays: the module's slot is repaired in
+    /// place, never reallocated.
+    pub(crate) fn reseal_root(&mut self, items: Vec<crate::ItemRef>, eof_hi: u32) {
+        let root = self.root.expect("the parse lane always sets the root");
+        let m = <crate::ModuleNode as NodeStore>::arena_mut(self)
+            .get_mut(root.idx)
+            .expect("the root slot is live");
+        m.items = items;
+        m.span = Span::new(0, eof_hi);
     }
     /// the deepest node whose span contains `pos` — the cursor's door
     /// (a position in dead space between nodes answers `None`)

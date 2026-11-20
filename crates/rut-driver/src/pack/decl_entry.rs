@@ -18,7 +18,7 @@
 //! [`lower_rows_envelope`]). A mismatch refuses the pack — never a
 //! doctored entry.
 
-use rut_ast::parser::{parse_with_recover, Mode, ParseOpts};
+use rut_ast::parser::{parse_with_recover, Mode};
 use rut_ast::{Ast, FieldRef, ItemRef, MethodRef, ParamRef, TyRef};
 use rut_core::binary::Program;
 use rut_core::types::{TyKind, TypeId};
@@ -440,7 +440,7 @@ fn ty_ast_text(ast: &Ast, t: TyRef) -> String {
 /// mean equal surfaces.
 pub fn facts_of_text(text: &str) -> Result<std::collections::BTreeSet<String>, String> {
     // the caller's text is borrowed — clone to move into the parse
-    let p = parse_with_recover(text.to_string(), Mode::Decl, ParseOpts::default());
+    let p = parse_with_recover(text.to_string(), Mode::Decl);
     if !p.ast().is_clean() {
         let msgs: Vec<String> = p.ast().errors().iter().map(|d| d.msg.clone()).collect();
         return Err(format!(

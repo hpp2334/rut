@@ -1,18 +1,25 @@
 //! rut-ast — the tree and its grammar, one crate.
 //!
-//! Two modules, one law each:
+//! Three modules, one law each:
 //! - `ast` (SEALED `mod`) — PURE STRUCTURE: the typed-arena AST.
 //!   The module is private — the same privacy wall as rut-lsp's
 //!   `semantic`: consumers get the flat re-exports at the crate
 //!   root and `parser::`, never an `ast::` module path. `Ast` is a
 //!   CAPSULE whose mut doors are `pub(crate)` — only the in-crate
-//!   parse lane may build a tree; every other consumer reads.
-//!   The artifact is the PAIR `Parsed { ast, src }` (law v3): the
-//!   tree holds no text, `src` is the normalized text every span
-//!   indexes, and `Span::text(&src)` is the join.
+//!   pipeline may build or repair a tree; every other consumer reads.
+//!   The artifact is the [`Doc`] (law v4): the tree holds no text,
+//!   `Doc` owns the normalized text every span indexes, and
+//!   `Doc::text(span)` is the join.
 //! - [`parser`] — the grammar: the explicit-frame machine that
-//!   turns text into that pair (`parse` fail-fast /
-//!   `parse_with_recover` always a tree).
+//!   turns text into that tree. Its public face is the entry pair
+//!   (`parse` fail-fast / `parse_with_recover` always a tree), both
+//!   wrappers over [`Doc::parse`]; the ONE engine entry
+//!   (`parse_item_window`) is crate-internal — the `Doc` edit lane
+//!   rides it with the dirty tail.
+//! - [`Doc`] — THE document pipeline: text + tokens + tree + the one
+//!   mutator (`Doc::edit`). Cold parse = window reparse of
+//!   everything; an edit = token splice → dirty root item → window
+//!   reparse into fresh slots. Edit ≡ cold, property-tested.
 //!
 //! The tree vocabulary is re-exported FLAT at the crate root —
 //! consumers never spell a module path; file layout stays free to
@@ -26,10 +33,14 @@
 #![recursion_limit = "256"]
 
 mod ast;
+mod document;
 pub mod parser;
 
 pub use ast::*;
+pub use document::Doc;
 
 // the parse lane's construction macros, crate-root reachable for the
 // `use crate::slot_alloc;` house style — never public
 pub(crate) use ast::{plain_alloc, slot_alloc, slot_any, slot_span};
+// the edit lane's dispatch (the Doc pipeline's subtree walks)
+pub(crate) use ast::{children_of, remove_any};

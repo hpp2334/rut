@@ -3,7 +3,7 @@
 
 use crate::span::Span;
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Diag {
     pub span: Span,
     pub msg: String,

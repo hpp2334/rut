@@ -58,14 +58,15 @@ fn corpus_parses_clean() {
         } else {
             rut_ast::parser::Mode::Impl
         };
-        let (ast, diags) = common::parse(&src, mode);
+        let (doc, diags) = common::parse(&src, mode);
+        let ast = doc.ast();
         if !diags.is_empty() {
             let first = &diags[0];
             failures.push(format!("{}:{}: {}", f.display(), first.span.lo, first.msg));
             continue;
         }
         // the tree itself must be sound: every item slot resolves
-        let _ = ast.root().items(&ast).len();
+        let _ = ast.root().items(ast).len();
     }
     assert!(
         failures.is_empty(),
@@ -84,17 +85,18 @@ fn enum_member_values_are_gone() {
     // broken member region may leave an Error slot beside the survivors;
     // the count here is the LIVE members)
     for (src, want_members) in [("enum T { a = 1 }", 1), ("enum E { A = 1, B }", 2)] {
-        let (ast, diags) = parse(src, Mode::Impl);
+        let (doc, diags) = parse(src, Mode::Impl);
+        let ast = doc.ast();
         assert_eq!(diags.len(), 1, "one diag, no cascade: {src} -> {diags:?}");
         assert!(
             diags[0].msg.contains("expected `,` or `}`, found `=`"),
             "want the member-value diag, got: {diags:?}"
         );
-        let items = ast.root().items(&ast);
+        let items = ast.root().items(ast);
         let Some(ItemRef::Enum(h)) = items.iter().find(|i| matches!(i, ItemRef::Enum(_))) else {
             panic!("enum item still parses: {diags:?}")
         };
-        let members = &h.get(&ast).members;
+        let members = &h.get(ast).members;
         let live = members.iter().filter(|m| !m.is_error()).count();
         assert_eq!(live, want_members, "{src}: members: {members:?}");
     }
@@ -372,9 +374,10 @@ fn nullable_types_parse() {
     // ELEMENT — TyArray(TyOpt)), while `?[T]` is `[T] | nil` (nullable
     // ARRAY — TyOpt(TyArray)); `??T` chains, `?[?T]` nests the other way.
     let src = "fn f(a: [?i32], b: ?[i32], c: ??i32, d: ?[?i32]) -> ?i32 { return a[0]; }";
-    let (ast, diags) = parse(src, Mode::Impl);
+    let (doc, diags) = parse(src, Mode::Impl);
+    let ast = doc.ast();
     assert!(diags.is_empty(), "{diags:?}");
-    let items = ast.root().items(&ast);
+    let items = ast.root().items(ast);
     let ItemRef::Fn(fh) = *items
         .iter()
         .find(|i| matches!(i, ItemRef::Fn(_)))
@@ -382,10 +385,10 @@ fn nullable_types_parse() {
     else {
         unreachable!()
     };
-    let d = fh.get(&ast);
+    let d = fh.get(ast);
     let param_ty = |i: usize| -> Option<TyRef> {
         match d.params[i] {
-            ParamRef::Param(h) => h.get(&ast).ty,
+            ParamRef::Param(h) => h.get(ast).ty,
             ref p => panic!("param {i}, got {p:?}"),
         }
     };
@@ -394,7 +397,7 @@ fn nullable_types_parse() {
         panic!("`[?i32]` must be TyArray(TyOpt), got {:?}", param_ty(0));
     };
     assert!(
-        matches!(t0.get(&ast).elem, TyRef::Opt(_)),
+        matches!(t0.get(ast).elem, TyRef::Opt(_)),
         "the element carries the `?`"
     );
     // `?[i32]` — the nullable OUTSIDE, the array inside
@@ -402,7 +405,7 @@ fn nullable_types_parse() {
         panic!("`?[i32]` must be TyOpt(TyArray), got {:?}", param_ty(1));
     };
     assert!(
-        matches!(t1.get(&ast).inner, TyRef::Array(_)),
+        matches!(t1.get(ast).inner, TyRef::Array(_)),
         "the array is the payload"
     );
     // `??i32` chains — Opt(Opt(path))
@@ -410,19 +413,19 @@ fn nullable_types_parse() {
         panic!("`??i32` must be TyOpt, got {:?}", param_ty(2));
     };
     assert!(
-        matches!(t2.get(&ast).inner, TyRef::Opt(_)),
+        matches!(t2.get(ast).inner, TyRef::Opt(_)),
         "the chain nests"
     );
     // `?[?i32]` — both at once: Opt(Array(Opt))
     let TyRef::Opt(t3) = param_ty(3).unwrap() else {
         panic!("`?[?i32]` must be TyOpt, got {:?}", param_ty(3));
     };
-    let inner3 = t3.get(&ast).inner;
+    let inner3 = t3.get(ast).inner;
     let TyRef::Array(t3in) = inner3 else {
         panic!("the payload is the array, got {inner3:?}");
     };
     assert!(
-        matches!(t3in.get(&ast).elem, TyRef::Opt(_)),
+        matches!(t3in.get(ast).elem, TyRef::Opt(_)),
         "the element is nullable"
     );
     // the return keeps the same rule
@@ -530,13 +533,14 @@ pub mod widget;
 pub(pkg) mod ui;
 pub(super) mod internal;
 ";
-    let (ast, diags) = parse(src, Mode::Impl);
+    let (doc, diags) = parse(src, Mode::Impl);
+    let ast = doc.ast();
     assert!(diags.is_empty(), "expected a clean parse: {diags:?}");
-    let items = ast.root().items(&ast);
+    let items = ast.root().items(ast);
     assert_eq!(items.len(), 4, "one decl per line: {items:?}");
     let decl = |i: usize| match items[i] {
         ItemRef::ModDecl(h) => {
-            let d = h.get(&ast);
+            let d = h.get(ast);
             (d.vis(), ast.name(d.name).to_string())
         }
         k => panic!("expected a mod decl at {i}, got {k:?}"),
@@ -551,12 +555,13 @@ pub(super) mod internal;
 fn use_paths_split_path_and_names() {
     // the leaf brace list / single name split off the mod path;
     // path[0] is always the package
-    let (ast, diags) = parse("use pkg::A::B::{C, D};\n", Mode::Impl);
+    let (doc, diags) = parse("use pkg::A::B::{C, D};\n", Mode::Impl);
+    let ast = doc.ast();
     assert!(diags.is_empty(), "{diags:?}");
-    let items = ast.root().items(&ast);
+    let items = ast.root().items(ast);
     match items[0] {
         ItemRef::Use(h) => {
-            let u = h.get(&ast);
+            let u = h.get(ast);
             let segs: Vec<&str> = u.path.iter().map(|&s| ast.name(s)).collect();
             let nms: Vec<&str> = u.names.iter().map(|&n| ast.name(n)).collect();
             assert_eq!(segs, vec!["pkg", "A", "B"], "the mod path");
@@ -565,12 +570,13 @@ fn use_paths_split_path_and_names() {
         k => panic!("expected a use item, got {k:?}"),
     }
     // the single-name leaf: the LAST segment pops into names
-    let (ast, diags) = parse("use pkg::A::B::C;\n", Mode::Impl);
+    let (doc, diags) = parse("use pkg::A::B::C;\n", Mode::Impl);
+    let ast = doc.ast();
     assert!(diags.is_empty(), "{diags:?}");
-    let items = ast.root().items(&ast);
+    let items = ast.root().items(ast);
     match items[0] {
         ItemRef::Use(h) => {
-            let u = h.get(&ast);
+            let u = h.get(ast);
             let segs: Vec<&str> = u.path.iter().map(|&s| ast.name(s)).collect();
             assert_eq!(segs, vec!["pkg", "A", "B"]);
             assert_eq!(u.names.len(), 1);
@@ -588,12 +594,13 @@ fn flat_uses_degenerate_to_the_package_path() {
         ("use pkg::{A, B};\n", vec!["A", "B"]),
         ("use pkg::A;\n", vec!["A"]),
     ] {
-        let (ast, diags) = parse(src, Mode::Impl);
+        let (doc, diags) = parse(src, Mode::Impl);
+        let ast = doc.ast();
         assert!(diags.is_empty(), "{src}: {diags:?}");
-        let items = ast.root().items(&ast);
+        let items = ast.root().items(ast);
         match items[0] {
             ItemRef::Use(h) => {
-                let u = h.get(&ast);
+                let u = h.get(ast);
                 assert_eq!(u.path.len(), 1, "{src}: the degenerate path");
                 assert_eq!(ast.name(u.path[0]), "pkg");
                 let nms: Vec<&str> = u.names.iter().map(|&n| ast.name(n)).collect();
@@ -608,17 +615,18 @@ fn flat_uses_degenerate_to_the_package_path() {
 fn use_with_an_empty_leaf_diagnoses() {
     // `use pkg::A::B;` imports nothing — mods are not values. One diag
     // naming the fix; the item still parses (recovery).
-    let (ast, diags) = parse("use pkg::A::B;\n", Mode::Impl);
+    let (doc, diags) = parse("use pkg::A::B;\n", Mode::Impl);
+    let ast = doc.ast();
     assert_eq!(diags.len(), 1, "one diag, no cascade: {diags:?}");
     assert!(
         diags[0].msg.contains("imports nothing")
             && diags[0].msg.contains("spell a name at the leaf"),
         "the empty-leaf diag names the fix: {diags:?}"
     );
-    let items = ast.root().items(&ast);
+    let items = ast.root().items(ast);
     match items[0] {
         ItemRef::Use(h) => {
-            let u = h.get(&ast);
+            let u = h.get(ast);
             let segs: Vec<&str> = u.path.iter().map(|&s| ast.name(s)).collect();
             assert_eq!(segs, vec!["pkg", "A", "B"], "the spelled path survives");
             assert!(u.names.is_empty(), "nothing was imported");
@@ -639,12 +647,13 @@ fn pub_use_parses_with_the_reexport_vis() {
         ("pub(pkg) use pkg::A;\n", Vis::Pkg),
         ("use pkg::{A};\n", Vis::Self_),
     ] {
-        let (ast, diags) = parse(src, Mode::Impl);
+        let (doc, diags) = parse(src, Mode::Impl);
+        let ast = doc.ast();
         assert!(diags.is_empty(), "{src}: {diags:?}");
-        let items = ast.root().items(&ast);
+        let items = ast.root().items(ast);
         match items[0] {
             ItemRef::Use(h) => {
-                let u = h.get(&ast);
+                let u = h.get(ast);
                 assert_eq!(u.vis(), want_vis, "{src}: the re-export vis");
                 // span law v3.1: the span starts at the item's FIRST
                 // token — the `pub`/`pub(..)` modifier when one is
@@ -665,10 +674,11 @@ fn pub_use_parses_with_the_reexport_vis() {
         }
     }
     // Decl-mode files parse it too (a `.d.rut` surface may re-export)
-    let (ast, diags) = parse("pub use core::{ opaque };\n", Mode::Decl);
+    let (doc, diags) = parse("pub use core::{ opaque };\n", Mode::Decl);
+    let ast = doc.ast();
     assert!(diags.is_empty(), "{diags:?}");
-    match ast.root().items(&ast)[0] {
-        ItemRef::Use(h) => assert_eq!(h.get(&ast).vis(), Vis::Pub),
+    match ast.root().items(ast)[0] {
+        ItemRef::Use(h) => assert_eq!(h.get(ast).vis(), Vis::Pub),
         k => panic!("expected a use item, got {k:?}"),
     }
 }
@@ -682,12 +692,13 @@ fn inline_mod_blocks_are_an_ordinary_error() {
     // ordinary ladder's, no tailored skip arm anymore). In DECL files
     // the inline form is legal current syntax.
     let src = "mod W { fn f() -> nil { } }\nfn g() -> nil { }\n";
-    let (ast, diags) = parse(src, Mode::Impl);
+    let (doc, diags) = parse(src, Mode::Impl);
+    let ast = doc.ast();
     assert!(
         !diags.is_empty() && !diags.iter().any(|d| d.msg.contains("gone")),
         "the stray block fails through the ordinary ladder: {diags:?}"
     );
-    let items = ast.root().items(&ast);
+    let items = ast.root().items(ast);
     assert!(matches!(items[0], ItemRef::ModDecl(_)), "the decl survives");
     assert!(
         items.iter().any(|i| matches!(i, ItemRef::Error(_))),
@@ -701,14 +712,15 @@ fn pub_mod_and_pub_self_are_the_ordinary_scope_error() {
     // the paren spellings hit the ordinary pub(..) scope error (the
     // same one `pub(crate)` draws); the bare default and the widened
     // forms keep parsing
-    let (ast, diags) = parse("pub(mod) type T = i64;\n", Mode::Impl);
+    let (doc, diags) = parse("pub(mod) type T = i64;\n", Mode::Impl);
+    let ast = doc.ast();
     assert!(
         diags
             .iter()
             .any(|d| d.msg.contains("expected `super` or `pkg` in pub(..)")),
         "{diags:?}"
     );
-    assert!(matches!(ast.root().items(&ast)[0], ItemRef::Alias(_)));
+    assert!(matches!(ast.root().items(ast)[0], ItemRef::Alias(_)));
     let (_, diags) = parse("pub(self) mod m;", Mode::Impl);
     assert!(
         diags
@@ -717,14 +729,15 @@ fn pub_mod_and_pub_self_are_the_ordinary_scope_error() {
         "{diags:?}"
     );
     // the surviving set: `pub(super)`, `pub(pkg)`, `pub`
-    let (ast, diags) = parse(
+    let (doc, diags) = parse(
         "pub(super) mod a;\npub(pkg) mod b;\npub mod c;\n",
         Mode::Impl,
     );
     assert!(diags.is_empty(), "{diags:?}");
-    let items = ast.root().items(&ast);
+    let ast = doc.ast();
+    let items = ast.root().items(ast);
     let vis = |i: usize| match items[i] {
-        ItemRef::ModDecl(h) => h.get(&ast).vis(),
+        ItemRef::ModDecl(h) => h.get(ast).vis(),
         _ => panic!("expected a mod decl"),
     };
     assert_eq!(vis(0), Vis::Super);
@@ -773,12 +786,13 @@ fn inf_is_the_infinity_float_literal() {
     use rut_ast::{ExprRef, Lit, StmtRef, UnOp};
     use rut_lexer::token::FloatSuffix;
 
-    let (ast, diags) = parse("fn f() -> nil { let a = inf; let b = -inf; }", Mode::Impl);
+    let (doc, diags) = parse("fn f() -> nil { let a = inf; let b = -inf; }", Mode::Impl);
+    let ast = doc.ast();
     assert!(diags.is_empty(), "{diags:?}");
-    let body = common::first_fn_body(&ast);
-    let stmts = body.get(&ast).stmts.to_vec();
+    let body = common::first_fn_body(ast);
+    let stmts = body.get(ast).stmts.to_vec();
     let inf_lit = |e: ExprRef, what: &str| match e {
-        ExprRef::Lit(lh) => match &lh.get(&ast).lit {
+        ExprRef::Lit(lh) => match &lh.get(ast).lit {
             Lit::Float(bits, Some(FloatSuffix::F64)) => {
                 assert_eq!(*bits, f64::INFINITY.to_bits(), "{what} carries inf bits");
             }
@@ -787,13 +801,13 @@ fn inf_is_the_infinity_float_literal() {
         e => panic!("{what} folds to a literal, got {e:?}"),
     };
     match stmts[0] {
-        StmtRef::Let(h) => inf_lit(h.get(&ast).init, "`inf`"),
+        StmtRef::Let(h) => inf_lit(h.get(ast).init, "`inf`"),
         s => panic!("expected a let, got {s:?}"),
     }
     match stmts[1] {
-        StmtRef::Let(h) => match h.get(&ast).init {
+        StmtRef::Let(h) => match h.get(ast).init {
             ExprRef::Unary(uh) => {
-                let u = uh.get(&ast);
+                let u = uh.get(ast);
                 assert_eq!(u.op, UnOp::Neg, "`-inf` is unary negation");
                 inf_lit(u.expr, "`-inf`'s operand");
             }
@@ -804,11 +818,12 @@ fn inf_is_the_infinity_float_literal() {
 
     // `inf` as a NAME — a plain ident, zero diags (expression USE of
     // the name reads the literal; the binding itself is ordinary)
-    let (ast, diags) = parse("fn f() -> nil { let inf = 1.0; }", Mode::Impl);
+    let (doc, diags) = parse("fn f() -> nil { let inf = 1.0; }", Mode::Impl);
+    let ast = doc.ast();
     assert!(diags.is_empty(), "{diags:?}");
-    let body = common::first_fn_body(&ast);
-    match body.get(&ast).stmts[0] {
-        StmtRef::Let(h) => assert_eq!(ast.name(h.get(&ast).name), "inf"),
+    let body = common::first_fn_body(ast);
+    match body.get(ast).stmts[0] {
+        StmtRef::Let(h) => assert_eq!(ast.name(h.get(ast).name), "inf"),
         s => panic!("expected a let named `inf`, got {s:?}"),
     }
 }

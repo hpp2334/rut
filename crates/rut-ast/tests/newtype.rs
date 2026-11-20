@@ -14,13 +14,14 @@ use rut_ast::{FieldRef, ItemRef, TyRef, Vis};
 #[test]
 fn positional_decl_desugars_to_one_inner_field() {
     let src = "class JsonI64(i64);\n";
-    let (ast, diags) = parse(src, Mode::Impl);
+    let (doc, diags) = parse(src, Mode::Impl);
+    let ast = doc.ast();
     assert!(diags.is_empty(), "expected a clean parse: {diags:?}");
-    let items = ast.root().items(&ast);
+    let items = ast.root().items(ast);
     let ItemRef::Class(ch) = items[0] else {
         panic!("expected a class, got {:?}", items[0]);
     };
-    let c = ch.get(&ast);
+    let c = ch.get(ast);
     assert_eq!(ast.name(c.name), "JsonI64");
     assert!(c.newtype, "the positional spelling arms the flag");
     assert!(c.generics.is_empty() && c.requires.is_empty() && c.methods.is_empty());
@@ -28,7 +29,7 @@ fn positional_decl_desugars_to_one_inner_field() {
     let FieldRef::Field(fh) = c.fields[0] else {
         panic!("the inner field, got {:?}", c.fields[0]);
     };
-    let fd = fh.get(&ast);
+    let fd = fh.get(ast);
     assert_eq!(ast.name(fd.name), "inner");
     assert_eq!(fd.vis(), None, "the field rides the module-private default");
     assert!(!fd.is_static() && fd.init.is_none());
@@ -37,7 +38,7 @@ fn positional_decl_desugars_to_one_inner_field() {
     let TyRef::Path(t) = fd.ty else {
         panic!("expected a path type, got {:?}", fd.ty);
     };
-    let segs = &t.get(&ast).segs;
+    let segs = &t.get(ast).segs;
     assert_eq!(segs.len(), 1);
     assert_eq!(ast.name(segs[0].name), "i64");
 }
@@ -51,13 +52,14 @@ fn generic_newtype_head_parses() {
         ("class DebugWrap<T>(T);\n", "T"),
         ("class M<T>(Vec<Future<T>>);\n", "composite"),
     ] {
-        let (ast, diags) = parse(src, Mode::Impl);
+        let (doc, diags) = parse(src, Mode::Impl);
+        let ast = doc.ast();
         assert!(diags.is_empty(), "{src}: expected a clean parse: {diags:?}");
-        let items = ast.root().items(&ast);
+        let items = ast.root().items(ast);
         let ItemRef::Class(ch) = items[0] else {
             panic!("{src}: expected a class, got {:?}", items[0]);
         };
-        let c = ch.get(&ast);
+        let c = ch.get(ast);
         assert!(c.newtype, "{src}");
         assert_eq!(c.generics.len(), 1, "{src}");
         assert_eq!(c.fields.len(), 1, "{src}");
@@ -69,13 +71,14 @@ fn generic_newtype_head_parses() {
 fn bounded_generic_newtype_head_parses() {
     // the class `requires` grammar composes with the positional form
     let src = "class HashWrap<K requires Hashable>(K);\n";
-    let (ast, diags) = parse(src, Mode::Impl);
+    let (doc, diags) = parse(src, Mode::Impl);
+    let ast = doc.ast();
     assert!(diags.is_empty(), "expected a clean parse: {diags:?}");
-    let items = ast.root().items(&ast);
+    let items = ast.root().items(ast);
     let ItemRef::Class(ch) = items[0] else {
         panic!("expected a class, got {:?}", items[0]);
     };
-    let c = ch.get(&ast);
+    let c = ch.get(ast);
     assert!(c.newtype);
     assert_eq!(c.generics.len(), 1);
     assert_eq!(c.requires.len(), 1, "the bound rides the head");
@@ -84,13 +87,14 @@ fn bounded_generic_newtype_head_parses() {
 #[test]
 fn pub_newtype_decl_parses() {
     let src = "pub class TheirJson(TheirType);\n";
-    let (ast, diags) = parse(src, Mode::Impl);
+    let (doc, diags) = parse(src, Mode::Impl);
+    let ast = doc.ast();
     assert!(diags.is_empty(), "expected a clean parse: {diags:?}");
-    let items = ast.root().items(&ast);
+    let items = ast.root().items(ast);
     let ItemRef::Class(ch) = items[0] else {
         panic!("expected a class, got {:?}", items[0]);
     };
-    let c = ch.get(&ast);
+    let c = ch.get(ast);
     assert_eq!(c.vis(), Vis::Pub);
     assert!(c.newtype);
 }
@@ -105,13 +109,14 @@ fn wrapped_type_may_be_any_type_term() {
         "class Opt(?i64);\n",
         "class Arr([[i32]]);\n",
     ] {
-        let (ast, diags) = parse(src, Mode::Impl);
+        let (doc, diags) = parse(src, Mode::Impl);
+        let ast = doc.ast();
         assert!(diags.is_empty(), "{src}: {diags:?}");
-        let items = ast.root().items(&ast);
+        let items = ast.root().items(ast);
         let ItemRef::Class(ch) = items[0] else {
             panic!("{src}: expected a class, got {:?}", items[0]);
         };
-        let c = ch.get(&ast);
+        let c = ch.get(ast);
         assert!(c.newtype && c.fields.len() == 1, "{src}");
     }
 }

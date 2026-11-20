@@ -46,7 +46,8 @@ const BROKEN: &str = "let ok = 1;\noops here\n";
 
 #[test]
 fn node_at_finds_the_deepest_node() {
-    let (ast, diags) = parse(SRC, Mode::Impl);
+    let (doc, diags) = parse(SRC, Mode::Impl);
+    let ast = doc.ast();
     assert!(diags.is_empty(), "expected a clean parse: {diags:?}");
 
     // an operator byte: only the binary (and its enclosing windows)
@@ -83,7 +84,8 @@ fn node_at_finds_the_deepest_node() {
 
 #[test]
 fn node_at_lands_on_error_fences() {
-    let (ast, diags) = parse(BROKEN, Mode::Impl);
+    let (doc, diags) = parse(BROKEN, Mode::Impl);
+    let ast = doc.ast();
     assert_eq!(diags.len(), 2, "the fence owns its region's diags");
     let pos = BROKEN.find("oops").unwrap() as u32;
     let h = ast.node_at(pos).expect("the fence covers the garbage");
@@ -98,7 +100,8 @@ fn node_at_lands_on_error_fences() {
 
 #[test]
 fn ancestors_walk_the_closed_positions() {
-    let (ast, _) = parse(SRC, Mode::Impl);
+    let (doc, _) = parse(SRC, Mode::Impl);
+    let ast = doc.ast();
     // inside the when arm's body block — the chain crosses BlockNode
     // and WhenArmNode (positions that hold exactly one kind and never
     // an Error)
@@ -125,7 +128,8 @@ fn ancestors_walk_the_closed_positions() {
 
 #[test]
 fn parent_rows_answer_the_owners() {
-    let (ast, _) = parse(SRC, Mode::Impl);
+    let (doc, _) = parse(SRC, Mode::Impl);
+    let ast = doc.ast();
     // the method's parent is its impl; the method body block's parent
     // is the method; the root has no parent
     let plus = SRC.find("v + 1").unwrap() as u32 + 2;
@@ -143,7 +147,7 @@ fn parent_rows_answer_the_owners() {
     let body = method
         .downcast::<MethodDeclNode>()
         .unwrap()
-        .get(&ast)
+        .get(ast)
         .body
         .expect("hit() has a body")
         .any();
@@ -158,40 +162,43 @@ fn parent_rows_answer_the_owners() {
 
 #[test]
 fn span_of_agrees_with_the_typed_span() {
-    let (ast, _) = parse(SRC, Mode::Impl);
+    let (doc, _) = parse(SRC, Mode::Impl);
+    let ast = doc.ast();
     let root = ast.root();
     let any = root.any();
-    assert_eq!(ast.span_of(any), root.span(&ast));
+    assert_eq!(ast.span_of(any), root.span(ast));
     // every ancestor address, checked against its typed span
     let pos = SRC.find("v + 1").unwrap() as u32 + 2;
     for a in ast.ancestors(ast.node_at(pos).unwrap()) {
         if let Some(m) = a.downcast::<MethodDeclNode>() {
-            assert_eq!(ast.span_of(a), m.span(&ast));
+            assert_eq!(ast.span_of(a), m.span(ast));
         }
         if let Some(b) = a.downcast::<BlockNode>() {
-            assert_eq!(ast.span_of(a), b.span(&ast));
+            assert_eq!(ast.span_of(a), b.span(ast));
         }
     }
 }
 
 #[test]
 fn subtree_of_the_root_is_the_tree() {
-    let (ast, _) = parse(SRC, Mode::Impl);
-    let whole = AstPrinter::json_of(&ast);
-    let window = AstPrinter::json(&AstPrinter::subtree(&ast, ast.root().any()));
+    let (doc, _) = parse(SRC, Mode::Impl);
+    let ast = doc.ast();
+    let whole = AstPrinter::json_of(ast);
+    let window = AstPrinter::json(&AstPrinter::subtree(ast, ast.root().any()));
     assert_eq!(window, whole, "the root window IS the whole tree");
 }
 
 #[test]
 fn subtree_prints_the_closed_positions_and_the_fence() {
-    let (ast, _) = parse(SRC, Mode::Impl);
+    let (doc, _) = parse(SRC, Mode::Impl);
+    let ast = doc.ast();
     // the method body block — a closed position (Handle<BlockNode>)
     let pos = SRC.find("v + 1").unwrap() as u32;
     let body = ast
         .ancestors(ast.node_at(pos).unwrap())
         .find(|&a| a.is::<BlockNode>())
         .expect("the method body is in the chain");
-    let json = AstPrinter::json(&AstPrinter::subtree(&ast, body));
+    let json = AstPrinter::json(&AstPrinter::subtree(ast, body));
     let head = json.split(',').nth(1);
     assert_eq!(
         head,
@@ -204,7 +211,7 @@ fn subtree_prints_the_closed_positions_and_the_fence() {
         .ancestors(ast.node_at(pos).unwrap())
         .find(|&a| a.is::<WhenArmNode>())
         .expect("the arm is in the chain");
-    let json = AstPrinter::json(&AstPrinter::subtree(&ast, arm));
+    let json = AstPrinter::json(&AstPrinter::subtree(ast, arm));
     let head = json.split(',').nth(1);
     assert_eq!(
         head,
@@ -219,22 +226,25 @@ fn subtree_prints_the_closed_positions_and_the_fence() {
         "the param type is a TyPath, got {}",
         ty.kind_name()
     );
-    let json = AstPrinter::json(&AstPrinter::subtree(&ast, ty));
+    let json = AstPrinter::json(&AstPrinter::subtree(ast, ty));
     assert!(
         json.contains("\"kind\":\"TyPath\""),
         "the ty window prints the TyPath row: {json}"
     );
     // a pattern window (the arm's `1 ->`)
-    let pat = arm.downcast::<WhenArmNode>().unwrap().get(&ast).pats[0].any();
-    let json = AstPrinter::json(&AstPrinter::subtree(&ast, pat));
+    let pat = arm.downcast::<WhenArmNode>().unwrap().get(ast).pats[0].any();
+    let json = AstPrinter::json(&AstPrinter::subtree(ast, pat));
     assert!(
         json.contains("\"kind\":\"PatLit\""),
         "the pat window prints the PatLit row: {json}"
     );
     // the error fence window (from the broken module)
     let (broken, _) = parse(BROKEN, Mode::Impl);
-    let fence = broken.node_at(BROKEN.find("oops").unwrap() as u32).unwrap();
-    let json = AstPrinter::json(&AstPrinter::subtree(&broken, fence));
+    let broken_ast = broken.ast();
+    let fence = broken_ast
+        .node_at(BROKEN.find("oops").unwrap() as u32)
+        .unwrap();
+    let json = AstPrinter::json(&AstPrinter::subtree(broken_ast, fence));
     assert!(
         json.contains("\"kind\":\"Error\"") && json.contains("\"diag\":\""),
         "the fence window carries its diags: {json}"
@@ -243,17 +253,18 @@ fn subtree_prints_the_closed_positions_and_the_fence() {
 
 #[test]
 fn a_dead_slot_prints_the_dead_row() {
-    let (ast, _) = parse(SRC, Mode::Impl);
+    let (doc, _) = parse(SRC, Mode::Impl);
+    let ast = doc.ast();
     // a fabricated address into a dead (never-allocated) slot
     let dead = AnyHandle {
         kind: BlockNode::KIND,
         idx: u32::MAX,
     };
-    let json = AstPrinter::json(&AstPrinter::subtree(&ast, dead));
+    let json = AstPrinter::json(&AstPrinter::subtree(ast, dead));
     assert_eq!(json, "{\"id\":0,\"kind\":\"dead\",\"span\":[0,0]}");
     // and a bogus kind id names the same honest row
     let bogus = AnyHandle { kind: 999, idx: 0 };
-    let json = AstPrinter::json(&AstPrinter::subtree(&ast, bogus));
+    let json = AstPrinter::json(&AstPrinter::subtree(ast, bogus));
     assert_eq!(json, "{\"id\":0,\"kind\":\"dead\",\"span\":[0,0]}");
     // the doors degrade, never lie: no parent, and span_of refuses
     assert_eq!(ast.parent(dead), None);
@@ -262,7 +273,8 @@ fn a_dead_slot_prints_the_dead_row() {
 #[test]
 #[should_panic(expected = "stale AnyHandle")]
 fn span_of_refuses_a_dead_slot() {
-    let (ast, _) = parse(SRC, Mode::Impl);
+    let (doc, _) = parse(SRC, Mode::Impl);
+    let ast = doc.ast();
     let dead = AnyHandle {
         kind: BlockNode::KIND,
         idx: u32::MAX,
@@ -275,11 +287,12 @@ fn same_tree_same_bytes() {
     // the canonical-comparable obligation: two cold parses of the
     // same text produce byte-identical JSON, text, node_at answers,
     // and subtree windows — the edit≡cold tests will diff these bytes
-    let (a, da) = parse(SRC, Mode::Impl);
-    let (b, db) = parse(SRC, Mode::Impl);
+    let (da_doc, da) = parse(SRC, Mode::Impl);
+    let (db_doc, db) = parse(SRC, Mode::Impl);
+    let (a, b) = (da_doc.ast(), db_doc.ast());
     assert_eq!(da.len(), db.len(), "clean parse, twice");
-    assert_eq!(AstPrinter::json_of(&a), AstPrinter::json_of(&b));
-    assert_eq!(AstPrinter::text_of(&a, SRC), AstPrinter::text_of(&b, SRC));
+    assert_eq!(AstPrinter::json_of(a), AstPrinter::json_of(b));
+    assert_eq!(AstPrinter::text_of(a, SRC), AstPrinter::text_of(b, SRC));
 
     let pos = SRC.find("let y = g;").unwrap() as u32;
     let ha = a.node_at(pos).unwrap();
@@ -287,8 +300,8 @@ fn same_tree_same_bytes() {
     assert_eq!(ha.kind, hb.kind);
     assert_eq!(ha.idx, hb.idx);
     assert_eq!(
-        AstPrinter::json(&AstPrinter::subtree(&a, ha)),
-        AstPrinter::json(&AstPrinter::subtree(&b, hb)),
+        AstPrinter::json(&AstPrinter::subtree(a, ha)),
+        AstPrinter::json(&AstPrinter::subtree(b, hb)),
     );
     let chain_a: Vec<AnyHandle> = a.ancestors(ha).collect();
     let chain_b: Vec<AnyHandle> = b.ancestors(hb).collect();

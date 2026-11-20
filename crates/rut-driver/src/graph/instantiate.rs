@@ -14,7 +14,7 @@
 
 use std::collections::HashMap;
 
-use rut_ast::parser::{parse_with_recover, Mode, ParseOpts};
+use rut_ast::parser::{parse_with_recover, Mode};
 use rut_core::binary::Program;
 use rut_core::ops::Op;
 use rut_lexer::diag::Diag;
@@ -164,7 +164,7 @@ impl<'a> GraphCompiler<'a> {
         let out = crate::compile::compile_program_pre(
             // the owned clone moves into the parse — the old shape paid
             // the clone AND the normalize copy; this pays the clone only
-            parse_with_recover(text, mode, ParseOpts::default()),
+            parse_with_recover(text, mode),
             owner,
             scope,
             &bound,

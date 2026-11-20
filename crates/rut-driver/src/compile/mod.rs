@@ -15,7 +15,7 @@ pub use dump::ir_dump_of;
 pub use program::{compile_program, compile_program_pre, compile_program_resolved, ProgramOutput};
 pub use seeds::{SeedGroup, Seeds};
 
-use rut_ast::parser::{parse_with_recover, Mode, ParseOpts};
+use rut_ast::parser::{parse_with_recover, Mode};
 use rut_ast::AstPrinter;
 use rut_lexer::diag::Diag;
 use rut_lexer::span::Span;
@@ -41,11 +41,12 @@ pub struct CompileOutput {
 /// NOT here — a host that wants them offers them (`rut-native`'s
 /// `tree_pkg`); the single-source lane knows no names.
 pub fn compile_module(src: &str, mode: Mode, module_name: &str) -> CompileOutput {
-    // the recovering entry: ALWAYS a tree, and `p.src` is the
+    // the recovering entry: ALWAYS a tree, and the Doc owns the
     // NORMALIZED text every span indexes — the renders slice it, never
-    // the caller's raw input (the pair-artifact law, v2)
-    let p = parse_with_recover(src.to_string(), mode, ParseOpts::default());
-    let ast_dump = AstPrinter::text_of(p.ast(), p.src());
+    // the caller's raw input (the artifact law)
+    let p = parse_with_recover(src.to_string(), mode);
+    let text = p.text(p.span());
+    let ast_dump = AstPrinter::text_of(p.ast(), text);
     let ast_json = AstPrinter::json_of(p.ast());
     if !p.ast().is_clean() {
         return CompileOutput {
