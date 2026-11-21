@@ -148,7 +148,9 @@ pipeline lives in the `Doc`.
 - **The collection law**: every file in the session's world — the
   open doc, the prelude, walked deps — is a
   `MountedFile { doc: Document, mount, decls }` in the session's
-  `DefIndexCollection` (rut-lsp's `hover/collection.rs`); the session
+  `DefIndexCollection` (rut-lsp's `hover/collection/` — the store in
+  its `mod.rs`, the member-law resolver family in `member`, the
+  completion tier doors in `tiers`, the views in `views/`); the session
   cache is `SessionState.docs: HashMap<String, MountedFile>` — ONE
   composition for open docs and mounts alike (the plan's separate
   `HashMap<String, Document>` shell cache is consciously superseded).

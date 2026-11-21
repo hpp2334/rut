@@ -19,9 +19,10 @@
 
 //!
 //! Layout: `types` (the shared vocabulary — Mount, TyForm, type text)
-//! → `collection` (MountedFile + DefIndexCollection, the views and the
-//! doors) → `bindings` + `lookup` + `infer` (what's under the cursor)
-//! → `render` (markdown).
+//! → `collection` (MountedFile + DefIndexCollection in its `mod.rs`;
+//! the member-law resolver family in `member`; completion's tier
+//! doors in `tiers`; the per-node views in `views/`) → `bindings` +
+//! `lookup` + `infer` (what's under the cursor) → `render` (markdown).
 
 pub mod bindings;
 pub(crate) mod collection;
