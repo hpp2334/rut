@@ -131,11 +131,13 @@ pipeline lives in the `Doc`.
   SEALED (`mod semantic;` — a private decl hides even its own `pub`
   items), so the queries spell `crate::semantic::…` and no consumer
   reaches past the ABI; `rut-ast` stays as shared tree vocabulary,
-  `rut-driver`/`rut-core` are other lanes. The grammar/corpus tests
-  drive the parser via the crate's unit-test tree (the sanctioned
-  seam, like the futures LocalPool); the fail-fast `parse` door exists
-  for "a diag means stop" callers — today only its own crate's tests —
-  while fmt/semantic/driver ride the recovering entry. (The wasm face
+  `rut-driver`/`rut-core` are other lanes. The grammar tests drive the
+  parser via rut-ast's own unit-test tree (the sanctioned seam, like
+  the futures LocalPool); the fail-fast `parse` door exists for "a
+  diag means stop" callers — today only rut-ast's own tests — while
+  fmt/semantic/driver ride the recovering entry. The LSP side pins the
+  same grammar through its public door (`tests/corpus.rs` analyzes the
+  corpus fixtures envelope-style). (The wasm face
   `rut-lsp-wasm` layers one crate higher: its only language dep is
   `rut-lsp`.) And since the privacy wall the WHOLE crate is sealed
   the way `semantic` is: **rut-lsp's public surface is `Lsp` +
@@ -284,11 +286,15 @@ order:
 - **Two crates — core + face**: `crates/rut-lsp` is the queries + actor
   core — the event loop, the session state, the envelope `wire` —
   native-clean AND wasm32-clean, and sealed to `Lsp` + `env::Io` (see
-  the privacy wall above): the tests that spell internal paths live
-  in the crate's unit-test tree (`src/tests/` — an integration test
-  cannot name a private module), and `crates/rut-lsp/tests/` keeps
-  only the public-door trio (abi/sched/walk — envelopes, clock, dep
-  walk, each through `Lsp` + an `Io` mock).
+  the privacy wall above): ALL of its tests sit in `crates/rut-lsp/tests/`
+  behind the public door — JSON envelopes in and out through `Lsp`,
+  driven on the native `LocalPool` (`Lsp::spawn_native`) over an `Io`
+  mock, sharing the `tests/common/` harness. There is NO unit-test
+  tree (`src/tests/` is gone): an assertion the envelopes cannot
+  express does not ship. The one in-crate exception is `event_loop`'s
+  own `#[cfg(test)] mod tests` — the NEUTRAL-QUEUE/cancel machinery
+  drives the loop's private handles directly (dummy cmds, the defer
+  queue), which no envelope can reach.
   `crates/rut-lsp-wasm` is the wasm-bindgen
   face: one exported `RutLsp` class whose every method delegates onto
   the core's `Lsp` handle; its deps are rut-lsp + the wasm trio

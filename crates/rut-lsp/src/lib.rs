@@ -133,11 +133,6 @@ mod semantic;
 // the reverse. ----
 mod world;
 
-// the unit-test tree — the sealed modules' tests live INSIDE the
-// crate (an integration test in `tests/` cannot spell private paths)
-#[cfg(test)]
-mod tests;
-
 /// the language core as the host holds it — one per editing session.
 /// Not the state itself: the INBOX HANDLE. The loop task owns `SessionState`
 /// exclusively; every entry posts one `event_loop::Msg` and awaits the

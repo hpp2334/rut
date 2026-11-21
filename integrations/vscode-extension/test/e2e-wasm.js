@@ -1,5 +1,5 @@
 // Through-wasm e2e gate — the extension-side twin of
-// crates/rut-lsp/src/tests/corpus.rs (the lsp-align survey §3.6 design).
+// crates/rut-lsp/tests/corpus.rs (the lsp-align survey §3.6 design).
 // Drives the SHIPPED bin/rut-lsp.wasm over the full repo corpus
 // (rut/ + examples/ + demo/src/examples/ + benches/workloads/) through
 // the extension's OWN ABI binding (src/wasm.ts, bundled to out/wasm.js
@@ -67,7 +67,7 @@ const WASM_PATH = path.join(EXT, 'bin', 'rut-lsp.wasm');
 const BINDING_PATH = path.join(EXT, 'out', 'wasm.js');
 const FIXTURE = path.join(__dirname, 'fixtures', 'symbols', 'src', 'mod.rut');
 
-// corpus roots, mirroring crates/rut-lsp/src/tests/corpus.rs and
+// corpus roots, mirroring crates/rut-lsp/tests/corpus.rs and
 // test/grammar-corpus.js
 const CORPUS_ROOTS = [
     'rut',
@@ -250,7 +250,7 @@ async function main() {
     }
 
     // ---- member hover/completion through a `?Circle` let-binding ----
-    // (M4's ty_head arm — mirrors crates/rut-lsp/src/tests/hover.rs's
+    // (M4's ty_head arm — mirrors crates/rut-lsp/tests/hover.rs's
     // nullable_let_binding_resolves_members through the shipped wasm;
     // methods live in impl blocks — RFC 0012 — so the doc analyzes clean)
     {

@@ -25,12 +25,6 @@ pub struct Analysis {
     pub symbols: Vec<DocumentSymbol>,
 }
 
-/// the sealed `semantic` module owns the filename convention — the
-/// unit tests spell it here (the production lanes go through the
-/// sync lane's own derivation)
-#[cfg(test)]
-pub use crate::semantic::mode_of;
-
 /// one Document → the LSP `Analysis` envelope — every row rides the
 /// doc's own lazy views (the classifier and the symbol tree compute
 /// once per version, on the sync lane's entry)

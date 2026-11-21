@@ -22,8 +22,9 @@ path = "src/lib.rs"
 # grammar, so `rut-lexer`/`rut-ast` are its vocabulary and nothing
 # else here drives normalize → lex → parse by hand (production src
 # spells the parser lane only inside semantic/doc.rs; the corpus tests
-# in src/tests are the sanctioned seam). rut-driver carries the
-# manifest/bundle bytes; rut-core the checker's run chain.
+# pin the same grammar through the public door, tests/corpus.rs).
+# rut-driver carries the manifest/bundle bytes; rut-core the checker's
+# run chain.
 rut-lexer = { path = "../rut-lexer" }
 rut-ast = { path = "../rut-ast" }
 rut-core = { path = "../rut-core" }
