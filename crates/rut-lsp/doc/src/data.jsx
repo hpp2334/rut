@@ -1,7 +1,6 @@
 /* The canned content — every example on the page, lifted from the
  * crate's real unit-test fixtures (hover.rs, completion.rs). What the
  * reader clicks is what the tests pin. */
-import { html } from "./vdom.js";
 
 /* completion lab ------------------------------------------------------ */
 export const LAB_CODE = `// inventory.rut — a tour of the completion tiers
@@ -39,10 +38,11 @@ entry fn main() -> nil {
 export const LAB = [
   {
     id: "use", ln: 2, after: "use json::", title: "the use tier",
-    edge: "Use", why: html`The cursor sits inside a <code>use</code> statement, right after
+    edge: "Use",
+    why: <>The cursor sits inside a <code>use</code> statement, right after
       <code>json::</code>. The tier walks that package and lists its surface — only
       <code>pub</code> names cross a package boundary (fns, types, lets and
-      <code>pub&nbsp;use</code> re-exports all ride the same gate).`,
+      <code>pub&nbsp;use</code> re-exports all ride the same gate).</>,
     items: [
       { label: "encodeJson", kind: "Fn", detail: "pub fn" },
       { label: "decodeJson", kind: "Fn", detail: "pub fn" },
@@ -51,14 +51,15 @@ export const LAB = [
       { label: "JsonArr", kind: "Type", detail: "pub type" },
       { label: "SOpt", kind: "Type", detail: "pub type" },
     ],
-    note: html`At <code>use ⏐</code> — nothing walked yet — the tier lists the mounted
-      <b>module names</b> instead (every named index; nothing is hardcoded).`,
+    note: <>At <code>use ⏐</code> — nothing walked yet — the tier lists the mounted
+      <b>module names</b> instead (every named index; nothing is hardcoded).</>,
   },
   {
     id: "ann", ln: 25, after: "let count: ", title: "the type tier (annotation boundary)",
-    edge: "Annotation", why: html`<code>let count: ⏐</code> is a type slot — the <code>:</code>
+    edge: "Annotation",
+    why: <><code>let count: ⏐</code> is a type slot — the <code>:</code>
       boundary (one text probe; the tree records no punct there) names the tier. Primitives,
-      the document's own types, ambient builtin rows and imported types complete.`,
+      the document's own types, ambient builtin rows and imported types complete.</>,
     items: [
       { label: "i32", kind: "Type", detail: "primitive" },
       { label: "i64", kind: "Type", detail: "primitive" },
@@ -68,13 +69,14 @@ export const LAB = [
       { label: "Color", kind: "Type", detail: "declared here" },
       { label: "Counter", kind: "Type", detail: "declared here" },
     ],
-    note: html`No keywords, no fns, no locals — <b>values never ride a type position</b>.
-      (Params and return arrows ride the same tier: <code>fn f(x: ⏐</code>, <code>-> ⏐</code>.)`,
+    note: <>No keywords, no fns, no locals — <b>values never ride a type position</b>.
+      (Params and return arrows ride the same tier: <code>fn f(x: ⏐</code>, <code>-&gt; ⏐</code>.)</>,
   },
   {
     id: "bare", ln: 28, after: "  ", title: "the bare tiers (merged)",
-    edge: "Bare", why: html`A plain expression position with nothing typed. Lists merge in
-      precedence order and dedupe by label — first occurrence wins:`,
+    edge: "Bare",
+    why: <>A plain expression position with nothing typed. Lists merge in
+      precedence order and dedupe by label — first occurrence wins:</>,
     groups: [
       ["locals — the bindings pass, shadow-correct", [
         { label: "count", kind: "Variable", detail: "let — i32" },
@@ -100,48 +102,51 @@ export const LAB = [
         { label: "decodeJson", kind: "Fn", insert: "use json::{ decodeJson };", detail: "not imported yet" },
       ]],
     ],
-    note: html`The <b>dot guard</b>: a bare request sitting right after a <code>.</code> the
+    note: <>The <b>dot guard</b>: a bare request sitting right after a <code>.</code> the
       tree couldn't shape is a member request with an unresolved receiver — the answer is
-      <b>empty</b>, never the keyword dump.`,
+      <b>empty</b>, never the keyword dump.</>,
   },
   {
     id: "member", ln: 29, after: "c.", title: "the member tier",
-    edge: "Member", why: html`<code>c.</code> mid-typing is an <b>incomplete node</b> in the
+    edge: "Member",
+    why: <><code>c.</code> mid-typing is an <b>incomplete node</b> in the
       tree — a method node whose member slot is absent — so the cursor is ON the member
       position. The receiver <code>c</code> resolves through its initializer →
-      <code>Counter</code>, and the member law answers:`,
+      <code>Counter</code>, and the member law answers:</>,
     items: [
       { label: "n", kind: "Field", detail: "n: i32" },
       { label: "bump", kind: "Method", detail: "fn bump(self) -> i32" },
       { label: "reset", kind: "Method", detail: "fn reset(self) -> nil" },
     ],
-    note: html`An unresolved receiver is an <b>empty</b> tier, never a wrong one. A receiver
+    note: <>An unresolved receiver is an <b>empty</b> tier, never a wrong one. A receiver
       that names a module (<code>helpers::mk(</code>) diverts to the position-path tier with
-      visibility gates.`,
+      visibility gates.</>,
   },
   {
     id: "qual", ln: 30, after: "Color::", title: "the :: tier — an enum's members",
-    edge: "Qualified", why: html`<code>Color::⏐</code> — the head resolves to a type in the
+    edge: "Qualified",
+    why: <><code>Color::⏐</code> — the head resolves to a type in the
       index, and an enum's member list is the answer. A resolved head is <b>final</b>: the
-      list is the answer even when empty.`,
+      list is the answer even when empty.</>,
     items: [
       { label: "Red", kind: "EnumMember", detail: "Red;" },
       { label: "Green", kind: "EnumMember", detail: "Green;" },
     ],
-    note: html`An interface head offers nothing (its members ride receivers). A non-enum type
-      head lists statics + associated fns — try the <code>Counter::</code> dot on line 26.`,
+    note: <>An interface head offers nothing (its members ride receivers). A non-enum type
+      head lists statics + associated fns — try the <code>Counter::</code> dot on line 26.</>,
   },
   {
     id: "qualfn", ln: 26, after: "Counter::", title: "the :: tier — statics & associated fns",
-    edge: "Qualified", why: html`<code>Counter::⏐</code> — a non-enum type head lists its
+    edge: "Qualified",
+    why: <><code>Counter::⏐</code> — a non-enum type head lists its
       static fields plus the inherent <code>impl Counter</code> fns. The constructor
-      <code>new</code> lives exactly there.`,
+      <code>new</code> lives exactly there.</>,
     items: [
       { label: "new", kind: "Fn", detail: "fn new(n: i32) -> Counter" },
     ],
-    note: html`And a head that resolves to a <b>module</b> of your own package? That is the
+    note: <>And a head that resolves to a <b>module</b> of your own package? That is the
       position-path tier: the module's members filtered by what this file may see —
-      private reaches the module's subtree, pub(pkg) the package, pub everywhere.`,
+      private reaches the module's subtree, pub(pkg) the package, pub everywhere.</>,
   },
 ];
 

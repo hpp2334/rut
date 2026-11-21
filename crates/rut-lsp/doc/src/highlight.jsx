@@ -1,7 +1,6 @@
 /* A tiny rut tokenizer for the code samples — enough to color
  * keywords, comments, strings (f-strings whole), numbers, and
  * Capitalized identifiers as types. Pure: line in, token list out. */
-import { html } from "./vdom.js";
 
 const RUT_KW = new Set((
   "entry fn let struct class interface enum impl use mod pub return self Self nil true false " +
@@ -45,7 +44,7 @@ export function tokenizeRut(line) {
   return out;
 }
 
-export const Tok = ({ tk }) => html`<span className="tk-${tk.t}">${tk.v}</span>`;
+export const Tok = ({ tk }) => <span className={"tk-" + tk.t}>{tk.v}</span>;
 
 /* split a token list at byte offset `at` (a hotspot dot lands there) */
 export function splitTokens(toks, at) {

@@ -1,9 +1,9 @@
 /* §Overview — the hero + the layering diagram. */
-import { html } from "./vdom.js";
-import { CARD } from "./ui.js";
-import { LAYERS } from "./data.js";
+import { Fragment } from "react";
+import { CARD } from "./ui.jsx";
+import { LAYERS } from "./data.jsx";
 
-export const Overview = () => html`
+export const Overview = () => (
   <section className="grid items-center gap-11 pb-8 pt-14 lg:grid-cols-[1.2fr_.9fr]" id="overview">
     <div>
       <span className="kind border border-brand-200 bg-brand-50 text-brand-600">interactive walkthrough</span>
@@ -24,16 +24,18 @@ export const Overview = () => html`
       <a href="#pipeline" className="ml-2.5 inline-flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-4.5 py-2.5 font-semibold shadow-card transition hover:-translate-y-px">Follow one keystroke</a>
     </div>
     <div className="flex flex-col gap-2">
-      ${LAYERS.map((l, i) => html`
-        <${React.Fragment} key=${i}>
-          <div className=${CARD + " flex items-center gap-3.5 px-4 py-3 " + (l.core ? "border-l-4 border-l-brand-600" : "")}>
-            <span className="w-24 flex-none text-[.66rem] font-extrabold uppercase tracking-[.08em] text-slate-400">${l.tag}</span>
+      {LAYERS.map((l, i) => (
+        <Fragment key={i}>
+          <div className={CARD + " flex items-center gap-3.5 px-4 py-3 " + (l.core ? "border-l-4 border-l-brand-600" : "")}>
+            <span className="w-24 flex-none text-[.66rem] font-extrabold uppercase tracking-[.08em] text-slate-400">{l.tag}</span>
             <div>
-              <div className="text-sm font-semibold">${l.t}</div>
-              <div className="text-[.85rem] leading-snug text-slate-500">${l.d}</div>
+              <div className="text-sm font-semibold">{l.t}</div>
+              <div className="text-[.85rem] leading-snug text-slate-500">{l.d}</div>
             </div>
           </div>
-          ${i < LAYERS.length - 1 ? html`<div className="text-center text-xs text-slate-300">▼</div>` : null}
-        <//>`)}
+          {i < LAYERS.length - 1 ? <div className="text-center text-xs text-slate-300">▼</div> : null}
+        </Fragment>
+      ))}
     </div>
-  </section>`;
+  </section>
+);
