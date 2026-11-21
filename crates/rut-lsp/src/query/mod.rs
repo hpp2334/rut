@@ -9,6 +9,7 @@ pub mod analysis;
 pub mod check;
 pub mod completion;
 pub mod definition;
+pub mod hover;
 pub mod inlay;
 pub mod references;
 pub mod signature_help;

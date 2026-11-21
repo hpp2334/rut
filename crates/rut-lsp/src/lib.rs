@@ -115,19 +115,23 @@ mod state;
 // world is the [`Lsp`] handle and its JSON envelopes — no internal
 // name crosses the crate boundary (the face crate implements
 // [`env::Io`] and nothing else). The canonical paths inside the crate
-// spell the module tree (`crate::query::analysis`, `crate::hover`, …).
+// spell the module tree (`crate::query::analysis`, `crate::world`, …).
 mod query;
 
 mod deps;
 pub mod env;
-mod hover;
-mod mods;
 // the classifier/document layer — absorbed from `rut-semantic` and
 // SEALED: the private `mod` decl makes even the module's own `pub`
 // items invisible outside the crate, so the queries keep one spelling
 // (`crate::semantic::…`) and no consumer can reach past the ABI
 mod prelude;
 mod semantic;
+
+// ---- the mounted world — the session's accumulated language facts,
+// the decl layer + the binding pass every query reads (see the
+// module's own doc). One-way layering: `query` spells `world`, never
+// the reverse. ----
+mod world;
 
 // the unit-test tree — the sealed modules' tests live INSIDE the
 // crate (an integration test in `tests/` cannot spell private paths)

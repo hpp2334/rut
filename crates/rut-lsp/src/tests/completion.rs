@@ -1,8 +1,8 @@
-use crate::hover::collection::Chain;
-use crate::hover::Mount;
-use crate::hover::MountedFile;
-use crate::mods::DocMods;
 use crate::query::completion::*;
+use crate::world::collection::Chain;
+use crate::world::mods::DocMods;
+use crate::world::Mount;
+use crate::world::MountedFile;
 use rut_ast::parser::Mode;
 use std::collections::HashSet;
 

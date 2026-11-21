@@ -21,7 +21,7 @@ mod member;
 mod tiers;
 mod views;
 
-pub(crate) use member::{used_ifaces, MemberHit, MemberTarget, RecvNode};
+pub(crate) use member::{enclosing_type, used_ifaces, MemberHit, MemberTarget, RecvNode};
 pub(crate) use tiers::{ExportRow, MemberRow, UseExports};
 pub(crate) use views::{FnView, LetView, MemberView, ModView, TyView, UseView};
 
@@ -29,8 +29,8 @@ use rut_ast::{
     AnyHandle, BuiltinPrimitiveNode, BuiltinTyNode, ItemRef, MethodRef, SurfaceFnNode, UseNode,
 };
 
-use crate::hover::types::Mount;
 use crate::semantic::{mode_of, Document};
+use crate::world::types::Mount;
 
 // ---- the decl map — name → node address, one pass per file version ----
 
@@ -393,4 +393,24 @@ impl<'a> Chain<'a> {
     ) -> Vec<(&'a MountedFile, T)> {
         DefIndexCollection::prefer_bodies(hits)
     }
+}
+
+/// `find_ty` over a plain file window — the inference pass rides
+/// slices (a one-file window for a module-let's initializer, the
+/// chain's pointer slice inside the binding pass); the law is
+/// [`Chain::type_decl`]'s mounted-over-embed rule, spelled once here
+/// for the window shape
+pub(crate) fn find_ty<'a>(idxs: &[&'a MountedFile], name: &str) -> Option<TyView<'a>> {
+    let mut fallback = None;
+    for f in idxs.iter().copied() {
+        if let Some(t) = f.ty(name) {
+            if f.mount.src_path.is_none() {
+                return Some(t);
+            }
+            if fallback.is_none() {
+                fallback = Some(t);
+            }
+        }
+    }
+    fallback
 }

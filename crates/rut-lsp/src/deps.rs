@@ -34,7 +34,7 @@ type ModHead = (
 use crate::semantic::Mode;
 use sha2::{Digest, Sha256};
 
-use crate::hover::MountedFile;
+use crate::world::MountedFile;
 
 /// One entry source a dep indexes: the manifest-relative file path and
 /// the mode it parses in (`entry.type` → Decl, the `mod.rut` root →
@@ -802,7 +802,7 @@ pub fn mount_file(name: &str, uri: &str, mod_path: Option<&str>, src: String) ->
     // already derived it that way). `src` BY VALUE: it moves into the
     // doc (a fresh walk read moves for free, a borrowed text clones to
     // move)
-    MountedFile::from_src(crate::hover::Mount::dep(name, uri, mod_path), src)
+    MountedFile::from_src(crate::world::Mount::dep(name, uri, mod_path), src)
 }
 
 /// One declaration entry's module index — the wire-13 consumption of

@@ -9,8 +9,8 @@ use std::collections::{BTreeMap, HashMap, HashSet};
 
 use crate::env;
 use crate::event_loop;
-use crate::hover::{DefIndexCollection, Mount, MountedFile};
 use crate::wire;
+use crate::world::{DefIndexCollection, Mount, MountedFile};
 
 pub(crate) struct SessionState {
     /// open documents by URI (the LSP's full-text sync) — the
@@ -99,7 +99,7 @@ impl SessionState {
             }
         }
         let f = self.docs.get_mut(uri).expect("just synced");
-        f.decls = crate::hover::collection::decls_of(&f.doc);
+        f.decls = crate::world::collection::decls_of(&f.doc);
     }
 
     /// the document at `uri`, if open
@@ -112,7 +112,7 @@ impl SessionState {
     /// (the prelude + workspace; a stamped twin of the SAME uri keeps
     /// its place — the definition layer's dedupe law handles the
     /// doubled answer). `None` = the doc is unknown.
-    pub(crate) fn chain(&self, uri: &str) -> Option<crate::hover::collection::Chain<'_>> {
+    pub(crate) fn chain(&self, uri: &str) -> Option<crate::world::collection::Chain<'_>> {
         let head = self.docs.get(uri)?;
         Some(self.defs.chain_with(head))
     }
@@ -194,13 +194,13 @@ impl SessionState {
     /// indexer) laid down the (module, mod_path) pair. Unstamped files
     /// answer the default (position-path completion off; nothing else
     /// reads this).
-    pub(crate) fn doc_mods_of(&self, uri: &str) -> crate::mods::DocMods {
+    pub(crate) fn doc_mods_of(&self, uri: &str) -> crate::world::mods::DocMods {
         match self.defs.file_for(uri) {
-            Some(f) => crate::mods::DocMods {
+            Some(f) => crate::world::mods::DocMods {
                 mod_path: f.mount.mod_path.clone(),
                 pkg: f.mount.module.clone(),
             },
-            None => crate::mods::DocMods::default(),
+            None => crate::world::mods::DocMods::default(),
         }
     }
 

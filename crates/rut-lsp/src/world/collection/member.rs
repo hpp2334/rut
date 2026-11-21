@@ -10,8 +10,9 @@ use std::collections::HashSet;
 use rut_ast::{AnyHandle, ExprRef, FieldNode, IdentId, Lit, MethodNode, PathNode, UseNode};
 
 use super::{Chain, FnView, MemberView, MountedFile, TyView};
-use crate::hover::bindings::{BindKind, Binding};
-use crate::hover::types::TyForm;
+use crate::semantic::Span;
+use crate::world::bindings::{BindKind, Binding};
+use crate::world::types::TyForm;
 
 /// a member door's receiver — the node-derived spelling: the receiver
 /// expression (a method/field access), or the `::` path segment
@@ -174,8 +175,7 @@ impl<'a> Chain<'a> {
         match recv {
             RecvNode::Expr(e) => match e {
                 ExprRef::Self_(h) if !h.get(ast).is_ty => {
-                    crate::hover::lookup::enclosing_type(self.iter(), pos)
-                        .map(|t| t.name().to_string())
+                    enclosing_type(self.iter(), pos).map(|t| t.name().to_string())
                 }
                 ExprRef::Path(ph) => {
                     let segs = &ph.get(ast).segs;
@@ -202,13 +202,13 @@ impl<'a> Chain<'a> {
     pub(crate) fn named_recv(&self, pos: u32, id: IdentId) -> Option<String> {
         let ast = self.head().doc.ast();
         let text = ast.name(id);
-        if crate::hover::infer::is_cap(text) || crate::semantic::is_primitive_ty(text) {
+        if crate::world::infer::is_cap(text) || crate::semantic::is_primitive_ty(text) {
             return Some(text.to_string());
         }
         let b = rut_ast::resolve_binding(self.head().doc.bindings(), pos, id)?;
         self.binding_ty(b)
-            .map(|t| crate::hover::types::head_of_ty(&t))
-            .or_else(|| crate::hover::infer::module_let_ty(self.iter(), text))
+            .map(|t| crate::world::types::head_of_ty(&t))
+            .or_else(|| crate::world::infer::module_let_ty(self.iter(), text))
     }
 
     /// a binding row's type — declared-or-inferred, the chain as the
@@ -229,7 +229,7 @@ impl<'a> Chain<'a> {
         }
         let ty = b.init.and_then(|init| self.expr_ty(head, init))?;
         if matches!(b.kind, BindKind::IterVar) {
-            if let Some(elem) = crate::hover::infer::elem_ty(&ty) {
+            if let Some(elem) = crate::world::infer::elem_ty(&ty) {
                 return Some(elem);
             }
         }
@@ -243,7 +243,7 @@ impl<'a> Chain<'a> {
     /// member chains → the member lanes)
     pub(crate) fn expr_ty(&self, home: &MountedFile, e: ExprRef) -> Option<String> {
         let files: Vec<&MountedFile> = self.iter().collect();
-        crate::hover::infer::expr_ty(home, &files, e)
+        crate::world::infer::expr_ty(home, &files, e)
     }
 
     /// the inherent impl-block fn `impl ty_name { fn member(..) }` —
@@ -276,6 +276,55 @@ impl<'a> Chain<'a> {
         self.type_decl(name)
             .filter(|t| t.form() == TyForm::Interface)
     }
+}
+
+// ---- the enclosing-type walk (the self-receiver's resolver) ----
+
+/// the type whose body contains `pos` — a class/struct/interface body,
+/// or the target of the enclosing impl (via the method's owner). Over
+/// any file window (the chain's iteration or the inference pass's
+/// slice — one law, two shapes).
+pub(crate) fn enclosing_type<'a, I>(files: I, pos: u32) -> Option<TyView<'a>>
+where
+    I: IntoIterator<Item = &'a MountedFile>,
+{
+    let mut best: Option<(u32, TyView<'a>)> = None;
+    for f in files {
+        for t in f.types() {
+            if t.form() == TyForm::Enum || !contains(t.span(), pos) {
+                continue;
+            }
+            if best
+                .map(|(l, _)| t.span().hi - t.span().lo < l)
+                .unwrap_or(true)
+            {
+                best = Some((t.span().hi - t.span().lo, t));
+            }
+        }
+        for fv in f.fns() {
+            // the impl's target — the owner string IS the type's name
+            // (inherent impls own their methods)
+            let Some(target) = fv.owner() else {
+                continue;
+            };
+            if let Some(t) = f.ty(&target) {
+                if contains(fv.span(), pos)
+                    && best
+                        .map(|(l, _)| fv.span().hi - fv.span().lo < l)
+                        .unwrap_or(true)
+                {
+                    best = Some((fv.span().hi - fv.span().lo, t));
+                }
+            }
+        }
+    }
+    best.map(|(_, t)| t)
+}
+
+/// is `pos` inside `sp`? — the span-containment predicate the
+/// enclosing-type walk reads
+fn contains(sp: Span, pos: u32) -> bool {
+    sp.lo <= pos && pos < sp.hi
 }
 
 // ---- the member law's verdict types (the shared resolver's shape) ----

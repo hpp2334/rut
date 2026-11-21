@@ -30,10 +30,10 @@ use rut_ast::{
     UseNode,
 };
 
-use crate::hover::collection::{Chain, FnView, LetView, MemberView, TyView};
-use crate::hover::types::TyForm;
-use crate::mods::{self, DocMods};
 use crate::semantic::LineIndex;
+use crate::world::collection::{Chain, FnView, LetView, MemberView, TyView};
+use crate::world::mods::{self, DocMods};
+use crate::world::types::TyForm;
 
 /// One completion item — plain data; the server maps it to LSP types.
 #[derive(Debug, Clone)]
@@ -88,8 +88,8 @@ pub(crate) trait CompletionRow {
 /// A binding row — the rows carry interner ids, the wire spells them;
 /// the detail rides the doc's own text join
 pub(crate) struct BindRow<'a> {
-    pub b: &'a crate::hover::Binding,
-    pub doc: &'a crate::hover::collection::MountedFile,
+    pub b: &'a crate::world::Binding,
+    pub doc: &'a crate::world::collection::MountedFile,
     /// the resolver's declared-or-inferred answer (the tier's one
     /// resolver read per row)
     pub ty: Option<String>,
@@ -163,8 +163,8 @@ impl CompletionRow for Row<'_> {
             }
             Row::Let(_) => CompletionKind::Const,
             Row::Bind(r) => match r.b.kind {
-                crate::hover::BindKind::Param => CompletionKind::Parameter,
-                crate::hover::BindKind::Let | crate::hover::BindKind::IterVar => {
+                crate::world::BindKind::Param => CompletionKind::Parameter,
+                crate::world::BindKind::Let | crate::world::BindKind::IterVar => {
                     CompletionKind::Variable
                 }
             },
@@ -305,7 +305,7 @@ pub fn complete(
             }
             member_tier_out(
                 chain
-                    .members_for(pos, crate::hover::collection::RecvNode::Seg(tail))
+                    .members_for(pos, crate::world::collection::RecvNode::Seg(tail))
                     .unwrap_or_default(),
                 &prefix,
             )
@@ -587,7 +587,7 @@ fn on_name(sp: Span, pos: u32) -> bool {
 /// the typed part of `sp` — the slice up to the cursor (a cursor past
 /// the span's end typed the whole name and moved on: the prefix is the
 /// whole name, the tier filters on it)
-fn partial_text(head: &crate::hover::collection::MountedFile, sp: Span, pos: u32) -> String {
+fn partial_text(head: &crate::world::collection::MountedFile, sp: Span, pos: u32) -> String {
     let end = (pos as usize).clamp(sp.lo as usize, sp.hi as usize);
     head.doc.text(Span::new(sp.lo, end as u32)).to_string()
 }
@@ -598,7 +598,7 @@ fn partial_text(head: &crate::hover::collection::MountedFile, sp: Span, pos: u32
 /// FULL path with the partial name as the prefix; past a separator
 /// with nothing typed, the full path and an empty prefix.
 fn use_edge(
-    head: &crate::hover::collection::MountedFile,
+    head: &crate::world::collection::MountedFile,
     ast: &Ast,
     node: AnyHandle,
     u: &UseNode,
@@ -656,7 +656,7 @@ fn use_edge(
 /// multi-seg path's tail is the qualified tier's, which the walk
 /// answered before this lane)
 fn ty_slot_prefix(
-    head: &crate::hover::collection::MountedFile,
+    head: &crate::world::collection::MountedFile,
     t: TyRef,
     pos: u32,
 ) -> Option<String> {
@@ -679,7 +679,7 @@ fn ty_slot_prefix(
 /// slot's own segments (text-backed, the dot guard's precedent: the
 /// TYPE grammar spells no `.` access, so the punct lives in the
 /// statement's recovery region)
-fn ty_slot_dot(head: &crate::hover::collection::MountedFile, t: TyRef, pos: u32) -> Option<Edge> {
+fn ty_slot_dot(head: &crate::world::collection::MountedFile, t: TyRef, pos: u32) -> Option<Edge> {
     let TyRef::Path(h) = t else {
         return None;
     };
@@ -716,7 +716,7 @@ fn ty_slot_dot(head: &crate::hover::collection::MountedFile, t: TyRef, pos: u32)
 /// before any `=`? (the annotation probe — the tree records the
 /// slots, not the punct that introduced them)
 fn gap_spells(
-    head: &crate::hover::collection::MountedFile,
+    head: &crate::world::collection::MountedFile,
     from: u32,
     pos: u32,
     punct: char,
@@ -739,7 +739,7 @@ fn gap_spells(
 /// (`Ve⏐` → `Ve`), from the tree — a path segment, a let/param name —
 /// else the fence residue (`Doc::name_at`)
 fn bare_prefix_walk(
-    head: &crate::hover::collection::MountedFile,
+    head: &crate::world::collection::MountedFile,
     p0: rut_ast::AnyHandle,
     pos: u32,
     src: &str,
@@ -801,17 +801,17 @@ fn dot_context_before(src: &str, pos: u32) -> bool {
 /// maps its view rows to the wire items and applies the typed prefix
 /// (presentation, at the call site).
 fn member_tier_out(
-    rows: Vec<crate::hover::collection::MemberRow>,
+    rows: Vec<crate::world::collection::MemberRow>,
     prefix: &str,
 ) -> Vec<CompletionOut> {
     let mut out: Vec<CompletionOut> = Vec::new();
     for r in rows {
         match r {
-            crate::hover::collection::MemberRow::Field(m)
-            | crate::hover::collection::MemberRow::Method(m) => {
+            crate::world::collection::MemberRow::Field(m)
+            | crate::world::collection::MemberRow::Method(m) => {
                 push_item(&mut out, CompletionOut::of(&Row::Member(m)));
             }
-            crate::hover::collection::MemberRow::ImplFn(f) => {
+            crate::world::collection::MemberRow::ImplFn(f) => {
                 push_item(&mut out, CompletionOut::of(&Row::Fn(f)));
             }
         }
@@ -830,7 +830,7 @@ fn member_tier_out(
 /// read internally (`Doc::bindings()` — lazy per version).
 fn local_completions(chain: &Chain, pos: u32) -> Vec<CompletionOut> {
     let doc = chain.head();
-    let mut best: Vec<&crate::hover::Binding> = Vec::new();
+    let mut best: Vec<&crate::world::Binding> = Vec::new();
     for b in doc.doc.bindings() {
         if b.decl_ident_span.lo > pos || !(b.scope_span.lo <= pos && pos < b.scope_span.hi) {
             continue; // declared later, or its scope ended before the cursor
@@ -890,7 +890,7 @@ fn bare_tier_out(chain: &Chain) -> Vec<CompletionOut> {
 /// typed prefix (presentation, at the call site).
 fn use_tier_out(
     chain: &Chain,
-    ux: Option<crate::hover::collection::UseExports>,
+    ux: Option<crate::world::collection::UseExports>,
     prefix: &str,
 ) -> Vec<CompletionOut> {
     let Some(ux) = ux else {
@@ -898,7 +898,7 @@ fn use_tier_out(
     };
     let mut out: Vec<CompletionOut> = Vec::new();
     match ux {
-        crate::hover::collection::UseExports::Modules(list) => {
+        crate::world::collection::UseExports::Modules(list) => {
             for (m, origin) in list {
                 push_item(
                     &mut out,
@@ -906,12 +906,12 @@ fn use_tier_out(
                 );
             }
         }
-        crate::hover::collection::UseExports::Exports { pkg, path, rows } => {
+        crate::world::collection::UseExports::Exports { pkg, path, rows } => {
             for r in rows {
                 match r {
                     // the walkable children — the detail renders the
                     // mounted display from the child's mod path
-                    crate::hover::collection::ExportRow::Mod(m, child) => push_item(
+                    crate::world::collection::ExportRow::Mod(m, child) => push_item(
                         &mut out,
                         CompletionOut::plain(
                             m.name().to_string(),
@@ -923,19 +923,19 @@ fn use_tier_out(
                             CompletionKind::Module,
                         ),
                     ),
-                    crate::hover::collection::ExportRow::Ty(t) => {
+                    crate::world::collection::ExportRow::Ty(t) => {
                         push_item(&mut out, CompletionOut::of(&Row::Ty(t)));
                     }
-                    crate::hover::collection::ExportRow::Fn(fv) => {
+                    crate::world::collection::ExportRow::Fn(fv) => {
                         push_item(&mut out, CompletionOut::of(&Row::Fn(fv)));
                     }
-                    crate::hover::collection::ExportRow::Let(l) => {
+                    crate::world::collection::ExportRow::Let(l) => {
                         push_item(&mut out, CompletionOut::of(&Row::Let(l)));
                     }
                     // a `pub use` re-export: the imported name joined
                     // the module's surface. The cap law picks the icon
                     // until real resolution (same as the use classifier)
-                    crate::hover::collection::ExportRow::ReExport(u) => {
+                    crate::world::collection::ExportRow::ReExport(u) => {
                         let src = u.path().join("::");
                         push_item(
                             &mut out,
@@ -943,7 +943,7 @@ fn use_tier_out(
                                 u.name().to_string(),
                                 format!("re-export of {src}::{}", u.name()),
                                 Vec::new(),
-                                if crate::hover::infer::is_cap(u.name()) {
+                                if crate::world::infer::is_cap(u.name()) {
                                     CompletionKind::Type
                                 } else {
                                     CompletionKind::Fn
@@ -981,12 +981,12 @@ fn type_tier_completions(chain: &Chain) -> Vec<CompletionOut> {
         );
     }
     let doc = chain.head();
-    let imported = crate::query::definition::import_map(doc);
+    let imported = crate::world::pkg::import_map(doc);
     for f in chain.iter() {
         let own = std::ptr::eq(f, doc);
         let used_from: HashSet<&str> = imported
             .iter()
-            .filter(|(_, pkg)| crate::query::definition::matches_pkg(f, pkg))
+            .filter(|(_, pkg)| crate::world::pkg::matches_pkg(f, pkg))
             .map(|(name, _)| *name)
             .collect();
         for t in f.types() {
@@ -1095,7 +1095,7 @@ fn scope_index<'a>(
     doc: &DocMods,
     pkg: Option<&str>,
     path: &str,
-) -> Option<&'a crate::hover::collection::MountedFile> {
+) -> Option<&'a crate::world::collection::MountedFile> {
     if doc.mod_path.as_deref() == Some(path) {
         return Some(chain.head());
     }
@@ -1111,7 +1111,7 @@ fn scope_index<'a>(
 /// here — its module resolution never lands.
 fn use_bound_dep_module(
     chain: &Chain,
-    doc_file: &crate::hover::collection::MountedFile,
+    doc_file: &crate::world::collection::MountedFile,
     head: &str,
 ) -> Option<(String, String)> {
     for u in doc_file.uses() {
@@ -1251,7 +1251,7 @@ fn position_path_completions(
                 u.name().to_string(),
                 format!("re-export of {src}::{}", u.name()),
                 Vec::new(),
-                if crate::hover::infer::is_cap(u.name()) {
+                if crate::world::infer::is_cap(u.name()) {
                     CompletionKind::Type
                 } else {
                     CompletionKind::Fn
@@ -1276,7 +1276,7 @@ fn position_path_completions(
 ///
 /// `direct_deps` is the open document's own dep set — its manifest's
 /// `deps`/`dev-deps` rows, state-derived FACT threaded the
-/// [`DocMods`](crate::mods::DocMods) way (never the state itself). The
+/// [`DocMods`](crate::world::mods::DocMods) way (never the state itself). The
 /// direct-dep gate DERIVES here, at the read, never stamped on the
 /// index: the compiler's closure check (`Session::resolve_use` →
 /// `declares`) refuses `use` of a mounted-but-undeclared package (the
@@ -1294,7 +1294,7 @@ fn auto_import_completions(
     // the gate itself: the ambient prelude (origin `core` — a walked
     // dep's origin is always a uri, never the bare label, so no
     // collision) or a module the document's own manifest names
-    let direct = |f: &crate::hover::collection::MountedFile| {
+    let direct = |f: &crate::world::collection::MountedFile| {
         f.mount.origin == "core"
             || f.mount
                 .module

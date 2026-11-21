@@ -4,8 +4,9 @@
 //! layer (field + enum-member + module-let decl sites), and the M7
 //! primitive blurbs.
 
-use crate::hover::collection::Chain;
-use crate::hover::*;
+use crate::query::hover::hover;
+use crate::world::collection::Chain;
+use crate::world::{Mount, MountedFile};
 use rut_ast::parser::Mode;
 use rut_lexer::token::{Tok, Token};
 
@@ -34,11 +35,15 @@ fn hover_nth(src: &str, needle: &str, n: usize) -> Option<String> {
     hover_out_nth(src, needle, n).map(|h| h.markdown)
 }
 
-fn hover_out_nth(src: &str, needle: &str, n: usize) -> Option<crate::hover::lookup::HoverOut> {
+fn hover_out_nth(
+    src: &str,
+    needle: &str,
+    n: usize,
+) -> Option<crate::query::hover::lookup::HoverOut> {
     let file = mount_of(src, Mode::Impl, Mount::default());
     let chain = Chain::new(vec![&file]);
     let pos = find_ident_pos(file.doc.toks(), needle, n)?;
-    hover(&chain, &crate::mods::DocMods::default(), pos)
+    hover(&chain, &crate::world::mods::DocMods::default(), pos)
 }
 
 fn find_ident_pos(toks: &[Token], name: &str, n: usize) -> Option<u32> {
@@ -199,7 +204,7 @@ fn hover_decl_at(src: &str, needle: &str) -> Option<String> {
     let file = mount_of(src, Mode::Decl, Mount::default());
     let chain = Chain::new(vec![&file]);
     let pos = find_ident_pos(file.doc.toks(), needle, 0)?;
-    hover(&chain, &crate::mods::DocMods::default(), pos).map(|h| h.markdown)
+    hover(&chain, &crate::world::mods::DocMods::default(), pos).map(|h| h.markdown)
 }
 
 #[test]
@@ -317,7 +322,7 @@ fn ambiguity_lists_candidates() {
     );
     let chain = Chain::new(vec![&doc, &a, &b]);
     let pos = find_ident_pos(doc.doc.toks(), "helper", 0).unwrap();
-    let md = hover(&chain, &crate::mods::DocMods::default(), pos)
+    let md = hover(&chain, &crate::world::mods::DocMods::default(), pos)
         .unwrap()
         .markdown;
     assert!(md.contains("multiple definitions"), "{md}");
@@ -337,7 +342,7 @@ fn host_fn_surface_favors_own_methods() {
     );
     let chain = Chain::new(vec![&di, &surf]);
     let pos = find_ident_pos(di.doc.toks(), "string_join", 0).unwrap();
-    let h = hover(&chain, &crate::mods::DocMods::default(), pos).unwrap();
+    let h = hover(&chain, &crate::world::mods::DocMods::default(), pos).unwrap();
     assert!(h.markdown.contains("fn string_join"), "{}", h.markdown);
     assert!(h.markdown.contains("core"), "{}", h.markdown);
 }
@@ -416,7 +421,7 @@ fn foreign_interface_member_requires_use() {
         let di = mount_of(doc, Mode::Impl, Mount::doc("main.rut"));
         let chain = Chain::new(vec![&di, &surf]);
         let pos = find_ident_pos(di.doc.toks(), "greet", 0).unwrap();
-        hover(&chain, &crate::mods::DocMods::default(), pos).map(|h| h.markdown)
+        hover(&chain, &crate::world::mods::DocMods::default(), pos).map(|h| h.markdown)
     };
 
     let gated = "fn go(g: Greeter) -> nil { g.greet(); }\n";
@@ -763,7 +768,7 @@ fn binding_decl_span_is_byte_exact() {
     let chain = Chain::new(vec![&file]);
     let src2 = file.doc.src();
     let use_pos = src2.rfind("total").unwrap() as u32;
-    let out = hover(&chain, &crate::mods::DocMods::default(), use_pos).unwrap();
+    let out = hover(&chain, &crate::world::mods::DocMods::default(), use_pos).unwrap();
     let use_span = file
         .doc
         .toks()
@@ -810,7 +815,7 @@ fn surface_primitives_keep_their_rich_hover() {
     );
     let chain = Chain::new(vec![&di, &core]);
     let pos = find_ident_pos(di.doc.toks(), "str", 0).unwrap();
-    let md = hover(&chain, &crate::mods::DocMods::default(), pos)
+    let md = hover(&chain, &crate::world::mods::DocMods::default(), pos)
         .unwrap()
         .markdown;
     assert!(md.contains("primitive str {"), "{md}");
@@ -892,7 +897,7 @@ fn hover_over_dep(doc: &str, name: &str, n: usize) -> Option<String> {
     files.extend(dep.iter());
     let chain = Chain::new(files);
     let pos = find_ident_pos(idx.doc.toks(), name, n)?;
-    hover(&chain, &crate::mods::DocMods::default(), pos).map(|h| h.markdown)
+    hover(&chain, &crate::world::mods::DocMods::default(), pos).map(|h| h.markdown)
 }
 
 #[test]
@@ -1027,7 +1032,7 @@ fn host_fn_hover_via_the_calc_fixture_has_no_next_decl_artifact() {
     files.extend(std.iter());
     let chain = Chain::new(files);
     let pos = di.doc.src().find("abs(").unwrap() as u32;
-    let md = hover(&chain, &crate::mods::DocMods::default(), pos)
+    let md = hover(&chain, &crate::world::mods::DocMods::default(), pos)
         .expect("abs hovers through the calc math module")
         .markdown;
     assert!(
@@ -1065,7 +1070,7 @@ x: f64;
         ("x", 2),          // the field decl's name
     ] {
         let pos = find_ident_pos(file.doc.toks(), name, n).unwrap();
-        let out = hover(&chain, &crate::mods::DocMods::default(), pos).unwrap();
+        let out = hover(&chain, &crate::world::mods::DocMods::default(), pos).unwrap();
         let (lo, hi) = token(name, n);
         assert_eq!(
             (out.span.lo, out.span.hi),
@@ -1096,7 +1101,7 @@ return c.area(1.0) + c.r;
     let chain = Chain::new(vec![&file]);
     for (name, n) in [("area", 1usize), ("r", 2usize)] {
         let pos = find_ident_pos(file.doc.toks(), name, n).unwrap();
-        let out = hover(&chain, &crate::mods::DocMods::default(), pos).unwrap();
+        let out = hover(&chain, &crate::world::mods::DocMods::default(), pos).unwrap();
         let lo = pos;
         let hi = pos + name.len() as u32;
         assert_eq!(

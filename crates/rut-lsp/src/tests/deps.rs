@@ -1,6 +1,6 @@
 use crate::deps::*;
-use crate::hover::collection::Chain;
-use crate::hover::types::TyForm;
+use crate::world::collection::Chain;
+use crate::world::types::TyForm;
 use rut_ast::parser::Mode;
 use rut_ast::Vis;
 use rut_driver::bundle::files::MANIFEST_NAME;
@@ -559,12 +559,12 @@ fn dep_impl_methods_ride_the_dep_index() {
         .position(|l| l.contains(".info"))
         .expect("the .info line") as u32;
     let ch = lines[line as usize].find(".info").unwrap() as u32 + 1;
-    let doc_file = crate::hover::MountedFile::from_document(
+    let doc_file = crate::world::MountedFile::from_document(
         crate::semantic::Document::parse(Mode::Impl, consumer.to_string()),
-        crate::hover::Mount::doc("file:///ws/main.rut"),
+        crate::world::Mount::doc("file:///ws/main.rut"),
     );
     let chain = Chain::new(vec![&doc_file, &idx]);
-    let dm = crate::mods::DocMods::default();
+    let dm = crate::world::mods::DocMods::default();
     let ctx = crate::query::definition::Ctx {
         doc_uri: "file:///ws/main.rut",
         chain: &chain,

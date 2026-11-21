@@ -4,8 +4,8 @@
 //! reads it through the collection's chain. The server layer only
 //! routes and publishes; nothing here re-parses per request.
 
-use crate::hover::collection::Chain;
 use crate::semantic::{Diag, LineIndex, Span};
+use crate::world::collection::Chain;
 use ls_types::*;
 
 use crate::query::check;
@@ -171,11 +171,11 @@ fn byte_at(doc: &crate::semantic::Document, line: u32, ch: u32) -> u32 {
 pub fn hover_on(
     doc: &crate::semantic::Document,
     chain: &Chain,
-    dm: &crate::mods::DocMods,
+    dm: &crate::world::mods::DocMods,
     line: u32,
     ch: u32,
 ) -> Option<Hover> {
-    let h = crate::hover::hover(chain, dm, byte_at(doc, line, ch))?;
+    let h = crate::query::hover::hover(chain, dm, byte_at(doc, line, ch))?;
     Some(Hover {
         contents: HoverContents::Markup(MarkupContent {
             kind: MarkupKind::Markdown,
@@ -196,7 +196,7 @@ pub fn hover_on(
 pub fn definition_on(
     doc: &crate::semantic::Document,
     chain: &Chain,
-    dm: &crate::mods::DocMods,
+    dm: &crate::world::mods::DocMods,
     line: u32,
     ch: u32,
 ) -> Vec<definition::DefLocation> {
@@ -213,7 +213,7 @@ pub fn definition_on(
 pub fn type_definition_on(
     doc: &crate::semantic::Document,
     chain: &Chain,
-    dm: &crate::mods::DocMods,
+    dm: &crate::world::mods::DocMods,
     line: u32,
     ch: u32,
 ) -> Vec<definition::DefLocation> {
@@ -254,7 +254,7 @@ pub fn inlay_hints_on(
 pub fn references_on(
     doc: &crate::semantic::Document,
     chain: &Chain,
-    dm: &crate::mods::DocMods,
+    dm: &crate::world::mods::DocMods,
     line: u32,
     ch: u32,
     include_declaration: bool,
@@ -285,8 +285,8 @@ pub fn signature_help_on(chain: &Chain, line: u32, ch: u32) -> Option<SignatureH
 pub(crate) fn merged_diags_for(
     uri: &str,
     src: &str,
-    dm: &crate::mods::DocMods,
-    files: &[crate::hover::collection::MountedFile],
+    dm: &crate::world::mods::DocMods,
+    files: &[crate::world::collection::MountedFile],
     parse_diags: Vec<Diagnostic>,
 ) -> Vec<Diagnostic> {
     let groups = if dm.pkg.is_some() {

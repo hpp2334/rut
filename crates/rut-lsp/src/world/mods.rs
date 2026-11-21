@@ -20,7 +20,7 @@
 
 use rut_ast::Vis;
 
-use crate::hover::collection::{Chain, ModView, MountedFile};
+use crate::world::collection::{Chain, ModView, MountedFile};
 
 /// what the face knows about the OPEN document's place in its
 /// package's mod tree — the input that turns position-path completion
@@ -93,7 +93,7 @@ pub fn vis_allows(from: &str, def_mod: &str, vis: Vis) -> bool {
 /// unstamped files can never impersonate a module).
 pub fn matches_mod(f: &MountedFile, pkg: Option<&str>, path: &str) -> bool {
     match pkg {
-        Some(p) => crate::query::definition::matches_pkg(f, p) && mod_path_of(f) == path,
+        Some(p) => crate::world::pkg::matches_pkg(f, p) && mod_path_of(f) == path,
         None => f.mount.module.is_none() && f.mount.mod_path.as_deref() == Some(path),
     }
 }
@@ -215,7 +215,7 @@ pub fn display(path: &str) -> String {
 /// origin basename is the flavor's `mod.rut`/`mod.d.rut`).
 pub fn display_of(chain: &Chain, pkg: Option<&str>, child: &str) -> String {
     let mounted = chain.iter().find(|f| {
-        mod_path_of(f) == child && pkg.is_none_or(|p| crate::query::definition::matches_pkg(f, p))
+        mod_path_of(f) == child && pkg.is_none_or(|p| crate::world::pkg::matches_pkg(f, p))
     });
     match mounted.and_then(|f| origin_file_name(&f.mount.origin)) {
         Some(name) if name != "mod.rut" && name != rut_driver::decl::DECL_CHILD_FILE => name,

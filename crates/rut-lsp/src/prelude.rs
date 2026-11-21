@@ -16,7 +16,7 @@
 //! while the import-gated `pub builtin` names derive at read (the
 //! compiler's ambient split, mirrored).
 
-use crate::hover::{Mount, MountedFile};
+use crate::world::{Mount, MountedFile};
 
 /// the prelude's single embedded source — the engine's own decl file
 pub const CORE: &str = include_str!("../../../rut/core/src/core.d.rut");

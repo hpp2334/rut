@@ -4,8 +4,8 @@
 use rut_ast::{AnyHandle, Ast, FnNode, ImplNode, MethodDeclNode, SurfaceFnNode, Vis};
 
 use super::{doc_lines, param_names, sig_src};
-use crate::hover::collection::MountedFile;
-use crate::hover::types::{ty_head, ty_src};
+use crate::world::collection::MountedFile;
+use crate::world::types::{ty_head, ty_src};
 
 /// a fn view — a free fn, a surface fn, or an impl-block method (the
 /// owner derives from the parent impl's target)

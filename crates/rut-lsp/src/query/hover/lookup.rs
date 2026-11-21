@@ -8,15 +8,17 @@
 //! name. The token residue lives in `Doc::name_at` — no token scans
 //! here.
 
-use super::collection::{Chain, FnView, MemberHit, MemberTarget, ModView, MountedFile, TyView};
-use super::infer::is_cap;
 use super::render::{
     binding_markdown, render_candidates, render_fn_hits, render_let, render_member, render_mod,
     render_module_target, render_primitive, render_ty,
 };
-use super::types::TyForm;
-use crate::mods::DocMods;
 use crate::semantic::Span;
+use crate::world::collection::{
+    enclosing_type, Chain, FnView, MemberHit, MemberTarget, ModView, MountedFile, TyView,
+};
+use crate::world::infer::is_cap;
+use crate::world::mods::DocMods;
+use crate::world::types::TyForm;
 use rut_ast::{
     AnyHandle, EnumMemberNode, FieldDeclNode, FieldNode, MethodNode, ModDeclNode, ModuleLetNode,
     ParamNode, PathNode, SelfNode, SelfTyNode, UseNode,
@@ -354,7 +356,10 @@ fn decl_site_hover(chain: &Chain<'_>, h: AnyHandle, pos: u32) -> Option<(String,
             let t = TyView { file: d, h: parent };
             let md = match t.form() {
                 TyForm::Enum => render_ty(&t),
-                _ => render_member(&super::collection::MemberView { file: d, ty: t, h }, None),
+                _ => render_member(
+                    &crate::world::collection::MemberView { file: d, ty: t, h },
+                    None,
+                ),
             };
             return Some((md, fd.name_span));
         }
@@ -373,7 +378,7 @@ fn decl_site_hover(chain: &Chain<'_>, h: AnyHandle, pos: u32) -> Option<(String,
     if let Some(lh) = h.downcast::<ModuleLetNode>() {
         let ld = lh.get(ast);
         if on_name(ld.name_span, pos) {
-            let l = super::collection::LetView { file: d, h };
+            let l = crate::world::collection::LetView { file: d, h };
             return Some((render_let(&l), ld.name_span));
         }
         return None;
@@ -382,14 +387,16 @@ fn decl_site_hover(chain: &Chain<'_>, h: AnyHandle, pos: u32) -> Option<(String,
         let md_node = mh.get(ast);
         if on_name(md_node.name_span, pos) {
             let m = ModView { file: d, h };
-            let child =
-                crate::mods::child_path(crate::mods::mod_path_of(d), ast.name(md_node.name));
+            let child = crate::world::mods::child_path(
+                crate::world::mods::mod_path_of(d),
+                ast.name(md_node.name),
+            );
             let mounted = mounted_child(chain, d, &child);
             return Some((
                 render_mod(
                     d,
                     &m,
-                    &crate::mods::display_of(chain, d.mount.module.as_deref(), &child),
+                    &crate::world::mods::display_of(chain, d.mount.module.as_deref(), &child),
                     mounted.map(|c| c.mods().len()),
                 ),
                 md_node.name_span,
@@ -408,11 +415,11 @@ fn mounted_child<'a>(
     owner: &MountedFile,
     child: &str,
 ) -> Option<&'a MountedFile> {
-    match crate::mods::find_mod(chain, owner.mount.module.as_deref(), child) {
+    match crate::world::mods::find_mod(chain, owner.mount.module.as_deref(), child) {
         Some(c) => Some(c),
-        None if owner.mount.module.is_none() => {
-            chain.iter().find(|i| crate::mods::mod_path_of(i) == child)
-        }
+        None if owner.mount.module.is_none() => chain
+            .iter()
+            .find(|i| crate::world::mods::mod_path_of(i) == child),
         None => None,
     }
 }
@@ -449,26 +456,31 @@ fn use_segment_hover(
         // the OWN lane — committed once the head speaks for the
         // doc's own package: `k == 0` answers the resolved start
         // module, deeper segments walk intra-package
-        if let Some(start) = crate::mods::resolve_position_head(doc, di, chain, &pkg) {
+        if let Some(start) = crate::world::mods::resolve_position_head(doc, di, chain, &pkg) {
             let path = if k == 0 {
                 start
             } else {
-                crate::mods::walk_position_mods(chain, doc.pkg.as_deref(), &start, &segs[1..=k])?
+                crate::world::mods::walk_position_mods(
+                    chain,
+                    doc.pkg.as_deref(),
+                    &start,
+                    &segs[1..=k],
+                )?
             };
             let target = if doc.mod_path.as_deref() == Some(path.as_str()) {
                 di
             } else {
-                crate::mods::find_mod(chain, doc.pkg.as_deref(), &path)?
+                crate::world::mods::find_mod(chain, doc.pkg.as_deref(), &path)?
             };
             return Some((render_module_target(target, &path), *sp));
         }
         let walked = if k == 0 {
             Some(String::new())
         } else {
-            crate::mods::walk_use_mods(chain, &pkg, &segs[1..=k])
+            crate::world::mods::walk_use_mods(chain, &pkg, &segs[1..=k])
         };
         let path = walked?;
-        let target = crate::mods::find_mod(chain, Some(&pkg), &path)?;
+        let target = crate::world::mods::find_mod(chain, Some(&pkg), &path)?;
         return Some((render_module_target(target, &path), *sp));
     }
     None
@@ -478,71 +490,6 @@ fn use_segment_hover(
 /// the decl; ambiguity stays a miss (the flat chain's honesty rule)
 fn module_let_hover(chain: &Chain<'_>, name: &str) -> Option<String> {
     chain.module_let(name).map(|l| render_let(&l))
-}
-
-/// the type whose body contains `pos` — a class/struct/interface body,
-/// or the target of the enclosing impl (via the method's owner). Over
-/// any file window (the chain's iteration or the inference pass's
-/// slice — one law, two shapes).
-pub(crate) fn enclosing_type<'a, I>(files: I, pos: u32) -> Option<TyView<'a>>
-where
-    I: IntoIterator<Item = &'a MountedFile>,
-{
-    let mut best: Option<(u32, TyView<'a>)> = None;
-    for f in files {
-        for t in f.types() {
-            if t.form() == TyForm::Enum || !contains(t.span(), pos) {
-                continue;
-            }
-            if best
-                .map(|(l, _)| t.span().hi - t.span().lo < l)
-                .unwrap_or(true)
-            {
-                best = Some((t.span().hi - t.span().lo, t));
-            }
-        }
-        for fv in f.fns() {
-            // the impl's target — the owner string IS the type's name
-            // (inherent impls own their methods)
-            let Some(target) = fv.owner() else {
-                continue;
-            };
-            if let Some(t) = f.ty(&target) {
-                if contains(fv.span(), pos)
-                    && best
-                        .map(|(l, _)| fv.span().hi - fv.span().lo < l)
-                        .unwrap_or(true)
-                {
-                    best = Some((fv.span().hi - fv.span().lo, t));
-                }
-            }
-        }
-    }
-    best.map(|(_, t)| t)
-}
-
-pub(crate) fn contains(sp: Span, pos: u32) -> bool {
-    sp.lo <= pos && pos < sp.hi
-}
-
-/// `find_ty` over a plain file window — the inference pass rides
-/// slices (a one-file window for a module-let's initializer, the
-/// chain's pointer slice inside the binding pass); the law is the
-/// [`crate::hover::collection::Chain::type_decl`] door's
-/// mounted-over-embed rule, spelled once here for the window shape
-pub(crate) fn find_ty<'a>(idxs: &[&'a MountedFile], name: &str) -> Option<TyView<'a>> {
-    let mut fallback = None;
-    for f in idxs.iter().copied() {
-        if let Some(t) = f.ty(name) {
-            if f.mount.src_path.is_none() {
-                return Some(t);
-            }
-            if fallback.is_none() {
-                fallback = Some(t);
-            }
-        }
-    }
-    fallback
 }
 
 /// the markdown a resolved member target renders to (hover's half of

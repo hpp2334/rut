@@ -31,7 +31,7 @@ use ls_types::{
 
 use rut_ast::{CallNode, ExprRef, MethodNode};
 
-use crate::hover::collection::Chain;
+use crate::world::collection::Chain;
 
 /// everything one signature-help query needs — the chain the
 /// collection handed out (the open document at the head; its kept
@@ -227,8 +227,8 @@ fn signature_help_at_decl(ctx: &Ctx, probe: rut_ast::AnyHandle, pos: u32) -> Opt
             let owner = ast.parent(a).and_then(|p| {
                 if let Some(t) = p.downcast::<rut_ast::ImplNode>() {
                     let td = t.get(ast);
-                    return Some(crate::hover::types::head_of_ty(
-                        &crate::hover::types::ty_src(ast, td.target),
+                    return Some(crate::world::types::head_of_ty(
+                        &crate::world::types::ty_src(ast, td.target),
                     ));
                 }
                 p.downcast::<rut_ast::InterfaceNode>()

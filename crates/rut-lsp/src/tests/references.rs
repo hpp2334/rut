@@ -1,10 +1,10 @@
-use crate::hover::collection::Chain;
-use crate::hover::Mount;
-use crate::hover::MountedFile;
 use crate::query::definition;
 use crate::query::definition::DefLocation;
 use crate::query::references::*;
 use crate::semantic::LineIndex;
+use crate::world::collection::Chain;
+use crate::world::Mount;
+use crate::world::MountedFile;
 use rut_ast::parser::Mode;
 use rut_lexer::lexer::canonical;
 
@@ -62,7 +62,7 @@ fn refs(d: &Doc, pos: u32, extra: &[MountedFile], include_decl: bool) -> Vec<Def
     let mut files: Vec<&MountedFile> = vec![&d.file];
     files.extend(extra.iter());
     let chain = Chain::new(files);
-    let dm = crate::mods::DocMods::default();
+    let dm = crate::world::mods::DocMods::default();
     let ctx = definition::Ctx {
         doc_uri: DOC,
         chain: &chain,
@@ -376,7 +376,7 @@ fn cross_file_refs_find_the_importing_files() {
     let mut files: Vec<&MountedFile> = vec![&main.file];
     files.extend(extra.iter().copied());
     let chain = Chain::new(files);
-    let dm = crate::mods::DocMods::default();
+    let dm = crate::world::mods::DocMods::default();
     let ctx = definition::Ctx {
         doc_uri: DOC,
         chain: &chain,
@@ -403,7 +403,7 @@ fn refs_from_the_decl_side_reach_the_importing_doc() {
     let mut files: Vec<&MountedFile> = vec![&lib.file];
     files.extend(extra.iter().copied());
     let chain = Chain::new(files);
-    let dm = crate::mods::DocMods::default();
+    let dm = crate::world::mods::DocMods::default();
     let ctx = definition::Ctx {
         doc_uri: WIDGET_URI,
         chain: &chain,
@@ -434,7 +434,7 @@ fn an_unrelated_same_named_type_does_not_leak_in() {
     let mut files: Vec<&MountedFile> = vec![&main.file];
     files.extend(extra.iter().copied());
     let chain = Chain::new(files);
-    let dm = crate::mods::DocMods::default();
+    let dm = crate::world::mods::DocMods::default();
     let ctx = definition::Ctx {
         doc_uri: DOC,
         chain: &chain,

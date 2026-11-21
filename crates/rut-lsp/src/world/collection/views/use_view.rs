@@ -3,7 +3,7 @@
 
 use rut_ast::{AnyHandle, UseNode, Vis};
 
-use crate::hover::collection::MountedFile;
+use crate::world::collection::MountedFile;
 
 /// one imported name of a use edge (a brace list's names share the
 /// node; each is its own row)

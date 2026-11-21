@@ -3,7 +3,7 @@
 use rut_ast::{AnyHandle, ModDeclNode, Vis};
 
 use super::{decl_src, doc_lines};
-use crate::hover::collection::MountedFile;
+use crate::world::collection::MountedFile;
 
 /// a `mod NAME;` namespace edge view
 #[derive(Clone, Copy)]

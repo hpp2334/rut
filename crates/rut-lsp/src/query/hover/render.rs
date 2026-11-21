@@ -5,9 +5,9 @@
 //! slice is a span×src join on the OWNING file's document (the views'
 //! law) — nothing rendered is stored text.
 
-use super::bindings::{BindKind, Binding};
-use super::collection::{FnView, LetView, MemberView, ModView, MountedFile, TyView};
-use super::types::TyForm;
+use crate::world::bindings::{BindKind, Binding};
+use crate::world::collection::{FnView, LetView, MemberView, ModView, MountedFile, TyView};
+use crate::world::types::TyForm;
 
 fn code_block(body: &str) -> String {
     format!("```rut\n{body}\n```")
@@ -226,7 +226,7 @@ pub(crate) fn render_let(l: &LetView) -> String {
 /// name for a single-file module — the origin's basename), the child
 /// count, provenance
 pub(crate) fn render_module_target(f: &MountedFile, path: &str) -> String {
-    let file = crate::mods::display_of_single(f, path);
+    let file = crate::world::mods::display_of_single(f, path);
     let mut out = code_block(&file);
     out.push_str("\nfile module");
     match f.mods().len() {

@@ -31,9 +31,10 @@
 
 use std::collections::HashSet;
 
-use crate::hover::collection::MountedFile;
 use crate::query::definition::{self, Ctx, DefLocation};
 use crate::semantic::Span;
+use crate::world::collection::MountedFile;
+use crate::world::pkg::matches_pkg;
 
 /// what the ident at `pos` was resolved to — drives how far the scan
 /// reaches (locals stay in the doc; module-level names ride the use
@@ -106,7 +107,7 @@ pub fn references(ctx: &Ctx, pos: u32, include_decl: bool) -> Vec<DefLocation> {
                     let reverse_edge = x
                         .uses()
                         .iter()
-                        .any(|u| u.name() == name && definition::matches_pkg(tg.file, u.pkg()));
+                        .any(|u| u.name() == name && matches_pkg(tg.file, u.pkg()));
                     if reverse_edge {
                         cand.push(x);
                     }
@@ -374,7 +375,7 @@ fn scan_files(
         // tokens (the two queries cannot disagree about the doc's
         // idents); another file's context is unknown — the default
         // keeps the own lanes off in its scan
-        let orphan = crate::mods::DocMods::default();
+        let orphan = crate::world::mods::DocMods::default();
         let f_ctx = Ctx {
             doc_uri: f.mount.origin.as_str(),
             chain: &chain,
@@ -414,8 +415,8 @@ fn scan_files(
 /// query chain (no origin speaks twice). The chain order keeps the
 /// collection's law (the prelude and the workspace ride after).
 fn candidate_chain<'a>(
-    chain: &'a crate::hover::collection::Chain<'a>,
+    chain: &'a crate::world::collection::Chain<'a>,
     f: &'a MountedFile,
-) -> crate::hover::collection::Chain<'a> {
-    crate::hover::collection::Chain::reordered(chain, f)
+) -> crate::world::collection::Chain<'a> {
+    crate::world::collection::Chain::reordered(chain, f)
 }

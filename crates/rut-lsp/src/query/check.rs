@@ -28,8 +28,8 @@
 
 use std::collections::BTreeMap;
 
-use crate::hover::collection::MountedFile;
 use crate::semantic::Diag;
+use crate::world::collection::MountedFile;
 use ls_types::Diagnostic;
 use rut_ast::Vis;
 use rut_driver::{lower_decl_module, Manifest, ModSource, Mounted, RutRun};
@@ -119,7 +119,8 @@ fn edge_vis(files: &[MountedFile], module: &str, path: &str) -> Vis {
         None => ("", path),
     };
     for f in files {
-        if f.mount.module.as_deref() == Some(module) && crate::mods::mod_path_of(f) == parent {
+        if f.mount.module.as_deref() == Some(module) && crate::world::mods::mod_path_of(f) == parent
+        {
             if let Some(e) = f.mods().into_iter().find(|m| m.name() == name) {
                 return e.vis();
             }

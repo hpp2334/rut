@@ -75,7 +75,7 @@ impl<'a> Chain<'a> {
         let ty_name = self.recv_ty_name(pos, recv).or_else(|| match recv {
             RecvNode::Expr(e) => self
                 .expr_ty(self.head(), e)
-                .map(|t| crate::hover::types::head_of_ty(&t)),
+                .map(|t| crate::world::types::head_of_ty(&t)),
             _ => None,
         });
         let Some(ty_name) = ty_name else {
@@ -165,7 +165,7 @@ impl<'a> Chain<'a> {
         // does not bind here (this IS the use that names them)
         let scoped: Vec<&MountedFile> = self
             .iter()
-            .filter(|f| crate::query::definition::matches_pkg(f, pkg))
+            .filter(|f| crate::world::pkg::matches_pkg(f, pkg))
             .collect();
         if scoped.is_empty() {
             return Some(UseExports::Exports {
@@ -185,7 +185,7 @@ impl<'a> Chain<'a> {
         let walked = if interior.is_empty() {
             Some(String::new())
         } else {
-            crate::mods::walk_use_mods(self, pkg, interior)
+            crate::world::mods::walk_use_mods(self, pkg, interior)
         };
         let Some(path) = walked else {
             return Some(UseExports::Exports {
@@ -197,7 +197,7 @@ impl<'a> Chain<'a> {
         let scope: Vec<&MountedFile> = if carrying {
             scoped
                 .into_iter()
-                .filter(|f| crate::mods::mod_path_of(f) == path)
+                .filter(|f| crate::world::mods::mod_path_of(f) == path)
                 .collect()
         } else {
             scoped
@@ -209,7 +209,7 @@ impl<'a> Chain<'a> {
                 if m.vis() != Vis::Pub {
                     continue;
                 }
-                let child = crate::mods::child_path(&path, m.name());
+                let child = crate::world::mods::child_path(&path, m.name());
                 rows.push(ExportRow::Mod(m, child));
             }
             for t in f.types() {
@@ -259,7 +259,7 @@ impl<'a> Chain<'a> {
     /// only; methods are reached through a receiver, not named bare.
     pub(crate) fn bare(&self) -> Bare<'a> {
         let doc = self.head();
-        let imported = crate::query::definition::import_map(doc);
+        let imported = crate::world::pkg::import_map(doc);
         let mut out = Bare {
             types: Vec::new(),
             fns: Vec::new(),
@@ -272,7 +272,7 @@ impl<'a> Chain<'a> {
             // first, the origin/stem derivation on an unnamed file)
             let used_from: HashSet<&str> = imported
                 .iter()
-                .filter(|(_, pkg)| crate::query::definition::matches_pkg(i, pkg))
+                .filter(|(_, pkg)| crate::world::pkg::matches_pkg(i, pkg))
                 .map(|(name, _)| *name)
                 .collect();
             // the bare gate per row: own decls always; foreign rows

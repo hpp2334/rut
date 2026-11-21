@@ -33,8 +33,8 @@ use ls_types::{
 
 use rut_ast::{ElseBranch, ExprRef, ItemRef, StmtRef};
 
-use crate::hover::collection::{Chain, MountedFile};
-use crate::hover::types::head_of_ty;
+use crate::world::collection::{Chain, MountedFile};
+use crate::world::types::head_of_ty;
 
 /// everything one inlay query needs — the chain the collection handed
 /// out (the open document at the head; its kept document owns the
@@ -124,7 +124,7 @@ fn type_hints(ctx: &Ctx, out: &mut Vec<RawInlay>) {
             continue;
         };
         let name = doc.doc.ast().name(b.name);
-        let tooltip = crate::hover::binding_markdown(b, name, Some(ty.clone()));
+        let tooltip = crate::query::hover::binding_markdown(b, name, Some(ty.clone()));
         out.push(RawInlay {
             byte: b.decl_ident_span.hi,
             label: format!(": {ty}"),
@@ -151,7 +151,7 @@ fn type_hints(ctx: &Ctx, out: &mut Vec<RawInlay>) {
             byte: name.hi,
             label: format!(": {text}"),
             kind: InlayHintKind::TYPE,
-            tooltip: Some(crate::hover::render_let(&l)),
+            tooltip: Some(crate::query::hover::render_let(&l)),
         });
     }
 }

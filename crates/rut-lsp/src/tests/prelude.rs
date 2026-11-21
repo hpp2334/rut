@@ -8,9 +8,9 @@
 //! lane the walk mounts through.
 
 use crate::deps::mount_file;
-use crate::hover::collection::Chain;
-use crate::hover::MountedFile;
 use crate::prelude;
+use crate::world::collection::Chain;
+use crate::world::MountedFile;
 use std::collections::HashSet;
 
 /// the myhost fixture tree — the repo's own host pkg, mounted the way
@@ -83,7 +83,7 @@ fn the_prelude_index_stamps_the_manifest_shape() {
     // plain), the doc's dep set EMPTY.
     let di = MountedFile::from_document(
         doc_of("entry fn main() -> nil { }\n", rut_ast::parser::Mode::Impl),
-        crate::hover::Mount::default(),
+        crate::world::Mount::default(),
     );
     let core = mount_file(
         "core",
@@ -97,7 +97,7 @@ fn the_prelude_index_stamps_the_manifest_shape() {
         &chain,
         d2.len() as u32,
         d2,
-        &crate::mods::DocMods::default(),
+        &crate::world::mods::DocMods::default(),
         &HashSet::new(),
     );
     assert!(
@@ -172,12 +172,12 @@ fn definition_over_a_qualified_host_use_jumps_into_the_tree() {
     let src = "use myhost::net::{ connect };\n\nentry fn main() -> nil {\n    let _ = connect(\"x\");\n}\n";
     let ddoc = doc_of(src, rut_ast::parser::Mode::Impl);
     let doc_uri = "file:///t/main.rut";
-    let doc_idx = MountedFile::from_document(ddoc, crate::hover::Mount::doc(doc_uri));
+    let doc_idx = MountedFile::from_document(ddoc, crate::world::Mount::doc(doc_uri));
     let idxs = myhost_chain();
     let mut files: Vec<&MountedFile> = vec![&doc_idx];
     files.extend(idxs.iter());
     let chain = Chain::new(files);
-    let dm = crate::mods::DocMods::default();
+    let dm = crate::world::mods::DocMods::default();
     let ctx = crate::query::definition::Ctx {
         doc_uri,
         chain: &chain,
@@ -209,14 +209,14 @@ fn hover_over_a_qualified_host_use_renders_the_row() {
     let src = "use myhost::net::{ connect };\n";
     let ddoc = doc_of(src, rut_ast::parser::Mode::Impl);
     let doc_uri = "file:///t/main.rut";
-    let doc_idx = MountedFile::from_document(ddoc, crate::hover::Mount::doc(doc_uri));
+    let doc_idx = MountedFile::from_document(ddoc, crate::world::Mount::doc(doc_uri));
     let idxs = myhost_chain();
     let mut files: Vec<&MountedFile> = vec![&doc_idx];
     files.extend(idxs.iter());
     let chain = Chain::new(files);
     let normalized = doc_idx.doc.src();
     let leaf = normalized.find("connect").expect("the leaf") as u32;
-    let h = crate::hover::hover(&chain, &crate::mods::DocMods::default(), leaf)
+    let h = crate::query::hover::hover(&chain, &crate::world::mods::DocMods::default(), leaf)
         .expect("the leaf hovers");
     assert!(h.markdown.contains("connect"), "{}", h.markdown);
     assert!(

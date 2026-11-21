@@ -44,10 +44,11 @@
 
 use std::collections::HashMap;
 
-use crate::hover::collection::{Chain, MemberHit, MemberTarget, MountedFile};
-use crate::hover::types::head_of_ty;
-use crate::mods::DocMods;
 use crate::semantic::Span;
+use crate::world::collection::{Chain, MemberHit, MemberTarget, MountedFile};
+use crate::world::mods::DocMods;
+use crate::world::pkg::{import_map, matches_pkg};
+use crate::world::types::head_of_ty;
 use ls_types::Range;
 
 /// one resolved jump target — the uri is the doc itself, a workspace
@@ -128,34 +129,6 @@ fn origin_uri(origin: &str) -> String {
     }
 }
 
-/// does this file speak for `pkg`? — the explicit manifest module
-/// name FIRST (`Mount::module`, the dep/prelude file's `Some`); on
-/// `None` the old derivation verbatim: exact origin, a path segment
-/// named `pkg` (…/pouch/pouch.rut), or the file
-/// stem (…/gadgets/lib.rut for pkg `gadgets`)
-pub fn matches_pkg(f: &MountedFile, pkg: &str) -> bool {
-    if let Some(m) = &f.mount.module {
-        return m == pkg;
-    }
-    let hay = f.mount.src_path.as_deref().unwrap_or(&f.mount.origin);
-    if hay == pkg {
-        return true;
-    }
-    hay.split(['/', '\\'])
-        .any(|seg| seg.strip_suffix(".rut").unwrap_or(seg) == pkg)
-}
-
-/// the document's import map: imported name -> its `use` pkg — the
-/// (name, pkg) set shape the completion tiers match foreign names
-/// against (the bare tier's imported gate and the auto-import tier's
-/// dedup)
-pub(crate) fn import_map(doc: &MountedFile) -> HashMap<&str, &str> {
-    doc.uses()
-        .into_iter()
-        .map(|u| (u.name(), u.pkg()))
-        .collect()
-}
-
 /// the chain restricted to the pkg that declares `name` — the use
 /// graph's gate. An import the chain cannot satisfy falls back to the
 /// flat chain (hover's semantics: better a broad answer than none)
@@ -181,11 +154,11 @@ fn chain_for<'a>(
 /// a type's definition target span — the declaring ident (the node's
 /// own recorded name span); the whole decl is the fallback when the
 /// name span is missing on a degenerate parse
-pub(crate) fn ty_span(t: &crate::hover::collection::TyView) -> Span {
+pub(crate) fn ty_span(t: &crate::world::collection::TyView) -> Span {
     t.name_span().unwrap_or(t.span())
 }
 
-pub(crate) fn fn_span(f: &crate::hover::collection::FnView) -> Span {
+pub(crate) fn fn_span(f: &crate::world::collection::FnView) -> Span {
     f.name_span().unwrap_or(f.span())
 }
 
@@ -296,7 +269,7 @@ fn get_definition_targets(ctx: &Ctx, pos: u32) -> Vec<DefLocation> {
 
     // 4. type position — capitalized / primitive names, restricted to
     //    the use graph for imported names
-    if crate::hover::infer::is_cap(&name) || crate::semantic::is_primitive_ty(&name) {
+    if crate::world::infer::is_cap(&name) || crate::semantic::is_primitive_ty(&name) {
         if let Some(locs) = ty_name_locations(ctx, chain, &imported, &name) {
             return locs;
         }
@@ -402,7 +375,7 @@ fn get_type_definition_targets(ctx: &Ctx, pos: u32) -> Vec<DefLocation> {
     let name = ast.name(name_id).to_string();
 
     // a type token: its own declaration (definition's answer)
-    if crate::hover::infer::is_cap(&name) || crate::semantic::is_primitive_ty(&name) {
+    if crate::world::infer::is_cap(&name) || crate::semantic::is_primitive_ty(&name) {
         if let Some(locs) = ty_name_locations(ctx, chain, &imported, &name) {
             return locs;
         }
@@ -414,13 +387,13 @@ fn get_type_definition_targets(ctx: &Ctx, pos: u32) -> Vec<DefLocation> {
     // locals / module lets — their type head's declaration
     if let Some(b) = rut_ast::resolve_binding(doc.doc.bindings(), pos, name_id) {
         let files: Vec<&MountedFile> = chain.iter().collect();
-        return crate::hover::infer::binding_ty(doc, &files, b)
+        return crate::world::infer::binding_ty(doc, &files, b)
             .as_deref()
             .map(head_of_ty)
             .and_then(|head| ty_name_locations(ctx, chain, &imported, &head))
             .unwrap_or_default();
     }
-    match crate::hover::infer::module_let_ty(chain.iter(), &name) {
+    match crate::world::infer::module_let_ty(chain.iter(), &name) {
         Some(head) => ty_name_locations(ctx, chain, &imported, &head).unwrap_or_default(),
         None => Vec::new(),
     }
@@ -661,7 +634,7 @@ fn use_graph_targets<'a>(
         Some(p) => {
             let scoped: Vec<&MountedFile> = chain
                 .iter()
-                .filter(|f| matches_pkg(f, pkg) && crate::mods::mod_path_of(f) == p)
+                .filter(|f| matches_pkg(f, pkg) && crate::world::mods::mod_path_of(f) == p)
                 .collect();
             if scoped.is_empty() {
                 chain.iter().filter(|f| matches_pkg(f, pkg)).collect()
@@ -708,7 +681,7 @@ fn use_graph_targets<'a>(
 fn pkg_root_index<'a>(chain: &'a Chain<'a>, pkg: &str) -> Option<&'a MountedFile> {
     let mut roots: Vec<&MountedFile> = chain
         .iter()
-        .filter(|f| matches_pkg(f, pkg) && crate::mods::mod_path_of(f).is_empty())
+        .filter(|f| matches_pkg(f, pkg) && crate::world::mods::mod_path_of(f).is_empty())
         .collect();
     roots.sort_by_key(|f| {
         (
@@ -750,7 +723,7 @@ fn use_site_targets(ctx: &Ctx, h: rut_ast::AnyHandle, pos: u32) -> Option<Vec<De
         // the OWN lane — the walk is the intra-package one (any
         // declared edge; the doc's own rows read for its own scope)
         if let Some(start) = own_lane_start(ctx, &pkg) {
-            let walked = crate::mods::walk_position_mods(
+            let walked = crate::world::mods::walk_position_mods(
                 chain,
                 ctx.doc_mods.pkg.as_deref(),
                 &start,
@@ -764,7 +737,7 @@ fn use_site_targets(ctx: &Ctx, h: rut_ast::AnyHandle, pos: u32) -> Option<Vec<De
         let walked = if u_node.path.len() == 1 {
             Some(String::new())
         } else {
-            crate::mods::walk_use_mods(chain, &pkg, &segs[1..])
+            crate::world::mods::walk_use_mods(chain, &pkg, &segs[1..])
         };
         return Some(
             use_graph_targets(chain, &pkg, walked.as_deref(), name)
@@ -791,7 +764,7 @@ fn use_site_targets(ctx: &Ctx, h: rut_ast::AnyHandle, pos: u32) -> Option<Vec<De
                     None => Vec::new(),
                 }
             } else {
-                match crate::mods::walk_position_mods(
+                match crate::world::mods::walk_position_mods(
                     chain,
                     ctx.doc_mods.pkg.as_deref(),
                     &start,
@@ -811,8 +784,12 @@ fn use_site_targets(ctx: &Ctx, h: rut_ast::AnyHandle, pos: u32) -> Option<Vec<De
                     .unwrap_or_default(),
             );
         }
-        let walked = crate::mods::walk_use_mods(chain, &pkg, &segs[1..=k])?;
-        let parent = crate::mods::find_mod(chain, Some(&pkg), crate::mods::parent_of(&walked))?;
+        let walked = crate::world::mods::walk_use_mods(chain, &pkg, &segs[1..=k])?;
+        let parent = crate::world::mods::find_mod(
+            chain,
+            Some(&pkg),
+            crate::world::mods::parent_of(&walked),
+        )?;
         let edge_name = ast.name(u_node.path[k]);
         let edge = parent.mods().into_iter().find(|m| m.name() == edge_name)?;
         return Some(vec![loc_at(
@@ -831,7 +808,7 @@ fn use_site_targets(ctx: &Ctx, h: rut_ast::AnyHandle, pos: u32) -> Option<Vec<De
 /// the compiler's bare-head law). `None` = a foreign head; the caller
 /// rides the cross-package lanes.
 fn own_lane_start(ctx: &Ctx, head: &str) -> Option<String> {
-    crate::mods::resolve_position_head(ctx.doc_mods, ctx.doc_file(), ctx.chain, head)
+    crate::world::mods::resolve_position_head(ctx.doc_mods, ctx.doc_file(), ctx.chain, head)
 }
 
 /// the scope file for a resolved own mod path — the open document's
@@ -843,7 +820,7 @@ fn own_scope<'a>(ctx: &Ctx<'a>, walked: &str) -> Option<&'a MountedFile> {
     if ctx.doc_mods.mod_path.as_deref() == Some(walked) {
         return Some(ctx.doc_file());
     }
-    crate::mods::find_mod(ctx.chain, ctx.doc_mods.pkg.as_deref(), walked)
+    crate::world::mods::find_mod(ctx.chain, ctx.doc_mods.pkg.as_deref(), walked)
 }
 
 /// the own-lane leaf: the walked mod path's scope answers the
@@ -876,7 +853,7 @@ fn own_leaf_targets(ctx: &Ctx, walked: &str, name: &str) -> Vec<DefLocation> {
 /// NAME;` edge in the parent module's file — the foreign lane's
 /// target law, keyed on the own package
 fn own_edge_target(ctx: &Ctx, walked: &str) -> Option<DefLocation> {
-    let parent_path = crate::mods::parent_of(walked);
+    let parent_path = crate::world::mods::parent_of(walked);
     let name = walked.rsplit('/').next()?;
     let parent = own_scope(ctx, parent_path)?;
     let edge = parent.mods().into_iter().find(|m| m.name() == name)?;
@@ -902,8 +879,8 @@ fn mod_edge_target(ctx: &Ctx, h: rut_ast::AnyHandle, pos: u32) -> Option<DefLoca
     on_name(m.name_span, pos).then_some(())?;
     let name = ast.name(m.name);
     let from = ctx.doc_mods.mod_path.as_deref()?;
-    let child = crate::mods::child_path(from, name);
-    let mounted = crate::mods::find_mod(ctx.chain, ctx.doc_mods.pkg.as_deref(), &child)?;
+    let child = crate::world::mods::child_path(from, name);
+    let mounted = crate::world::mods::find_mod(ctx.chain, ctx.doc_mods.pkg.as_deref(), &child)?;
     Some(loc_at(ctx.doc_uri, mounted, Span::new(0, 0)))
 }
 

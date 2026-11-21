@@ -1,7 +1,7 @@
-use crate::hover::collection::Chain;
-use crate::hover::Mount;
-use crate::hover::MountedFile;
 use crate::query::signature_help::*;
+use crate::world::collection::Chain;
+use crate::world::Mount;
+use crate::world::MountedFile;
 use ls_types::{Documentation, ParameterLabel, SignatureHelp};
 use rut_ast::parser::Mode;
 

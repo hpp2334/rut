@@ -1,9 +1,10 @@
-use crate::hover::collection::Chain;
-use crate::hover::Mount;
-use crate::hover::MountedFile;
-use crate::mods::DocMods;
 use crate::query::definition::*;
 use crate::semantic::LineIndex;
+use crate::world::collection::Chain;
+use crate::world::mods::DocMods;
+use crate::world::pkg::matches_pkg;
+use crate::world::Mount;
+use crate::world::MountedFile;
 use rut_ast::parser::Mode;
 use rut_lexer::lexer::canonical;
 

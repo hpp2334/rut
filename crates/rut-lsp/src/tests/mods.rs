@@ -1,7 +1,7 @@
-use crate::hover::collection::Chain;
-use crate::hover::Mount;
-use crate::hover::MountedFile;
-use crate::mods::*;
+use crate::world::collection::Chain;
+use crate::world::mods::*;
+use crate::world::Mount;
+use crate::world::MountedFile;
 use rut_ast::Vis;
 
 /// a named mounted file standing at `mod_path`, its `mod NAME;` edges

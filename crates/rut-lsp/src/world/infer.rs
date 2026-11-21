@@ -37,7 +37,7 @@ pub(crate) fn expr_ty(home: &MountedFile, idxs: &[&MountedFile], e: ExprRef) -> 
             if d.is_ty {
                 return None;
             }
-            super::lookup::enclosing_type(idxs.iter().copied(), d.span.lo)
+            super::collection::enclosing_type(idxs.iter().copied(), d.span.lo)
                 .map(|t| t.name().to_string())
         }
         ExprRef::Path(h) => {
@@ -186,7 +186,7 @@ fn call_ty(idxs: &[&MountedFile], ast: &Ast, callee: ExprRef) -> Option<String> 
             // head behind it (an enum, a plain unknown) stays a miss —
             // never wrong text. The free-fn match keeps precedence.
             if is_cap(name) {
-                if let Some(ty) = super::lookup::find_ty(idxs, name) {
+                if let Some(ty) = super::collection::find_ty(idxs, name) {
                     if matches!(
                         ty.form(),
                         TyForm::Class | TyForm::Struct | TyForm::HostStruct

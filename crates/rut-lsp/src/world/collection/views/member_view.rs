@@ -4,8 +4,8 @@
 use rut_ast::{AnyHandle, Ast, EnumMemberNode, FieldDeclNode, MethodDeclNode};
 
 use super::{decl_src, doc_lines, sig_src, TyView};
-use crate::hover::collection::MountedFile;
-use crate::hover::types::ty_src;
+use crate::world::collection::MountedFile;
+use crate::world::types::ty_src;
 
 /// a member view — a field, a method, or an enum member of
 /// [`TyView`]'s body

@@ -531,7 +531,7 @@ fn dispatch(l: &mut Loop, cmd: Cmd) {
             // the wire's String moves into the parse — a fresh read,
             // zero copies end to end. The mounted file rides the
             // open-doc stamp (the workspace scan's shape)
-            let file = crate::hover::MountedFile::from_src(crate::hover::Mount::doc(&uri), src);
+            let file = crate::world::MountedFile::from_src(crate::world::Mount::doc(&uri), src);
             l.state.defs.mount(file);
             let _ = tx.send(Reply::Done);
         }

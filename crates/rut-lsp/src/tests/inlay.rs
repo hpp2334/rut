@@ -1,7 +1,7 @@
-use crate::hover::collection::Chain;
-use crate::hover::Mount;
-use crate::hover::MountedFile;
 use crate::query::inlay::*;
+use crate::world::collection::Chain;
+use crate::world::Mount;
+use crate::world::MountedFile;
 use ls_types::{InlayHint, InlayHintKind, InlayHintLabel, InlayHintTooltip};
 use rut_ast::parser::Mode;
 
@@ -213,7 +213,7 @@ fn hint_and_hover_agree_on_the_type_text() {
     let chain = Chain::new(vec![&d.file]);
     let (hl, hc) = at(&src, "let c", 1);
     let byte = d.file.doc.lines().byte(d.src(), hl, hc) + 4; // the `c` ident
-    let hov = crate::hover::hover(&chain, &crate::mods::DocMods::default(), byte);
+    let hov = crate::query::hover::hover(&chain, &crate::world::mods::DocMods::default(), byte);
     let md = hov.expect("hover at the binding").markdown;
     assert!(md.contains("let c: Circle"), "{md}");
     let hover_ty = md
@@ -283,7 +283,7 @@ fn tuple_types_render_no_empty_hints() {
     let chain = Chain::new(vec![&d.file]);
     let (hl, hc) = at(&src, "let v", 1);
     let byte = d.file.doc.lines().byte(d.src(), hl, hc) + 4; // the `v` ident
-    let md = crate::hover::hover(&chain, &crate::mods::DocMods::default(), byte)
+    let md = crate::query::hover::hover(&chain, &crate::world::mods::DocMods::default(), byte)
         .expect("hover at the binding")
         .markdown;
     assert!(md.contains("let v: (opaque, str)"), "{md}");

@@ -3,9 +3,9 @@
 use rut_ast::{AnyHandle, Ast, ModuleLetNode, Vis};
 
 use super::doc_lines;
-use crate::hover::collection::MountedFile;
-use crate::hover::infer;
-use crate::hover::types::ty_src;
+use crate::world::collection::MountedFile;
+use crate::world::infer;
+use crate::world::types::ty_src;
 
 /// a module-scope `let` view
 #[derive(Clone, Copy)]
