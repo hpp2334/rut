@@ -518,8 +518,143 @@ blanket-install their subset):
 | `nmap::pkg()` | the native key table behind `nmapset` ([stdlib](stdlib.md)) |
 | `strbuild::pkg()` | the string builder's rows behind `strbuild` ([stdlib](stdlib.md)) — growth is charged against the embedder's heap budget |
 | `async_host::pkg()` | the launcher rows (`__launch`/`__abort`/`__sleep`/`__sleep_yield`) |
-| `http::pkg()` | the std HTTP lanes (reqwest; native builds only); `http::pkg_with(f)` is the fixture twin, returning `(HostPkg, HttpFixture)`. The `http_host` surface is a mod tree — the rows register scope-relatively (`net::http_send` + the readbacks, `stream::http_body`/`http_stream_next`) |
+| `http::pkg()` | the std HTTP lanes over reqwest (native builds; the `http` cargo feature, default-off); `http::pkg_with(f)` is the fixture twin, returning `(HostPkg, HttpFixture)`; `http::pkg_over(Arc<dyn HttpBackend>)` binds the same seven rows over YOUR transport, and on wasm32 `http_wasm::pkg_fetch()` binds them over the browser's `fetch` ([below](#the-std-http-lane--your-own-transport-pkg_over)). The `http_host` surface is a mod tree — the rows register scope-relatively (`net::http_send` + the readbacks, `stream::http_body`/`http_stream_next`) |
 | `bench_cross::pkg()` | the crossing-tax benchmark rows |
+
+## The std HTTP lane — your own transport (`pkg_over`)
+
+rut-std carries no HTTP client of its own. The seven `http_host` rows
+are the surface; the transport is a door the embedder picks:
+
+| door | transport | gate |
+|---|---|---|
+| `http::pkg()` | reqwest (one shared blocking client, one worker thread per request) | the `http` cargo feature; native targets only |
+| `http::pkg_with(f)` | an injectable fixture keyed on method+URL, walking its chunk schedule on the virtual clock | feature-free; returns the `HttpFixture` settle handle |
+| `http::pkg_over(backend)` | YOUR backend — any `Arc<dyn HttpBackend>` | feature-free |
+| `http_wasm::pkg_fetch()` | the browser window's `fetch` | the `http-wasm` cargo feature, wasm32 only |
+
+All four bind the same rows over the same seam — only `send` differs.
+
+### The `HttpBackend` contract
+
+One trait, one method — the whole transport:
+
+```rust
+pub trait HttpBackend: Send + Sync + 'static {
+    fn send(&self, req: &HttpRequest, out: Completer<HttpResponse>);
+}
+```
+
+`HttpRequest { method, url, headers, body }` carries the crossing
+parts verbatim: the canonical verb, the `"\n"`-joined `Name: value`
+header block (empty = none), and the raw body bytes (empty = none —
+the disclosed empty-vs-none merge).
+
+The contract, in order:
+
+1. **Answer `out` exactly ONCE, at HEADERS.** Success mints through
+   `HttpResponse::streaming(status)` — it returns the response half
+   (complete `out` with it; `send` resolves here) and an
+   `HttpBodyWriter` you keep. Transport trouble completes with
+   `HttpResponse::failed(msg)` — status 0 plus the message; its body
+   is born dead, so the read lanes degrade to empty / immediate EOF.
+   A double complete is NOT loud: the `Completer` contract is
+   last-write-wins (the second answer overwrites the slot, the first
+   is silently lost; a late answer after the take is never taken).
+   "Exactly once" is the discipline, not an enforced invariant.
+2. **Then drive the writer — from any thread**: `push_chunk(bytes)`
+   feeds one chunk (a parked stream read takes the queue's front,
+   FIFO), `end()` is the clean EOF, `fail(msg)` the sticky mid-read
+   death (the queued chunks stay readable — they did arrive). The
+   terminal flags are sticky.
+3. **Never block the VM thread.** Do the wire work on your own
+   threads/tasks; the completer and the writer (atomics + a Mutex
+   slot, waiters completed outside it) are the only shared state.
+   This is also why `push_chunk` is safe to park on: it is YOUR
+   worker thread that stalls, never the VM.
+
+Backpressure is inherited, not implemented: `push_chunk` is the
+budget gate's home — once `HttpBodyWriter::DEFAULT_STREAM_BUDGET_BYTES`
+(64 × 16 KiB ≈ 1 MiB) sits queued and unread, the next push PARKS the
+calling thread until readers drain below the bound (the one-shot body
+drain stands the gate down — its answer IS the whole body). A slow
+guest backs the pressure out to your socket; you get TCP flow control
+for free. Cancel is a probe: a guest-cancelled read marks the source
+through the pkg's cancel registry, `writer.cancelled()` goes true, and
+a backend that checks it between chunks drops its response there — the
+connection closes with the cancelled frame. A backend that never
+checks keeps the disclosed best-effort lane (the mark is sticky; no
+reader ever sees more than `nil` + `read_error() == "cancelled"`).
+
+The minimal backend — a thread per request, the reqwest lane's own
+shape:
+
+```rust
+struct ThreadBackend;
+
+impl rut_std::http::HttpBackend for ThreadBackend {
+    fn send(
+        &self,
+        req: &rut_std::http::HttpRequest,
+        out: rut_vm::Completer<rut_std::http::HttpResponse>,
+    ) {
+        let req = req.clone();
+        std::thread::spawn(move || match transport::send(req) {
+            Ok((status, body)) => {
+                let (resp, w) = rut_std::http::HttpResponse::streaming(status);
+                out.complete(resp);                 // HEADERS — send resolves here
+                for c in body.chunks(16 * 1024) {
+                    if w.cancelled() { return; }    // the wire-abort: drop the wire
+                    w.push_chunk(c.to_vec());       // bounded — may park this thread
+                }
+                w.end();                            // clean EOF
+            }
+            Err(msg) => {
+                out.complete(rut_std::http::HttpResponse::failed(msg)); // status 0
+            }
+        });
+    }
+}
+
+// the seven rows bind over it like any host pkg:
+hosts.install_host_pkg(
+    &ctx,
+    rut_std::http::pkg_over(std::sync::Arc::new(ThreadBackend)),
+);
+```
+
+### The wasm lane — `pkg_fetch`
+
+On wasm32 the `http-wasm` cargo feature (target-gated
+`wasm-bindgen`/`web-sys`/`js-sys`, default-off like the reqwest lane)
+exposes `rut_std::http_wasm::pkg_fetch()` — the same seven rows over
+the browser's `fetch`, the playground's transport:
+
+- `send` resolves at HEADERS: one `spawn_local` task awaits the
+  `fetch`, mints `streaming(status)`, and keeps pumping the body on
+  the same task through the `ReadableStream` default reader — ONE
+  read per step, so the JS microtask queue drains between steps and
+  the VM thread never blocks.
+- The budget gate's wasm flavor is park/resume: a JS thread has no
+  condvar (a park there would block the whole world), so the pump
+  checks `parked_at_budget()` between reads and re-arms itself one
+  macrotask at a time; the guest's one-pop-per-await pacing drains
+  below the bound and the next tick resumes the pump. The stream's
+  internal buffer fills, the browser slows the socket — real
+  backpressure all the same.
+- Cancel is the same between-chunk wire-abort (the `cancelled()`
+  probe drops the reader, the connection closes).
+
+The RUN shape follows the thread: chunks land from JS microtasks, so
+they can never settle inside the synchronous `run` export. When a
+session's main has retired, no timer is armed, and only host
+completers remain pending, the wasm engine PARKS — the run envelope
+carries `"parked": true` beside a null trap — and `resume` re-drives
+the parked machine one macrotask leg at a time; a page pumps until
+idle. A window-less host (node, the smoke lane) answers the immediate
+status-0 transport failure — no JS call, no panic — so an offline run
+completes synchronously inside the first run envelope, body and
+stream lanes degrading exactly as `HttpResponse::failed` discloses.
 
 ## In-tree examples
 

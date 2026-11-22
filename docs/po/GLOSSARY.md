@@ -216,3 +216,15 @@ context; after that, use the zh-CN rendering alone.
 | const binding | 常量绑定 | the `const` statement head（`const` stays code）——mutability 的唯一 opt-out（退出选择）：浅层（shallow → 浅层），只拒绝绑定自身的重新赋值（reassign → 重新赋值），透过值的写入（write-through → 穿透写入）照旧；`const`-binding law → 常量绑定法则 |
 | surface const | 表面常量 | 依赖的 `.d.rut` 接口（或宿主包）导出的加载期常量，经一条 `use` 裸名绑定——接口里拼作 `let`，从不是 `const`；与常量绑定（`const` 语句头）严格区分，两个 "const" 勿混译 |
 | glob | glob | the `*` use leaf（`*` stays code）——保留不译；glob leaf → glob 叶子；the star → 星号；glob-bind → glob 绑定；precedence ladder → 优先级阶梯（glob < 显式叶子 < 本文件自己的声明）；shadowing → 遮蔽；idempotent → 幂等 |
+| backpressure | 背压 | the stream lane is bounded → 流链路是有界的；the producer parks → 生产者停放；the budget gate → 预算门（`HttpBodyWriter::DEFAULT_STREAM_BUDGET_BYTES` stays code）；stands the gate down → 让门收班 |
+| flow control | 流量控制 | TCP flow control end to end → 端到端的 TCP 流量控制；the socket fills → 套接字填满 |
+| wire-abort | 线路中止 | cancel drops the response, the connection closes → 取消丢弃响应，连接关闭；between chunks → 数据块之间；the sticky mark → 粘性标记 |
+| chunk | 数据块 | one chunk per await → 每次 await 一个数据块；push_chunk stays code；the queued chunks stay readable → 已排队的数据块仍可读 |
+| drain | 排干 | `body()` 在一个 future 里排干其余响应体；the drain is exempt → 排干依法豁免；an empty drain → 空排空 |
+| one-shot law | 一次性法则 | body xor stream per response → 每个响应 `body()` 与 `byte_stream()` 二选一；a late/second taker degrades → 迟到的或第二名的取用者退化 |
+| sticky | 粘性 | the sticky read failure → 粘性读取失败；non-nil and stays → 变为非 nil 并保持 |
+| seam | 接缝 | the swappable-backend seam → 可换后端接缝；feature-free → 不依赖特性；`HttpBackend`/`pkg_over` stay code |
+| probe | 探针 | the between-chunk cancel probe → 数据块之间的取消探针；`cancelled()` stays code |
+| settle | 结算 | the settle handle → 结算句柄（`HttpFixture` stays code）；settle the dues → 结算到期的 |
+| park | 停放 | the parked pump → 停放的泵；park/resume → 停放/恢复；a parked frame → 停放的帧 |
+| last-write-wins | 后写者胜 | a double complete is NOT loud → 双重完成不会响；the second answer overwrites the slot → 第二个应答覆盖槽位 |

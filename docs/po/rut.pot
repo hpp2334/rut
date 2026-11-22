@@ -2,7 +2,8 @@
 msgid ""
 msgstr ""
 "Project-Id-Version: The rut Book\n"
-"POT-Creation-Date: 1970-01-01 00:00:00+00:00\n"
+"POT-Creation-Date: 1970-01-01 00:00:00+00:00
+"
 "PO-Revision-Date: \n"
 "Last-Translator: \n"
 "Language-Team: \n"
@@ -10528,7 +10529,7 @@ msgstr ""
 msgid "token"
 msgstr ""
 
-#: src/reference/lexical-structure.md:93 src/reference/host-fns.md:329
+#: src/reference/lexical-structure.md:93 src/reference/host-fns.md:343
 #: src/reference/symbol-stripping.md:26
 msgid "role"
 msgstr ""
@@ -11084,7 +11085,7 @@ msgstr ""
 msgid "spelling"
 msgstr ""
 
-#: src/reference/modules-and-visibility.md:294
+#: src/reference/modules-and-visibility.md:294 src/reference/embedding.md:529
 msgid "door"
 msgstr ""
 
@@ -19691,16 +19692,21 @@ msgstr ""
 msgid "the launcher rows (`__launch`/`__abort`/`__sleep`/`__sleep_yield`)"
 msgstr ""
 
-#: src/reference/embedding.md:521 src/reference/cli.md:82
+#: src/reference/embedding.md:521 src/reference/embedding.md:531
+#: src/reference/cli.md:82
 msgid "`http::pkg()`"
 msgstr ""
 
 #: src/reference/embedding.md:521
 msgid ""
-"the std HTTP lanes (reqwest; native builds only); `http::pkg_with(f)` is the "
-"fixture twin, returning `(HostPkg, HttpFixture)`. The `http_host` surface is "
-"a mod tree — the rows register scope-relatively (`net::http_send` + the "
-"readbacks, `stream::http_body`/`http_stream_next`)"
+"the std HTTP lanes over reqwest (native builds; the `http` cargo feature, "
+"default-off); `http::pkg_with(f)` is the fixture twin, returning `(HostPkg, "
+"HttpFixture)`; `http::pkg_over(Arc<dyn HttpBackend>)` binds the same seven "
+"rows over YOUR transport, and on wasm32 `http_wasm::pkg_fetch()` binds them "
+"over the browser's `fetch` "
+"([below](#the-std-http-lane--your-own-transport-pkg_over)). The `http_host` "
+"surface is a mod tree — the rows register scope-relatively (`net::http_send` "
+"+ the readbacks, `stream::http_body`/`http_stream_next`)"
 msgstr ""
 
 #: src/reference/embedding.md:522 src/reference/cli.md:80
@@ -19712,17 +19718,227 @@ msgid "the crossing-tax benchmark rows"
 msgstr ""
 
 #: src/reference/embedding.md:524
-msgid "In-tree examples"
+msgid "The std HTTP lane — your own transport (`pkg_over`)"
 msgstr ""
 
 #: src/reference/embedding.md:526
+msgid ""
+"rut-std carries no HTTP client of its own. The seven `http_host` rows are "
+"the surface; the transport is a door the embedder picks:"
+msgstr ""
+
+#: src/reference/embedding.md:529
+msgid "transport"
+msgstr ""
+
+#: src/reference/embedding.md:529
+msgid "gate"
+msgstr ""
+
+#: src/reference/embedding.md:531
+msgid "reqwest (one shared blocking client, one worker thread per request)"
+msgstr ""
+
+#: src/reference/embedding.md:531
+msgid "the `http` cargo feature; native targets only"
+msgstr ""
+
+#: src/reference/embedding.md:532
+msgid "`http::pkg_with(f)`"
+msgstr ""
+
+#: src/reference/embedding.md:532
+msgid ""
+"an injectable fixture keyed on method+URL, walking its chunk schedule on the "
+"virtual clock"
+msgstr ""
+
+#: src/reference/embedding.md:532
+msgid "feature-free; returns the `HttpFixture` settle handle"
+msgstr ""
+
+#: src/reference/embedding.md:533
+msgid "`http::pkg_over(backend)`"
+msgstr ""
+
+#: src/reference/embedding.md:533
+msgid "YOUR backend — any `Arc<dyn HttpBackend>`"
+msgstr ""
+
+#: src/reference/embedding.md:533
+msgid "feature-free"
+msgstr ""
+
+#: src/reference/embedding.md:534
+msgid "`http_wasm::pkg_fetch()`"
+msgstr ""
+
+#: src/reference/embedding.md:534
+msgid "the browser window's `fetch`"
+msgstr ""
+
+#: src/reference/embedding.md:534
+msgid "the `http-wasm` cargo feature, wasm32 only"
+msgstr ""
+
+#: src/reference/embedding.md:536
+msgid "All four bind the same rows over the same seam — only `send` differs."
+msgstr ""
+
+#: src/reference/embedding.md:538
+msgid "The `HttpBackend` contract"
+msgstr ""
+
+#: src/reference/embedding.md:540
+msgid "One trait, one method — the whole transport:"
+msgstr ""
+
+#: src/reference/embedding.md:548
+msgid ""
+"`HttpRequest { method, url, headers, body }` carries the crossing parts "
+"verbatim: the canonical verb, the `\"\\n"
+"\"`\\-joined `Name: value` header block (empty = none), and the raw body "
+"bytes (empty = none — the disclosed empty-vs-none merge)."
+msgstr ""
+
+#: src/reference/embedding.md:553
+msgid "The contract, in order:"
+msgstr ""
+
+#: src/reference/embedding.md:555
+msgid ""
+"**Answer `out` exactly ONCE, at HEADERS.** Success mints through "
+"`HttpResponse::streaming(status)` — it returns the response half (complete "
+"`out` with it; `send` resolves here) and an `HttpBodyWriter` you keep. "
+"Transport trouble completes with `HttpResponse::failed(msg)` — status 0 plus "
+"the message; its body is born dead, so the read lanes degrade to empty / "
+"immediate EOF. A double complete is NOT loud: the `Completer` contract is "
+"last-write-wins (the second answer overwrites the slot, the first is "
+"silently lost; a late answer after the take is never taken). \"Exactly "
+"once\" is the discipline, not an enforced invariant."
+msgstr ""
+
+#: src/reference/embedding.md:565
+msgid ""
+"**Then drive the writer — from any thread**: `push_chunk(bytes)` feeds one "
+"chunk (a parked stream read takes the queue's front, FIFO), `end()` is the "
+"clean EOF, `fail(msg)` the sticky mid-read death (the queued chunks stay "
+"readable — they did arrive). The terminal flags are sticky."
+msgstr ""
+
+#: src/reference/embedding.md:570
+msgid ""
+"**Never block the VM thread.** Do the wire work on your own threads/tasks; "
+"the completer and the writer (atomics + a Mutex slot, waiters completed "
+"outside it) are the only shared state. This is also why `push_chunk` is safe "
+"to park on: it is YOUR worker thread that stalls, never the VM."
+msgstr ""
+
+#: src/reference/embedding.md:576
+msgid ""
+"Backpressure is inherited, not implemented: `push_chunk` is the budget "
+"gate's home — once `HttpBodyWriter::DEFAULT_STREAM_BUDGET_BYTES` (64 × 16 "
+"KiB ≈ 1 MiB) sits queued and unread, the next push PARKS the calling thread "
+"until readers drain below the bound (the one-shot body drain stands the gate "
+"down — its answer IS the whole body). A slow guest backs the pressure out to "
+"your socket; you get TCP flow control for free. Cancel is a probe: a "
+"guest-cancelled read marks the source through the pkg's cancel registry, "
+"`writer.cancelled()` goes true, and a backend that checks it between chunks "
+"drops its response there — the connection closes with the cancelled frame. A "
+"backend that never checks keeps the disclosed best-effort lane (the mark is "
+"sticky; no reader ever sees more than `nil` + `read_error() == "
+"\"cancelled\"`)."
+msgstr ""
+
+#: src/reference/embedding.md:589
+msgid "The minimal backend — a thread per request, the reqwest lane's own shape:"
+msgstr ""
+
+#: src/reference/embedding.md:605
+msgid "// HEADERS — send resolves here\n"
+msgstr ""
+
+#: src/reference/embedding.md:607
+msgid "// the wire-abort: drop the wire\n"
+msgstr ""
+
+#: src/reference/embedding.md:608
+msgid "// bounded — may park this thread\n"
+msgstr ""
+
+#: src/reference/embedding.md:610
+msgid "// clean EOF\n"
+msgstr ""
+
+#: src/reference/embedding.md:613
+msgid "// status 0\n"
+msgstr ""
+
+#: src/reference/embedding.md:618
+msgid "// the seven rows bind over it like any host pkg:\n"
+msgstr ""
+
+#: src/reference/embedding.md:626
+msgid "The wasm lane — `pkg_fetch`"
+msgstr ""
+
+#: src/reference/embedding.md:628
+msgid ""
+"On wasm32 the `http-wasm` cargo feature (target-gated "
+"`wasm-bindgen`/`web-sys`/`js-sys`, default-off like the reqwest lane) "
+"exposes `rut_std::http_wasm::pkg_fetch()` — the same seven rows over the "
+"browser's `fetch`, the playground's transport:"
+msgstr ""
+
+#: src/reference/embedding.md:633
+msgid ""
+"`send` resolves at HEADERS: one `spawn_local` task awaits the `fetch`, mints "
+"`streaming(status)`, and keeps pumping the body on the same task through the "
+"`ReadableStream` default reader — ONE read per step, so the JS microtask "
+"queue drains between steps and the VM thread never blocks."
+msgstr ""
+
+#: src/reference/embedding.md:638
+msgid ""
+"The budget gate's wasm flavor is park/resume: a JS thread has no condvar (a "
+"park there would block the whole world), so the pump checks "
+"`parked_at_budget()` between reads and re-arms itself one macrotask at a "
+"time; the guest's one-pop-per-await pacing drains below the bound and the "
+"next tick resumes the pump. The stream's internal buffer fills, the browser "
+"slows the socket — real backpressure all the same."
+msgstr ""
+
+#: src/reference/embedding.md:645
+msgid ""
+"Cancel is the same between-chunk wire-abort (the `cancelled()` probe drops "
+"the reader, the connection closes)."
+msgstr ""
+
+#: src/reference/embedding.md:648
+msgid ""
+"The RUN shape follows the thread: chunks land from JS microtasks, so they "
+"can never settle inside the synchronous `run` export. When a session's main "
+"has retired, no timer is armed, and only host completers remain pending, the "
+"wasm engine PARKS — the run envelope carries `\"parked\": true` beside a "
+"null trap — and `resume` re-drives the parked machine one macrotask leg at a "
+"time; a page pumps until idle. A window-less host (node, the smoke lane) "
+"answers the immediate status-0 transport failure — no JS call, no panic — so "
+"an offline run completes synchronously inside the first run envelope, body "
+"and stream lanes degrading exactly as `HttpResponse::failed` discloses."
+msgstr ""
+
+#: src/reference/embedding.md:659
+msgid "In-tree examples"
+msgstr ""
+
+#: src/reference/embedding.md:661
 msgid ""
 "[03 — Plugin](../examples/03-plugin.md): a Rust chat server driving a rut "
 "moderator plugin, loaded from a module directory and from a packed "
 "`.rutbundle`; re-entrant `emit` crossings."
 msgstr ""
 
-#: src/reference/embedding.md:529
+#: src/reference/embedding.md:664
 msgid ""
 "[06 — GitHub viewer CLI](../examples/06-github-viewer-cli.md): walks the std "
 "packages, binds example-local I/O rows, launches an async entry fn, and "
@@ -20817,38 +21033,54 @@ msgid ""
 msgstr ""
 
 #: src/reference/host-fns.md:325
+msgid ""
+"The abort hook is where cancel becomes REAL, and the std HTTP lane is the "
+"worked example: its `__cancel` arms take the cancelled completer's identity "
+"and mark the request's shared chunk source with the sticky read failure "
+"`\"cancelled\"` — a body producer parked on the stream budget releases and "
+"stops BETWEEN chunks, drops the response (the connection closes — the "
+"wire-abort), and every remaining reader degrades to nil + `read_error() == "
+"\"cancelled\"`, never a trap. A cancel before the row ever parked (the send "
+"still waiting on its headers) finds no slot: the disclosed best-effort law "
+"above. The contract and the embedder-side doors are in [embedding and native "
+"modules](embedding.md#the-std-http-lane--your-own-transport-pkg_over); the "
+"rut-side disclosures are in [core and the swappable "
+"packages](stdlib.md#calcs-company-async-and-http)."
+msgstr ""
+
+#: src/reference/host-fns.md:339
 msgid "Declaration files as artifacts"
 msgstr ""
 
-#: src/reference/host-fns.md:327
+#: src/reference/host-fns.md:341
 msgid "A published package ships:"
 msgstr ""
 
-#: src/reference/host-fns.md:329
+#: src/reference/host-fns.md:343
 msgid "artifact"
 msgstr ""
 
-#: src/reference/host-fns.md:331
+#: src/reference/host-fns.md:345
 msgid "`mod.rutc`"
 msgstr ""
 
-#: src/reference/host-fns.md:331
+#: src/reference/host-fns.md:345
 msgid ""
 "the compiled module binary: bodies + the surface, the linking truth ([module "
 "binary and verification](module-binary.md))"
 msgstr ""
 
-#: src/reference/host-fns.md:332
+#: src/reference/host-fns.md:346
 msgid "`mod.d.rut`"
 msgstr ""
 
-#: src/reference/host-fns.md:332
+#: src/reference/host-fns.md:346
 msgid ""
 "the surface text — hand-written, editable, publishable (humans, LSP); "
 "documentation only, never the loader's source of truth"
 msgstr ""
 
-#: src/reference/host-fns.md:334
+#: src/reference/host-fns.md:348
 msgid ""
 "The surface rides the binary: a consumer binds `p`'s exports from `mod.rutc` "
 "alone. Nothing is rebuilt from `.d.rut` text — impl-to-fn ids, "
@@ -20856,59 +21088,59 @@ msgid ""
 "guesswork."
 msgstr ""
 
-#: src/reference/host-fns.md:338
+#: src/reference/host-fns.md:352
 msgid ""
 "Link compares the consumer's bound surface against the binary's export table "
 "— a pure data compare. Drift is a load error naming both modules, never a "
 "runtime surprise."
 msgstr ""
 
-#: src/reference/host-fns.md:341
+#: src/reference/host-fns.md:355
 msgid ""
 "Publishing is not encryption: bodies are compiled and local names are "
 "stripped (`--release` drops member-name strings), but code is recoverable "
 "with effort. What publishing guarantees is API discipline."
 msgstr ""
 
-#: src/reference/host-fns.md:345
+#: src/reference/host-fns.md:359
 msgid "Surface resolution during compilation"
 msgstr ""
 
-#: src/reference/host-fns.md:347
+#: src/reference/host-fns.md:361
 msgid ""
 "When module `M` uses package `p`, the compiler resolves `p`'s surface, first "
 "hit wins:"
 msgstr ""
 
-#: src/reference/host-fns.md:350
+#: src/reference/host-fns.md:364
 msgid "**source** — `p`'s rut source on the source path: compile it normally;"
 msgstr ""
 
-#: src/reference/host-fns.md:351
+#: src/reference/host-fns.md:365
 msgid ""
 "**bundle** — a mounted `.rutbundle`: its compiled `.rutc` (bodies + surface "
 "on the wire) — or its bundled source for a splice-needed group; explicit "
 "mounts outrank stray sources, never dev source;"
 msgstr ""
 
-#: src/reference/host-fns.md:354
+#: src/reference/host-fns.md:368
 msgid ""
 "**host registry** — for host pkgs, the `.d.rut` the embedder ships beside "
 "the registered implementation."
 msgstr ""
 
-#: src/reference/host-fns.md:357
+#: src/reference/host-fns.md:371
 msgid ""
 "Bodies resolve only at link/run. Compiling `M` against a package whose "
 "implementation is absent is legal and complete — checking passes; only "
 "running requires the bodies."
 msgstr ""
 
-#: src/reference/host-fns.md:361
+#: src/reference/host-fns.md:375
 msgid "End-to-end shape"
 msgstr ""
 
-#: src/reference/host-fns.md:363
+#: src/reference/host-fns.md:377
 msgid ""
 "The chat-bus plugin is the canonical walkthrough: a Rust server binds "
 "`server::subscribe`/`server::emit` over its own `EventBus` box, the plugin "
@@ -22429,22 +22661,83 @@ msgid ""
 "    .header(\"Accept\", \"application/json\")\n"
 "    .body(payload)\n"
 "    .build()\n"
-"    .send(cx);\n"
+"    .send();\n"
 "```"
 msgstr ""
 
 #: src/reference/stdlib.md:460
 msgid ""
-"`send` resolves at headers; `body(cx)` drains the wire; "
-"`byte_stream()`/`next(cx)` walk it in chunks. Status `0` is reserved for "
-"transport failure. The reqwest lane is native-only."
+"`send` resolves at headers; `body()` drains the remaining wire in one "
+"future; `byte_stream()` mints the reader and `next()` walks it one chunk per "
+"await. Status `0` is reserved for transport failure (`transport_error()` "
+"names it); a mid-read wire death is data — the sticky "
+"`read_error()`/`error()` goes non-nil and stays. The reqwest lane is "
+"native-only; the browser rides `fetch` and any embedder can bind its own "
+"transport ([embedding](embedding.md))."
 msgstr ""
 
-#: src/reference/stdlib.md:464
+#: src/reference/stdlib.md:468
+msgid ""
+"**Body xor stream — the one-shot law.** Each response's body is taken by "
+"exactly one lane: `await resp.body()` (the drain) or `resp.byte_stream()` "
+"(the mint — instant, sync). A late or second taker degrades: the drain "
+"answers empty, a second mint answers a dead reader whose `next()` is an "
+"immediate EOF — never a trap."
+msgstr ""
+
+#: src/reference/stdlib.md:474
+msgid ""
+"**Backpressure is real.** The stream lane is bounded: once ~1 MiB (64 × 16 "
+"KiB pump chunks) sits queued and unread, the producer parks — one chunk may "
+"land past the bound, the next stalls — the socket fills and the server feels "
+"it: TCP flow control end to end. One `await next()` per chunk IS the "
+"consumer pacing; nothing reads ahead. The drain is exempt by law — its "
+"answer IS the whole body, gating buys nothing."
+msgstr ""
+
+#: src/reference/stdlib.md:482
+msgid ""
+"**Cancel is the wire-abort.** Cancelling the frame parked on a row future — "
+"a `select2`/`select_all` loser, or `LaunchedFutureHandle::abort()` "
+"([launched futures](launched-futures.md)) — marks the response's chunk "
+"source: the budget-parked pump releases and stops between chunks, the "
+"connection closes, and remaining readers degrade to `nil` with `read_error() "
+"== \"cancelled\"` — never a trap. Disclosed edges:"
+msgstr ""
+
+#: src/reference/stdlib.md:491
+msgid ""
+"cancel lands BETWEEN chunks — a blocking read already in flight still "
+"completes, and its bytes arrive as data;"
+msgstr ""
+
+#: src/reference/stdlib.md:493
+msgid ""
+"a cancel before the headers (`send` still waiting) is best-effort: the "
+"worker runs to its blocking completion and the late response is simply never "
+"taken;"
+msgstr ""
+
+#: src/reference/stdlib.md:496
+msgid ""
+"only the frame parked directly on the row future carries the abort — a user "
+"wrapper cancelled above its `await` clears only its own pending edge; the "
+"row frame (the wire) runs on ([the host futures bridge](host-futures.md));"
+msgstr ""
+
+#: src/reference/stdlib.md:500
+msgid ""
+"an abandoned stream — minted, never drained, never cancelled — parks its "
+"pump at the budget plateau: the connection and the ~1 MiB queue stay until "
+"the read frame is cancelled or the session ends. Bounded, but not free: "
+"cancel what you stop reading."
+msgstr ""
+
+#: src/reference/stdlib.md:506
 msgid "Offering"
 msgstr ""
 
-#: src/reference/stdlib.md:466
+#: src/reference/stdlib.md:508
 msgid ""
 "`core` auto-rides — every run's `.compile()` offers the core prelude unless "
 "a pkg named `core` was offered. `calc` and the async pair are ordinary tree "
@@ -22455,7 +22748,7 @@ msgid ""
 "CLI](cli.md))."
 msgstr ""
 
-#: src/reference/stdlib.md:474
+#: src/reference/stdlib.md:516
 msgid ""
 "The rut packages over host rows (`ink`, `strbuild`, `nmapset`, `futures`, "
 "`http`) pull their decl pkg along (`deps`) — the embedder pairs the mount "
@@ -22465,7 +22758,7 @@ msgid ""
 "pipeline](compiler.md))."
 msgstr ""
 
-#: src/reference/stdlib.md:480
+#: src/reference/stdlib.md:522
 msgid ""
 "Generic exports link on their own: instantiation happens where the body "
 "lives, consumers request it, and `Vec<i64>` is one type program-wide ([the "

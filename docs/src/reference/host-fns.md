@@ -322,6 +322,20 @@ completer. Cancellation is best-effort — a worker runs to its blocking
 completion and the late answer is discarded. See
 [the host futures bridge](host-futures.md) and [async and await](async.md).
 
+The abort hook is where cancel becomes REAL, and the std HTTP lane is
+the worked example: its `__cancel` arms take the cancelled completer's
+identity and mark the request's shared chunk source with the sticky
+read failure `"cancelled"` — a body producer parked on the stream
+budget releases and stops BETWEEN chunks, drops the response (the
+connection closes — the wire-abort), and every remaining reader
+degrades to nil + `read_error() == "cancelled"`, never a trap. A
+cancel before the row ever parked (the send still waiting on its
+headers) finds no slot: the disclosed best-effort law above. The
+contract and the embedder-side doors are in
+[embedding and native modules](embedding.md#the-std-http-lane--your-own-transport-pkg_over);
+the rut-side disclosures are in
+[core and the swappable packages](stdlib.md#calcs-company-async-and-http).
+
 ## Declaration files as artifacts
 
 A published package ships:

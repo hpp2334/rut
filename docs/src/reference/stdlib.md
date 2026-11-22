@@ -454,12 +454,54 @@ For the common accumulator shape no builder is needed at all:
       .header("Accept", "application/json")
       .body(payload)
       .build()
-      .send(cx);
+      .send();
   ```
 
-  `send` resolves at headers; `body(cx)` drains the wire;
-  `byte_stream()`/`next(cx)` walk it in chunks. Status `0` is reserved
-  for transport failure. The reqwest lane is native-only.
+  `send` resolves at headers; `body()` drains the remaining wire in
+  one future; `byte_stream()` mints the reader and `next()` walks it
+  one chunk per await. Status `0` is reserved for transport failure
+  (`transport_error()` names it); a mid-read wire death is data — the
+  sticky `read_error()`/`error()` goes non-nil and stays. The reqwest
+  lane is native-only; the browser rides `fetch` and any embedder can
+  bind its own transport ([embedding](embedding.md)).
+
+  **Body xor stream — the one-shot law.** Each response's body is
+  taken by exactly one lane: `await resp.body()` (the drain) or
+  `resp.byte_stream()` (the mint — instant, sync). A late or second
+  taker degrades: the drain answers empty, a second mint answers a
+  dead reader whose `next()` is an immediate EOF — never a trap.
+
+  **Backpressure is real.** The stream lane is bounded: once ~1 MiB
+  (64 × 16 KiB pump chunks) sits queued and unread, the producer
+  parks — one chunk may land past the bound, the next stalls — the
+  socket fills and the server feels it: TCP flow control end to end.
+  One `await next()` per chunk IS the consumer pacing; nothing reads
+  ahead. The drain is exempt by law — its answer IS the whole body,
+  gating buys nothing.
+
+  **Cancel is the wire-abort.** Cancelling the frame parked on a row
+  future — a `select2`/`select_all` loser, or
+  `LaunchedFutureHandle::abort()`
+  ([launched futures](launched-futures.md)) — marks the response's
+  chunk source: the budget-parked pump releases and stops between
+  chunks, the connection closes, and remaining readers degrade to
+  `nil` with `read_error() == "cancelled"` — never a trap. Disclosed
+  edges:
+
+  - cancel lands BETWEEN chunks — a blocking read already in flight
+    still completes, and its bytes arrive as data;
+  - a cancel before the headers (`send` still waiting) is
+    best-effort: the worker runs to its blocking completion and the
+    late response is simply never taken;
+  - only the frame parked directly on the row future carries the
+    abort — a user wrapper cancelled above its `await` clears only
+    its own pending edge; the row frame (the wire) runs on
+    ([the host futures bridge](host-futures.md));
+  - an abandoned stream — minted, never drained, never cancelled —
+    parks its pump at the budget plateau: the connection and the
+    ~1 MiB queue stay until the read frame is cancelled or the
+    session ends. Bounded, but not free: cancel what you stop
+    reading.
 
 ## Offering
 
