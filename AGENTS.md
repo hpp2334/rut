@@ -15,6 +15,24 @@ these fail loudly on drift). Practical consequences:
   `#[allow(...)]` with a one-line reason is the house style (grep for
   existing examples before inventing wording).
 
+## Planning: read the plan-rule skill before writing any plan
+
+Any "plan X" / "design X" / design-convergence work — any document meant
+to drive implementation later — starts by reading
+`.opencode/skills/plan-rule/SKILL.md` and following it. The core, in
+one breath: a plan is a LAW plus its derived changes, never a patch
+list — diagnose the old law that produces the observed behavior,
+replace it with one named mechanism, derive every edit from it; carry
+ground truth verified THIS session (`file:line`, grep-proven call
+sites); supersede outright with NO backward compat (shims, dual paths,
+kept-for-safety code forbidden; pinned tests update in the same
+change); package as self-contained phases that each leave every gate
+green, with disjoint-scope parallel tasks INSIDE a phase (never
+parallel phases); and pass the skill's pre-flight audit before saving.
+Plans live in `~/.opencode/plan/<slug>.md` (the slug names the law); a
+saved plan is a proposal — how, and whether, it executes is the user's
+call.
+
 ## Frontend layering: one parse entry, lsp-wasm talks only to rut-lsp
 
 **Call the layer whose abstraction you consume.** Document semantics
