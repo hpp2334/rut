@@ -21,6 +21,10 @@
 //!    match the pin refuses at the run's mount door (naming url and
 //!    BOTH hashes) and is EVICTED — `install --locked` re-downloads
 //!    (the heal) and the offline run passes again.
+//! 10. the legacy cleanup: a successful install removes a
+//!     `<project>/.rut/unpacked/` left by an older toolchain (the
+//!     walk mounts the store's trees now) — the whole `.rut` goes when
+//!     nothing else lives under it, foreign content stays and is named.
 //!
 //! The drift/diff LAW itself is install.rs's (phase 3); what this file
 //! proves is the wire-side behavior an editor or CI would see.
@@ -691,4 +695,96 @@ fn a_poisoned_entry_refuses_evicts_and_locked_install_heals() {
     server.set_up(false);
     let (code, _, err) = rut(&home, &["run", app.to_str().unwrap()]);
     assert_eq!(code, 0, "the healed store answers offline: {err}");
+}
+
+// -- 10 ---------------------------------------------------------------
+
+#[test]
+fn install_removes_a_legacy_unpack_area() {
+    // the old toolchain planted `<project>/.rut/unpacked/<sha>/`; the
+    // walk mounts the store's unpack trees now, so install removes the
+    // legacy area — and the `.rut` dir holding NOTHING but it goes
+    // too. The removal is logged in install's output.
+    let bytes = leaf_bundle(
+        "legacy leaf",
+        "util",
+        "pub fn twice(v: i64) -> i64 {\n    return v * 2;\n}\n",
+    );
+    let mut payloads = BTreeMap::new();
+    payloads.insert("util.rutbundle".to_string(), bytes);
+    let server = TestServer::serve(payloads);
+    let url = server.url("util.rutbundle");
+    let root = consumer_world("legacy consumer", &one_dep(&url));
+    let app = root.join("app");
+    let legacy = app.join(".rut").join("unpacked").join("359a93a2e32f2ef0");
+    std::fs::create_dir_all(&legacy).unwrap();
+    std::fs::write(legacy.join("rut.jsonc"), r#"{"name": "util"}"#).unwrap();
+    let home = root.join("home");
+
+    let (code, out, err) = rut(&home, &["install", app.to_str().unwrap()]);
+    assert_eq!(code, 0, "install must succeed: {err}");
+    assert!(
+        !app.join(".rut").exists(),
+        "the `.rut` holding nothing but the legacy unpack area goes too"
+    );
+    assert!(
+        out.contains("removed the legacy unpack area"),
+        "the removal is logged: {out}"
+    );
+
+    // idempotent: a second install neither logs nor creates anything
+    let (code, out, err) = rut(&home, &["install", app.to_str().unwrap()]);
+    assert_eq!(code, 0, "re-install must succeed: {err}");
+    assert!(
+        !out.contains("legacy unpack area"),
+        "nothing left to clean: {out}"
+    );
+    assert!(!app.join(".rut").exists());
+}
+
+#[test]
+fn install_leaves_a_foreign_rut_dir_alone() {
+    // `.rut` carrying ANYTHING besides `unpacked/` is not ours: the
+    // legacy area is still removed, everything else stays untouched,
+    // and one line names what was left.
+    let bytes = leaf_bundle(
+        "foreign leaf",
+        "util",
+        "pub fn twice(v: i64) -> i64 {\n    return v * 2;\n}\n",
+    );
+    let mut payloads = BTreeMap::new();
+    payloads.insert("util.rutbundle".to_string(), bytes);
+    let server = TestServer::serve(payloads);
+    let url = server.url("util.rutbundle");
+    let root = consumer_world("foreign consumer", &one_dep(&url));
+    let app = root.join("app");
+    let rut_dir = app.join(".rut");
+    std::fs::create_dir_all(rut_dir.join("unpacked").join("359a93a2e32f2ef0")).unwrap();
+    std::fs::write(
+        rut_dir
+            .join("unpacked")
+            .join("359a93a2e32f2ef0")
+            .join("mod.rutc"),
+        b"legacy-bytes",
+    )
+    .unwrap();
+    std::fs::create_dir_all(rut_dir.join("user")).unwrap();
+    std::fs::write(rut_dir.join("user").join("precious.txt"), b"keep me").unwrap();
+    let home = root.join("home");
+
+    let (code, _out, err) = rut(&home, &["install", app.to_str().unwrap()]);
+    assert_eq!(code, 0, "install must succeed: {err}");
+    assert!(
+        !rut_dir.join("unpacked").exists(),
+        "the legacy unpack area is removed"
+    );
+    assert_eq!(
+        std::fs::read(rut_dir.join("user").join("precious.txt")).unwrap(),
+        b"keep me",
+        "the foreign content is untouched"
+    );
+    assert!(
+        err.contains("holds other content") && err.contains("left untouched"),
+        "one line names what was left: {err}"
+    );
 }

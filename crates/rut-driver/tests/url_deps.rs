@@ -82,6 +82,29 @@ fn write(dir: &Path, rel: &str, text: &str) {
     std::fs::write(p, text).unwrap();
 }
 
+/// A temp `$RUT_HOME` for the test's lifetime — the store doors never
+/// touch the real `~/.rut`. Mutating the process env here is safe
+/// under nextest's one-process-per-test model (the suite's runner),
+/// which is the only runner this repo uses.
+struct Home(PathBuf);
+impl Home {
+    fn new(tag: &str) -> Home {
+        let d = scratch(&format!("{tag}-home"));
+        std::env::set_var("RUT_HOME", &d);
+        Home(d)
+    }
+
+    fn path(&self) -> &Path {
+        &self.0
+    }
+}
+impl Drop for Home {
+    fn drop(&mut self) {
+        std::env::remove_var("RUT_HOME");
+        let _ = std::fs::remove_dir_all(&self.0);
+    }
+}
+
 fn manifest(name: &str, _entry: &str, extra: &str) -> String {
     // `extra` is the fragment after the name row (`, "deps": { … }`) —
     // the entry keys are repealed: the body is `src/mod.rut` in the
@@ -417,12 +440,13 @@ fn embedder_mount_outranks_the_url_dep() {
 }
 
 #[test]
-fn embedder_offer_unpacks_a_source_zip_url_dep() {
+fn embedder_offer_mounts_the_store_unpack_tree() {
     // the offer lane's SOURCE transport: `dir_pkgs_with` mounts a
-    // source-zip url dep exactly like the load lane — the walk seeds
-    // `<project>/.rut/unpacked` so the zip has a home. The compiled
-    // `.rutbundle` offer above hides the seed; this row proves it.
-    let root = leaf_world("zipoff", "util", UTIL_BODY);
+    // source-zip url dep through the STORE's unpack tree — the same
+    // address `rut install` publishes (`<deps>/<spec>@<pin16>/unpack/`).
+    // The project dir gains NO `.rut`; the mounted pkg's text is the
+    // STORE tree's bytes (the marker comment below rides only there).
+    let root = leaf_world("zipstore", "util", UTIL_BODY);
     let zip = pack_dir_zip(&root.join("util")).expect("pack util as a source zip");
     let url = "https://fixtures.test/util.zip";
     let app = root.join("app");
@@ -441,6 +465,83 @@ fn embedder_offer_unpacks_a_source_zip_url_dep() {
         "use util::{twice};\nentry fn go() -> i64 {\n    return twice(21);\n}\n",
     );
 
+    // the store entry: the walk's ONE derivation law lays it where
+    // install would — the pin is the bytes' sha256, the tree carries
+    // the marker the fixture zip never had
+    let home = Home::new("zipstore");
+    let pin = sha256_hex(&zip);
+    let unpack = home
+        .path()
+        .join("deps")
+        .join(rut_driver::store_dir("util", &pin))
+        .join(rut_driver::UNPACK_DIR);
+    std::fs::create_dir_all(unpack.join("src")).unwrap();
+    std::fs::write(unpack.join("rut.jsonc"), manifest("util", "mod.rut", "")).unwrap();
+    std::fs::write(
+        unpack.join("src/mod.rut"),
+        format!("// mounted from the store\n{UTIL_BODY}"),
+    )
+    .unwrap();
+
+    let mut table = BTreeMap::new();
+    table.insert(url.to_string(), zip.clone());
+    write_lock(&app, &table);
+    let walked =
+        block_on(rut_native::dir_pkgs_with(&app, &Table::from(table))).expect("mount the zip dep");
+    assert_eq!(walked.root, "app");
+    let util = walked
+        .pkgs
+        .iter()
+        .find(|p| p.spec == "util")
+        .expect("the zip dep mounted");
+    match &util.body {
+        rut_driver::MountedBody::Source { text, .. } => assert!(
+            text.contains("// mounted from the store"),
+            "the pkg mounts the STORE tree, not the fixture bytes: {text}"
+        ),
+        b => panic!("the store mount is a source pkg, got {b:?}"),
+    }
+    // the project law: no `.rut` beside the project — not even the
+    // legacy plant's shape
+    assert!(
+        !app.join(".rut").exists(),
+        "the project dir stays rut.jsonc + rut.lock + src/"
+    );
+    let answer: i64 = run_entry(walked, "go");
+    assert_eq!(answer, 42);
+    assert!(
+        unpack.exists(),
+        "the store entry outlives the run untouched — the walk never deletes"
+    );
+}
+
+#[test]
+fn the_temp_fallback_unpacks_when_the_store_tree_is_absent() {
+    // the store entry's `unpack/` missing while the artifact vouches
+    // (partial eviction, hand deletion): the walk unpacks ONCE into a
+    // run-scoped temp dir and mounts that — the mount still succeeds,
+    // the project gains NO `.rut`, and the temp tree dies with the
+    // walk (zero traces).
+    let root = leaf_world("ziptmp", "util", UTIL_BODY);
+    let zip = pack_dir_zip(&root.join("util")).expect("pack util as a source zip");
+    let url = "https://fixtures.test/util.zip";
+    let app = root.join("app");
+    write(
+        &app,
+        "rut.jsonc",
+        &manifest(
+            "app",
+            "mod.rut",
+            &format!(r#", "deps": {{"util": {{"url": "{url}"}}}}"#),
+        ),
+    );
+    write(
+        &app,
+        "src/mod.rut",
+        "use util::{twice};\nentry fn go() -> i64 {\n    return twice(21);\n}\n",
+    );
+
+    let _home = Home::new("ziptmp"); // a COLD store — no entry for util
     let mut table = BTreeMap::new();
     table.insert(url.to_string(), zip.clone());
     write_lock(&app, &table);
@@ -449,23 +550,24 @@ fn embedder_offer_unpacks_a_source_zip_url_dep() {
     assert_eq!(walked.root, "app");
     assert!(
         walked.pkgs.iter().any(|p| p.spec == "util"),
-        "the zip dep mounted (mounted: {:?})",
-        walked
-            .pkgs
-            .iter()
-            .map(|p| p.spec.clone())
-            .collect::<Vec<_>>()
-    );
-    // the offer lane's seed: the unpacked tree lives under the PROJECT
-    // (`<app>/.rut/unpacked`, content-addressed by the pin)
-    let unpacked = app.join(".rut").join("unpacked").join(sha256_hex(&zip));
-    assert!(
-        unpacked.join("src/mod.rut").is_file(),
-        "the zip unpacked under the project: {}",
-        unpacked.display()
+        "the fallback mount succeeds"
     );
     let answer: i64 = run_entry(walked, "go");
     assert_eq!(answer, 42);
+    assert!(
+        !app.join(".rut").exists(),
+        "the fallback never writes the project"
+    );
+    let leftovers: Vec<String> = std::fs::read_dir(std::env::temp_dir())
+        .unwrap()
+        .flatten()
+        .map(|e| e.file_name().to_string_lossy().into_owned())
+        .filter(|n| n.starts_with(&format!("rut-unpack-{}-", std::process::id())))
+        .collect();
+    assert!(
+        leftovers.is_empty(),
+        "the run-scoped temp dirs die with the walk: {leftovers:?}"
+    );
 }
 
 /// The archive source-group world: `codec` (interface + entries,

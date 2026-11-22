@@ -447,8 +447,9 @@ fn hash_closure(
         field(buf, &lock_bytes);
     }
     // every file under the directory, sorted by relative path — over-
-    // inclusive on purpose (dot entries skipped: editor droppings and
-    // the loader's own unpack area are not closure)
+    // inclusive on purpose (dot entries skipped: editor droppings are
+    // not closure; the loader's retired `.rut/unpacked` plant never
+    // returns — the walk mounts the store's unpack trees now)
     let mut files: Vec<PathBuf> = Vec::new();
     collect_files(&canonical, &mut files)?;
     files.sort();
@@ -503,8 +504,10 @@ fn hash_closure(
     Ok(())
 }
 
-/// Every file under `dir`, recursively; dot entries (`.git`, the
-/// loader's `.rut` unpack area) are tooling's own — not the closure.
+/// Every file under `dir`, recursively; dot entries (`.git`, editor
+/// droppings — and the loader's RETIRED `.rut` unpack area, which
+/// install removes; the walk mounts the store's trees now) are
+/// tooling's own — not the closure.
 fn collect_files(dir: &std::path::Path, out: &mut Vec<PathBuf>) -> Result<(), String> {
     let entries = std::fs::read_dir(dir).map_err(|e| format!("{}: {e}", dir.display()))?;
     for entry in entries {

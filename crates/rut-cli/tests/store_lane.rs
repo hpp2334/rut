@@ -306,10 +306,27 @@ fn a_zip_dep_publishes_the_unpacked_tree_and_runs_offline() {
         "the sources ride under the src/ shell"
     );
 
-    // and the offline run answers — the store's zip bytes mount
+    // and the offline run answers — the store's zip bytes mount, and
+    // the project stays exactly the law's shape (no `.rut`, nothing
+    // planted beside the manifest and the lock)
     server.set_up(false);
     let (code, _out, err) = rut(&home, &["run", app.to_str().unwrap()]);
     assert_eq!(code, 0, "the offline run rides the store: {err}");
+    let mut planted: Vec<String> = std::fs::read_dir(&app)
+        .unwrap()
+        .flatten()
+        .map(|e| e.file_name().to_string_lossy().into_owned())
+        .collect();
+    planted.sort();
+    assert_eq!(
+        planted,
+        vec![
+            "rut.jsonc".to_string(),
+            "rut.lock".to_string(),
+            "src".to_string()
+        ],
+        "the project dir is rut.jsonc + rut.lock + src/ — nothing else: {planted:?}"
+    );
 }
 
 // -- 3 ----------------------------------------------------------------

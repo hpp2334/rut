@@ -196,8 +196,8 @@ All loader-owned; the run stays I/O-free.
    cycle guard, name-mismatch error. A dep mounted from a url artifact
    brings its whole closure with it: a `.rutbundle`'s groups mount
    under their content identities (`name@<16 hex>`), and a `.zip`
-   mounts as an ordinary directory package after one content-addressed
-   unpack — first-mount-wins
+   mounts as an ordinary directory package over the store's extracted
+   tree — first-mount-wins
    becomes per-identity exact dedup ([Module
    bundles](bundles.md), [Coexistence](#coexistence)).
 2. **The dev pass — root only.** The program root's `dev-deps` mount

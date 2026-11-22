@@ -44,10 +44,11 @@ pub use rut_driver::pack::Archive;
 
 /// Where a walked pkg's files live — the pack lanes' group reads
 /// dispatch on it: a `Dir` pkg reads from its directory,
-/// an `Unpacked` pkg from the content-addressed directory a source-zip
-/// url dep unpacked to (the pack lanes read its tree like any dir's),
-/// an `Archive` pkg from the fetched archive's entries at its prefix.
-/// WALK-LOCAL bookkeeping: it never rides the [`Mounted`] (pure data).
+/// an `Unpacked` pkg from the directory a source-zip url dep mounted
+/// as a tree (the store's `unpack/` dir, or the run-scoped temp
+/// fallback — the pack lanes read it like any dir's), an `Archive`
+/// pkg from the fetched archive's entries at its prefix. WALK-LOCAL
+/// bookkeeping: it never rides the [`Mounted`] (pure data).
 #[derive(Clone, Debug)]
 pub(crate) enum Loc {
     Dir,
@@ -55,20 +56,52 @@ pub(crate) enum Loc {
     Archive { slot: usize, prefix: String },
 }
 
+/// A run-scoped temp dir — the fallback unpack home when the store's
+/// `unpack/` tree is absent while the artifact vouches (partial
+/// eviction, hand deletion). The guard removes the tree on drop (the
+/// walk's end), so the fallback leaves zero traces and — the project
+/// law — never writes a byte under the project dir.
+pub(crate) struct RunTempDir {
+    path: PathBuf,
+}
+
+impl RunTempDir {
+    /// Create a uniquely-named dir under the system temp root: the
+    /// process id spaces concurrent runs, the counter spaces several
+    /// worlds inside one process (the test suites).
+    fn create() -> Result<RunTempDir, String> {
+        static COUNTER: std::sync::atomic::AtomicUsize = std::sync::atomic::AtomicUsize::new(0);
+        let n = COUNTER.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+        let path = std::env::temp_dir().join(format!("rut-unpack-{}-{}", std::process::id(), n));
+        let _ = std::fs::remove_dir_all(&path);
+        std::fs::create_dir_all(&path).map_err(|e| format!("{}: {e}", path.display()))?;
+        Ok(RunTempDir { path })
+    }
+
+    fn path(&self) -> &Path {
+        &self.path
+    }
+}
+
+impl Drop for RunTempDir {
+    fn drop(&mut self) {
+        let _ = std::fs::remove_dir_all(&self.path);
+    }
+}
+
 /// The walk's world: the mounted table (first mount wins — enforced by
 /// the callers), where each pkg's files live, the pack-time scope
 /// ledger (per-archive namespacing shifts rows above everything
 /// recorded so far), the archives the url deps opened (slot-ordered),
-/// and the root source-zip url deps unpack under
-/// (`<project>/.rut/unpacked`, seeded by the walk entry from the
-/// project dir).
+/// and the run-scoped temp dirs the zip fallback unpacked into (the
+/// guards die with the world — the run's end).
 #[derive(Default)]
 pub(crate) struct World {
     pub(crate) pkgs: BTreeMap<String, Mounted>,
     pub(crate) locs: BTreeMap<String, Loc>,
     ledger: BTreeMap<ScopeId, String>,
     pub(crate) archives: Vec<Archive>,
-    pub(crate) unpack_root: PathBuf,
+    pub(crate) tempdirs: Vec<RunTempDir>,
 }
 
 impl World {
@@ -796,12 +829,6 @@ pub(crate) fn walk_dir(
     let root = manifest.name.clone().ok_or_else(|| {
         LoadError::law(format!("{}{MANIFEST_NAME} has no `name`", dir_key_dir(dir),))
     })?;
-    // the source-zip unpack root: `<project>/.rut/unpacked` — seeded
-    // once from the project dir (the cache's sibling convention); a
-    // walk that never meets a `.zip` url dep never touches it
-    if world.unpack_root.as_os_str().is_empty() {
-        world.unpack_root = Path::new(dir).join(".rut").join("unpacked");
-    }
     let root_module = load_entry_module(src, dir, &manifest)?;
     world.register(&root, root_module)?;
     // the root's dir rides the world, so the pack lanes can answer for
@@ -1058,12 +1085,22 @@ fn resolve_table(
 
 /// Mount a `.zip` url dep — the SOURCE transport's lane: gate 0 (the
 /// pin) ran at the caller; the bytes are a source zip ([`read_srczip`]
-/// — CRC, grammar, zip64 all enforced), which unpacks ONCE into a
-/// content-addressed directory (`<project>/.rut/unpacked/<sha-of-bytes>/`,
-/// temp-dir + rename atomic, so a reader never sees a partial tree)
-/// and mounts as the directory package it carries — the ordinary dir
-/// lane from there (its rewritten rows resolve inside; an open url row
-/// resolves from the fetched closure, loudly absent otherwise).
+/// — CRC, grammar, zip64 all enforced). The fetch GATES; the STORE
+/// TREE MOUNTS: `rut install` already published the extracted tree at
+/// `<deps>/<spec>@<sha16>/unpack/` (verify-then-rename,
+/// content-addressed, lock-free readers) — the walk derives that ONE
+/// address (`deps_dir` + `store_dir` + [`rut_driver::UNPACK_DIR`], the
+/// same derivation install keys on) and mounts it as the directory
+/// package it carries. A store entry whose `unpack/` is missing or
+/// manifest-less while the artifact vouches (partial eviction, hand
+/// deletion) unpacks ONCE into a run-scoped temp dir — the
+/// [`World::tempdirs`] guards hold it for the walk's lifetime — and
+/// mounts that; NEVER `<project>/.rut` (the project is `rut.jsonc` +
+/// `rut.lock` + `src/`, nothing else). From either tree it is the
+/// ordinary dir lane: the manifest, the name-vs-key gate, the entry
+/// mount, then the dep recursion (the rewritten rows resolve inside;
+/// an open url row resolves from the fetched closure, loudly absent
+/// otherwise).
 fn mount_zip_dep(
     world: &mut World,
     spec: &str,
@@ -1075,18 +1112,33 @@ fn mount_zip_dep(
 ) -> Result<(), LoadError> {
     let entries = rut_driver::bundle::read_srczip(bytes)
         .map_err(|e| LoadError::law(format!("{url}: {e}")))?;
-    if world.unpack_root.as_os_str().is_empty() {
-        return Err(LoadError::law(format!(
-            "{url}: no unpack root — the walk/offer entry seeds `<project>/.rut/unpacked`"
-        )));
-    }
-    let dir = world.unpack_root.join(sha_hex);
-    unpack_once(&dir, &entries).map_err(|e| LoadError::law(format!("{url}: {e}")))?;
-    // the directory lane over the unpacked tree — the manifest, the
+    // the store's unpack tree — the ONE derivation law: the spec is
+    // the manifest row's dep name (the same string install's
+    // `store_publish` keys on — both sides read the same `[deps]`
+    // row), the pin is the verified hash of these very bytes
+    // (lowercase full hex), so `store_dir`'s pin16 cut is install's
+    // address exactly
+    let store = PathBuf::from(rut_driver::deps_dir())
+        .join(rut_driver::store_dir(spec, sha_hex))
+        .join(rut_driver::UNPACK_DIR);
+    let dir = if store.is_dir() && store.join(MANIFEST_NAME).is_file() {
+        store
+    } else {
+        // the fallback: unpack once into a run-scoped temp dir — the
+        // bytes are validated and pin-checked, so the tree is whole;
+        // the guard rides the world and dies with the run
+        let tmp = RunTempDir::create()
+            .map_err(|e| LoadError::law(format!("{url}: unpack scratch: {e}")))?;
+        lay_entries(tmp.path(), &entries).map_err(|e| LoadError::law(format!("{url}: {e}")))?;
+        let path = tmp.path().to_path_buf();
+        world.tempdirs.push(tmp);
+        path
+    };
+    // the directory lane over the mounted tree — the manifest, the
     // name-vs-key gate, the entry mount, then the dep recursion (the
     // rewritten rows resolve inside; the first-mount edge records the
-    // declaring pkg's spec). ONE grammar here too: the unpacked tree
-    // parses like any directory.
+    // declaring pkg's spec). ONE grammar here too: the tree parses
+    // like any directory.
     let dir_key = dir.to_string_lossy().into_owned();
     let src = FsSource::at(&dir);
     let manifest = read_manifest(&src, &dir_key)?;
@@ -1121,45 +1173,21 @@ fn mount_zip_dep(
     Ok(())
 }
 
-/// Lay a source zip's entries down under `dir` — atomic: a temp
-/// sibling fills first, then one rename publishes the tree, so a
-/// reader never sees a partial unpack (the cache entry law). The
-/// entries are grammar-validated (no `..`, no absolute, no dot
-/// components), so every path is a safe join.
-fn unpack_once(dir: &Path, entries: &[(String, Vec<u8>)]) -> Result<(), String> {
-    if dir.is_dir() {
-        return Ok(()); // content-addressed: present ⇒ whole
-    }
-    let parent = dir
-        .parent()
-        .ok_or_else(|| format!("{}: no parent", dir.display()))?;
-    std::fs::create_dir_all(parent).map_err(|e| format!("{}: {e}", parent.display()))?;
-    let stem = dir
-        .file_name()
-        .map(|n| n.to_string_lossy().into_owned())
-        .unwrap_or_else(|| "pkg".to_string());
-    let tmp = parent.join(format!(".{stem}.tmp-{}", std::process::id()));
-    let _ = std::fs::remove_dir_all(&tmp);
-    std::fs::create_dir_all(&tmp).map_err(|e| format!("{}: {e}", tmp.display()))?;
+/// Lay a source zip's entries down under `root` — every path is a
+/// safe join (the entries are grammar-validated: no `..`, no
+/// absolute, no dot components). The store's own publish lane keeps
+/// its temp+rename atomicity (cache.rs); the walk's fallback lays
+/// straight into its private run-scoped temp dir — no concurrent
+/// reader exists for it.
+fn lay_entries(root: &Path, entries: &[(String, Vec<u8>)]) -> Result<(), String> {
     for (name, bytes) in entries {
-        let p = tmp.join(name);
+        let p = root.join(name);
         if let Some(parent) = p.parent() {
             std::fs::create_dir_all(parent).map_err(|e| format!("{}: {e}", parent.display()))?;
         }
         std::fs::write(&p, bytes).map_err(|e| format!("{}: {e}", p.display()))?;
     }
-    match std::fs::rename(&tmp, dir) {
-        Ok(()) => Ok(()),
-        // a concurrent unpack won the rename — its tree is whole too
-        Err(_) if dir.is_dir() => {
-            let _ = std::fs::remove_dir_all(&tmp);
-            Ok(())
-        }
-        Err(e) => {
-            let _ = std::fs::remove_dir_all(&tmp);
-            Err(format!("{}: {e}", dir.display()))
-        }
-    }
+    Ok(())
 }
 
 /// Mount a url dep's fetched bytes — the mount door where the pin is
@@ -1218,9 +1246,10 @@ fn mount_url_dep(
         });
     }
     // gate 1 — the container, by the row's own spelling: a `.zip` url
-    // is SOURCE transport — unzipped, unpacked once (content-addressed
-    // by the pin's hash), and mounted as the directory package it
-    // carries; anything else rides the compiled-bundle lane below
+    // is SOURCE transport — validated as a tree, mounted from the
+    // store's unpack dir (or a run-scoped temp fallback), never
+    // written beside the project; anything else rides the
+    // compiled-bundle lane below
     if url
         .rsplit('.')
         .next()
@@ -1609,13 +1638,6 @@ pub(crate) fn offer_dir(
 ) -> Result<String, LoadError> {
     let src = FsSource::at(dir);
     let dir_key = dir.to_string_lossy().into_owned();
-    // the source-zip unpack root: the same seed the load lane's
-    // `walk_dir` plants (`<project>/.rut/unpacked`) — an offer that
-    // meets a `.zip` url dep unpacks there; without it the zip mount
-    // dies on its internal-error branch
-    if world.unpack_root.as_os_str().is_empty() {
-        world.unpack_root = dir.join(".rut").join("unpacked");
-    }
     let manifest = read_manifest(&src, &dir_key)?;
     let name = manifest.name.clone().ok_or_else(|| {
         LoadError::law(format!(

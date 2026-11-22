@@ -888,68 +888,68 @@ msgstr ""
 
 #: src/quick-start/installation.md:237
 msgid ""
-"`rut install` fetched `ink` from jsDelivr into the **global dep store** (`$RUT_HOME/deps` — `~/.rut` by default, one content-addressed dir per pinned dep, shared by every project; no dep cache lands inside `hello/` — the one local write is the walk's `.rut/unpacked/` scratch, where `.zip` deps unpack once as gitignored machine output) and pinned its sha256 in `hello/rut.lock` — the lock every later load verifies against, committed alongside the manifest (same manifest + same `rut.lock` ⇒ identical resolved world). `rut install --locked` re-verifies the pair without writing, re-warming the store on a miss (the CI lane)."
+"`rut install` fetched `ink` from jsDelivr into the **global dep store** (`$RUT_HOME/deps` — `~/.rut` by default, one content-addressed dir per pinned dep, shared by every project; nothing lands inside `hello/` — the project stays `rut.jsonc` + `rut.lock` + `src/`, and runs mount the store's extracted trees directly) and pinned its sha256 in `hello/rut.lock` — the lock every later load verifies against, committed alongside the manifest (same manifest + same `rut.lock` ⇒ identical resolved world). `rut install --locked` re-verifies the pair without writing, re-warming the store on a miss (the CI lane)."
 msgstr ""
-"`rut install` 把 `ink` 从 jsDelivr 取回放进**全局依赖存储**（`$RUT_HOME/deps`——默认 `~/.rut`，每个被固定的依赖一个按内容寻址的目录，所有项目共享；依赖缓存绝不落进 `hello/`——唯一的本地写入是遍历的 `.rut/unpacked/` 草稿，`.zip` 依赖在那里一次性解包，是 gitignored 的机器输出），并把它的 sha256 固定进 `hello/rut.lock`——此后每次加载都对照这把锁校验，它随清单一起提交（同一清单 + 同一 `rut.lock` ⇒ 完全相同的解析世界）。`rut install --locked` 只复核这对文件、绝不写入，未命中时再预热存储（CI 车道）。"
+"`rut install` 把 `ink` 从 jsDelivr 取回放进**全局依赖存储**（`$RUT_HOME/deps`——默认 `~/.rut`，每个被固定的依赖一个按内容寻址的目录，所有项目共享；`hello/` 里什么都不落——项目保持 `rut.jsonc` + `rut.lock` + `src/`，运行直接挂载存储解包好的树），并把它的 sha256 固定进 `hello/rut.lock`——此后每次加载都对照这把锁校验，它随清单一起提交（同一清单 + 同一 `rut.lock` ⇒ 完全相同的解析世界）。`rut install --locked` 只复核这对文件、绝不写入，未命中时再预热存储（CI 车道）。"
 
 
-#: src/quick-start/installation.md:248
+#: src/quick-start/installation.md:247
 msgid ""
 "The hand-typed walkthrough is the lesson — the manifest is what you are learning. When it is routine, `rut new hello` is the one-step equivalent: it scaffolds the directory in three files (`rut.jsonc` plus the matching `rut.lock` plus the hello `src/mod.rut`), with the whole swappable std set as url deps and the std pins already in the lock ([the rut CLI](../reference/cli.md))."
 msgstr ""
 "亲手敲一遍才是本课的意义——你要学的就是清单。等它成了肌肉记忆，`rut new hello` 就是一步到位的等价物：它用三个文件搭好目录（`rut.jsonc` 加配套的 `rut.lock` 再加 hello 的 `src/mod.rut`），整个可换 std 集合作为 url 依赖，std 的固定值已经写进锁里（[rut CLI](../reference/cli.md)）。"
 
 
-#: src/quick-start/installation.md:255
+#: src/quick-start/installation.md:254
 msgid ""
 "If that printed, the CLI is ready. Continue to [your first rut program](first-program.md) — and keep the lane's role in mind: the CLI is for **temporary runs** (`run`, `fmt`, `dump`, `pack`), not a shipping path. Real projects depend on the crates and embed the engine; [the rut CLI](../reference/cli.md) is the binary's reference."
 msgstr ""
 "打印出了这一行，CLI 就绪了。继续阅读[你的第一个 rut 程序](first-program.md)——同时记住这条车道的角色：CLI 是为**临时运行**（`run`、`fmt`、`dump`、`pack`）准备的，不是交付路径。真正的项目依赖这些 crate 并嵌入引擎；[rut CLI](../reference/cli.md) 是这个二进制的参考。"
 
 
-#: src/quick-start/installation.md:262
+#: src/quick-start/installation.md:261
 msgid "Optional: the wasm playground"
 msgstr "可选：wasm Playground"
 
 
-#: src/quick-start/installation.md:264
+#: src/quick-start/installation.md:263
 msgid ""
 "The [playground](playground.md) runs the same engine compiled to WebAssembly. Building it needs [wasm-pack](https://rustwasm.github.io/wasm-pack/) and one extra target:"
 msgstr ""
 "[Playground](playground.md) 运行的是同一个引擎，只是编译成了 WebAssembly。构建它需要 [wasm-pack](https://rustwasm.github.io/wasm-pack/) 和一个额外的 target："
 
 
-#: src/quick-start/installation.md:271
+#: src/quick-start/installation.md:270
 msgid ""
 "# the JS face + declarations the editors import (pkg/index.js, pkg/index.d.ts)\n"
 msgstr ""
 "# 编辑器导入的 JS 面与声明（pkg/index.js、pkg/index.d.ts）\n"
 
 
-#: src/quick-start/installation.md:276
+#: src/quick-start/installation.md:275
 msgid ""
 "or, from `demo/`, the one-command lane that also copies the artifacts into place:"
 msgstr "或者，在 `demo/` 里走那条只需一条命令的路径，它还会把产物复制到位："
 
 
-#: src/quick-start/installation.md:283
+#: src/quick-start/installation.md:282
 msgid "Optional: build this book"
 msgstr "可选：构建本书"
 
 
-#: src/quick-start/installation.md:285
+#: src/quick-start/installation.md:284
 msgid "The documentation is an [mdbook](https://rust-lang.github.io/mdBook/) site:"
 msgstr "本文档是一个 [mdbook](https://rust-lang.github.io/mdBook/) 站点："
 
 
-#: src/quick-start/installation.md:290
+#: src/quick-start/installation.md:289
 msgid ""
 "# live-reload preview at http://localhost:3000\n"
 msgstr ""
 "# live-reload preview at http://localhost:3000\n"
 
 
-#: src/quick-start/installation.md:291
+#: src/quick-start/installation.md:290
 msgid ""
 "# static site in docs/book/\n"
 msgstr ""
@@ -998,9 +998,9 @@ msgstr ""
 
 #: src/quick-start/first-program.md:64
 msgid ""
-"The run works from ANY directory — nothing about it assumes a clone of the toolchain's repo. The url row names the package on jsDelivr; `rut install` fetched it once into the **global dep store** and pinned its sha256 in `hello/rut.lock` — the lock rides beside the manifest, committed, and every load verifies the fetched bytes against it (an unpinned url refuses at the door: `run `rut install\\``). The store is content-addressed under `$RUT_HOME` (`~/.rut` by default), one `deps/<name>@<sha256[:16]>/` dir per pinned dep, shared by every project — no dep cache lands beside the project. (One piece of local scratch does: mounting a `.zip` dep unpacks it once under `.rut/unpacked/<sha-of-bytes>/` — content-addressed, gitignored, machine-managed; [loading](../reference/loading.md).) Every later run is a pure store hit, and `rut install hello --locked` re-verifies the lock without writing, re-warming the store on a miss (the CI lane)."
+"The run works from ANY directory — nothing about it assumes a clone of the toolchain's repo. The url row names the package on jsDelivr; `rut install` fetched it once into the **global dep store** and pinned its sha256 in `hello/rut.lock` — the lock rides beside the manifest, committed, and every load verifies the fetched bytes against it (an unpinned url refuses at the door: `run `rut install\\``). The store is content-addressed under `$RUT_HOME` (`~/.rut` by default), one `deps/<name>@<sha256[:16]>/` dir per pinned dep, shared by every project — no dep cache lands beside the project: the run mounts the store's extracted trees directly, and `hello/` stays exactly the three files the scaffold wrote ([loading](../reference/loading.md)). Every later run is a pure store hit, and `rut install hello --locked` re-verifies the lock without writing, re-warming the store on a miss (the CI lane)."
 msgstr ""
-"这次运行可以在任何目录下进行——它完全不假设你克隆了工具链的仓库。url 行点名了 jsDelivr 上的包；`rut install` 把它取回一次、放进**全局依赖存储**，并把它的 sha256 固定进 `hello/rut.lock`——锁随清单一起提交，每次加载都对照它校验取回的字节（没被固定的 url 在门口就会拒绝，并点名 `rut install`）。存储按内容寻址，位于 `$RUT_HOME` 之下（默认 `~/.rut`），每个被固定的依赖一个 `deps/<name>@<sha256[:16]>/` 目录，所有项目共享——依赖缓存绝不落在项目旁边。（本地确有一块草稿：挂载 `.zip` 依赖时会在 `.rut/unpacked/<sha-of-bytes>/` 下一次性解包——按内容寻址、gitignored、机器管理；见[加载](../reference/loading.md)。）之后的每次运行都是纯存储命中；`rut install hello --locked` 只复核锁、绝不写入，未命中时再预热存储（CI 车道）。"
+"这次运行可以在任何目录下进行——它完全不假设你克隆了工具链的仓库。url 行点名了 jsDelivr 上的包；`rut install` 把它取回一次、放进**全局依赖存储**，并把它的 sha256 固定进 `hello/rut.lock`——锁随清单一起提交，每次加载都对照它校验取回的字节（没被固定的 url 在门口就会拒绝，并点名 `rut install`）。存储按内容寻址，位于 `$RUT_HOME` 之下（默认 `~/.rut`），每个被固定的依赖一个 `deps/<name>@<sha256[:16]>/` 目录，所有项目共享——依赖缓存绝不落在项目旁边：运行直接挂载存储解包好的树，`hello/` 保持脚手架写下的三个文件原样（见[加载](../reference/loading.md)）。之后的每次运行都是纯存储命中；`rut install hello --locked` 只复核锁、绝不写入，未命中时再预热存储（CI 车道）。"
 
 
 #: src/quick-start/first-program.md:79
@@ -19347,7 +19347,7 @@ msgid ""
 msgstr ""
 
 
-#: src/reference/embedding.md:339 src/reference/bundles.md:544
+#: src/reference/embedding.md:339 src/reference/bundles.md:545
 msgid "\"vendor/plugin.rutbundle\""
 msgstr "\"vendor/plugin.rutbundle\""
 
@@ -25690,7 +25690,7 @@ msgid ""
 msgstr "在任何代码执行之前，校验器会重新检查二进制里的每个函数："
 
 
-#: src/reference/module-binary.md:192 src/reference/bundles.md:455
+#: src/reference/module-binary.md:192 src/reference/bundles.md:456
 msgid "check"
 msgstr "检查"
 
@@ -26010,7 +26010,7 @@ msgid ""
 msgstr "宿主与声明的叶子组没有编译依赖，平凡地通过。被拒绝的世界不加 `--strip` 照样打包。"
 
 
-#: src/reference/symbol-stripping.md:99 src/reference/bundles.md:558
+#: src/reference/symbol-stripping.md:99 src/reference/bundles.md:559
 msgid "CLI"
 msgstr "CLI"
 
@@ -26325,9 +26325,9 @@ msgstr ""
 
 #: src/reference/loading.md:21
 msgid ""
-"A **directory is one module**: its `rut.jsonc` names the package (`name`) and its surface (`entry.type` — optional on a host pkg, where `src/mod.d.rut` is the default root and a spelled entry wins, resolved under `src/`), its body is the `src/mod.rut` module tree, and its `deps`/`dev-deps` ride the manifest ([Project structure and rut.jsonc](project-structure.md)). A `type = \"host\"` package has no body: its `.d.rut` surface is itself a module tree — `mod NAME;` edges mount `NAME/mod.d.rut` children beside the declaring file, under `src/` (or the single-file `NAME.rut`), recursively — and each row registers path-qualified (`myhost::net::connect`; a flat pkg's rows keep today's bare shape). `rut_native::load_dir` walks `deps` recursively — cycle guard, first-mount-wins, name-mismatch is an error — gates every url dep against the root's `rut.lock` (an unpinned url refuses, naming `rut install`) and verifies the fetched bytes against the lock's pin at the mount door, then runs the root-only `[dev-deps]` pass ([Dependency kinds](dependency-kinds.md)). A url dep's kind routes its lane: a `.zip` is the SOURCE transport — unzipped (CRC verified in-read, DEFLATE accepted, zip64 refused), unpacked ONCE content-addressed at `<project>/.rut/unpacked/<sha-of-bytes>/` (atomic, zip-slip-guarded), and mounted as an ordinary directory package — its rewritten dep rows resolve inside the unpacked tree; a dep dir there holding a `.rutbundle` file mounts through the wire lane, the dirname's fingerprint verified against the content. A `.rutbundle` loads closed from the zip — groups mounting under their content identities ([Module bundles](bundles.md)). Both kinds are closed: the walk never follows a packed artifact's own url rows. The yield is `rut_driver::Walk { pkgs, root }`."
+"A **directory is one module**: its `rut.jsonc` names the package (`name`) and its surface (`entry.type` — optional on a host pkg, where `src/mod.d.rut` is the default root and a spelled entry wins, resolved under `src/`), its body is the `src/mod.rut` module tree, and its `deps`/`dev-deps` ride the manifest ([Project structure and rut.jsonc](project-structure.md)). A `type = \"host\"` package has no body: its `.d.rut` surface is itself a module tree — `mod NAME;` edges mount `NAME/mod.d.rut` children beside the declaring file, under `src/` (or the single-file `NAME.rut`), recursively — and each row registers path-qualified (`myhost::net::connect`; a flat pkg's rows keep today's bare shape). `rut_native::load_dir` walks `deps` recursively — cycle guard, first-mount-wins, name-mismatch is an error — gates every url dep against the root's `rut.lock` (an unpinned url refuses, naming `rut install`) and verifies the fetched bytes against the lock's pin at the mount door, then runs the root-only `[dev-deps]` pass ([Dependency kinds](dependency-kinds.md)). A url dep's kind routes its lane: a `.zip` is the SOURCE transport — unzipped (CRC verified in-read, DEFLATE accepted, zip64 refused), mounted as the store's extracted tree (`<deps>/<name>@<sha16>/unpack/` — the address `rut install` published; a missing tree unpacks once into a run-scoped temp dir instead, never beside the project) as an ordinary directory package — its rewritten dep rows resolve inside the tree; a dep dir there holding a `.rutbundle` file mounts through the wire lane, the dirname's fingerprint verified against the content. A `.rutbundle` loads closed from the zip — groups mounting under their content identities ([Module bundles](bundles.md)). Both kinds are closed: the walk never follows a packed artifact's own url rows. The yield is `rut_driver::Walk { pkgs, root }`."
 msgstr ""
-"**一个目录就是一个模块**：它的 `rut.jsonc` 命名包（`name`）与表面（`entry.type`——在宿主包上可省，`src/mod.d.rut` 是默认根，写明的入口优先，在 `src/` 之下解析），正文是 `src/mod.rut` 模块树，`deps`/`dev-deps` 随清单而行（[Project structure and rut.jsonc](project-structure.md)）。`type = \"host\"` 包没有正文：它的 `.d.rut` 表面本身就是模块树——`mod NAME;` 边在声明文件旁、`src/` 之下挂载 `NAME/mod.d.rut` 子模块（或单文件 `NAME.rut`），递归进行——每行按路径限定注册（`myhost::net::connect`；扁平包的行保持如今的裸形态）。`rut_native::load_dir` 递归遍历 `deps`——防环、先挂载者胜、名字不符即错——把每条 url dep 对照根的 `rut.lock` 把关（未固定的 url 拒绝，点名 `rut install`），并在挂载门对照锁的固定值校验取回的字节，然后运行只限根的 `[dev-deps]` 遍（[Dependency kinds](dependency-kinds.md)）。url 依赖的种类决定它的车道：`.zip` 是源码传输——解压（读取中校验 CRC，接受 DEFLATE，拒绝 zip64），一次性按内容寻址解包到 `<project>/.rut/unpacked/<sha-of-bytes>/`（原子、防 zip-slip），然后作为普通目录包挂载——它被改写过的 dep 行在解包出的树内解析；那里某个 dep 目录若携带 `.rutbundle` 文件，则经线车道挂载，目录名的指纹对照内容校验。`.rutbundle` 从 zip 封闭加载——组以内容标识挂载（[Module bundles](bundles.md)）。两种都封闭：遍历从不跟随打包工件自己的 url 行。产出是 `rut_driver::Walk { pkgs, root }`。"
+"**一个目录就是一个模块**：它的 `rut.jsonc` 命名包（`name`）与表面（`entry.type`——在宿主包上可省，`src/mod.d.rut` 是默认根，写明的入口优先，在 `src/` 之下解析），正文是 `src/mod.rut` 模块树，`deps`/`dev-deps` 随清单而行（[Project structure and rut.jsonc](project-structure.md)）。`type = \"host\"` 包没有正文：它的 `.d.rut` 表面本身就是模块树——`mod NAME;` 边在声明文件旁、`src/` 之下挂载 `NAME/mod.d.rut` 子模块（或单文件 `NAME.rut`），递归进行——每行按路径限定注册（`myhost::net::connect`；扁平包的行保持如今的裸形态）。`rut_native::load_dir` 递归遍历 `deps`——防环、先挂载者胜、名字不符即错——把每条 url dep 对照根的 `rut.lock` 把关（未固定的 url 拒绝，点名 `rut install`），并在挂载门对照锁的固定值校验取回的字节，然后运行只限根的 `[dev-deps]` 遍（[Dependency kinds](dependency-kinds.md)）。url 依赖的种类决定它的车道：`.zip` 是源码传输——解压（读取中校验 CRC，接受 DEFLATE，拒绝 zip64），挂载存储解包好的树（`<deps>/<name>@<sha16>/unpack/`——`rut install` 发布的地址；树缺失时改为一次性解包进运行级的临时目录，绝不落在项目旁），作为普通目录包挂载——它被改写过的 dep 行在树内解析；那里某个 dep 目录若携带 `.rutbundle` 文件，则经线车道挂载，目录名的指纹对照内容校验。`.rutbundle` 从 zip 封闭加载——组以内容标识挂载（[Module bundles](bundles.md)）。两种都封闭：遍历从不跟随打包工件自己的 url 行。产出是 `rut_driver::Walk { pkgs, root }`。"
 
 
 #: src/reference/loading.md:22
@@ -27218,340 +27218,340 @@ msgstr ""
 
 #: src/reference/bundles.md:253
 msgid ""
-"The pin lives beside the manifest, in the walk root's `rut.lock` (`rut install` writes it — [the rut CLI](cli.md)): the manifest row names the url, the lock pins its bytes. The url's kind routes the mount: a `.zip` url dep is unpacked once — content-addressed at `<project>/.rut/unpacked/<sha-of-bytes>/` — and mounted as an ordinary directory package ([Loading](loading.md)); a `.rutbundle` url dep runs the bundle mount below. Both are **closed**: the walk never follows a dep's own url rows, and the lock keeps direct rows only."
+"The pin lives beside the manifest, in the walk root's `rut.lock` (`rut install` writes it — [the rut CLI](cli.md)): the manifest row names the url, the lock pins its bytes. The url's kind routes the mount: a `.zip` url dep mounts the store's extracted tree — `<deps>/<name>@<sha16>/unpack/`, the exact address `rut install` published — as an ordinary directory package ([Loading](loading.md)); a `.rutbundle` url dep runs the bundle mount below. Both are **closed**: the walk never follows a dep's own url rows, and the lock keeps direct rows only."
 msgstr ""
-"固定值不在清单里，而在遍历根的 `rut.lock` 中（`rut install` 负责写入——[rut CLI](cli.md)）：清单行点名 url，锁固定它的字节。url 的种类决定挂载车道：`.zip` url 依赖被解包一次——按内容寻址于 `<project>/.rut/unpacked/<sha-of-bytes>/`——然后作为普通目录包挂载（[加载与嵌入循环](loading.md)）；`.rutbundle` url 依赖走下文的捆绑包挂载。两者都**封闭**：遍历从不跟随依赖自己的 url 行，锁只保留直接行。"
+"固定值不在清单里，而在遍历根的 `rut.lock` 中（`rut install` 负责写入——[rut CLI](cli.md)）：清单行点名 url，锁固定它的字节。url 的种类决定挂载车道：`.zip` url 依赖挂载存储解包好的树——`<deps>/<name>@<sha16>/unpack/`，即 `rut install` 发布的那个地址——作为普通目录包挂载（[加载与嵌入循环](loading.md)）；`.rutbundle` url 依赖走下文的捆绑包挂载。两者都**封闭**：遍历从不跟随依赖自己的 url 行，锁只保留直接行。"
 
 
-#: src/reference/bundles.md:262
+#: src/reference/bundles.md:263
 msgid ""
 "The compiled lane, in detail: the embedder's remote produces the bytes (`DepRemote` — the standard `rut_native::HttpRemote` is cache-first), then the loader runs the same container/layout/name checks and — before all of them — the **pin law**: the url must have a lock row (an unpinned url refuses, naming `rut install`), and the bytes must hash to the lock row's `sha256`, on every load, or the load refuses naming the dep, the url, and both hashes. The url dep mounts as a **leaf**: its bundle brings the whole closure (every declared dep satisfied by an in-archive group — the closure law is unchanged, and a url row inside a packed bundle is inert metadata; loading a bundle never fetches)."
 msgstr ""
 "编译车道，详述：嵌入方的远程产出字节（`DepRemote`——标准的 `rut_native::HttpRemote` 缓存优先），然后加载器跑同样的容器/布局/名字检查，而在这所有检查之前是**固定值法则**：url 必须有锁行（未被固定的 url 直接拒绝，并点名 `rut install`），字节必须与锁行的 `sha256` 哈希一致——每次加载都是如此——否则加载拒绝，并点名依赖、url 和两个哈希。url 依赖作为**叶子**挂载：它的捆绑包带来整个闭包（每个声明的依赖都由档内组满足——闭包法则不变，已打包捆绑包内的 url 行只是惰性元数据；加载捆绑包从不取回）。"
 
 
-#: src/reference/bundles.md:274
+#: src/reference/bundles.md:275
 msgid ""
 "Because the manifest rides byte-for-byte, url rows carry into a consumer's own `rut pack` output, satisfied by the groups the archive carries: the archive's groups re-encode from the consumer run's units (one `.rutc` path) or copy their file sets under the new identity prefixes, and the same manifest + lock still pack byte-identically. The pack refuses, loudly and named, the cases that would emit a bundle the loader must reject: an archive source group still declaring `dev-deps` directories (vendor the dep), a compiled group the consumer's closure never uses (it cannot ride unpackaged), and a declared dep that did not ride."
 msgstr ""
 "因为清单逐字节搭乘，url 行会带进消费者自己的 `rut pack` 输出，由档案携带的组满足：档案的组从消费者运行的单元重新编码（同一条`.rutc` 路径），或把文件集复制到新的标识前缀下，同一清单 +锁仍打包出逐字节相同的结果。打包会响亮、点名地拒绝会让加载器必须拒绝的产出：仍在声明 `dev-deps` 目录的档案源码组（改为 vendor该依赖）、消费者闭包从不使用的编译组（未打包无法搭乘）、以及没有搭乘的声明依赖。"
 
 
-#: src/reference/bundles.md:286
+#: src/reference/bundles.md:287
 msgid "The wire version"
 msgstr "线上版本"
 
 
-#: src/reference/bundles.md:288
+#: src/reference/bundles.md:289
 msgid ""
 "`format_version` is 13 — the one bundle wire, both root kinds; the manifest's `type` routes lib-compiled vs host-decl. Anything else refuses **before reading anything else** — refuse, never guess, and there is no old lane to fall back to: `this toolchain reads bundle format_version 13 only (found {v}) — re-pack the directory`. Stale bytes never load back — the pack is deterministic, so a re-pack reproduces today's bundle byte-for-byte."
 msgstr ""
 "`format_version` 是 13 —— 唯一的捆绑包 wire，两种根种类；清单的 `type` 路由 lib-编译 与 宿主-声明。其他任何值都在**读取任何东西之前**拒绝 —— 拒绝，绝不猜测，也没有旧通道可以回退：`this toolchain reads bundle format_version 13 only (found {v}) — re-pack the directory`。陈旧字节绝不加载回来——打包是确定性的，重新打包会逐字节复现今天的捆绑包。"
 
 
-#: src/reference/bundles.md:296
+#: src/reference/bundles.md:297
 msgid ""
 "Every file in the two layouts is part of the package: a bundle that dropped a declared child module would load partial — semantically wrong, so the closure law is checked at the mount. Compilation is the contract, no exceptions — the generic bodies ride INSIDE the binary as templates (instantiation independence, above), so consumer-spelled shapes stay servable and a published bundle never carries source. This version-unstability is exactly why source sharing over the wire moved to the source zip ([below](#the-source-zip--the-source-transport)): a `.rutbundle`'s IR is not stable across rut toolchains — a fresh toolchain compiles from source, never from old IR."
 msgstr ""
 "两种布局里的每个文件都是包的一部分：丢了声明子模块的捆绑包会加载出不完整——语义错误——因此闭包法则在挂载时检查。编译是契约，绝无例外——泛型代码体作为模板承载在二进制之内（上面的实例化独立），消费者拼形因此始终有得服务，而已发布的捆绑包绝不携带源码。这种版本不稳定性正是线上源码共享转向源码压缩包的原因（[见下](#the-source-zip--the-source-transport)）：`.rutbundle` 的 IR 在 rut 工具链之间并不稳定——新的工具链从源码编译，绝不从旧 IR 编译。"
 
 
-#: src/reference/bundles.md:308
+#: src/reference/bundles.md:309
 msgid ""
 "**The groups mirror the manifest.** The archive root is the root's own files; every dep rides at `deps/<name>@<fp16>/` — the dirname IS the content identity, fingerprinted over the group's own rode source set, and the reader recomputes the fingerprint and refuses a mismatch (a doctored or stale dirname). Same source ⇒ same dirname, so a repack of an unchanged group lands at the same directory and the two identities of one name coexist side by side (the packer exact-dedups one identity's file set — two groups stage to one identity only when their bytes are equal)."
 msgstr ""
 "**组映射清单**。档案根是根自己的文件；每个依赖 riding 在`deps/<name>@<fp16>/`——目录名就是内容标识，以组自己的承载源码集取指纹，读取器会重算指纹并在不匹配时拒绝（被篡改或过期的目录名）。同一源码⇒ 同一目录名，因此未改动组的重新打包落在同一目录，同一名字的两个标识并肩共存（打包器对一个标识精确去重——两组只在字节相等时才并入同一标识）。"
 
 
-#: src/reference/bundles.md:318
+#: src/reference/bundles.md:319
 msgid ""
 "**The ledger namespaces per archive.** Each archive's scope rows shift into a fresh numeric range of the consuming run's world (boot passes through), and its binaries rebase with that same map **before** mounting — so two independently packed bundles can share one world without their pack-time numberings ever arguing. First-mount-wins still decides which body a shared group name keeps, and a group's ledger row must still be the scope its own binary carries (refuse, never guess — that check is per archive). The CDN lane below is the reason this exists: per-package bundles are packed independently, each numbering its own closure."
 msgstr ""
 
 
-#: src/reference/bundles.md:329
+#: src/reference/bundles.md:330
 msgid "The source zip — the source transport"
 msgstr "源码压缩包——源码传输"
 
 
-#: src/reference/bundles.md:331
+#: src/reference/bundles.md:332
 msgid ""
 "The `.zip` source archive is the directory grammar packed for travel — the SOURCE counterpart of the compiled wire above, and the book's recommendation for publication. A source zip is a package directory with every dep embedded:"
 msgstr "`.zip` 源码档案是为旅行打包的目录语法——上文编译线的源码对应物，也是本书推荐的发布形态。源码压缩包是一个把每个依赖都内嵌的包目录："
 
 
-#: src/reference/bundles.md:348
+#: src/reference/bundles.md:349
 msgid ""
 "**The published manifest.** Every `[deps]` row's descriptor becomes `{ \"path\": \"deps/<name>@<fp16>\" }` — the `url` fields and the external `path` values drop (everything embeds), the row keys stay, and every comment outside the replaced descriptor blocks rides. A source zip's manifest does not claim the compiled wire: the directory grammar retired the `format`/`format_version` pair (a manifest spelling it refuses at the strict parse before the pack), and the rewrite's line-wise strip still removes any stray pair. The surgery is textual and comment-aware, and the result is re-parsed and gated against the original — any drift refuses at pack (`normalize the manifest's dep rows and re-pack`)."
 msgstr ""
 "**发布的清单。**每条 `[deps]` 行的描述符变成 `{ \\\"path\\\": \\\"deps/<name>@<fp16>\\\" }`——`url` 字段与外部 `path` 值丢弃（一切皆内嵌），行键保留，被替换描述符块之外的每条注释都随行。源码压缩包的清单不认领编译线：目录文法已淘汰 `format`/`format_version` 这对键（拼写它的清单会在打包前的严格解析处拒绝），改写动作的逐行剥离仍会移除任何残余的键对。手术是文本化的、注释感知的，结果会被重新解析并对照原件把关——任何漂移都在打包时拒绝（`normalize the manifest's dep rows and re-pack`）。"
 
 
-#: src/reference/bundles.md:360
+#: src/reference/bundles.md:361
 msgid ""
 "**The identity is the TREE flavor.** A dep dirname's `name@<fp16>` is the first 16 lowercase hex of sha256 over that package's own **rewritten** manifest and its `src/**.rut` sources (path-framed, path-sorted) — the tree flavor. The wire flavor above fingerprints the four canonical ride files instead; same width, same `name@<16 hex>` shape, and the two NEVER cross-compare. Same source ⇒ same dirname, and two identities of one name coexist side by side — different versions of one package travel in one closure."
 msgstr ""
 "**标识是树风味（tree flavor）。**dep 目录名的 `name@<fp16>` 是对该包自己**被改写**的清单与其 `src/**.rut` 源码（按路径分帧、按路径排序）取 sha256 的前 16 位小写十六进制——树风味。上文的线风味（wire flavor）改为对四个规范搭乘文件取指纹；宽度相同、`name@<16 hex>` 形状相同，两种绝不互比。同一源码 ⇒ 同一目录名，同一名字的两个标识并肩共存——一个包的不同版本同行于一个闭包。"
 
 
-#: src/reference/bundles.md:369
+#: src/reference/bundles.md:370
 msgid ""
 "**The grammar is enforced at both doors.** Exactly one `rut.jsonc`, at a package root (the archive root or `deps/<identity>/`); rut code ONLY under a `src/` shell — a `.rut` entry outside one refuses (``rut code rides only under a `src/` shell``); a `.rutbundle` only as a dep's IR file; no absolute paths, no `..`, no dot components (zip-slip-guarded). `rut pack --mode source` runs the same gates on the tree it packs: a `.rut` outside `src/` refuses, and an undeclared `.rut` under `src/` refuses (`nothing declares this module`)."
 msgstr ""
 "**语法在两道门都被强制。**恰有一个 `rut.jsonc`，位于包根（档案根或 `deps/<identity>/`）；rut 代码只在 `src/` 壳之下——壳外的 `.rut` 条目直接拒绝（``rut code rides only under a `src/` shell``）；`.rutbundle` 只能作为 dep 的 IR 文件；无绝对路径、无 `..`、无点组件（防 zip-slip）。`rut pack --mode source` 对它所打包的树跑同样的门：`src/` 之外的 `.rut` 拒绝，`src/` 之下未被声明的 `.rut` 拒绝（``nothing declares this module``）。"
 
 
-#: src/reference/bundles.md:378
+#: src/reference/bundles.md:379
 msgid ""
 "**Deterministic.** STORE entries, fixed order, the DOS epoch — the bundle writer's knobs, shared: same input ⇒ byte-identical zip, so published zips are cacheable and pin-stable (`rut.lock` pins their sha256 exactly like a bundle's)."
 msgstr ""
 "**确定性。**STORE 条目、固定顺序、DOS 纪元——捆绑包写入器的旋钮，共享：同输入 ⇒ 同字节，因此发布的压缩包可缓存、固定值稳定（`rut.lock` 像固定捆绑包那样固定它们的 sha256）。"
 
 
-#: src/reference/bundles.md:383
+#: src/reference/bundles.md:384
 msgid ""
 "**Why the book recommends the zip.** A source zip compiles with the CONSUMER's toolchain, so it never goes stale the way compiled IR does: a `.rutbundle`'s IR is version-unstable across rut toolchains (readable only by the toolchain generation that packed it — [the wire version](#the-wire-version) — a zip keeps a package publishable across engine releases without re-publishing). The zip is also the whole-closure lane: a consumer's `rut install` fetches it once, and every dep rides inside."
 msgstr ""
 "**本书为何推荐压缩包。**源码压缩包用消费方的（CONSUMER's）工具链编译，所以绝不会像编译后 IR 那样过时：`.rutbundle` 的 IR 在 rut 工具链之间版本不稳定（只对打包它的那一代工具链可读——[线版本](#the-wire-version)——压缩包让一个包跨越引擎版本保持可发布而无需重新发布）。压缩包也是整闭包车道：消费者的 `rut install` 拉取它一次，每个依赖都内嵌其中。"
 
 
-#: src/reference/bundles.md:392
+#: src/reference/bundles.md:393
 msgid "The `bundle` module"
 msgstr "`bundle` 模块"
 
 
-#: src/reference/bundles.md:394
+#: src/reference/bundles.md:395
 msgid ""
 "The container codec, the `rut.jsonc` grammar, the source file-set collector, and the reader (both root kinds) live in the driver's `rut_driver::bundle` module — **pure and in-memory**: the walk adds every filesystem read. That half lives in `rut-native`, whose one-method `Source` trait is the one filesystem door: `rut_native::FsSource::at(dir)` is the real filesystem (the CLI, native hosts); an in-memory path→bytes map serves tests and wasm hosts. The packer needs the walk and lives beside it (`rut_native::pack_dir`) — it returns the bundle bytes; writing the output file stays with the caller. Loading a bundle into a run goes through `rut_native::load_bundle_session(path)` (the file read) or `rut_driver::Bundle::parse(&bytes)` (the decode-once handle) over the parsed `rut_driver::bundle::Bundle` and its `rut_driver::bundle::Layout` — the compiled root and its ledger + groups, or the decl root and its surface."
 msgstr ""
 
 
-#: src/reference/bundles.md:410
+#: src/reference/bundles.md:411
 msgid "Deterministic packing"
 msgstr "确定性打包"
 
 
-#: src/reference/bundles.md:412
+#: src/reference/bundles.md:413
 msgid "Same directory + same toolchain ⇒ byte-identical `.rutbundle`:"
 msgstr "相同目录 + 相同工具链 ⇒ 逐字节相同的 `.rutbundle`："
 
 
-#: src/reference/bundles.md:414
+#: src/reference/bundles.md:415
 msgid ""
 "fixed entry order — `rut.jsonc` first, then the scope ledger, the root's binary, then the root's generated declaration entry (plus its module rows when it has mod children), then dep groups in identity order (one group per distinct identity);"
 msgstr ""
 "固定条目顺序 —— `rut.jsonc` 最先，然后作用域账本、根的二进制、根的生成声明条目（有 mod 子模块时加上其模块行），再按标识顺序搭载各依赖组（每个不同标识一个组）；"
 
 
-#: src/reference/bundles.md:418
+#: src/reference/bundles.md:419
 msgid "fixed (zeroed) timestamps;"
 msgstr "固定（清零）的时间戳；"
 
 
-#: src/reference/bundles.md:419
+#: src/reference/bundles.md:420
 msgid "STORE (no compression) — determinism over size."
 msgstr "STORE（不压缩）——确定性优先于体积。"
 
 
-#: src/reference/bundles.md:421
+#: src/reference/bundles.md:422
 msgid ""
 "This is the module binary's determinism law extended one level up ([Module binary and verification](module-binary.md)): bundles are content-cacheable, and two builds of the same module diff to nothing."
 msgstr ""
 "这是模块二进制的确定性法则向上一层的延伸（[模块二进制与校验](module-binary.md)）：捆绑包可按内容缓存，同一模块的两次构建 diff 为零。"
 
 
-#: src/reference/bundles.md:425
+#: src/reference/bundles.md:426
 msgid "Stripping — the private sidecar"
 msgstr "剥离——私有的旁车"
 
 
-#: src/reference/bundles.md:427
+#: src/reference/bundles.md:428
 msgid ""
 "`rut pack <dir> --strip` emits the bundle as above **plus a private symbol table** at the sibling path `<out-without-ext>.rutsym`. Every renameable name in the `.rutc` binaries mangles to `%N` and every function's span/position tables leave — the sidecar carries exactly what left, so supplying it at load restores real names and line/col for stack-trace symbolication. The sidecar is never an entry inside the archive. It needs a fully-compiled closure (a source group that could bind a compiled group's surface is a pointed refusal); without `--strip`, packing is unchanged. The whole law lives in [Symbol stripping and `.rutsym` sidecars](symbol-stripping.md). `run` accepts `--symbols <file.rutsym>` against a compiled bundle ([The rut CLI](cli.md))."
 msgstr ""
 "`rut pack <dir> --strip` 在上述内容之外，**外加一份私有符号表**，写在旁边的路径 `<out-without-ext>.rutsym`。`.rutc` 二进制里每个可改名的名字都改名为 `%N`，每个函数的区间/位置表都离开——旁车携带的正是离开的东西，因此在加载时提供它就能为栈追踪符号化还原真实名字与行/列。旁车绝不是归档里的一个条目。它需要一个全编译的闭包（可能绑定某编译组表面的源码组会被明确拒绝）；不加 `--strip` 时，打包一切照旧。完整的法则见[符号剥离与 `.rutsym` 旁车](symbol-stripping.md)。`run` 对编译的捆绑包接受 `--symbols <file.rutsym>`（[rut CLI](cli.md)）。"
 
 
-#: src/reference/bundles.md:440
+#: src/reference/bundles.md:441
 msgid ""
 "**The declaration entry is the strip policy's other half (v1): a stripped pack OMITS every compiled group's generated entry.** The entry's plaintext would state the real names the binary just mangled — shipping it would undo the strip. The editor degrades to the ladder's floor (the object surface's own names-less rows); the sidecar restores everything privately. Host groups are unchanged: their entry IS their source, there is no binary to mangle, and a host root refuses `--strip` outright."
 msgstr ""
 "**声明条目是剥离策略的另一半（v1）：剥离的打包会省略每个编译组的生成条目。** 条目的明文会陈述二进制刚刚混淆的真实名字 —— 携带它等于撤销剥离。编辑器降级到阶梯的底层（对象表面自己的无名字行）；旁车私下恢复一切。宿主组不变：它们的条目就是它们的源码，没有被混淆的二进制，宿主根直接拒绝 `--strip`。"
 
 
-#: src/reference/bundles.md:449
+#: src/reference/bundles.md:450
 msgid "Checks on load"
 msgstr "加载时的检查"
 
 
-#: src/reference/bundles.md:451
+#: src/reference/bundles.md:452
 msgid ""
 "Every check runs at load time, before compilation and linking — a bad bundle never executes. The order is the law: container, then manifest and version, then every group's decode, then the mount."
 msgstr "每项检查都在加载时、编译与链接之前运行——坏捆绑包绝不执行。顺序即法则：容器，然后清单与版本，然后每个组的解码，最后挂载。"
 
 
-#: src/reference/bundles.md:455
+#: src/reference/bundles.md:456
 msgid "rule on mismatch"
 msgstr "不匹配时的规则"
 
 
-#: src/reference/bundles.md:457
+#: src/reference/bundles.md:458
 msgid "zip entry CRC-32"
 msgstr "zip 条目 CRC-32"
 
 
-#: src/reference/bundles.md:457
+#: src/reference/bundles.md:458
 msgid "refuse — corrupt bundle (names the entry)"
 msgstr "拒绝——损坏的捆绑包（点名该条目）"
 
 
-#: src/reference/bundles.md:458
+#: src/reference/bundles.md:459
 msgid "`rut.jsonc` present, `\"format\": \"rutbundle\"`"
 msgstr ""
 
 
-#: src/reference/bundles.md:458
+#: src/reference/bundles.md:459
 msgid "refuse — not a rut bundle"
 msgstr "拒绝——不是 rut 捆绑包"
 
 
-#: src/reference/bundles.md:459
+#: src/reference/bundles.md:460
 msgid "`format_version` exactly 13"
 msgstr "`format_version` 恰为 13"
 
 
-#: src/reference/bundles.md:459
+#: src/reference/bundles.md:460
 msgid ""
 "anything else refuses — `this toolchain reads bundle format_version 13 only (found {v}) — re-pack the directory`"
 msgstr ""
 
 
-#: src/reference/bundles.md:460
+#: src/reference/bundles.md:461
 msgid "a host root carrying a root `mod.rutc`"
 msgstr "宿主根带着根 `mod.rutc`"
 
 
-#: src/reference/bundles.md:460
+#: src/reference/bundles.md:461
 msgid "refuse — a host bundle's root is its surface, not a compiled unit"
 msgstr "拒绝——宿主捆绑包的根是它的表面，不是编译单元"
 
 
-#: src/reference/bundles.md:461
+#: src/reference/bundles.md:462
 msgid "a host root carrying a `rut.scopes` ledger or any group entry"
 msgstr "宿主根带着 `rut.scopes` 台账或任何组条目"
 
 
-#: src/reference/bundles.md:461
+#: src/reference/bundles.md:462
 msgid "refuse — a host bundle is its surface, single-package"
 msgstr "拒绝——宿主捆绑包即其面，单包"
 
 
-#: src/reference/bundles.md:462
+#: src/reference/bundles.md:463
 msgid ""
 "a compiled root without its `rut.scopes` ledger, or a ledger row that is not a content identity (`name@<16 hex>`)"
 msgstr "编译根没有 `rut.scopes` 台账，或台账行不是内容标识（`name@<16 hex>`）"
 
 
-#: src/reference/bundles.md:462
+#: src/reference/bundles.md:463
 msgid "refuse — a corrupt compiled bundle"
 msgstr "拒绝——损坏的编译捆绑包"
 
 
-#: src/reference/bundles.md:463
+#: src/reference/bundles.md:464
 msgid "an entry under a top-level prefix other than `deps/`"
 msgstr "顶层前缀不是 `deps/` 的条目"
 
 
-#: src/reference/bundles.md:463
+#: src/reference/bundles.md:464
 msgid ""
 "refuse — the archive root carries only the root's own files; dep groups ride at `deps/<name>@<fp16>/`"
 msgstr "拒绝——档案根只携带根自己的文件；dep 组 riding 在 `deps/<name>@<fp16>/`"
 
 
-#: src/reference/bundles.md:464
+#: src/reference/bundles.md:465
 msgid "a `deps/` group directory whose name is not a content identity"
 msgstr "名字不是内容标识的 `deps/` 组目录"
 
 
-#: src/reference/bundles.md:464
+#: src/reference/bundles.md:465
 msgid "refuse — expected `<name>@<16 hex>`"
 msgstr "拒绝——期望 `<name>@<16 hex>`"
 
 
-#: src/reference/bundles.md:465
+#: src/reference/bundles.md:466
 msgid "a group's manifest `name` disagreeing with its dirname's name half"
 msgstr "组的清单 `name` 与其目录名的名字半不符"
 
 
-#: src/reference/bundles.md:465
+#: src/reference/bundles.md:466
 msgid "refuse — names both"
 msgstr "拒绝——两者都点名"
 
 
-#: src/reference/bundles.md:466
+#: src/reference/bundles.md:467
 msgid ""
 "a group dirname's fingerprint disagreeing with the hash of its rode source set"
 msgstr "组目录名的指纹与其承载源码集的哈希不符"
 
 
-#: src/reference/bundles.md:466
+#: src/reference/bundles.md:467
 msgid "refuse — the dirname and the content disagree"
 msgstr "拒绝——目录名与内容不符"
 
 
-#: src/reference/bundles.md:467
+#: src/reference/bundles.md:468
 msgid "`mod.rutc` decode (root and groups): version, tables, surface ids"
 msgstr "`mod.rutc` 解码（根与组）：版本、表、表面 id"
 
 
-#: src/reference/bundles.md:467
+#: src/reference/bundles.md:468
 msgid "refuse — names the entry and the cause"
 msgstr "拒绝——点出条目与原因"
 
 
-#: src/reference/bundles.md:468
+#: src/reference/bundles.md:469
 msgid "a compiled group's ledger row agrees with its binary's own scope"
 msgstr "编译组的台账行与其二进制自身的作用域一致"
 
 
-#: src/reference/bundles.md:468
+#: src/reference/bundles.md:469
 msgid "refuse — corrupt or doctored"
 msgstr "拒绝——损坏或被篡改"
 
 
-#: src/reference/bundles.md:469
+#: src/reference/bundles.md:470
 msgid "a riding source entry that fails to read or decode (UTF-8)"
 msgstr "承载源码条目读取或解码（UTF-8）失败"
 
 
-#: src/reference/bundles.md:469
+#: src/reference/bundles.md:470
 msgid "refuse — names the entry; a bad archive never reaches the run"
 msgstr "拒绝 —— 命名该条目；坏包永不抵达运行"
 
 
-#: src/reference/bundles.md:470
+#: src/reference/bundles.md:471
 msgid "every declared dep satisfied by a group (compiled roots)"
 msgstr "每个已声明依赖都被一个组满足（编译根）"
 
 
-#: src/reference/bundles.md:470
+#: src/reference/bundles.md:471
 msgid "refuse — names the missing group"
 msgstr "拒绝——点出缺失的组"
 
 
-#: src/reference/bundles.md:472
+#: src/reference/bundles.md:473
 msgid "The std tree on a CDN — the per-package delivery"
 msgstr "CDN 上的 std 树——按包交付"
 
 
-#: src/reference/bundles.md:474
+#: src/reference/bundles.md:475
 msgid ""
 "The std tree (`rut/`) ships as **committed** per-package source zips at `dist/std/<pkg>.zip` — one zip per std package a `deps` row can spell. Only the current cut is committed (the `dist/std/` working mirror plus the latest `dist/std-vNN/` envelope); old tags serve their own immutable commits, and this toolchain refuses their bytes. jsDelivr's gh lane serves repo files at a ref, so the artifacts ARE the delivery and the publish act is a git tag (the tag push and jsDelivr's propagation are the maintainer's manual step):"
 msgstr ""
 "标准树（`rut/`）以**提交入库**的每包源码压缩包交付于 `dist/std/<pkg>.zip`——`deps` 行可拼写的每个 std 包一个压缩包。只有当前刀（cut）入库（`dist/std/` 工作镜像加最新的 `dist/std-vNN/` 信封）；旧标签只服务于它们自己不可变的提交，而本工具链拒绝它们的字节。jsDelivr 的 gh 车道按 ref 服务仓库文件，因此工件就是交付本身，发布动作是一个 git tag（tag 推送与 jsDelivr 的传播是维护者的手工步骤）："
 
 
-#: src/reference/bundles.md:483
+#: src/reference/bundles.md:484
 msgid ""
 "```jsonc\n"
 "{\n"
@@ -27565,85 +27565,85 @@ msgid ""
 msgstr ""
 
 
-#: src/reference/bundles.md:493
+#: src/reference/bundles.md:494
 msgid ""
 "`<tag>` is a placeholder — real urls live in the worked manifests, and the real pins live in each project's committed `rut.lock` (the in-repo examples' locks are the reference; anti-rot: docs never rot pins). The laws:"
 msgstr ""
 "`<tag>` 是占位符——真实 url 在成形的清单里，真实固定值在每个项目已提交的 `rut.lock` 里（仓库内示例的锁就是参照；防腐：文档永不腐烂固定值）。法则如下："
 
 
-#: src/reference/bundles.md:498
+#: src/reference/bundles.md:499
 msgid ""
 "**Committed artifacts, immutable tags.** The zips are packed by `rut pack --mode source`'s lane (deterministic — same input ⇒ byte-identical, so freshness is a pure equality gate). Tags advance (`std-vNN`) and are never re-pointed — jsDelivr caches aggressively."
 msgstr ""
 "**入库工件，不可变 tag。**压缩包由 `rut pack --mode source` 的车道打包（确定性——同输入 ⇒ 同字节，因此新鲜度是纯相等门）。tag 只前进（`std-vNN`），绝不重指——jsDelivr 缓存很激进。"
 
 
-#: src/reference/bundles.md:502
+#: src/reference/bundles.md:503
 msgid ""
 "**What the source zip delivers — everything, current.** A zip compiles with the CONSUMER's toolchain, so the std set moves to zips as the primary lane: a pinned zip never goes stale the way compiled IR does, generics monomorphize at the consumer's link from the source itself (no templates needed), and every dep rides embedded — `json`'s zip carries its `strbuild` + `pouch` + `nmapset` trees inside, so its wrappers' `use` heads resolve wherever it travels (the ordinary closure law; zips are closed — [`install`](cli.md) never walks into one, the lock keeps direct rows only)."
 msgstr ""
 "**源码压缩包交付什么——一切，且不过时。**压缩包用消费方的（CONSUMER's）工具链编译，所以 std 集合把压缩包作为主车道：被固定的压缩包绝不会像编译后 IR 那样过时，泛型在消费方的链接处直接从源码单态化（无需模板），每个依赖都内嵌其中——json 的压缩包把 `strbuild` + `pouch` + `nmapset` 的树带在体内，它的包装器无论走到哪里都可解析（普通闭包法则；压缩包是封闭的——[`install`](cli.md) 绝不走进去，锁只保留直接行）。"
 
 
-#: src/reference/bundles.md:512
+#: src/reference/bundles.md:513
 msgid ""
 "**The compiled lane keeps serving.** The `.rutbundle` files stay for consumers of the compiled wire: **host surfaces** (decl bundles), **concrete-class libs** (`http`, `ink`, `strbuild` — methods cross on the surface's inherent rows), **and the generic owners** (`pouch`, `flow`, `nmapset`, `json`, `futures` — `Vec<Todo>`, `Flow<i32>`, `decodeJson<T>` compile at the link from the templates). Instantiation is owner-anchored: a compiled owner carries the generic instantiations its own pack closure spelled in its ledger — and its generic BODIES as templates inside the binary (instantiation independence). The law binds this lane too: a pkg that owns an open generic surface but whose binary carries no template bodies refuses at the mount (corrupt or doctored — re-pack the directory). And every bundle is **closed** — a bundle-mounted json carries its `strbuild` + `pouch` + `nmapset` groups inside, so its wrappers' `use` heads resolve wherever it travels (the ordinary closure law)."
 msgstr ""
 "**编译车道继续服务。**`.rutbundle` 文件留给编译线的消费者：**宿主表面**（decl 捆绑包）、**具体类库**（`http`、`ink`、`strbuild`——方法经表面的固有行跨越）、**以及泛型拥有者**（`pouch`、`flow`、`nmapset`、`json`、`futures`——`Vec<Todo>`、`Flow<i32>`、`decodeJson<T>` 在链接处从模板编译）。实例化按拥有者锚定：编译的拥有者携带其打包闭包在台账里拼写的泛型实例化——并把其泛型代码体作为模板携带在二进制内（实例化独立）。法则同样约束这条车道：拥有开放泛型表面但二进制不带模板代码体的包在挂载时拒绝（损坏或被篡改——重新打包目录）。而且每个捆绑包都是**封闭**的——捆绑包挂载的 json 把自己的 `strbuild` + `pouch` + `nmapset` 组带在体内，它的包装器无论走到哪里都可解析（普通闭包法则）。"
 
 
-#: src/reference/bundles.md:528
+#: src/reference/bundles.md:529
 msgid ""
 "**Duplicate mounts are safe.** Two archives may carry the same group (`json`'s and `http`'s closures both carry `strbuild`): the same identity mounts once (exact dedup), two identities of one name coexist side by side, and the per-archive ledger namespacing keeps every binary's ids resolving through its own archive's rows. A bare `use` head under several identities of one name is the loud ambiguity ([Dependency kinds](dependency-kinds.md)) — pin one of them with your own `deps` row."
 msgstr ""
 "**重复挂载是安全的。**两个档案可以携带同一组（`json` 与 `http` 的闭包都带`strbuild`）：同一标识只挂载一次（精确去重），同一名字的两个标识并肩共存，而每档案的台账命名空间让每个二进制的 id都经自己档案的行解析。同一名字的多个标识之下，裸 `use` 头是响亮的歧义（[Dependencykinds](dependency-kinds.md)）——用自己的 `deps` 行固定其中一个。"
 
 
-#: src/reference/bundles.md:537
+#: src/reference/bundles.md:538
 msgid "Loading"
 msgstr "加载"
 
 
-#: src/reference/bundles.md:539
+#: src/reference/bundles.md:540
 msgid ""
 "A bundle is one more resolution source alongside the directory form — same name resolution, same compile, same identity-keyed groups:"
 msgstr "捆绑包是目录形式之外的又一种解析来源——同名解析、同编译、同以标识为键的组："
 
 
-#: src/reference/bundles.md:543
+#: src/reference/bundles.md:544
 msgid ""
 "// from a file\n"
 msgstr ""
 "// from a file\n"
 
 
-#: src/reference/bundles.md:544
+#: src/reference/bundles.md:545
 msgid ""
 "// from bytes (embedders, tests, wasm) — the pure container parse\n"
 msgstr ""
 
 
-#: src/reference/bundles.md:549
+#: src/reference/bundles.md:550
 msgid ""
 "After the offer, the package name resolves exactly as the directory form does — with one difference: a compiled group's body is the decoded program itself. The run assigns it a fresh scope, rebases its packed ids through the ledger, and pushes it; source groups offer as sources and compile exactly as a directory world. Then the normal pipeline takes over ([Loading and the embed loop](loading.md)). Loose directories and loose `.rut` files stay valid share layouts; the bundle packages them, nothing requires it."
 msgstr ""
 "提供之后，包名的解析与目录形式完全一致——只有一个差别：编译组的函数体就是解码后的程序本身。运行给它分配全新作用域，经台账重定基其打包id，然后推入；源码组作为源码提供，并像目录世界一样精确编译。之后常规流水线接管（[Loading and the embedloop](loading.md)）。散目录与散 `.rut` 文件仍是合法的共享布局；捆绑包打包它们，但不强制。"
 
 
-#: src/reference/bundles.md:561
+#: src/reference/bundles.md:562
 msgid ""
 "# the default: the source zip, <dir>.zip\n"
 msgstr ""
 
 
-#: src/reference/bundles.md:562
+#: src/reference/bundles.md:563
 msgid ""
 "# the compiled wire\n"
 msgstr ""
 
 
-#: src/reference/bundles.md:566
+#: src/reference/bundles.md:567
 msgid ""
 "The packed form and its directory compile to identical programs — pinned by tests (the linked binaries are equal)."
 msgstr "打包形态与其目录编译出完全相同的程序——由测试钉住（链接后的二进制相等）。"
@@ -28316,9 +28316,9 @@ msgstr "全部由加载器拥有；运行保持无 I/O。"
 
 #: src/reference/dependency-kinds.md:195
 msgid ""
-"**The `deps` walk.** Recursive, name order, first-mount-wins, cycle guard, name-mismatch error. A dep mounted from a url artifact brings its whole closure with it: a `.rutbundle`'s groups mount under their content identities (`name@<16 hex>`), and a `.zip` mounts as an ordinary directory package after one content-addressed unpack — first-mount-wins becomes per-identity exact dedup ([Module bundles](bundles.md), [Coexistence](#coexistence))."
+"**The `deps` walk.** Recursive, name order, first-mount-wins, cycle guard, name-mismatch error. A dep mounted from a url artifact brings its whole closure with it: a `.rutbundle`'s groups mount under their content identities (`name@<16 hex>`), and a `.zip` mounts as an ordinary directory package over the store's extracted tree — first-mount-wins becomes per-identity exact dedup ([Module bundles](bundles.md), [Coexistence](#coexistence))."
 msgstr ""
-"**`deps` 遍历。**递归、按名字序、先挂载者胜、防环、名字不符即错。从 url 工件挂载的 dep 连同整个闭包一起进来：`.rutbundle` 的组以各自的内容标识（`name@<16 hex>`）挂载，`.zip` 则经一次按内容寻址的解包后作为普通目录包挂载——先挂载者胜变成按标识的精确去重（[Module bundles](bundles.md)、[Coexistence](#coexistence)）。"
+"**`deps` 遍历。**递归、按名字序、先挂载者胜、防环、名字不符即错。从 url 工件挂载的 dep 连同整个闭包一起进来：`.rutbundle` 的组以各自的内容标识（`name@<16 hex>`）挂载，`.zip` 则在存储解包好的树上作为普通目录包挂载——先挂载者胜变成按标识的精确去重（[Module bundles](bundles.md)、[Coexistence](#coexistence)）。"
 
 
 #: src/reference/dependency-kinds.md:203
@@ -29004,9 +29004,9 @@ msgstr "存储根目录"
 
 #: src/reference/cli.md:271
 msgid ""
-"`$RUT_HOME/deps/<name>@<sha256[:16]>/` — the global dep store: `RUT_HOME` overrides the home (`~/.rut` the default), the pin IS the address (the manifest row's name + the lock pin's first 16 hex digits). Each dep dir holds `artifact.<zip\\|rutbundle>` (the pinned bytes as downloaded), `meta.json` (the full sha256, url, and artifact kind — readers never re-hash), and `unpack/` (the extracted tree). No dep cache lands beside a project — the walk's one local write is the `.rut/unpacked/<sha-of-bytes>/` scratch where `.zip` deps unpack once (content-addressed, gitignored — [loading](loading.md))"
+"`$RUT_HOME/deps/<name>@<sha256[:16]>/` — the global dep store: `RUT_HOME` overrides the home (`~/.rut` the default), the pin IS the address (the manifest row's name + the lock pin's first 16 hex digits). Each dep dir holds `artifact.<zip\\|rutbundle>` (the pinned bytes as downloaded), `meta.json` (the full sha256, url, and artifact kind — readers never re-hash), and `unpack/` (the extracted tree — the tree `.zip` dep runs mount from). No dep cache lands beside a project: the project stays `rut.jsonc` + `rut.lock` + `src/` ([loading](loading.md))"
 msgstr ""
-"`$RUT_HOME/deps/<name>@<sha256[:16]>/`——全局依赖存储：`RUT_HOME` 覆盖主目录（默认 `~/.rut`），固定值即地址（清单行的名字 + 锁固定值的前 16 位十六进制）。每个依赖目录持有 `artifact.<zip\\|rutbundle>`（按下载原样的固定字节）、`meta.json`（完整 sha256、url 与工件种类——读取者绝不重新哈希）和 `unpack/`（解包后的树）。依赖缓存绝不落在项目旁边——遍历唯一的本地写入是 `.zip` 依赖一次性解包的 `.rut/unpacked/<sha-of-bytes>/` 草稿（按内容寻址、gitignored——[加载](loading.md)）"
+"`$RUT_HOME/deps/<name>@<sha256[:16]>/`——全局依赖存储：`RUT_HOME` 覆盖主目录（默认 `~/.rut`），固定值即地址（清单行的名字 + 锁固定值的前 16 位十六进制）。每个依赖目录持有 `artifact.<zip\\|rutbundle>`（按下载原样的固定字节）、`meta.json`（完整 sha256、url 与工件种类——读取者绝不重新哈希）和 `unpack/`（解包后的树——`.zip` 依赖的运行挂载的就是这棵树）。依赖缓存绝不落在项目旁边：项目保持 `rut.jsonc` + `rut.lock` + `src/`（见[加载](loading.md)）"
 
 
 #: src/reference/cli.md:272

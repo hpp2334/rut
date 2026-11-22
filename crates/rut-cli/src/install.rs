@@ -178,6 +178,50 @@ pub(crate) fn install(args: &InstallArgs) {
     } else {
         install_plain(p);
     }
+    cleanup_legacy_unpack(p);
+}
+
+/// The legacy unpack area's cleanup, after a successful install pass:
+/// the loader now mounts url deps from the store's own `unpack/` trees,
+/// so a `<project>/.rut/unpacked/` left by an older toolchain is pure
+/// duplication — remove it; a `.rut` holding NOTHING else goes too
+/// (the project is `rut.jsonc` + `rut.lock` + `src/`). Any OTHER
+/// content under `.rut` is not ours: everything stays, one line names
+/// what was left. `run`/`pack` never delete anything — this is the one
+/// lane that cleans, and only what that exact shape names.
+fn cleanup_legacy_unpack(p: &Path) {
+    let rut_dir = p.join(".rut");
+    let legacy = rut_dir.join("unpacked");
+    if !legacy.is_dir() {
+        return;
+    }
+    if let Err(e) = std::fs::remove_dir_all(&legacy) {
+        eprintln!(
+            "install: cannot remove the legacy unpack area {}: {e}",
+            legacy.display()
+        );
+        return;
+    }
+    let left: Vec<String> = match std::fs::read_dir(&rut_dir) {
+        Ok(entries) => entries
+            .flatten()
+            .map(|e| e.file_name().to_string_lossy().into_owned())
+            .collect(),
+        Err(_) => return, // `.rut` vanished under us — done either way
+    };
+    if left.is_empty() {
+        let _ = std::fs::remove_dir(&rut_dir);
+        println!(
+            "install: removed the legacy unpack area {} (deps mount from the global store now)",
+            p.join(".rut").join("unpacked").display()
+        );
+    } else {
+        eprintln!(
+            "install: {} holds other content ({}) — left untouched",
+            rut_dir.display(),
+            left.join(", ")
+        );
+    }
 }
 
 /// The plain lane: warm the store with progress, mount-validate the

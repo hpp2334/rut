@@ -253,11 +253,12 @@ url names the artifact kind, and each kind has its own lane:
 The pin lives beside the manifest, in the walk root's `rut.lock`
 (`rut install` writes it — [the rut CLI](cli.md)): the manifest row
 names the url, the lock pins its bytes. The url's kind routes the
-mount: a `.zip` url dep is unpacked once — content-addressed at
-`<project>/.rut/unpacked/<sha-of-bytes>/` — and mounted as an ordinary
-directory package ([Loading](loading.md)); a `.rutbundle` url dep runs
-the bundle mount below. Both are **closed**: the walk never follows a
-dep's own url rows, and the lock keeps direct rows only.
+mount: a `.zip` url dep mounts the store's extracted tree —
+`<deps>/<name>@<sha16>/unpack/`, the exact address `rut install`
+published — as an ordinary directory package ([Loading](loading.md));
+a `.rutbundle` url dep runs the bundle mount below. Both are
+**closed**: the walk never follows a dep's own url rows, and the lock
+keeps direct rows only.
 
 The compiled lane, in detail: the embedder's
 remote produces the bytes (`DepRemote` — the standard

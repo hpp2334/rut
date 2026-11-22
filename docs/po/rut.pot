@@ -792,16 +792,16 @@ msgstr ""
 msgid ""
 "`rut install` fetched `ink` from jsDelivr into the **global dep store** "
 "(`$RUT_HOME/deps` — `~/.rut` by default, one content-addressed dir per "
-"pinned dep, shared by every project; no dep cache lands inside `hello/` — "
-"the one local write is the walk's `.rut/unpacked/` scratch, where `.zip` "
-"deps unpack once as gitignored machine output) and pinned its sha256 in "
-"`hello/rut.lock` — the lock every later load verifies against, committed "
-"alongside the manifest (same manifest + same `rut.lock` ⇒ identical resolved "
-"world). `rut install --locked` re-verifies the pair without writing, "
-"re-warming the store on a miss (the CI lane)."
+"pinned dep, shared by every project; nothing lands inside `hello/` — the "
+"project stays `rut.jsonc` + `rut.lock` + `src/`, and runs mount the store's "
+"extracted trees directly) and pinned its sha256 in `hello/rut.lock` — the "
+"lock every later load verifies against, committed alongside the manifest "
+"(same manifest + same `rut.lock` ⇒ identical resolved world). `rut install "
+"--locked` re-verifies the pair without writing, re-warming the store on a "
+"miss (the CI lane)."
 msgstr ""
 
-#: src/quick-start/installation.md:248
+#: src/quick-start/installation.md:247
 msgid ""
 "The hand-typed walkthrough is the lesson — the manifest is what you are "
 "learning. When it is routine, `rut new hello` is the one-step equivalent: it "
@@ -811,7 +811,7 @@ msgid ""
 "CLI](../reference/cli.md))."
 msgstr ""
 
-#: src/quick-start/installation.md:255
+#: src/quick-start/installation.md:254
 msgid ""
 "If that printed, the CLI is ready. Continue to [your first rut "
 "program](first-program.md) — and keep the lane's role in mind: the CLI is "
@@ -820,43 +820,43 @@ msgid ""
 "CLI](../reference/cli.md) is the binary's reference."
 msgstr ""
 
-#: src/quick-start/installation.md:262
+#: src/quick-start/installation.md:261
 msgid "Optional: the wasm playground"
 msgstr ""
 
-#: src/quick-start/installation.md:264
+#: src/quick-start/installation.md:263
 msgid ""
 "The [playground](playground.md) runs the same engine compiled to "
 "WebAssembly. Building it needs "
 "[wasm-pack](https://rustwasm.github.io/wasm-pack/) and one extra target:"
 msgstr ""
 
-#: src/quick-start/installation.md:271
+#: src/quick-start/installation.md:270
 msgid ""
 "# the JS face + declarations the editors import (pkg/index.js, "
 "pkg/index.d.ts)\n"
 msgstr ""
 
-#: src/quick-start/installation.md:276
+#: src/quick-start/installation.md:275
 msgid ""
 "or, from `demo/`, the one-command lane that also copies the artifacts into "
 "place:"
 msgstr ""
 
-#: src/quick-start/installation.md:283
+#: src/quick-start/installation.md:282
 msgid "Optional: build this book"
 msgstr ""
 
-#: src/quick-start/installation.md:285
+#: src/quick-start/installation.md:284
 msgid ""
 "The documentation is an [mdbook](https://rust-lang.github.io/mdBook/) site:"
 msgstr ""
 
-#: src/quick-start/installation.md:290
+#: src/quick-start/installation.md:289
 msgid "# live-reload preview at http://localhost:3000\n"
 msgstr ""
 
-#: src/quick-start/installation.md:291
+#: src/quick-start/installation.md:290
 msgid "# static site in docs/book/\n"
 msgstr ""
 
@@ -910,12 +910,12 @@ msgid ""
 "load verifies the fetched bytes against it (an unpinned url refuses at the "
 "door: `run `rut install\\``). The store is content-addressed under "
 "`$RUT_HOME` (`~/.rut` by default), one `deps/<name>@<sha256[:16]>/` dir per "
-"pinned dep, shared by every project — no dep cache lands beside the project. "
-"(One piece of local scratch does: mounting a `.zip` dep unpacks it once "
-"under `.rut/unpacked/<sha-of-bytes>/` — content-addressed, gitignored, "
-"machine-managed; [loading](../reference/loading.md).) Every later run is a "
-"pure store hit, and `rut install hello --locked` re-verifies the lock "
-"without writing, re-warming the store on a miss (the CI lane)."
+"pinned dep, shared by every project — no dep cache lands beside the project: "
+"the run mounts the store's extracted trees directly, and `hello/` stays "
+"exactly the three files the scaffold wrote "
+"([loading](../reference/loading.md)). Every later run is a pure store hit, "
+"and `rut install hello --locked` re-verifies the lock without writing, "
+"re-warming the store on a miss (the CI lane)."
 msgstr ""
 
 #: src/quick-start/first-program.md:79
@@ -18999,7 +18999,7 @@ msgstr ""
 msgid "// from a file: the walk adds only the file read\n"
 msgstr ""
 
-#: src/reference/embedding.md:339 src/reference/bundles.md:544
+#: src/reference/embedding.md:339 src/reference/bundles.md:545
 msgid "\"vendor/plugin.rutbundle\""
 msgstr ""
 
@@ -24879,7 +24879,7 @@ msgid ""
 "binary:"
 msgstr ""
 
-#: src/reference/module-binary.md:192 src/reference/bundles.md:455
+#: src/reference/module-binary.md:192 src/reference/bundles.md:456
 msgid "check"
 msgstr ""
 
@@ -25185,7 +25185,7 @@ msgid ""
 "trivially. A refused world packs fine without `--strip`."
 msgstr ""
 
-#: src/reference/symbol-stripping.md:99 src/reference/bundles.md:558
+#: src/reference/symbol-stripping.md:99 src/reference/bundles.md:559
 msgid "CLI"
 msgstr ""
 
@@ -25550,10 +25550,11 @@ msgid ""
 "runs the root-only `[dev-deps]` pass ([Dependency "
 "kinds](dependency-kinds.md)). A url dep's kind routes its lane: a `.zip` is "
 "the SOURCE transport — unzipped (CRC verified in-read, DEFLATE accepted, "
-"zip64 refused), unpacked ONCE content-addressed at "
-"`<project>/.rut/unpacked/<sha-of-bytes>/` (atomic, zip-slip-guarded), and "
-"mounted as an ordinary directory package — its rewritten dep rows resolve "
-"inside the unpacked tree; a dep dir there holding a `.rutbundle` file mounts "
+"zip64 refused), mounted as the store's extracted tree "
+"(`<deps>/<name>@<sha16>/unpack/` — the address `rut install` published; a "
+"missing tree unpacks once into a run-scoped temp dir instead, never beside "
+"the project) as an ordinary directory package — its rewritten dep rows "
+"resolve inside the tree; a dep dir there holding a `.rutbundle` file mounts "
 "through the wire lane, the dirname's fingerprint verified against the "
 "content. A `.rutbundle` loads closed from the zip — groups mounting under "
 "their content identities ([Module bundles](bundles.md)). Both kinds are "
@@ -26506,14 +26507,14 @@ msgid ""
 "The pin lives beside the manifest, in the walk root's `rut.lock` (`rut "
 "install` writes it — [the rut CLI](cli.md)): the manifest row names the url, "
 "the lock pins its bytes. The url's kind routes the mount: a `.zip` url dep "
-"is unpacked once — content-addressed at "
-"`<project>/.rut/unpacked/<sha-of-bytes>/` — and mounted as an ordinary "
-"directory package ([Loading](loading.md)); a `.rutbundle` url dep runs the "
-"bundle mount below. Both are **closed**: the walk never follows a dep's own "
-"url rows, and the lock keeps direct rows only."
+"mounts the store's extracted tree — `<deps>/<name>@<sha16>/unpack/`, the "
+"exact address `rut install` published — as an ordinary directory package "
+"([Loading](loading.md)); a `.rutbundle` url dep runs the bundle mount below. "
+"Both are **closed**: the walk never follows a dep's own url rows, and the "
+"lock keeps direct rows only."
 msgstr ""
 
-#: src/reference/bundles.md:262
+#: src/reference/bundles.md:263
 msgid ""
 "The compiled lane, in detail: the embedder's remote produces the bytes "
 "(`DepRemote` — the standard `rut_native::HttpRemote` is cache-first), then "
@@ -26527,7 +26528,7 @@ msgid ""
 "loading a bundle never fetches)."
 msgstr ""
 
-#: src/reference/bundles.md:274
+#: src/reference/bundles.md:275
 msgid ""
 "Because the manifest rides byte-for-byte, url rows carry into a consumer's "
 "own `rut pack` output, satisfied by the groups the archive carries: the "
@@ -26540,11 +26541,11 @@ msgid ""
 "unpackaged), and a declared dep that did not ride."
 msgstr ""
 
-#: src/reference/bundles.md:286
+#: src/reference/bundles.md:287
 msgid "The wire version"
 msgstr ""
 
-#: src/reference/bundles.md:288
+#: src/reference/bundles.md:289
 msgid ""
 "`format_version` is 13 — the one bundle wire, both root kinds; the "
 "manifest's `type` routes lib-compiled vs host-decl. Anything else refuses "
@@ -26554,7 +26555,7 @@ msgid ""
 "is deterministic, so a re-pack reproduces today's bundle byte-for-byte."
 msgstr ""
 
-#: src/reference/bundles.md:296
+#: src/reference/bundles.md:297
 msgid ""
 "Every file in the two layouts is part of the package: a bundle that dropped "
 "a declared child module would load partial — semantically wrong, so the "
@@ -26568,7 +26569,7 @@ msgid ""
 "compiles from source, never from old IR."
 msgstr ""
 
-#: src/reference/bundles.md:308
+#: src/reference/bundles.md:309
 msgid ""
 "**The groups mirror the manifest.** The archive root is the root's own "
 "files; every dep rides at `deps/<name>@<fp16>/` — the dirname IS the content "
@@ -26580,7 +26581,7 @@ msgid ""
 "to one identity only when their bytes are equal)."
 msgstr ""
 
-#: src/reference/bundles.md:318
+#: src/reference/bundles.md:319
 msgid ""
 "**The ledger namespaces per archive.** Each archive's scope rows shift into "
 "a fresh numeric range of the consuming run's world (boot passes through), "
@@ -26593,18 +26594,18 @@ msgid ""
 "independently, each numbering its own closure."
 msgstr ""
 
-#: src/reference/bundles.md:329
+#: src/reference/bundles.md:330
 msgid "The source zip — the source transport"
 msgstr ""
 
-#: src/reference/bundles.md:331
+#: src/reference/bundles.md:332
 msgid ""
 "The `.zip` source archive is the directory grammar packed for travel — the "
 "SOURCE counterpart of the compiled wire above, and the book's recommendation "
 "for publication. A source zip is a package directory with every dep embedded:"
 msgstr ""
 
-#: src/reference/bundles.md:348
+#: src/reference/bundles.md:349
 msgid ""
 "**The published manifest.** Every `[deps]` row's descriptor becomes `{ "
 "\"path\": \"deps/<name>@<fp16>\" }` — the `url` fields and the external "
@@ -26618,7 +26619,7 @@ msgid ""
 "(`normalize the manifest's dep rows and re-pack`)."
 msgstr ""
 
-#: src/reference/bundles.md:360
+#: src/reference/bundles.md:361
 msgid ""
 "**The identity is the TREE flavor.** A dep dirname's `name@<fp16>` is the "
 "first 16 lowercase hex of sha256 over that package's own **rewritten** "
@@ -26630,7 +26631,7 @@ msgid ""
 "closure."
 msgstr ""
 
-#: src/reference/bundles.md:369
+#: src/reference/bundles.md:370
 msgid ""
 "**The grammar is enforced at both doors.** Exactly one `rut.jsonc`, at a "
 "package root (the archive root or `deps/<identity>/`); rut code ONLY under a "
@@ -26642,7 +26643,7 @@ msgid ""
 "this module`)."
 msgstr ""
 
-#: src/reference/bundles.md:378
+#: src/reference/bundles.md:379
 msgid ""
 "**Deterministic.** STORE entries, fixed order, the DOS epoch — the bundle "
 "writer's knobs, shared: same input ⇒ byte-identical zip, so published zips "
@@ -26650,7 +26651,7 @@ msgid ""
 "bundle's)."
 msgstr ""
 
-#: src/reference/bundles.md:383
+#: src/reference/bundles.md:384
 msgid ""
 "**Why the book recommends the zip.** A source zip compiles with the "
 "CONSUMER's toolchain, so it never goes stale the way compiled IR does: a "
@@ -26661,11 +26662,11 @@ msgid ""
 "lane: a consumer's `rut install` fetches it once, and every dep rides inside."
 msgstr ""
 
-#: src/reference/bundles.md:392
+#: src/reference/bundles.md:393
 msgid "The `bundle` module"
 msgstr ""
 
-#: src/reference/bundles.md:394
+#: src/reference/bundles.md:395
 msgid ""
 "The container codec, the `rut.jsonc` grammar, the source file-set collector, "
 "and the reader (both root kinds) live in the driver's `rut_driver::bundle` "
@@ -26682,15 +26683,15 @@ msgid ""
 "compiled root and its ledger + groups, or the decl root and its surface."
 msgstr ""
 
-#: src/reference/bundles.md:410
+#: src/reference/bundles.md:411
 msgid "Deterministic packing"
 msgstr ""
 
-#: src/reference/bundles.md:412
+#: src/reference/bundles.md:413
 msgid "Same directory + same toolchain ⇒ byte-identical `.rutbundle`:"
 msgstr ""
 
-#: src/reference/bundles.md:414
+#: src/reference/bundles.md:415
 msgid ""
 "fixed entry order — `rut.jsonc` first, then the scope ledger, the root's "
 "binary, then the root's generated declaration entry (plus its module rows "
@@ -26698,26 +26699,26 @@ msgid ""
 "distinct identity);"
 msgstr ""
 
-#: src/reference/bundles.md:418
+#: src/reference/bundles.md:419
 msgid "fixed (zeroed) timestamps;"
 msgstr ""
 
-#: src/reference/bundles.md:419
+#: src/reference/bundles.md:420
 msgid "STORE (no compression) — determinism over size."
 msgstr ""
 
-#: src/reference/bundles.md:421
+#: src/reference/bundles.md:422
 msgid ""
 "This is the module binary's determinism law extended one level up ([Module "
 "binary and verification](module-binary.md)): bundles are content-cacheable, "
 "and two builds of the same module diff to nothing."
 msgstr ""
 
-#: src/reference/bundles.md:425
+#: src/reference/bundles.md:426
 msgid "Stripping — the private sidecar"
 msgstr ""
 
-#: src/reference/bundles.md:427
+#: src/reference/bundles.md:428
 msgid ""
 "`rut pack <dir> --strip` emits the bundle as above **plus a private symbol "
 "table** at the sibling path `<out-without-ext>.rutsym`. Every renameable "
@@ -26732,7 +26733,7 @@ msgid ""
 "against a compiled bundle ([The rut CLI](cli.md))."
 msgstr ""
 
-#: src/reference/bundles.md:440
+#: src/reference/bundles.md:441
 msgid ""
 "**The declaration entry is the strip policy's other half (v1): a stripped "
 "pack OMITS every compiled group's generated entry.** The entry's plaintext "
@@ -26743,146 +26744,146 @@ msgid ""
 "and a host root refuses `--strip` outright."
 msgstr ""
 
-#: src/reference/bundles.md:449
+#: src/reference/bundles.md:450
 msgid "Checks on load"
 msgstr ""
 
-#: src/reference/bundles.md:451
+#: src/reference/bundles.md:452
 msgid ""
 "Every check runs at load time, before compilation and linking — a bad bundle "
 "never executes. The order is the law: container, then manifest and version, "
 "then every group's decode, then the mount."
 msgstr ""
 
-#: src/reference/bundles.md:455
+#: src/reference/bundles.md:456
 msgid "rule on mismatch"
 msgstr ""
 
-#: src/reference/bundles.md:457
+#: src/reference/bundles.md:458
 msgid "zip entry CRC-32"
 msgstr ""
 
-#: src/reference/bundles.md:457
+#: src/reference/bundles.md:458
 msgid "refuse — corrupt bundle (names the entry)"
 msgstr ""
 
-#: src/reference/bundles.md:458
+#: src/reference/bundles.md:459
 msgid "`rut.jsonc` present, `\"format\": \"rutbundle\"`"
 msgstr ""
 
-#: src/reference/bundles.md:458
+#: src/reference/bundles.md:459
 msgid "refuse — not a rut bundle"
 msgstr ""
 
-#: src/reference/bundles.md:459
+#: src/reference/bundles.md:460
 msgid "`format_version` exactly 13"
 msgstr ""
 
-#: src/reference/bundles.md:459
+#: src/reference/bundles.md:460
 msgid ""
 "anything else refuses — `this toolchain reads bundle format_version 13 only "
 "(found {v}) — re-pack the directory`"
 msgstr ""
 
-#: src/reference/bundles.md:460
+#: src/reference/bundles.md:461
 msgid "a host root carrying a root `mod.rutc`"
 msgstr ""
 
-#: src/reference/bundles.md:460
+#: src/reference/bundles.md:461
 msgid "refuse — a host bundle's root is its surface, not a compiled unit"
 msgstr ""
 
-#: src/reference/bundles.md:461
+#: src/reference/bundles.md:462
 msgid "a host root carrying a `rut.scopes` ledger or any group entry"
 msgstr ""
 
-#: src/reference/bundles.md:461
+#: src/reference/bundles.md:462
 msgid "refuse — a host bundle is its surface, single-package"
 msgstr ""
 
-#: src/reference/bundles.md:462
+#: src/reference/bundles.md:463
 msgid ""
 "a compiled root without its `rut.scopes` ledger, or a ledger row that is not "
 "a content identity (`name@<16 hex>`)"
 msgstr ""
 
-#: src/reference/bundles.md:462
+#: src/reference/bundles.md:463
 msgid "refuse — a corrupt compiled bundle"
 msgstr ""
 
-#: src/reference/bundles.md:463
+#: src/reference/bundles.md:464
 msgid "an entry under a top-level prefix other than `deps/`"
 msgstr ""
 
-#: src/reference/bundles.md:463
+#: src/reference/bundles.md:464
 msgid ""
 "refuse — the archive root carries only the root's own files; dep groups ride "
 "at `deps/<name>@<fp16>/`"
 msgstr ""
 
-#: src/reference/bundles.md:464
+#: src/reference/bundles.md:465
 msgid "a `deps/` group directory whose name is not a content identity"
 msgstr ""
 
-#: src/reference/bundles.md:464
+#: src/reference/bundles.md:465
 msgid "refuse — expected `<name>@<16 hex>`"
 msgstr ""
 
-#: src/reference/bundles.md:465
+#: src/reference/bundles.md:466
 msgid "a group's manifest `name` disagreeing with its dirname's name half"
 msgstr ""
 
-#: src/reference/bundles.md:465
+#: src/reference/bundles.md:466
 msgid "refuse — names both"
 msgstr ""
 
-#: src/reference/bundles.md:466
+#: src/reference/bundles.md:467
 msgid ""
 "a group dirname's fingerprint disagreeing with the hash of its rode source "
 "set"
 msgstr ""
 
-#: src/reference/bundles.md:466
+#: src/reference/bundles.md:467
 msgid "refuse — the dirname and the content disagree"
 msgstr ""
 
-#: src/reference/bundles.md:467
+#: src/reference/bundles.md:468
 msgid "`mod.rutc` decode (root and groups): version, tables, surface ids"
 msgstr ""
 
-#: src/reference/bundles.md:467
+#: src/reference/bundles.md:468
 msgid "refuse — names the entry and the cause"
 msgstr ""
 
-#: src/reference/bundles.md:468
+#: src/reference/bundles.md:469
 msgid "a compiled group's ledger row agrees with its binary's own scope"
 msgstr ""
 
-#: src/reference/bundles.md:468
+#: src/reference/bundles.md:469
 msgid "refuse — corrupt or doctored"
 msgstr ""
 
-#: src/reference/bundles.md:469
+#: src/reference/bundles.md:470
 msgid "a riding source entry that fails to read or decode (UTF-8)"
 msgstr ""
 
-#: src/reference/bundles.md:469
+#: src/reference/bundles.md:470
 msgid "refuse — names the entry; a bad archive never reaches the run"
 msgstr ""
 
-#: src/reference/bundles.md:470
+#: src/reference/bundles.md:471
 msgid "every declared dep satisfied by a group (compiled roots)"
 msgstr ""
 
-#: src/reference/bundles.md:470
+#: src/reference/bundles.md:471
 msgid "refuse — names the missing group"
 msgstr ""
 
-#: src/reference/bundles.md:472
+#: src/reference/bundles.md:473
 msgid "The std tree on a CDN — the per-package delivery"
 msgstr ""
 
-#: src/reference/bundles.md:474
+#: src/reference/bundles.md:475
 msgid ""
 "The std tree (`rut/`) ships as **committed** per-package source zips at "
 "`dist/std/<pkg>.zip` — one zip per std package a `deps` row can spell. Only "
@@ -26893,7 +26894,7 @@ msgid ""
 "(the tag push and jsDelivr's propagation are the maintainer's manual step):"
 msgstr ""
 
-#: src/reference/bundles.md:483
+#: src/reference/bundles.md:484
 msgid ""
 "```jsonc\n"
 "{\n"
@@ -26907,14 +26908,14 @@ msgid ""
 "```"
 msgstr ""
 
-#: src/reference/bundles.md:493
+#: src/reference/bundles.md:494
 msgid ""
 "`<tag>` is a placeholder — real urls live in the worked manifests, and the "
 "real pins live in each project's committed `rut.lock` (the in-repo examples' "
 "locks are the reference; anti-rot: docs never rot pins). The laws:"
 msgstr ""
 
-#: src/reference/bundles.md:498
+#: src/reference/bundles.md:499
 msgid ""
 "**Committed artifacts, immutable tags.** The zips are packed by `rut pack "
 "--mode source`'s lane (deterministic — same input ⇒ byte-identical, so "
@@ -26922,7 +26923,7 @@ msgid ""
 "re-pointed — jsDelivr caches aggressively."
 msgstr ""
 
-#: src/reference/bundles.md:502
+#: src/reference/bundles.md:503
 msgid ""
 "**What the source zip delivers — everything, current.** A zip compiles with "
 "the CONSUMER's toolchain, so the std set moves to zips as the primary lane: "
@@ -26934,7 +26935,7 @@ msgid ""
 "[`install`](cli.md) never walks into one, the lock keeps direct rows only)."
 msgstr ""
 
-#: src/reference/bundles.md:512
+#: src/reference/bundles.md:513
 msgid ""
 "**The compiled lane keeps serving.** The `.rutbundle` files stay for "
 "consumers of the compiled wire: **host surfaces** (decl bundles), "
@@ -26952,7 +26953,7 @@ msgid ""
 "wherever it travels (the ordinary closure law)."
 msgstr ""
 
-#: src/reference/bundles.md:528
+#: src/reference/bundles.md:529
 msgid ""
 "**Duplicate mounts are safe.** Two archives may carry the same group "
 "(`json`'s and `http`'s closures both carry `strbuild`): the same identity "
@@ -26963,25 +26964,25 @@ msgid ""
 "— pin one of them with your own `deps` row."
 msgstr ""
 
-#: src/reference/bundles.md:537
+#: src/reference/bundles.md:538
 msgid "Loading"
 msgstr ""
 
-#: src/reference/bundles.md:539
+#: src/reference/bundles.md:540
 msgid ""
 "A bundle is one more resolution source alongside the directory form — same "
 "name resolution, same compile, same identity-keyed groups:"
 msgstr ""
 
-#: src/reference/bundles.md:543
+#: src/reference/bundles.md:544
 msgid "// from a file\n"
 msgstr ""
 
-#: src/reference/bundles.md:544
+#: src/reference/bundles.md:545
 msgid "// from bytes (embedders, tests, wasm) — the pure container parse\n"
 msgstr ""
 
-#: src/reference/bundles.md:549
+#: src/reference/bundles.md:550
 msgid ""
 "After the offer, the package name resolves exactly as the directory form "
 "does — with one difference: a compiled group's body is the decoded program "
@@ -26992,15 +26993,15 @@ msgid ""
 "valid share layouts; the bundle packages them, nothing requires it."
 msgstr ""
 
-#: src/reference/bundles.md:561
+#: src/reference/bundles.md:562
 msgid "# the default: the source zip, <dir>.zip\n"
 msgstr ""
 
-#: src/reference/bundles.md:562
+#: src/reference/bundles.md:563
 msgid "# the compiled wire\n"
 msgstr ""
 
-#: src/reference/bundles.md:566
+#: src/reference/bundles.md:567
 msgid ""
 "The packed form and its directory compile to identical programs — pinned by "
 "tests (the linked binaries are equal)."
@@ -27801,7 +27802,7 @@ msgid ""
 "name-mismatch error. A dep mounted from a url artifact brings its whole "
 "closure with it: a `.rutbundle`'s groups mount under their content "
 "identities (`name@<16 hex>`), and a `.zip` mounts as an ordinary directory "
-"package after one content-addressed unpack — first-mount-wins becomes "
+"package over the store's extracted tree — first-mount-wins becomes "
 "per-identity exact dedup ([Module bundles](bundles.md), "
 "[Coexistence](#coexistence))."
 msgstr ""
@@ -28579,10 +28580,9 @@ msgid ""
 "manifest row's name + the lock pin's first 16 hex digits). Each dep dir "
 "holds `artifact.<zip\\|rutbundle>` (the pinned bytes as downloaded), "
 "`meta.json` (the full sha256, url, and artifact kind — readers never "
-"re-hash), and `unpack/` (the extracted tree). No dep cache lands beside a "
-"project — the walk's one local write is the `.rut/unpacked/<sha-of-bytes>/` "
-"scratch where `.zip` deps unpack once (content-addressed, gitignored — "
-"[loading](loading.md))"
+"re-hash), and `unpack/` (the extracted tree — the tree `.zip` dep runs mount "
+"from). No dep cache lands beside a project: the project stays `rut.jsonc` + "
+"`rut.lock` + `src/` ([loading](loading.md))"
 msgstr ""
 
 #: src/reference/cli.md:272

@@ -394,6 +394,25 @@ fn scaffolded_project_runs_against_a_local_server() {
         String::from_utf8_lossy(&out.stdout)
     );
 
+    // THE PROJECT LAW, full e2e: new → install → run leaves the
+    // project dir exactly `rut.jsonc` + `rut.lock` + `src/` — the
+    // walk mounts the store's unpack trees, nothing plants beside it
+    let mut listed: Vec<String> = std::fs::read_dir(&dir)
+        .unwrap()
+        .flatten()
+        .map(|e| e.file_name().to_string_lossy().into_owned())
+        .collect();
+    listed.sort();
+    assert_eq!(
+        listed,
+        vec![
+            "rut.jsonc".to_string(),
+            "rut.lock".to_string(),
+            "src".to_string()
+        ],
+        "the project stays the three files the scaffold wrote: {listed:?}"
+    );
+
     // the reviewer's probe, STANDING: a consumer that USES calc over
     // the frozen pins. The v17 envelope's calc_host carries its
     // constants as SURFACE LETS (the one spelling), so `math.rut`'s
