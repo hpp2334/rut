@@ -212,9 +212,12 @@ fn glob_surface_names(
 /// The target module's names an OWN-package glob leaf binds — the
 /// consumer's own tree enumerated the way the graph's own lane reads a
 /// spelled leaf: the target's top-level decls, each visibility-gated
-/// under the crossing predicate (import is no visibility bypass), and
-/// the pub re-export edges (`pub use` leaves join the surface one
-/// level). Module names are not imports.
+/// under the crossing predicate (import is no visibility bypass).
+/// Module names are not imports, and neither are the target's `pub
+/// use` edges: a re-exported name is no DECL of the target — the
+/// claim would route resolution through a module where the name does
+/// not live (a dep re-export crosses at its own head, a future lane's
+/// transitive shape).
 fn own_glob_surface_names(
     ast: &rut_ast::Ast,
     mods: &rut_lir::check::ModInputs,
@@ -259,13 +262,6 @@ fn own_glob_surface_names(
             rut_ast::ItemRef::ModuleLet(h) => {
                 let d = h.get(ast);
                 push(d.vis(), d.name.ident);
-            }
-            rut_ast::ItemRef::Use(h) => {
-                let d = h.get(ast);
-                let vis = d.vis();
-                for n in &d.names {
-                    push(vis, n.ident);
-                }
             }
             _ => {}
         }
@@ -622,9 +618,13 @@ fn compile_program_inner(
         }
     }
     let mut glob_rows: Vec<UseBinding> = Vec::new();
-    // the names a glob already bound, keyed by name: (the binding
-    // head, the use line's span) — the glob–glob conflict's ledger
-    let mut glob_bound: std::collections::HashMap<String, (String, rut_lexer::span::Span)> =
+    // the names a glob already bound, keyed by the (importing file,
+    // name) the T1 law keys every binding by: (the binding head) —
+    // the glob–glob conflict's ledger. Two FILES globbing different
+    // heads with an overlapping name never conflict (each file's
+    // ledger is its own); within one file, the second head's line is
+    // the error site.
+    let mut glob_bound: std::collections::HashMap<(String, String), String> =
         std::collections::HashMap::new();
     let mut glob_conflicts: Vec<Diag> = Vec::new();
     for it in ast.root().items(ast) {
@@ -648,8 +648,32 @@ fn compile_program_inner(
         // leaf), else the own-package walk. Neither answers and
         // nothing enumerates — the graph diagnosed the head already.
         let dep = uses.iter().find(|(_, _, _, h)| h == &head);
+        // the own lane walks the interior segments exactly like the
+        // graph's own lane: the head resolves the target module, each
+        // `pkg::helpers::*` segment walks a child mod from there —
+        // the star enumerates the WALKED module's surface, never the
+        // head's root
         let own_target = if dep.is_none() {
-            own_glob_target(&ctx.mods, module_name, &head, &file)
+            own_glob_target(&ctx.mods, module_name, &head, &file).and_then(|at| {
+                let mut at = at;
+                for seg in &u.path[1..] {
+                    let seg_text = ast.name(seg.ident);
+                    match ctx
+                        .mods
+                        .scopes
+                        .get(&at)
+                        .and_then(|s| s.children.get(seg_text))
+                    {
+                        Some((child, _vis)) => at = child.clone(),
+                        None => {
+                            // the graph own lane refused the walk
+                            // already; nothing enumerates
+                            return None;
+                        }
+                    }
+                }
+                Some(at)
+            })
         } else {
             None
         };
@@ -670,9 +694,9 @@ fn compile_program_inner(
                 continue;
             }
             // glob–glob: a DIFFERENT head's glob already bound the
-            // name — the SECOND use line errors
-            match glob_bound.get(&name) {
-                Some((first, _)) if first != &head => {
+            // name IN THIS FILE — the SECOND use line errors
+            match glob_bound.get(&(file.clone(), name.clone())) {
+                Some(first) if first != &head => {
                     glob_conflicts.push(Diag::new(
                         span,
                         format!(
@@ -684,7 +708,7 @@ fn compile_program_inner(
                 }
                 Some(_) => continue, // same head re-globbed: idempotent
                 None => {
-                    glob_bound.insert(name.clone(), (head.clone(), span));
+                    glob_bound.insert((file.clone(), name.clone()), head.clone());
                 }
             }
             // the synthesized-name seam: the ctx's interner extension

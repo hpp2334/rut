@@ -309,6 +309,171 @@ fn an_own_glob_binds_the_target_module() {
     }
 }
 
+// ----------------------------------------------------- round 1 ------ //
+
+/// [`run_main`] over a compile: a closure refusal is a loud panic (the
+/// green lanes' shape).
+fn run_compiled(c: Result<rut_driver::Compiled, rut_driver::RunError>) -> i32 {
+    match c {
+        Ok(compiled) => run_main(compiled.graph),
+        Err(e) => panic!("the compile refuses: {}", e.msg),
+    }
+}
+
+/// The review round-1 shape: the plan's literal own-glob spelling —
+/// the package's OWN spec as the head with an interior segment. The
+/// star enumerates the WALKED module's surface (`helpers`), never the
+/// head's root: `twice` binds in the root file, the root's own decls
+/// were never the glob's surface to begin with.
+fn walked_own_app() -> rut_driver::Mounted {
+    let mut p = rut_driver::Mounted::source(
+        "app",
+        "use app::helpers::*;\n\
+         mod helpers;\n\
+         fn rootfn() -> i32 { return 100; }\n\
+         entry fn main() -> i32 { return twice(20) + rootfn(); }\n",
+    );
+    p.mods.insert(
+        "helpers".to_string(),
+        rut_driver::ModSource {
+            path: "helpers".to_string(),
+            vis: rut_ast::Vis::Self_,
+            text: "pub fn twice(x: i32) -> i32 { return x * 2; }\n".to_string(),
+            file: "mod.rut".to_string(),
+        },
+    );
+    p
+}
+
+#[test]
+fn a_walked_own_glob_binds_the_interior_module() {
+    // `use app::helpers::*;` — the interior segment walks: helpers'
+    // pub surface glob-binds (twice(20) = 40 + rootfn() = 100)
+    assert_eq!(
+        run_compiled(
+            rut_driver::RutRun::new()
+                .mount(walked_own_app())
+                .entrypoint("app")
+                .compile()
+        ),
+        140
+    );
+}
+
+/// The sibling-head shape: the head names a `mod` child, the interior
+/// segment walks DEEPER (`helpers/deep`). Only deep's surface
+/// enumerates — helpers' own root fn stays unbound in this file.
+fn deep_own_app() -> rut_driver::Mounted {
+    deep_own_app_with(
+        "use helpers::deep::*;\n\
+         mod helpers;\n\
+         entry fn main() -> i32 { return triple(3); }\n",
+    )
+}
+
+#[test]
+fn a_sibling_head_glob_walks_its_interior_segments() {
+    // `use helpers::deep::*;` — the head resolves the sibling, the
+    // segment walks deeper: deep's pub fn binds (triple(3) = 9)
+    assert_eq!(
+        run_compiled(
+            rut_driver::RutRun::new()
+                .mount(deep_own_app())
+                .entrypoint("app")
+                .compile()
+        ),
+        9
+    );
+}
+
+#[test]
+fn a_walked_own_glob_enumerates_only_the_walked_module() {
+    // the negative pin: helpers' ROOT fn is not deep's surface — the
+    // walked glob binds `triple`, never `twice`
+    let src = "use helpers::deep::*;\n\
+               mod helpers;\n\
+               entry fn main() -> i32 { return twice(3); }\n";
+    let g = match rut_driver::RutRun::new()
+        .mount(deep_own_app_with(src))
+        .entrypoint("app")
+        .compile()
+    {
+        Ok(c) => c.graph,
+        Err(e) => panic!("the compile refuses: {}", e.msg),
+    };
+    assert_eq!(g.diags.len(), 1, "exactly one diagnostic: {:?}", msgs(&g));
+    // the elsewhere hint, not a binding: the glob never claimed
+    // helpers' root fn — the name stays module-resident
+    assert!(
+        g.diags[0]
+            .msg
+            .contains("`twice` is declared in module `helpers`"),
+        "got: {}",
+        g.diags[0].msg
+    );
+}
+
+/// [`deep_own_app`] over a different root text (the same mounted tree).
+fn deep_own_app_with(src: &str) -> rut_driver::Mounted {
+    let mut p = rut_driver::Mounted::source("app", src);
+    p.mods.insert(
+        "helpers".to_string(),
+        rut_driver::ModSource {
+            path: "helpers".to_string(),
+            vis: rut_ast::Vis::Self_,
+            text: "mod deep;\n\
+                   pub fn twice(x: i32) -> i32 { return x * 2; }\n"
+                .to_string(),
+            file: "mod.rut".to_string(),
+        },
+    );
+    p.mods.insert(
+        "helpers/deep".to_string(),
+        rut_driver::ModSource {
+            path: "helpers/deep".to_string(),
+            vis: rut_ast::Vis::Pub,
+            text: "pub fn triple(x: i32) -> i32 { return x * 3; }\n".to_string(),
+            file: "mod.rut".to_string(),
+        },
+    );
+    p
+}
+
+#[test]
+fn cross_file_glob_overlap_does_not_conflict() {
+    // the T1 per-file law: root globbing `util` and helpers.rut
+    // globbing `other` share the name `shadow` across their surfaces —
+    // no conflict (each file's ledger is its own), exactly like the
+    // identical shape with spelled leaves
+    let root = "use util::*;\n\
+                mod helpers;\n\
+                entry fn main() -> i32 { return half(10) + helpers::bridge(); }\n";
+    let mut p = rut_driver::Mounted::source("app", root)
+        .manifest(rut_driver::Manifest::lib("app", &["util", "other"]));
+    p.mods.insert(
+        "helpers".to_string(),
+        rut_driver::ModSource {
+            path: "helpers".to_string(),
+            vis: rut_ast::Vis::Self_,
+            text: "use other::*;\n\
+                   pub fn bridge() -> i32 { return twin(); }\n"
+                .to_string(),
+            file: "mod.rut".to_string(),
+        },
+    );
+    assert_eq!(
+        run_compiled(
+            rut_driver::RutRun::new()
+                .mount(util_pkg())
+                .mount(other_pkg())
+                .mount(p)
+                .entrypoint("app")
+                .compile()
+        ),
+        14
+    );
+}
+
 // ------------------------------------------------------------- pub --- //
 
 #[test]
