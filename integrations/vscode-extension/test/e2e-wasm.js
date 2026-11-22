@@ -107,6 +107,10 @@ function posOnLine(src, lineRe, needle) {
     assert.ok(false, `no line matches ${lineRe}`);
 }
 
+// collapse the `/name/..` segments the wasm path spelling produces (plus
+// any doubled slash), so an env read path keys the fake file maps
+const norm = (rp) => rp.replace(/\/[^/]+\/\.\./g, '').replace('//', '/');
+
 async function main() {
     if (!fs.existsSync(WASM_PATH)) {
         console.error(
@@ -1627,7 +1631,6 @@ async function main() {
                     'pub class Widget {\n    id: i32;\n}\npub fn tag() -> i32 {\n    return 1;\n}\n',
                 ],
             ]);
-            const norm = (rp) => rp.replace(/\/[^/]+\/\.\./g, '').replace('//', '/');
             const genc = new TextEncoder();
             const wrut = await RutLsp.load(fs.readFileSync(WASM_PATH), {
                 read: (rp) => {
@@ -1684,7 +1687,6 @@ async function main() {
                 [`${WS}/ink/rut.jsonc`, nf('ink/rut.jsonc.template')],
                 [`${WS}/ink/src/mod.rut`, inkSrc],
             ]);
-            const norm = (rp) => rp.replace(/\/[^/]+\/\.\./g, '').replace('//', '/');
             const enc = new TextEncoder();
             const nest = await RutLsp.load(fs.readFileSync(WASM_PATH), {
                 read: (rp) => {
