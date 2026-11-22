@@ -2009,6 +2009,69 @@ async function main() {
         );
         smokes++;
 
+        // ---- the mod-name slot (the disk probe): typing `mod ` in an
+        // open doc completes the module files beside it — the loader's
+        // own spellings, listed over the injected env. A DEDICATED
+        // instance: its env map is keyed by `file:///ws/e2emod/src/…`
+        // (the probe hands the doc uri's directory VERBATIM and the
+        // host resolves it), while the dep block's map keys plain
+        // paths, so its readDir answers null to the probe. Label-only
+        // items: kind 9 (Module), no space trigger — the user types
+        // `;`. The grandchild `opencode` (no recursion), the doc's own
+        // `mod.rut`, and the bare keyword dump stay out. ----
+        {
+            const enc = new TextEncoder();
+            const files = new Map(
+                Object.entries({
+                    'file:///ws/e2emod/src/mod.rut': 'entry fn main() -> nil {\n}\n',
+                    'file:///ws/e2emod/src/harness/mod.rut': 'pub fn run() -> nil {\n}\n',
+                    'file:///ws/e2emod/src/harness/opencode/mod.rut': 'pub fn boot() -> nil {\n}\n',
+                    'file:///ws/e2emod/src/util.rut': 'pub fn tag() -> i32 { return 1; }\n',
+                }),
+            );
+            const dirs = new Set([...files.keys()].map((k) => k.slice(0, k.lastIndexOf('/'))));
+            const modRut = await RutLsp.load(fs.readFileSync(WASM_PATH), {
+                read: (p) => {
+                    const src = files.get(p);
+                    return src === undefined ? null : enc.encode(src);
+                },
+                readDir: (p) => {
+                    const names = new Set();
+                    for (const k of [...files.keys(), ...dirs]) {
+                        if (k.startsWith(`${p}/`)) {
+                            names.add(k.slice(p.length + 1).split('/')[0]);
+                        }
+                    }
+                    return names.size ? [...names] : null;
+                },
+                isDir: (p) => dirs.has(p),
+                notify: () => {},
+            });
+            const slotUri = 'file:///ws/e2emod/src/mod.rut';
+            const slotDoc = 'mod \nentry fn main() -> nil {\n}\n';
+            const slot = await modRut.complete(slotUri, 0, 4, slotDoc);
+            assert.deepStrictEqual(
+                slot.map((i) => i.label),
+                ['harness', 'util'],
+                `mod-name slot: ${JSON.stringify(slot.map((i) => i.label))}`,
+            );
+            for (const it of slot) {
+                assert.strictEqual(it.kind, 9, `mod-name item kind: ${JSON.stringify(it)}`);
+            }
+            const narrowed = await modRut.complete(
+                slotUri,
+                0,
+                7,
+                'mod har\nentry fn main() -> nil {\n}\n',
+            );
+            assert.deepStrictEqual(
+                narrowed.map((i) => i.label),
+                ['harness'],
+                `mod-name prefix: ${JSON.stringify(narrowed.map((i) => i.label))}`,
+            );
+            smokes++;
+        }
+
         // ---- the completion lane's doc-sync ABI (complete with src): the
         // CURRENT text is stored BEFORE the tiers run, so a stale stored doc
         // (the tail still short the dot — the analyze debounce's window)
@@ -2521,6 +2584,7 @@ async function main() {
             `inlay-corpus-ground-truth/inlay-for-of-corpus/inlay-synthetic-laws/` +
             `refs-shadow/refs-cross/sighelp/` +
             `manifest-dep-table/manifest-decl+error/walked-dep-use-tier/` +
+            `mod-name-slot/` +
             `path-dep-segments/nested-roots+folder-not-a-root/` +
             `eof-member+locals/` +
             `complete-doc-sync/check-lane-mismatch+missing-field/` +

@@ -21,8 +21,11 @@
 //!                                              notify, plus the
 //!                                              OPTIONAL clock
 //!                                              `wakeAfter` — see
-//!                                              `env`) — the dep
-//!                                              walk's capability
+//!                                              `env`) — TWO pure
+//!                                              readers: the dep
+//!                                              walk and the
+//!                                              mod-name slot's
+//!                                              disk probe
 //!   resolve_deps(roots_json) -> String         the READ-ONLY dep walk over
 //!                                              the injected env: one JSON
 //!                                              array of workspace roots in,
@@ -348,9 +351,13 @@ impl Lsp {
     /// hand the core the READ-ONLY host environment — one [`env::Io`]
     /// implementation carrying `read` / `readDir` / `isDir` / `notify`
     /// (the wasm face's `HostEnv`, `js/index.d.ts`). The capability
-    /// stores as-is (the loop installs the wake source); the dep walk
-    /// ([`resolve_deps`](Self::resolve_deps)) reads through it and
-    /// nothing else does. A host that never calls it keeps the
+    /// stores as-is (the loop installs the wake source); TWO pure
+    /// readers read through it — the dep walk
+    /// ([`resolve_deps`](Self::resolve_deps)) and the completion
+    /// mod-name slot's disk probe (a `readDir` over the open
+    /// document's own `file://` directory — a host that cannot resolve
+    /// that spelling answers `null`, and the slot stays empty). A host
+    /// that never calls it keeps the
     /// env-less core, and its `resolve_deps` answers the no-env error
     /// envelope — loud, never a silent empty walk. Replace-on-reinject:
     /// a later call swaps the capability. The await is ordering only.

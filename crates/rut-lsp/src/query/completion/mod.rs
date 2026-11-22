@@ -21,7 +21,10 @@
 //! auto-import tier (with the `use mod::Name;` insert, sorted after
 //! the local items). Annotation boundaries (`let x: ⏐`, `-> T⏐`) get
 //! the type tier: primitives + document/imported types, never
-//! keywords, fns, or locals.
+//! keywords, fns, or locals. The `mod NAME;` name slot (item level
+//! only) is its own tier: the module files beside the open document,
+//! probed on DISK through the env — the loader's own spellings,
+//! nothing indexed.
 //!
 //! The seams: `edge` classifies the typing edge from the tree;
 //! `tiers` answers the bare/locals/member/use tiers; `paths` the
@@ -59,6 +62,7 @@ use std::collections::HashSet;
 
 use rut_ast::{AnyHandle, ExprRef, IdentId, PathNode, Span, TyRef};
 
+use crate::env::Io;
 use crate::world::collection::Chain;
 use crate::world::mods::DocMods;
 
@@ -66,7 +70,7 @@ use auto_import::auto_import_completions;
 use edge::typing_edge;
 use paths::{position_path_completions, type_head_completions, type_tier_completions};
 use rows::filtered;
-use tiers::{bare_tier_out, local_completions, member_tier_out, use_tier_out};
+use tiers::{bare_tier_out, local_completions, member_tier_out, mod_name_tier_out, use_tier_out};
 
 /// The typing edge, from the tree: the byte before the cursor names
 /// the context — a `use` ancestor (the use tiers), a member node (the
@@ -99,6 +103,9 @@ enum Edge {
     Annotation { prefix: String },
     /// the bare tiers, with the partial ident if one is mid-typed
     Bare { prefix: String },
+    /// the `mod NAME;` name slot — the node under the cursor (the decl
+    /// being typed, or the `mod` fence) + the typed prefix
+    ModName { node: AnyHandle, prefix: String },
     /// the type slot's `.`/`::` member request (`let c: layout.Co⏐`):
     /// the head segments for the mod tier, the tail ident for the
     /// member tier — no bare fallthrough (a miss is an empty list)
@@ -107,6 +114,16 @@ enum Edge {
         tail: IdentId,
         prefix: String,
     },
+}
+
+/// the open document's FILE facts the mod-name tier probes with (the
+/// face's knowledge); no dir / no env = no probe
+pub(crate) struct DocFile<'a> {
+    /// the doc uri's directory, `file://` uris only
+    pub dir: Option<&'a str>,
+    /// a `.d.rut` doc — children spell `mod.d.rut`
+    pub decl: bool,
+    pub io: Option<&'a dyn Io>,
 }
 
 /// Completions at `pos`: use-path tiers inside a `use` statement
@@ -119,6 +136,9 @@ enum Edge {
 /// source — the auto-import edits' coordinates ride the same text the
 /// spans index. `doc` is the open document's file-module context (the
 /// face's knowledge; the default keeps position-path completion off).
+/// `file` is the open document's FILE facts the mod-name tier probes
+/// with (the uri's directory + the doc's flavor + the env) — no dir /
+/// no env, and the slot answers empty, never the bare dump.
 /// `direct_deps` is the open document's own dep set (its manifest's
 /// rows) — the auto-import tier derives its gate from it live.
 pub fn complete(
@@ -126,6 +146,7 @@ pub fn complete(
     pos: u32,
     src: &str,
     doc: &DocMods,
+    file: &DocFile<'_>,
     direct_deps: &HashSet<String>,
 ) -> Vec<CompletionOut> {
     let head = chain.head();
@@ -211,6 +232,11 @@ pub fn complete(
             // calls, loop variables)
             member_tier_out(chain.members(pos, node).unwrap_or_default(), &prefix)
         }
+        // FINAL: the mod-name slot answers module candidates only — a
+        // miss is an empty list, never the bare keyword dump (the use
+        // tier's law). The tier does not read DocMods: no stamp is
+        // involved, the disk beside the document is the answer.
+        Edge::ModName { node, prefix } => mod_name_tier_out(chain, file, node, &prefix),
         Edge::Bare { prefix } => {
             // the dot guard: the request sits after a `.` the tree
             // could not shape into a member node (a fence swallowed the

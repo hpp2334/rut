@@ -71,8 +71,9 @@ pub enum Msg {
     /// spurious no-op). Posted by the clock capability's stored wake
     /// onto the loop's own inbox; no bridge ever sends it.
     Wake,
-    /// the injected READ-ONLY host environment (the dep walk's
-    /// capability — `crate::env`). Carried as the [`env::Io`] trait
+    /// the injected READ-ONLY host environment (the dep walk's and
+    /// the mod-name slot's disk probe's capability — `crate::env`).
+    /// Carried as the [`env::Io`] trait
     /// object: the wasm face wraps its `JsEnv` in the `Rc` at
     /// `set_env`, native callers hand over their own `Io` — one
     /// capability lane, two constructors.
@@ -232,8 +233,8 @@ struct Sched {
 
 /// the loop's whole self — the business state (opaque to the shell)
 /// beside the machinery's own facts: the stored read-only host env
-/// (`None` until the host hands one over, read only by the dep walk),
-/// the neutral defer queue, and the SELF-ADDRESS (a clone of the
+/// (`None` until the host hands one over, read only by the dep walk
+/// and the mod-name slot's disk probe), the neutral defer queue, and the SELF-ADDRESS (a clone of the
 /// inbox sender — the wake source's captured target). `run` owns it
 /// exclusively; [`handle`] and [`dispatch`] borrow it whole.
 struct Loop {
@@ -287,8 +288,9 @@ fn handle(l: &mut Loop, msg: Msg) {
             // the clock's trigger is a closure over this loop's
             // self-address (it posts the identity-free `Wake` on the
             // inbox, so only the actor's own loop sees the tick), then
-            // the store — every reader (the walk in `dispatch`, the
-            // clock in `arm_window`) reads the same capability.
+            // the store — every reader (the walk and the completion
+            // probe in `dispatch`, the clock in `arm_window`) reads
+            // the same capability.
             let self_tx = l.self_tx.clone();
             let wake: crate::env::WakeFn = Rc::new(move || {
                 let _ = self_tx.unbounded_send(Msg::Wake);
@@ -354,8 +356,8 @@ impl Loop {
 }
 
 /// the business tier's turn — the entries' bodies, verbatim: sync arms
-/// over the loop's state (and the stored env, which only the dep walk
-/// reads). No sender, no await.
+/// over the loop's state (and the stored env, which the dep walk and
+/// the mod-name slot's disk probe read). No sender, no await.
 fn dispatch(l: &mut Loop, cmd: Cmd) {
     match cmd {
         Cmd::Legend { tx } => {
@@ -431,9 +433,11 @@ fn dispatch(l: &mut Loop, cmd: Cmd) {
             // the doc-sync entry: the CURRENT text syncs FIRST (see the
             // bridge's doc — the analyze lane debounces, completion fires
             // on the keystroke). The typed body; the envelope writes
-            // HERE, at the reply boundary (hover's arm's own shape)
+            // HERE, at the reply boundary (hover's arm's own shape).
+            // The stored env rides along (two disjoint-field borrows of
+            // the loop) — the mod-name slot's disk probe reads it.
             l.state.sync(&uri, &src);
-            let items = l.state.complete_stored(&uri, line, ch);
+            let items = l.state.complete_stored(&uri, line, ch, l.env.as_deref());
             let _ = tx.send(Reply::Text(json_envelope(serde_json::json!(items))));
         }
         Cmd::Definition { uri, line, ch, tx } => {

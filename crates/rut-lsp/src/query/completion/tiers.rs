@@ -5,9 +5,10 @@
 //! applies the typed prefix (presentation, at the call site).
 
 use super::rows::{filtered, push_item, BindRow, CompletionOut, Row};
-use super::CompletionKind;
+use super::{CompletionKind, DocFile};
 use crate::world::collection::Chain;
 use crate::world::mods;
+use rut_ast::AnyHandle;
 
 /// The member tier — the enumeration and the gates live in the
 /// collection door (`Chain::members`, keyed on the walk's node); this
@@ -96,6 +97,47 @@ pub(super) fn bare_tier_out(chain: &Chain) -> Vec<CompletionOut> {
 }
 
 // ---- the use-path tiers ----
+
+/// The mod-name tier — the `mod NAME;` name slot's answer: the module
+/// files beside the open document, listed by the disk probe in
+/// `crate::walk` (the one home of the loader's child spellings).
+/// No filesystem to ask (no env, or a non-`file://` uri) is an empty
+/// list — a miss is an empty list, never the bare dump. The gate: a
+/// name the open document ALREADY declares never re-offers (a
+/// duplicate `mod` is an error) — EXCEPT the decl under the cursor,
+/// whose own typed name stays a candidate.
+pub(super) fn mod_name_tier_out(
+    chain: &Chain,
+    file: &DocFile<'_>,
+    node: AnyHandle,
+    prefix: &str,
+) -> Vec<CompletionOut> {
+    let (Some(dir), Some(io)) = (file.dir, file.io) else {
+        return Vec::new();
+    };
+    let mut out: Vec<CompletionOut> = Vec::new();
+    for c in crate::walk::list_child_mods(io, dir, file.decl) {
+        // the declared gate — another `mod` decl of the open doc
+        // owning the name kills the candidate
+        if chain
+            .head()
+            .mods()
+            .iter()
+            .any(|m| m.h != node && m.name() == c.name)
+        {
+            continue;
+        }
+        // hover's own spelling for a mod edge (`file module —
+        // \`harness/mod.rut\``)
+        out.push(CompletionOut::plain(
+            c.name,
+            format!("file module — `{}`", c.file),
+            Vec::new(),
+            CompletionKind::Module,
+        ));
+    }
+    filtered(out, prefix)
+}
 
 /// The use tier — the enumeration, the walk and the pub gates live in
 /// the collection door (`Chain::use_exports`, keyed on the walk's use

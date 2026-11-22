@@ -27,7 +27,9 @@ esbuild.buildSync({
     target: 'node18',
     logLevel: 'silent',
 });
-const { mergeProjectDirs, ownerDir, stripSrcShell } = require(path.join(outDir, 'ownership.js'));
+const { mergeProjectDirs, ownerDir, stripSrcShell, resolveHostPath } = require(
+    path.join(outDir, 'ownership.js'),
+);
 const { IGNORED } = require(path.join(outDir, 'constants.js'));
 fs.rmSync(outDir, { recursive: true, force: true });
 
@@ -93,4 +95,25 @@ assert.strictEqual(stripSrcShell('src/layout/grid'), 'layout/grid');
 assert.strictEqual(stripSrcShell(''), null); // the root beside the manifest
 assert.strictEqual(stripSrcShell('pages'), null); // outside the shell
 
-console.log('workspace units: all ownership/discovery pins hold');
+// ---- the env path law: the `file://` arm (the mod-name completion
+// probe hands the open document's directory verbatim), the plain-path
+// normalize, and the `.rut/` store anchor
+{
+    const decoded = resolveHostPath('file:///ws/a%20b/src/mod.rut');
+    assert.ok(path.isAbsolute(decoded), `file:// resolves absolute: ${decoded}`);
+    assert.ok(!decoded.includes('%20'), `file:// decodes percent escapes: ${decoded}`);
+    assert.strictEqual(decoded, '/ws/a b/src/mod.rut');
+    assert.strictEqual(
+        resolveHostPath('/ws/./src/../src/mod.rut'),
+        '/ws/src/mod.rut',
+        'a plain rooted path still normalizes',
+    );
+    process.env.RUT_HOME = path.join(os.tmpdir(), 'rut-units-home');
+    assert.strictEqual(
+        resolveHostPath('.rut/deps/kit@abc0123456789abcd/unpack/src/mod.rut'),
+        path.join(process.env.RUT_HOME, 'deps/kit@abc0123456789abcd/unpack/src/mod.rut'),
+        '.rut/ still anchors at the real $RUT_HOME',
+    );
+}
+
+console.log('workspace units: all ownership/discovery/path-law pins hold');

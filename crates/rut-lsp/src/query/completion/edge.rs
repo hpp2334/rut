@@ -3,7 +3,7 @@
 //! probe's own node kind (or its ancestors') names the tier — the
 //! Edge verdict the dispatcher matches. No token scans.
 
-use rut_ast::{AnyHandle, Ast, FieldNode, MethodNode, NodeKindId, PathNode, UseNode};
+use rut_ast::{AnyHandle, Ast, FieldNode, MethodNode, ModDeclNode, NodeKindId, PathNode, UseNode};
 
 use crate::world::collection::Chain;
 
@@ -66,6 +66,12 @@ pub(super) fn typing_edge(chain: &Chain, pos: u32, src: &str) -> Edge {
         if a.is::<rut_ast::ModuleNode>() {
             break;
         }
+    }
+    // the mod-name slot — the `mod NAME;` decl being typed (or the
+    // `mod` fence): the node kinds are disjoint from the member and
+    // qualified lanes below, so a miss keeps them untouched
+    if let Some(e) = mod_name_edge(head, ast, p0, pos, src) {
+        return e;
     }
     // the member lane — a method call (the partial shape rides its
     // absent member as the empty prefix) or a field access
@@ -273,4 +279,123 @@ fn use_edge(
         segs: before,
         prefix: String::new(),
     }
+}
+
+// ---- the mod-name slot ----
+
+/// the `mod NAME;` name slot — the tree verdict, ITEM level only: the
+/// probe is a `ModDeclNode` (the decl being typed) or the `mod`-head
+/// fence, and its parent is the root module. Inside a block `mod` is
+/// an expression — the parent check carries the whole item-level
+/// gate. Two parse shapes answer one slot: a dangling `mod` is the
+/// FENCE, and a `mod` followed by more text has SWALLOWED the next
+/// ident as its name — so the edge keys on the head text and the
+/// cursor, never on "the name is absent". Anything else is `None`
+/// (the bare tier stands).
+fn mod_name_edge(
+    head: &crate::world::collection::MountedFile,
+    ast: &Ast,
+    p0: AnyHandle,
+    pos: u32,
+    src: &str,
+) -> Option<Edge> {
+    // item level only: the decl (or its fence) hangs straight off the
+    // root module
+    if ast.parent(p0) != Some(ast.root().any()) {
+        return None;
+    }
+    let end = (pos as usize).min(src.len());
+    if let Some(m) = p0.downcast::<ModDeclNode>() {
+        let d = m.get(ast);
+        // the head slice must spell exactly a mod head; the keyword's
+        // end comes back INSIDE the slice
+        let lo = (d.span.lo as usize).min(end);
+        let kw_hi = d.span.lo + mod_head_end(&src[lo..(d.name.span.lo as usize).min(end)])?;
+        if pos <= kw_hi {
+            return None; // on or before the keyword — the bare typing edge
+        }
+        if pos < d.name.span.lo {
+            // between keyword and name — whitespace only (the gap to a
+            // swallowed name), else the slot is junk (`mod /`)
+            if !gap_is_blank(&src[kw_hi as usize..end]) {
+                return None;
+            }
+        } else if pos > d.name.span.hi {
+            // past the name: a complete `mod x;` is a finished item —
+            // the bare tier's new-item position, never the slot
+            let from = (d.name.span.hi as usize).min(end);
+            if src[from..end].contains(';') {
+                return None;
+            }
+        }
+        return Some(Edge::ModName {
+            node: p0,
+            prefix: partial_text(head, d.name.span, pos),
+        });
+    }
+    if p0.is::<rut_ast::ErrorNode>() {
+        let sp = ast.span_of(p0);
+        // the fence's WHOLE text must be exactly a mod head, the
+        // cursor past it, whitespace-only to the cursor
+        if pos <= sp.hi {
+            return None; // inside the fence — the bare typing edge
+        }
+        let from = (sp.lo as usize).min(end);
+        mod_head_end(&src[from..(sp.hi as usize).min(end)])?;
+        if !gap_is_blank(&src[(sp.hi as usize).min(end)..end]) {
+            return None;
+        }
+        return Some(Edge::ModName {
+            node: p0,
+            prefix: String::new(),
+        });
+    }
+    None
+}
+
+/// the mod head's spelling law — the slice spells exactly `mod`,
+/// `pub mod`, `pub(super) mod`, or `pub(pkg) mod`. `Some(end)` is the
+/// `mod` keyword's end INSIDE the slice (the caller adds the head's
+/// own lo for a source offset); `None` = not a mod head.
+fn mod_head_end(text: &str) -> Option<u32> {
+    const HEADS: [&[&str]; 4] = [
+        &["mod"],
+        &["pub", "mod"],
+        &["pub", "(", "super", ")", "mod"],
+        &["pub", "(", "pkg", ")", "mod"],
+    ];
+    HEADS.iter().find_map(|toks| scan_head(text, toks))
+}
+
+/// walk the head's token run: each word once, in order, nothing else.
+/// Whitespace is REQUIRED before `mod` when a word precedes it
+/// (`pubmod` is one ident, never this run); a word never glues to a
+/// following word, while punct glue (`pub(`) lexes apart. `Some(end)`
+/// is the last word's end inside `text`.
+fn scan_head(text: &str, toks: &[&str]) -> Option<u32> {
+    let word = |t: &str| t.starts_with(|c: char| c.is_ascii_alphabetic() || c == '_');
+    let mut rest = text;
+    let mut end = 0u32;
+    for (i, w) in toks.iter().enumerate() {
+        let trimmed = rest.trim_start();
+        let skipped = rest.len() - trimmed.len();
+        if *w == "mod" && i > 0 && skipped == 0 {
+            return None; // glued to the word before it
+        }
+        end += skipped as u32;
+        rest = trimmed;
+        let after = rest.strip_prefix(w)?;
+        if word(w) && after.starts_with(|c: char| c.is_ascii_alphanumeric() || c == '_') {
+            return None; // glued to the word after it
+        }
+        end += (rest.len() - after.len()) as u32;
+        rest = after;
+    }
+    (rest.trim().is_empty()).then_some(end)
+}
+
+/// whitespace only? (the byte run between the keyword and the cursor
+/// spells nothing)
+fn gap_is_blank(s: &str) -> bool {
+    s.chars().all(char::is_whitespace)
 }

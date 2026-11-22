@@ -101,6 +101,16 @@ The extension rides the same model:
   (`pub`/`pub(pkg)`/`pub(super)`/private, the compiler's predicate).
 - **Hover** renders `pub? mod NAME;` decls (kind, mounted file, child
   count) and resolves use-path segments to their mounted modules.
+- **The mod-name slot completes the disk**: typing `mod ` (or
+  `pub mod `) at an item position lists the module files beside the
+  current file — folders containing the flavor's module file
+  (`mod.rut`, or `mod.d.rut` beside a `.d.rut` doc) and single-file
+  `NAME.rut` siblings, never anything else (the loader's loud
+  ambiguity, empty folders, and names the doc already declares stay
+  out). The probe hands the injected env a `file://` path — the open
+  document's own directory, verbatim — which `src/env.ts` resolves
+  through `fileURLToPath`; without a `file://` uri or an env the list
+  is simply empty.
 
 ## Nested projects — one folder, several rut projects
 

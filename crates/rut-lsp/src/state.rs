@@ -209,12 +209,15 @@ impl SessionState {
     /// envelope (one law with every other query: JSON writes happen
     /// once, at the `Reply::Text` boundary). The doc-sync law: the
     /// caller synced FIRST, so the chain head's document IS the text
-    /// the cursor sits in.
+    /// the cursor sits in. `io` is the stored host env (the loop's
+    /// capability) — the mod-name slot's disk probe reads it; `None`
+    /// and that slot simply answers empty.
     pub(crate) fn complete_stored(
         &self,
         uri: &str,
         line: u32,
         ch: u32,
+        io: Option<&dyn env::Io>,
     ) -> Vec<ls_types::CompletionItem> {
         let Some(chain) = self.chain(uri) else {
             return Vec::new();
@@ -222,9 +225,24 @@ impl SessionState {
         let head = chain.head();
         let byte = head.doc.lines().byte(head.doc.src(), line, ch);
         let doc = self.doc_mods_of(uri);
-        crate::query::completion::complete(&chain, byte, head.doc.src(), &doc, &self.direct_deps)
-            .into_iter()
-            .map(crate::query::completion::lsp_item)
-            .collect()
+        let dir = crate::walk::file_dir(uri);
+        let file = crate::query::completion::DocFile {
+            dir: dir.as_deref(),
+            // the flavor is `mode_of`'s — the filename convention, THE
+            // authority (never a basename match)
+            decl: crate::semantic::mode_of(uri) == crate::semantic::Mode::Decl,
+            io,
+        };
+        crate::query::completion::complete(
+            &chain,
+            byte,
+            head.doc.src(),
+            &doc,
+            &file,
+            &self.direct_deps,
+        )
+        .into_iter()
+        .map(crate::query::completion::lsp_item)
+        .collect()
     }
 }

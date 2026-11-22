@@ -599,7 +599,8 @@ impl S {
 
 /// the walk's whole world as a file map + dir set: a root is its
 /// `rut.jsonc` + sources, so which manifest got read names which walk
-/// ran. The clock rides `clock` (`false` = the capability-less env);
+/// ran — and the mod-name slot's disk probe lists through the same
+/// world. The clock rides `clock` (`false` = the capability-less env);
 /// every read is recorded.
 #[derive(Default)]
 pub struct MemIo {
@@ -666,8 +667,29 @@ impl Io for MemIo {
         self.files.get(path).cloned()
     }
 
-    fn read_dir(&self, _path: &str) -> Option<Vec<String>> {
-        None // the file-map world never asks this spelling
+    fn read_dir(&self, path: &str) -> Option<Vec<String>> {
+        // a real listing over the key map AND the recorded dirs: the
+        // first segment under `path/`, sorted, deduped; `None` when
+        // empty (the mod-name slot's probe lists through this too)
+        let prefix = format!("{path}/");
+        let mut names: Vec<String> = Vec::new();
+        for k in self.files.keys().chain(self.dirs.iter()) {
+            let Some(rest) = k.strip_prefix(&prefix) else {
+                continue;
+            };
+            if rest.is_empty() {
+                continue;
+            }
+            let first = rest.split('/').next().unwrap_or(rest);
+            if !names.iter().any(|n| n == first) {
+                names.push(first.to_string());
+            }
+        }
+        if names.is_empty() {
+            return None;
+        }
+        names.sort();
+        Some(names)
     }
 
     fn is_dir(&self, path: &str) -> bool {

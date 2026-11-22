@@ -6,7 +6,7 @@
 import * as fs from 'node:fs';
 import * as path from 'node:path';
 import * as vscode from 'vscode';
-import { resolveHostPath } from './env';
+import { resolveHostPath } from './ownership';
 import { hintOnce } from './util';
 import type {
     LspCompletionItem,

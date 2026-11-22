@@ -127,10 +127,16 @@ export function isEnvelope(v: unknown): v is Envelope;
 
 /**
  * the injected, READ-ONLY host environment — the capability the core's
- * dep walk reads (phase: dep-walk-into-crate). Paths are rooted
- * strings; the crate joins them with `/` and the host normalizes. The
- * grant is read-only by construction: no write, no delete, no fetch
- * exists on this interface.
+ * dep walk reads (phase: dep-walk-into-crate), and the mod-name
+ * completion slot's disk probe (its second, pure read: one `readDir`
+ * over the open document's own directory). Paths are rooted strings;
+ * the crate joins them with `/` and the host normalizes. A path may
+ * also arrive as a `file://` DOCUMENT URI (the mod-name probe hands
+ * the open document's directory verbatim — the uri minus its last
+ * segment, scheme kept): resolve it (`fileURLToPath`) or answer
+ * `null` — an unresolved path is that slot's empty answer, never an
+ * error. The grant is read-only by construction: no write, no delete,
+ * no fetch exists on this interface.
  *
  * The one machinery addition is the OPTIONAL clock: `wakeAfter` arms
  * the core's debounce window (plain `setTimeout` covers it) and hands
@@ -142,7 +148,11 @@ export function isEnvelope(v: unknown): v is Envelope;
 export interface HostEnv {
     /** one file's bytes — `null` on a miss, never a throw */
     read(path: string): Uint8Array | null;
-    /** one directory's entry names — `null` when there is no dir */
+    /**
+     * one directory's entry names — `null` when there is no dir. A
+     * `path` may be a `file://` doc uri (see above): resolve it or
+     * answer `null`.
+     */
     readDir(path: string): string[] | null;
     /** does the path name a directory? */
     isDir(path: string): boolean;
