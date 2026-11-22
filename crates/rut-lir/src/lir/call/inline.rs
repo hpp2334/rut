@@ -42,24 +42,13 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
         };
         let md = mnode.get(self.ctx.ast).clone();
         let (params, ret, mname) = (md.params, md.ret, md.name.ident);
-        // the method's own generics: explicit site arguments first
+        // the method's own generics: the site's explicit list gates
+        // first (the arity + resolution law — the helper), then the
+        // resolved args join the class's substitution
         let decl_generics: Vec<IdentId> = md.generics.clone();
-        if generics.len() > decl_generics.len() {
-            self.ctx.err(
-                sp,
-                format!(
-                    "`{}.{}` takes {} type argument(s), {} given",
-                    self.ctx.name(dname),
-                    self.ctx.name(mname),
-                    decl_generics.len(),
-                    generics.len()
-                ),
-            );
-            return Err(());
-        }
+        let site_args = self.check_method_generics(mname, decl_generics.len(), &generics)?;
         let mut subst = class_subst.clone();
-        for (g, node) in decl_generics.iter().zip(generics.iter()) {
-            let t = self.resolve_type_now(*node);
+        for (g, t) in decl_generics.iter().zip(site_args) {
             subst.push((*g, t));
         }
         if args.len() != params.len() - 1 {

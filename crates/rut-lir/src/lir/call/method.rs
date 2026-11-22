@@ -86,6 +86,20 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
         // members at once, so each instantiation must typecheck. Dispatch
         // below stays per-instantiation (the concrete member's impl).
         self.check_union_capability(recv, name, sp);
+        // the generic-args gate for the CLOSED contracts: the builtin
+        // intrinsics and the str/bytes/trace/weak members declare no
+        // binders — a spelled list is surplus (the arity gate) and
+        // still resolves as types (the unknown-name family at each
+        // arg's span). The user-type lanes validate below against
+        // their own decl.
+        if !generics.is_empty()
+            && matches!(
+                self.ctx.types.kind(rt),
+                TyKind::Prim(_) | TyKind::Str | TyKind::Bytes | TyKind::Trace | TyKind::Weak { .. }
+            )
+        {
+            self.check_method_generics(name, 0, &generics)?;
+        }
         // core's builtin-impl numeric methods:
         // `x.wrapping_add(y)` on an integer receiver — ambient on the
         // primitive (no `use`), lowered inline off the receiver's width.
@@ -491,6 +505,8 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
         // lowered fused, including the `Vec<T>` class
         if name == sym::LEN && args.is_empty() {
             if let Some(info) = self.slice_info(rt) {
+                // the fused member declares no binders — the arity gate
+                self.check_method_generics(name, 0, &generics)?;
                 self.emit_slice_len(rreg, &info, sp.lo)?;
                 return Ok(TY_I32);
             }
@@ -502,6 +518,8 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
         // fixed-length. str has its own slice (handled above).
         if name == sym::SLICE && args.len() == 2 {
             if let Some(info) = self.slice_info(rt) {
+                // the fused member declares no binders — the arity gate
+                self.check_method_generics(name, 0, &generics)?;
                 match &info.source {
                     SliceSource::DataBuf {
                         buf_field,
@@ -647,7 +665,7 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
             // singleton; `checkpoint()` answers it — the divergence the
             // survey blessed, invisible off the weave)
             if rt == self.ctx.run_context_ty() {
-                return self.compile_cx_member(name, rreg, &args, sp);
+                return self.compile_cx_member(name, rreg, &generics, &args, sp);
             }
             // the receiver is either an instantiated generic (decl + args in
             // `inst_data`) or a local non-generic record. An
@@ -715,6 +733,8 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                 }) {
                     let (ptys, ret_ty, decl_iface) =
                         self.iface_member_shape(rt, &ifaces, name, sp)?;
+                    // the bound's member declares no binders — the gate
+                    self.check_method_generics(name, 0, &generics)?;
                     if args.len() != ptys.len() {
                         self.ctx.err(
                             sp,
@@ -781,6 +801,8 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                     return Err(());
                 };
                 let (ptys, ret_ty, _) = self.iface_member_shape(rt, &ifaces, name, sp)?;
+                // the bound's member declares no binders — the gate
+                self.check_method_generics(name, 0, &generics)?;
                 if args.len() != ptys.len() {
                     self.ctx.err(
                         sp,
@@ -962,6 +984,40 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
             ),
         );
         Err(())
+    }
+
+    /// The method-call generic-args gate: the site's explicit list
+    /// validates against the RESOLVED method's declared binders — more
+    /// args than binders errs with the house text at the list's own
+    /// span (first spelled arg through last), and every spelled arg
+    /// resolves as a TYPE through the same lanes an `x: T` slot rides
+    /// (the unknown-name family reports at the arg's own span). Fewer
+    /// args than binders rides inference — the unification lanes bind
+    /// the rest, and their `cannot infer` diagnostics stay the honesty
+    /// gate. The resolved types come back positionally for the
+    /// caller's binder zip (one resolution per site: no double
+    /// diagnosis).
+    pub(crate) fn check_method_generics(
+        &mut self,
+        name: IdentId,
+        declared: usize,
+        generics: &[TyRef],
+    ) -> TcResult<Vec<TypeId>> {
+        if generics.len() > declared {
+            let lo = generics[0].span(self.ctx.ast).lo;
+            let hi = generics[generics.len() - 1].span(self.ctx.ast).hi;
+            self.ctx.err(
+                rut_lexer::span::Span::new(lo, hi),
+                format!(
+                    "`{}` takes {} type argument(s), {} given",
+                    self.ctx.name(name),
+                    declared,
+                    generics.len()
+                ),
+            );
+            return Err(());
+        }
+        Ok(generics.iter().map(|g| self.resolve_type_now(*g)).collect())
     }
 
     /// The diagnostic for a missing method on a user type. With the

@@ -655,11 +655,14 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
         &mut self,
         name: IdentId,
         cx_reg: u16,
+        generics: &[TyRef],
         args: &[ExprRef],
         sp: rut_lexer::span::Span,
     ) -> TcResult<TypeId> {
         let sp_lo = sp.lo;
         if name == sym::CHECKPOINT && args.is_empty() {
+            // the protocol member declares no binders — the gate
+            self.check_method_generics(name, 0, generics)?;
             let frame_ty = self
                 .async_frame
                 .as_ref()
@@ -688,6 +691,8 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
             return Ok(TY_U32);
         }
         if name == sym::CANCELLED && args.is_empty() {
+            // the protocol member declares no binders — the gate
+            self.check_method_generics(name, 0, generics)?;
             // the frame edge: inside an async body the cx's frame IS
             // this fn's frame — the staging register takes its type so
             // the field read verifies against the record layout

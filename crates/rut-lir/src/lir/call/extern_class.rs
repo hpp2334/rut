@@ -70,9 +70,14 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
         // else structural unification against the placeholder signature
         let mut full_subst = subst.to_vec();
         if !mgen.is_empty() && !generics.is_empty() {
+            // the lane's law stands: an extern generic method spells
+            // ALL its binders (none spelled rides inference below) —
+            // the house text, now at the list's own span
             if generics.len() != mgen.len() {
+                let lo = generics[0].span(self.ctx.ast).lo;
+                let hi = generics[generics.len() - 1].span(self.ctx.ast).hi;
                 self.ctx.err(
-                    sp,
+                    rut_lexer::span::Span::new(lo, hi),
                     format!(
                         "`{}` takes {} type argument(s), {} given",
                         self.ctx.name(name),
@@ -85,6 +90,12 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
             for (g, node) in mgen.iter().zip(generics.iter()) {
                 full_subst.push((*g, self.resolve_type_now(*node)));
             }
+        } else if !generics.is_empty() {
+            // the closing lane: a non-generic extern method (the
+            // `log.warn<T>("..")` family) declares no binders — the
+            // spelled list is the arity error, and each arg still
+            // resolves as a type at its own span
+            self.check_method_generics(name, mgen.len(), &generics)?;
         }
         if !mgen.is_empty() && generics.is_empty() {
             // the unannotated-lambda diagnosis (v1): a fully unannotated
