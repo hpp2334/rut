@@ -5,9 +5,15 @@
 //! (`spec` for a pkg's root module, `spec/mod-path` for a child), so
 //! the mapping back to owning documents is data, not guessing:
 //!
-//! - **parse-only fallback**: no package context (`pkg: None`) or a
-//!   world that cannot assemble → the parse lane's diags alone
-//!   (today's behavior, never worse);
+//! - **parse-only fallback**: no package context (`pkg: None`) → the
+//!   parse lane's diags alone;
+//! - **the degraded retry**: a world that cannot assemble (the run's
+//!   shape/closure refusal, `Err` carrying no spans) retries ONCE with
+//!   the doc's own package alone, its dangling `use` heads blanked
+//!   span-preserving — silence is the bug: the doc's own name errors
+//!   survive an unresolved dep closure, the unmounted heads surface as
+//!   true unknown-name squiggles at their use sites, and a degraded
+//!   refusal stands (the parse set alone; never a loop);
 //! - **unattributable spans** (the graph-level refusals' `file: None`)
 //!   and spans naming files that are not the open document → skipped,
 //!   no misplaced squiggle;
@@ -31,7 +37,7 @@ use std::collections::BTreeMap;
 use crate::semantic::Diag;
 use crate::world::collection::MountedFile;
 use ls_types::Diagnostic;
-use rut_ast::Vis;
+use rut_ast::{ItemRef, Vis};
 use rut_driver::{lower_decl_module, Manifest, ModSource, Mounted, RutRun};
 
 /// One assembled package's file modules, keyed by mod path (`""` = the
@@ -197,15 +203,22 @@ pub fn check_doc(
                 .or_insert_with(|| (f.uri.clone(), f.text.clone()));
         }
     }
-    // the run: shape/closure refusals are `Err` carrying no spans —
-    // the caller's parse set stands alone
-    let mut run = RutRun::new();
-    for p in build_world(&groups) {
-        run = run.mount(p);
-    }
-    let diags: Vec<Diag> = match run.entrypoint(doc_pkg).compile() {
-        Ok(c) => c.graph.diags,
-        Err(_) => return Vec::new(),
+    // the run: a shape/closure refusal is `Err` carrying no spans.
+    // Silence is the bug — the doc's own name errors must survive an
+    // unresolved dep closure — so the refusal retries ONCE, DEGRADED:
+    // the doc's own package alone ([`degraded_diags`]), mapped through
+    // the same stamps/guards below. A degraded refusal stands as today
+    // (the parse set alone; one retry, never a loop) — and the parse
+    // set merged first either way: the degraded set only ADDS.
+    let diags: Vec<Diag> = match compile_world(build_world(&groups), doc_pkg) {
+        Some(d) => d,
+        None => {
+            let own = groups
+                .into_iter()
+                .find(|g| g.module == doc_pkg)
+                .expect("the doc's group rides its own upsert");
+            degraded_diags(&own, doc_pkg).unwrap_or_default()
+        }
     };
     let stamp_of = |s: &str, p: &str| {
         if p.is_empty() {
@@ -235,6 +248,123 @@ pub fn check_doc(
         out.push(crate::query::analysis::to_diagnostic_parts(d, text, &index));
     }
     out
+}
+
+/// One compile attempt over an assembled world: `None` = the run's
+/// shape/closure refusal — the `Err` carries no spans, the caller
+/// decides what stands.
+fn compile_world(world: Vec<Mounted>, doc_pkg: &str) -> Option<Vec<Diag>> {
+    let mut run = RutRun::new();
+    for p in world {
+        run = run.mount(p);
+    }
+    Some(run.entrypoint(doc_pkg).compile().ok()?.graph.diags)
+}
+
+/// The degraded retry (the full world's compile refused): the doc's
+/// OWN package alone — every dep group dropped (the `Err` carries no
+/// per-pkg blame to drop finer) — compiled and answered, `None` when
+/// the degraded run refuses too (the parse set stands alone; one
+/// retry, never a loop).
+///
+/// The group's dangling `use` heads are blanked span-preserving first
+/// ([`blank_dangling_heads`]): the closure gate refuses a run whose
+/// source names a head nothing offered, so the doc-only world would
+/// refuse again and the silence — the bug — would stand. The blanked
+/// heads' names surface as true unknown-name squiggles at their use
+/// sites; the span-0/URI/bounds skips below keep it honest.
+fn degraded_diags(group: &PkgFiles, doc_pkg: &str) -> Option<Vec<Diag>> {
+    let files = group
+        .files
+        .iter()
+        .map(|(p, f)| {
+            (
+                p.clone(),
+                FileSrc {
+                    uri: f.uri.clone(),
+                    text: blank_dangling_heads(&f.text, f.mode, group, p),
+                    mode: f.mode,
+                    vis: f.vis,
+                },
+            )
+        })
+        .collect();
+    let degraded = PkgFiles {
+        module: group.module.clone(),
+        files,
+    };
+    compile_world(build_world(&[degraded]), doc_pkg)
+}
+
+/// One file's degraded parse copy: every `use` naming a head the
+/// degraded world cannot offer — not `core` (the engine auto-offers
+/// the real prelude), not the doc's own claim ([`own_head_claim`]) —
+/// is blanked: its bytes become spaces, newlines kept. Byte-preserving
+/// by construction, so every span the degraded run reports indexes the
+/// same offsets the mapping table's ORIGINAL texts hold — never a
+/// misplaced squiggle.
+fn blank_dangling_heads(
+    text: &str,
+    mode: crate::semantic::Mode,
+    group: &PkgFiles,
+    path: &str,
+) -> String {
+    let doc = crate::semantic::Document::parse(mode, text.to_string());
+    let ast = doc.ast();
+    let mut bytes = text.as_bytes().to_vec();
+    for it in ast.root().items(ast) {
+        let ItemRef::Use(uh) = it else {
+            continue;
+        };
+        let u = uh.get(ast);
+        let Some(head) = u.path.first() else {
+            continue; // the incomplete shape — no head to dangle
+        };
+        let head = ast.name(head.ident);
+        if head == "core" || own_head_claim(group, path, head) {
+            continue; // the degraded world offers it — the statement stands
+        }
+        let (lo, hi) = (u.span.lo as usize, u.span.hi as usize);
+        if lo > hi || hi > bytes.len() {
+            continue; // out of bounds — the statement stands (the run may refuse)
+        }
+        for b in &mut bytes[lo..hi] {
+            if *b != b'\n' {
+                *b = b' '; // ASCII writes only — the copy stays UTF-8
+            }
+        }
+    }
+    String::from_utf8(bytes).expect("blanking writes ASCII spaces only — the copy stays UTF-8")
+}
+
+/// The doc's own-package answer for a use head — the driver's own-lane
+/// walk (`Session::own_use_head`), mirrored over the group's file set:
+/// a `mod` edge walked from `from` (the importing file's mod path; the
+/// current module first, then the ancestors, nearest wins), or the
+/// doc's OWN spec naming the root module — a non-empty mod tree only
+/// (a flat package's own name was never a legal use head there).
+fn own_head_claim(group: &PkgFiles, from: &str, head: &str) -> bool {
+    let mut cur = from.to_string();
+    loop {
+        let child = if cur.is_empty() {
+            head.to_string()
+        } else {
+            format!("{cur}/{head}")
+        };
+        if group.files.contains_key(&child) {
+            return true;
+        }
+        let parent = match cur.rsplit_once('/') {
+            Some((p, _)) => p.to_string(),
+            None => String::new(),
+        };
+        if parent == cur {
+            break;
+        }
+        cur = parent;
+    }
+    let has_mods = group.files.keys().any(|p| !p.is_empty());
+    has_mods && head == group.module
 }
 
 /// The world's pkgs: a lib body mounts as `Mounted::source` + its mod tree;

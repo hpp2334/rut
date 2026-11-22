@@ -9,6 +9,7 @@
 mod common;
 
 use common::*;
+use serde_json::Value;
 use std::rc::Rc;
 
 /// The plugin manifest's dep shape, INLINE and unpinned: the real
@@ -350,6 +351,134 @@ fn dep_impl_methods_ride_the_dep_index() {
     assert_eq!(hits.len(), 1, "the .info click resolves: {hits:?}");
     assert_eq!(hits[0]["uri"], "file:///deps/ink/src/mod.rut");
     assert_target(INK, &hits[0], "info(self", 1, 4, "the dep's impl fn");
+}
+
+// ---- the check lane's degraded retry (the folder-only e2e pin's
+// native twin): a doc whose dep closure is unresolved used to silence
+// the WHOLE semantic set — the run's closure refusal carries no spans,
+// and `Err` meant `Vec::new()`. Silence is the bug: the doc's own name
+// errors must survive. ----
+
+/// the self-contained ink surface (the nested e2e fixture's shape — no
+/// dangling heads of its own, so the full world assembles)
+const CLEAN_INK: &str = "pub class Logger {\n    internal: opaque;\n}\nimpl Logger {\n    pub fn info(self, msg: str) -> nil {\n        return;\n    }\n}\n";
+
+#[test]
+fn an_unresolvable_closure_keeps_the_docs_own_errors() {
+    // the headline pin: the doc names `ink`, nothing mounts it — the
+    // run refuses — and the DEGRADED retry still answers the doc's own
+    // unknowns: `y` at its site, the unnameable `Logger` at its call.
+    // The use statement itself stays clean (the head is blanked
+    // span-preserving in the degraded copy), and nothing lands outside
+    // the doc's true misses.
+    let mut s = S::boot();
+    let doc = "use ink::{ Logger };\nentry fn main() {\n    let log = Logger(\"x\");\n    let x = y;\n}\n";
+    let uri = "file:///ws/app/src/mod.rut";
+    s.index_mod_at(uri, "app", "", doc);
+    let a = s.analyze(uri, doc);
+    let diags = a["diags"].as_array().unwrap();
+    assert_eq!(diags.len(), 2, "the two true misses, no more: {a}");
+
+    // the headline: the doc's OWN unknown name squiggles at its line
+    let (y_line, y_ch) = pos_of(doc, "= y;", 1);
+    let (y_line, y_ch) = (i64::from(y_line), i64::from(y_ch) + 2); // the needle is `= y;` — the ident starts +2
+    let hits: Vec<&Value> = diags
+        .iter()
+        .filter(|d| d["message"].as_str().unwrap().contains("`y`"))
+        .collect();
+    assert_eq!(hits.len(), 1, "one `y` squiggle: {a}");
+    assert!(
+        hits[0]["message"]
+            .as_str()
+            .unwrap()
+            .contains("unknown name"),
+        "the doc's own unknown name: {a}"
+    );
+    assert_eq!(pos_pair(&hits[0]["range"]["start"]), (y_line, y_ch), "{a}");
+    assert_eq!(
+        pos_pair(&hits[0]["range"]["end"]),
+        (y_line, y_ch + 1),
+        "{a}"
+    );
+
+    // the unmounted head's honest miss: `Logger` squiggles at its CALL
+    // (a true squiggle — the head really is unnameable), never on the
+    // use statement
+    let (call_line, call_ch) = pos_of(doc, "Logger(\"x\")", 1);
+    let (call_line, call_ch) = (i64::from(call_line), i64::from(call_ch));
+    let hits: Vec<&Value> = diags
+        .iter()
+        .filter(|d| d["message"].as_str().unwrap().contains("Logger"))
+        .collect();
+    assert_eq!(hits.len(), 1, "one `Logger` squiggle: {a}");
+    assert!(
+        hits[0]["message"].as_str().unwrap().contains("unknown"),
+        "the unnameable head's miss: {a}"
+    );
+    assert_eq!(
+        pos_pair(&hits[0]["range"]["start"]),
+        (call_line, call_ch),
+        "{a}"
+    );
+    assert!(
+        diags.iter().all(|d| d["range"]["start"]["line"] != 0),
+        "the use line stays clean: {a}"
+    );
+}
+
+#[test]
+fn a_resolved_closure_rides_the_ok_branch() {
+    // the Ok branch is untouched: the same doc against a RESOLVABLE
+    // closure answers exactly today's set — the constructor-call lint
+    // (a ctor-less class called directly) beside the doc's own unknown
+    // name, the dep's surface binding clean around them
+    let mut s = S::boot();
+    s.index_mod_at("file:///deps/ink/src/mod.rut", "ink", "", CLEAN_INK);
+    let doc = "use ink::{ Logger };\nentry fn main() {\n    let log = Logger(\"x\");\n    log.info(\"hi\");\n    let x = y;\n}\n";
+    let uri = "file:///ws/app/src/mod.rut";
+    s.index_mod_at(uri, "app", "", doc);
+    let a = s.analyze(uri, doc);
+    let diags = a["diags"].as_array().unwrap();
+    assert_eq!(diags.len(), 2, "the Ok branch's answer, unchanged: {a}");
+    let (y_line, y_ch) = pos_of(doc, "= y;", 1);
+    let hits: Vec<&Value> = diags
+        .iter()
+        .filter(|d| d["message"].as_str().unwrap().contains("`y`"))
+        .collect();
+    assert_eq!(hits.len(), 1, "the doc's own unknown name: {a}");
+    assert_eq!(
+        pos_pair(&hits[0]["range"]["start"]),
+        (i64::from(y_line), i64::from(y_ch) + 2),
+        "the doc's own unknown name at its site: {a}"
+    );
+    assert!(
+        diags.iter().any(|d| d["message"]
+            .as_str()
+            .unwrap()
+            .contains("constructs through its class methods")),
+        "the ctor-call lint rides the resolved world, as today: {a}"
+    );
+}
+
+#[test]
+fn a_dirty_doc_degrades_without_duplication() {
+    // a syntax-damaged doc beside a dangling use: the closure gate
+    // skips the dirty file, the compile reports the syntax, and the
+    // merge dedupes the TRUE duplicates (same range AND message) — the
+    // degraded set only ever ADDS distinct sites
+    let mut s = S::boot();
+    let doc = "use ink::{ Logger };\nentry fn main() {\n    let x = ;\n    let z = q;\n}\n";
+    let uri = "file:///ws/app/src/mod.rut";
+    s.index_mod_at(uri, "app", "", doc);
+    let a = s.analyze(uri, doc);
+    let diags = a["diags"].as_array().unwrap();
+    assert_eq!(diags.len(), 2, "the syntax set, exactly once: {a}");
+    assert!(
+        diags
+            .iter()
+            .all(|d| d["message"].as_str().unwrap().contains("expected")),
+        "the parse lane's own diags: {a}"
+    );
 }
 
 #[test]

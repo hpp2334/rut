@@ -1719,10 +1719,11 @@ async function main() {
 
             // the FOLDER-only shape (what the walk walked before
             // discovery): the manifest-less folder is NOT a root — a
-            // clean walk that mounts nothing. The stamped doc's check
-            // lane stays quiet while the dep closure is unresolved (the
-            // `y` squiggle included) and bare completion offers no
-            // Logger — the dep world is simply absent
+            // clean walk that mounts nothing. The check lane DEGRADES
+            // (the conscious 2026-11 flip — silence was the bug): the
+            // doc's own `y` squiggle arrives even with the dep closure
+            // unresolved, while the dep world stays absent — bare
+            // completion offers no Logger
             const folderOut = await nest.resolveDeps([WS]);
             assert.ok(
                 !folderOut.error && folderOut.missing.length === 0,
@@ -1732,9 +1733,10 @@ async function main() {
             const preY = (pre.diags || []).filter(
                 (d) => d.message.includes('unknown name') && d.message.includes('`y`'),
             );
-            if (preY.length !== 0) {
+            const wantPreY = posOnLine(docSrc, /let x = y;/, 'y');
+            if (preY.length !== 1 || preY[0].range.start.line !== wantPreY[0]) {
                 bad.push(
-                    `the folder-only walk must leave the check lane quiet (got ${JSON.stringify(pre.diags.map((d) => d.message))})`,
+                    `the folder-only walk degrades, yet the doc's own y squiggle must survive (got ${JSON.stringify(pre.diags.map((d) => d.message))})`,
                 );
             }
             const preBare = await nest.complete(`file://${DOC}`, 0, 0, docSrc);
