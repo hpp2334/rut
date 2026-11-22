@@ -438,7 +438,11 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
             let cty = self.ctx.types.intern(RutType {
                 name: cname,
                 kind: TyKind::Data {
-                    fields: vec![FieldInfo { name, ty }],
+                    fields: vec![FieldInfo {
+                        name,
+                        ty,
+                        vis: FieldVis::Pub,
+                    }],
                 },
             });
             let crec = self.new_reg(cty);
@@ -547,7 +551,11 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
         let cty = self.ctx.types.intern(RutType {
             name: cname,
             kind: TyKind::Data {
-                fields: vec![FieldInfo { name, ty }],
+                fields: vec![FieldInfo {
+                    name,
+                    ty,
+                    vis: FieldVis::Pub,
+                }],
             },
         });
         let old = self.locals[idx].reg;

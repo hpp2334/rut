@@ -196,10 +196,62 @@ pub fn arr_elem_repr(table: &TypeTable, elem: TypeId) -> Repr {
     table.repr_of(elem)
 }
 
+/// The per-field visibility dial a type descriptor's rows carry
+/// (`TyKind::Data`'s fields): the declaring source's member dial,
+/// stamped at collection, copied by every mirror/instantiation rebuild,
+/// and riding the binary wire with the row. rut-core has no AST dep, so
+/// this is the descriptor's own spelling of the AST's `Vis` — the
+/// compiler converts at its boundary. The gate reads it when the unit
+/// holds no decl for the record (a used class, a mirror instantiation):
+/// `Pub` is the only dial that crosses packages, and the check is
+/// STRICT equality — never the module predicate, whose `Pkg => true`
+/// arm would wrongly pass `pub(pkg)` across the use door. Synthesized
+/// machinery rows (asyncfn frames, tuples, capture cells, the cx
+/// singleton) stamp `Pub`: machinery has no dial, never gated.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum FieldVis {
+    /// `pub` — usable from anywhere (struct fields stamp it AT THE
+    /// STAMP: the always-pub exemption folded into the row, so a
+    /// carried struct row passes without the kind at hand)
+    Pub,
+    /// `pub(pkg)` — package-wide, no further
+    Pkg,
+    /// `pub(super)` — the parent module's subtree
+    Super,
+    /// unannotated member — module-private (the default)
+    Private,
+}
+
+impl FieldVis {
+    /// The wire tag (one byte per field row, after the type id).
+    pub fn tag(self) -> u8 {
+        match self {
+            FieldVis::Pub => 0,
+            FieldVis::Pkg => 1,
+            FieldVis::Super => 2,
+            FieldVis::Private => 3,
+        }
+    }
+
+    /// The wire tag's dial; a bad tag is a decode error.
+    pub fn from_tag(t: u8) -> Option<FieldVis> {
+        match t {
+            0 => Some(FieldVis::Pub),
+            1 => Some(FieldVis::Pkg),
+            2 => Some(FieldVis::Super),
+            3 => Some(FieldVis::Private),
+            _ => None,
+        }
+    }
+}
+
 #[derive(Clone, Debug, PartialEq)]
 pub struct FieldInfo {
     pub name: IdentId,
     pub ty: TypeId,
+    /// the field's own dial (see [`FieldVis`]) — stamped from the
+    /// declaring AST at collection, `Pub` on synthesized rows
+    pub vis: FieldVis,
 }
 
 #[derive(Clone, Debug, PartialEq)]

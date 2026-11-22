@@ -1230,6 +1230,7 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                     fields: vec![FieldInfo {
                         name: var,
                         ty: elem_ty,
+                        vis: FieldVis::Pub,
                     }],
                 },
             });
@@ -1600,6 +1601,7 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                     fields: vec![FieldInfo {
                         name: var,
                         ty: elem_ty,
+                        vis: FieldVis::Pub,
                     }],
                 },
             });

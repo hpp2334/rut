@@ -337,6 +337,7 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                     .map(|(f, o)| rut_core::types::FieldInfo {
                         name: f.name,
                         ty: o.unwrap_or(f.ty),
+                        vis: f.vis,
                     })
                     .collect();
                 self.ctx.types.intern(rut_core::types::RutType {

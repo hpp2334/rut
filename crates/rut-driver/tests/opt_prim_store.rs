@@ -668,8 +668,11 @@ fn version_gate_rejects_stale_artifacts() {
     // law is dead), so stale v21 artifacts refuse at the gate; v23 is
     // the legacy-tables cut — the retired `WELL_KNOWN` rows and the
     // reserved boot shells are removed, ids renumbered dense, and the
-    // surface section drops the namespace head's filler byte
-    assert_eq!(VERSION, 23, "the legacy-tables cut owns this VERSION bump");
+    // surface section drops the namespace head's filler byte; v24 is
+    // the field dial — every `Data` row's fields gain one vis tag byte
+    // (the member-vis field plan's Act 1: the carried rows answer the
+    // `.field` gate for a record this unit holds no decl for)
+    assert_eq!(VERSION, 24, "the field-dial cut owns this VERSION bump");
     let out = rut_driver::compile_module(
         "entry fn main() -> i64 { let a: [?i64] = [nil; 2]; a[0] = 1; let x = a[0]; return x; }",
         rut_ast::parser::Mode::Impl,

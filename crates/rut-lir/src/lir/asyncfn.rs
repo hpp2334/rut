@@ -70,18 +70,22 @@ pub(crate) fn ensure_layout(
         FieldInfo {
             name: ctx.intern("state"),
             ty: ckpt_ty,
+            vis: FieldVis::Pub,
         },
         FieldInfo {
             name: ctx.intern("cancelled"),
             ty: TY_BOOL,
+            vis: FieldVis::Pub,
         },
         FieldInfo {
             name: ctx.intern("awaiter"),
             ty: TY_OPAQUE,
+            vis: FieldVis::Pub,
         },
         FieldInfo {
             name: ctx.intern("pending"),
             ty: TY_OPAQUE,
+            vis: FieldVis::Pub,
         },
         // the ANSWER lane (rut-core/async_frame::ANSWER_FIELD): a
         // completing frame stores its value here before retiring the
@@ -89,10 +93,15 @@ pub(crate) fn ensure_layout(
         FieldInfo {
             name: ctx.intern("answer"),
             ty: ret_ty,
+            vis: FieldVis::Pub,
         },
     ];
     for (n, t) in &param_fields {
-        fields.push(FieldInfo { name: *n, ty: *t });
+        fields.push(FieldInfo {
+            name: *n,
+            ty: *t,
+            vis: FieldVis::Pub,
+        });
     }
     let frame_ty = ctx.types.intern(RutType {
         name: frame_name,
@@ -135,7 +144,11 @@ pub(crate) fn patch_members(ctx: &mut Ctx, ckpt_ty: TypeId, states: u32) {
 pub(crate) fn append_frame_field(ctx: &mut Ctx, frame_ty: TypeId, name: IdentId, ty: TypeId) {
     let di = ctx.types.dense(frame_ty) as usize;
     if let TyKind::Data { fields } = &mut ctx.types.types[di].kind {
-        fields.push(FieldInfo { name, ty });
+        fields.push(FieldInfo {
+            name,
+            ty,
+            vis: FieldVis::Pub,
+        });
     }
 }
 
@@ -1287,28 +1300,34 @@ pub(crate) fn ensure_sleep_future(ctx: &mut Ctx) -> TcResult<()> {
                 FieldInfo {
                     name: f_state,
                     ty: ckpt_ty,
+                    vis: FieldVis::Pub,
                 },
                 FieldInfo {
                     name: f_cancelled,
                     ty: TY_BOOL,
+                    vis: FieldVis::Pub,
                 },
                 FieldInfo {
                     name: f_awaiter,
                     ty: TY_OPAQUE,
+                    vis: FieldVis::Pub,
                 },
                 FieldInfo {
                     name: f_pending,
                     ty: TY_OPAQUE,
+                    vis: FieldVis::Pub,
                 },
                 // the ANSWER lane — every engine frame carries one (nil
                 // here; the await's resume arm reads it uniformly)
                 FieldInfo {
                     name: f_answer,
                     ty: TY_NIL,
+                    vis: FieldVis::Pub,
                 },
                 FieldInfo {
                     name: f_ms,
                     ty: TY_U32,
+                    vis: FieldVis::Pub,
                 },
             ],
         },
@@ -1410,10 +1429,12 @@ pub(crate) fn ensure_select_future(
             FieldInfo {
                 name: fa,
                 ty: TY_OPAQUE,
+                vis: FieldVis::Pub,
             },
             FieldInfo {
                 name: fb,
                 ty: TY_OPAQUE,
+                vis: FieldVis::Pub,
             },
         ],
     )?;
@@ -1451,6 +1472,7 @@ pub(crate) fn ensure_select_all_future(
         vec![FieldInfo {
             name: fcohort,
             ty: TY_OPAQUE,
+            vis: FieldVis::Pub,
         }],
     )?;
     let (thunk_fid, wfid) = ensure_engine_yield_pair(ctx, "__select_all_yield")?;
@@ -1512,22 +1534,27 @@ fn mint_engine_future(
         FieldInfo {
             name: ctx.intern("state"),
             ty: ckpt_ty,
+            vis: FieldVis::Pub,
         },
         FieldInfo {
             name: ctx.intern("cancelled"),
             ty: TY_BOOL,
+            vis: FieldVis::Pub,
         },
         FieldInfo {
             name: ctx.intern("awaiter"),
             ty: TY_OPAQUE,
+            vis: FieldVis::Pub,
         },
         FieldInfo {
             name: ctx.intern("pending"),
             ty: TY_OPAQUE,
+            vis: FieldVis::Pub,
         },
         FieldInfo {
             name: ctx.intern("answer"),
             ty: answer_ty,
+            vis: FieldVis::Pub,
         },
     ];
     fields.extend(extra);
@@ -1817,22 +1844,27 @@ pub(crate) fn ensure_host_async(
                 FieldInfo {
                     name: f_state,
                     ty: TY_OPAQUE,
+                    vis: FieldVis::Pub,
                 },
                 FieldInfo {
                     name: f_cancelled,
                     ty: TY_BOOL,
+                    vis: FieldVis::Pub,
                 },
                 FieldInfo {
                     name: f_awaiter,
                     ty: TY_OPAQUE,
+                    vis: FieldVis::Pub,
                 },
                 FieldInfo {
                     name: f_pending,
                     ty: TY_OPAQUE,
+                    vis: FieldVis::Pub,
                 },
                 FieldInfo {
                     name: f_answer,
                     ty: ret_ty,
+                    vis: FieldVis::Pub,
                 },
             ],
         },
@@ -2210,28 +2242,34 @@ fn ensure_crossed_async(ctx: &mut Ctx, name: IdentId, ef: &crate::check::ExternF
         FieldInfo {
             name: ctx.intern("state"),
             ty: ckpt_ty,
+            vis: FieldVis::Pub,
         },
         FieldInfo {
             name: ctx.intern("cancelled"),
             ty: TY_BOOL,
+            vis: FieldVis::Pub,
         },
         FieldInfo {
             name: ctx.intern("awaiter"),
             ty: TY_OPAQUE,
+            vis: FieldVis::Pub,
         },
         FieldInfo {
             name: ctx.intern("pending"),
             ty: TY_OPAQUE,
+            vis: FieldVis::Pub,
         },
         FieldInfo {
             name: ctx.intern("answer"),
             ty: ef.ret,
+            vis: FieldVis::Pub,
         },
     ];
     for (i, p) in ef.params.iter().enumerate() {
         fields.push(FieldInfo {
             name: ctx.intern(&format!("#arg{i}")),
             ty: *p,
+            vis: FieldVis::Pub,
         });
     }
     let frame_name = ctx.intern(&format!("{}{}", af::FRAME_PREFIX, ctx.name(name)));

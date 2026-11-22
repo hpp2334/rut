@@ -40,7 +40,9 @@ fn graph_of(c: Result<rut_driver::Compiled, rut_driver::RunError>) -> rut_driver
 
 const LIB: &str = r#"
 pub class Ctx {
-  v: u64;
+  // the pack root's probe reads it across the use door — the field
+  // dial's law: a field a foreign pkg reads is declared `pub`
+  pub v: u64;
 }
 
 impl Ctx {

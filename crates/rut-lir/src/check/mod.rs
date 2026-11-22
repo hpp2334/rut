@@ -1304,45 +1304,115 @@ impl<'a> Ctx<'a> {
 
     /// The member-visibility law, the FIELD lanes (a `.field` read, a
     /// field write, a literal naming the field): may the CURRENT module
-    /// see `ty`'s field `name`? Structs are exempt BY LAW (fields are
-    /// always public — the field law has no dial for `DataKind::Struct`);
-    /// classes only. A record this unit holds no decl for — a used
-    /// foreign class, a carried mirror instantiation — has no dial to
-    /// read and passes: the used-class surface carries no per-field
-    /// dial at all (its literals refuse outright in
-    /// `compile_struct_extern`); carrying the dial across the wire is
-    /// the binary format's law, not this gate's. `None` = visible;
-    /// `Some` spells the crossing fix — the phase-1 wording family,
-    /// the owner (the class) prefixed.
+    /// see `ty`'s field `name`? Two halves, one door:
+    ///
+    /// - a record this unit holds a DECL for (own classes, their
+    ///   instantiations) answers from the AST — the decl's own member
+    ///   list is the dial (the generic template keeps no resolved field
+    ///   table; its instantiations re-read the decl). Structs are exempt
+    ///   BY LAW here (their fields are always public — the field law has
+    ///   no dial for `DataKind::Struct`).
+    /// - a record with no decl here (a used foreign class, a mirror
+    ///   instantiation — `find_data` misses) answers from the CARRIED
+    ///   rows: the used-class surface carries each field's dial
+    ///   ([`FieldVis`], stamped at the exporter's collection, copied by
+    ///   every mirror rebuild, riding the wire). `Pub` passes — structs
+    ///   stamp it AT THE STAMP — and every other dial refuses
+    ///   cross-package (the strict check, never the module predicate:
+    ///   `pub(pkg)` names one package, and this is not it).
+    ///
+    /// `None` = visible; `Some` spells the crossing fix — the phase-1
+    /// wording family, the owner (the class) prefixed.
     pub(crate) fn field_vis_err(&self, ty: TypeId, name: IdentId) -> Option<String> {
         let dname = self
             .inst_data
             .get(&ty)
             .map(|(d, _)| *d)
-            .or_else(|| self.datas.iter().find(|(_, d)| d.ty == ty).map(|(n, _)| *n))?;
-        let d = self.find_data(dname)?;
-        if d.kind == DataKind::Struct {
+            .or_else(|| self.datas.iter().find(|(_, d)| d.ty == ty).map(|(n, _)| *n));
+        if let Some(dname) = dname {
+            if let Some(d) = self.find_data(dname) {
+                if d.kind == DataKind::Struct {
+                    return None;
+                }
+                let members: Vec<FieldRef> = match d.node {
+                    ItemRef::Struct(h) => h.get(self.ast).fields.clone(),
+                    ItemRef::Class(h) => h.get(self.ast).fields.clone(),
+                    _ => Vec::new(),
+                };
+                let fvis = members
+                    .iter()
+                    .find_map(|&f| {
+                        let FieldRef::Field(fh) = f else {
+                            return None;
+                        };
+                        let fd = fh.get(self.ast);
+                        (fd.name.ident == name).then_some(fd.vis())
+                    })
+                    .flatten();
+                return self.member_vis_err(dname, d.node.span(self.ast), name, fvis);
+            }
+            // `inst_data` names a FOREIGN decl (a mirror instantiation):
+            // no body in this unit — the carried dial answers below
+        }
+        self.carried_field_vis_err(ty, name)
+    }
+
+    /// The field gate's carried half: `ty`'s row answers from the
+    /// surface-carried descriptor (see [`Ctx::field_vis_err`]). A field
+    /// this unit never declared takes the declaring package from the
+    /// binding ledger (`extern_origins`, the mirror's `owner_of_data`
+    /// fallback). `None` = visible.
+    fn carried_field_vis_err(&self, ty: TypeId, name: IdentId) -> Option<String> {
+        let TyKind::Data { fields } = self.types.kind(ty) else {
+            return None;
+        };
+        let fvis = fields.iter().find(|f| f.name == name)?.vis;
+        if fvis == FieldVis::Pub {
             return None;
         }
-        // the field's dial: the decl's own member list — the generic
-        // template keeps no resolved field table (its instantiations
-        // re-read the decl), so the AST is the one source of the vis
-        let members: Vec<FieldRef> = match d.node {
-            ItemRef::Struct(h) => h.get(self.ast).fields.clone(),
-            ItemRef::Class(h) => h.get(self.ast).fields.clone(),
-            _ => Vec::new(),
-        };
-        let fvis = members
-            .iter()
-            .find_map(|&f| {
-                let FieldRef::Field(fh) = f else {
-                    return None;
-                };
-                let fd = fh.get(self.ast);
-                (fd.name.ident == name).then_some(fd.vis())
-            })
-            .flatten();
-        self.member_vis_err(dname, d.node.span(self.ast), name, fvis)
+        let dname = self
+            .inst_data
+            .get(&ty)
+            .map(|(d, _)| *d)
+            .unwrap_or_else(|| self.types.type_at(ty).name);
+        // the origin ledger spells the mount key (`name@hash` in the
+        // linked flows); the diagnostic names the package
+        let origin = self
+            .extern_origins
+            .get(&dname)
+            .cloned()
+            .unwrap_or_else(|| self.owner_of_data(dname));
+        let origin = origin
+            .rsplit_once('@')
+            .map(|(name, _)| name)
+            .unwrap_or(&origin);
+        Some(format!(
+            "`{}.{}` — {}",
+            self.name(dname),
+            self.name(name),
+            self.carried_vis_hint(name, origin, fvis)
+        ))
+    }
+
+    /// The crossing-fix hint for a CARRIED field's dial: each tier
+    /// names the dial, the package that holds it, and the one widening
+    /// that crosses — `pub` (the [`Ctx::vis_hint`] conventions, the
+    /// package speaking where a module would).
+    fn carried_vis_hint(&self, name: IdentId, origin: &str, vis: FieldVis) -> String {
+        let n = self.name(name);
+        match vis {
+            FieldVis::Private => format!(
+                "`{n}` is private to package `{origin}` — declare it `pub` to cross"
+            ),
+            FieldVis::Pkg => format!(
+                "`{n}` is `pub(pkg)` — visible only inside package `{origin}`; declare it `pub` to cross"
+            ),
+            FieldVis::Super => format!(
+                "`{n}` is `pub(super)` — visible only in its parent module's subtree inside package `{origin}`; declare it `pub` to cross"
+            ),
+            // the gate refuses only non-Pub dials; Pub never reaches here
+            FieldVis::Pub => String::new(),
+        }
     }
 
     /// Use another module's type descriptors so `(scope, local)` ids
@@ -2157,6 +2227,7 @@ impl<'a> Ctx<'a> {
             .map(|(i, ty)| FieldInfo {
                 name: self.intern(&i.to_string()),
                 ty,
+                vis: FieldVis::Pub,
             })
             .collect();
         self.types.intern(RutType {

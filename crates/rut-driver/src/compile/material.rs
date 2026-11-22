@@ -221,6 +221,7 @@ impl<'a> Substitution<'a> {
                     .map(|f| FieldInfo {
                         name: f.name,
                         ty: self.run(f.ty),
+                        vis: f.vis,
                     })
                     .collect();
                 let fields_changed = nf.iter().zip(fields.iter()).any(|(n, o)| n.ty != o.ty);

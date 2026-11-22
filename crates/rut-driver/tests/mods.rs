@@ -1612,6 +1612,313 @@ fn member_visibility_fields_matrix() {
     );
 }
 
+// =====================================================================
+// the member-visibility law — FIELDS, the cross-package half (the
+// carried dial): a record the consumer holds no decl for answers from
+// the surface-carried rows. `pub` passes (structs stamp it AT THE
+// STAMP); every other dial refuses — strictly, `pub(pkg)`/`pub(super)`
+// included.
+// =====================================================================
+
+/// The exporting package's fixture: the class module `a` (the
+/// `box_mod` shape) under a `pub mod a;` root — the consumer's
+/// `use dep::a::{ .. }` door.
+fn box_pkg(dial: &str) -> rut_driver::Mounted {
+    modpkg(
+        "dep",
+        "pub mod a;\nentry fn main() -> i32 { return 0; }\n",
+        vec![("a", Vis::Pub, box_mod(dial).as_str())],
+    )
+}
+
+/// The consumer's three cross-package lane fns against the dep door:
+/// read, write, literal (`Box` bare through the use). The go sums the
+/// runnable pair + the literal's getter.
+fn box_pkg_site() -> String {
+    "use dep::a::{ Box, mk };\n\
+     fn r() -> i32 { let b = mk(41); return b.v; }\n\
+     fn w() -> i32 { let b = mk(41); b.v = 42; return b.get(); }\n\
+     fn l() -> i32 { let b = Box { v: 41 }; return b.get(); }\n\
+     entry fn main() -> i32 { return r() + w() + l(); }\n"
+        .to_string()
+}
+
+#[test]
+fn member_visibility_fields_cross_package() {
+    // private field across the use door: the read and the write refuse
+    // with the carried wording — the origin package named, `pub` the
+    // one widening that crosses; the literal refuses at the class gate
+    // (a used class has no instance literal — construction is the
+    // class's own statics)
+    let pkgs = vec![box_pkg(""), modpkg("pkg", box_pkg_site().as_str(), vec![])];
+    let diags = compile_with_diags(&pkgs, "pkg");
+    assert_eq!(
+        diags
+            .iter()
+            .filter(|d| d
+                .contains("`Box.v` — `v` is private to package `dep` — declare it `pub` to cross"))
+            .count(),
+        2,
+        "the read and the write each diagnose: {diags:?}"
+    );
+    assert!(
+        diags
+            .iter()
+            .any(|d| d.contains("classes have no instance literal")),
+        "the literal stays refused at the class gate: {diags:?}"
+    );
+
+    // `pub` field: crosses — the read and the write compile clean (the
+    // literal stays refused at the class gate for ANY dial — a used
+    // class has no instance literal; the runtime half rides the real
+    // walk flow, pinned below)
+    let pkg_body = "use dep::a::{ Box, mk };\n\
+                    fn r() -> i32 { let b = mk(41); return b.v; }\n\
+                    fn w() -> i32 { let b = mk(41); b.v = 42; return b.get(); }\n\
+                    entry fn main() -> i32 { return r() + w(); }\n"
+        .to_string();
+    let pkgs = vec![box_pkg("pub "), modpkg("pkg", pkg_body.as_str(), vec![])];
+    let diags = compile_with_diags(&pkgs, "pkg");
+    assert!(diags.is_empty(), "`pub v` crosses: {diags:?}");
+
+    // struct fields across the use door: the always-pub law rides the
+    // carried rows (structs stamp `Pub` AT THE STAMP) — read, write,
+    // literal all compile clean
+    let point = "pub struct Point { x: i32; y: i32 }\n\
+                 pub fn mk(x: i32) -> Point { return Point { x: x, y: 0 }; }\n";
+    let dep = modpkg(
+        "dep",
+        "pub mod a;\nentry fn main() -> i32 { return 0; }\n",
+        vec![("a", Vis::Pub, point)],
+    );
+    let pkgs = vec![
+        dep,
+        modpkg(
+            "pkg",
+            "use dep::a::{ Point, mk };\n\
+             entry fn main() -> i32 {\n\
+             \x20   let p = mk(40);\n\
+             \x20   p.y = 2;\n\
+             \x20   let q = Point { x: 40, y: 2 };\n\
+             \x20   return p.x + p.y + q.x + q.y;\n\
+             }\n",
+            vec![],
+        ),
+    ];
+    let diags = compile_with_diags(&pkgs, "pkg");
+    assert!(diags.is_empty(), "struct fields cross: {diags:?}");
+
+    // `pub(pkg)`: package-wide AT HOME, refused across the door — the
+    // strict carried check, never the module predicate (whose
+    // `Pkg => true` arm would wrongly pass)
+    for dial in ["pub(pkg) ", "pub(super) "] {
+        let expect = if dial.starts_with("pub(pkg)") {
+            "`Box.v` — `v` is `pub(pkg)` — visible only inside package `dep`; declare it `pub` to cross"
+        } else {
+            "`Box.v` — `v` is `pub(super)` — visible only in its parent module's subtree inside package `dep`; declare it `pub` to cross"
+        };
+        let pkgs = vec![
+            box_pkg(dial),
+            modpkg("pkg", box_pkg_site().as_str(), vec![]),
+        ];
+        let diags = compile_with_diags(&pkgs, "pkg");
+        assert_eq!(
+            diags.iter().filter(|d| d.contains(expect)).count(),
+            2,
+            "`{dial}v` refuses across the door: {diags:?}"
+        );
+    }
+
+    // the method control: a used class's inherent-method surface
+    // carries only `pub` fns, so a private (and a `pub(pkg)` /
+    // `pub(super)`) member call refuses across the door exactly as
+    // before this phase — the field change gates nothing there
+    for dial in [None, Some("pub(pkg) "), Some("pub(super) ")] {
+        let pkgs = vec![
+            modpkg(
+                "dep",
+                "pub mod a;\nentry fn main() -> i32 { return 0; }\n",
+                vec![("a", Vis::Pub, counter_mod(dial).as_str())],
+            ),
+            modpkg(
+                "pkg",
+                "use dep::a::{ Counter, mk };\n\
+                 entry fn main() -> i32 { let c = mk(41); return c.bump(); }\n",
+                vec![],
+            ),
+        ];
+        let diags = compile_with_diags(&pkgs, "pkg");
+        assert!(!diags.is_empty(), "`{dial:?} bump` refuses across the door");
+    }
+
+    // the closed mirror hole: a used GENERIC class's literal routes
+    // through the mirror arm (the instantiation row IS the layout) —
+    // the carried dial gates it now, the phase's wording
+    let node = "pub class Node<T> { v: T }\n\
+                pub fn mkv(v: i32) -> Node<i32> { return Node<i32> { v: v }; }\n";
+    let pkgs = vec![
+        modpkg(
+            "dep",
+            "pub mod a;\nentry fn main() -> i32 { return 0; }\n",
+            vec![("a", Vis::Pub, node)],
+        ),
+        modpkg(
+            "pkg",
+            "use dep::a::{ Node };\n\
+             entry fn main() -> i32 { let n = Node<i32> { v: 41 }; return n.v; }\n",
+            vec![],
+        ),
+    ];
+    let diags = compile_with_diags(&pkgs, "pkg");
+    assert!(
+        diags.iter().any(|d| d
+            .contains("`Node.v` — `v` is private to package `dep` — declare it `pub` to cross")),
+        "the mirror-arm literal gates on the carried dial: {diags:?}"
+    );
+}
+
+/// The cross-package field law, END TO END over the real walk flow (the
+/// hand two-lib world above is the gate's shape; this one packs the dep
+/// as a source zip and mounts it the way a manifest dep mounts): the
+/// carried dial crosses the wire AND the runtime reads/writes the pub
+/// field; the private dial refuses at compile with the carried wording.
+#[test]
+fn member_visibility_fields_cross_package_runs() {
+    use rut_native::{load_dir_fetched, pack_dir_zip};
+    use std::collections::BTreeMap;
+
+    let box_dep = |dial: &str, root: &Path| {
+        let dep = root.join("dep");
+        write(&dep, "rut.jsonc", r#"{ "name": "dep" }"#);
+        write(&dep, "src/mod.rut", box_mod(dial).as_str());
+        pack_dir_zip(&dep).expect("pack the dep")
+    };
+    let app_with = |body: &str, root: &Path| {
+        let app = root.join("app");
+        write(
+            &app,
+            "rut.jsonc",
+            r#"{ "name": "app", "deps": { "dep": { "url": "https://cdn.example/x/dep.zip" } } }"#,
+        );
+        write(&app, "src/mod.rut", body);
+        app
+    };
+    let mount = |app: &Path, zip: &[u8]| {
+        let sha: String = {
+            use sha2::{Digest, Sha256};
+            let mut h = Sha256::new();
+            h.update(zip);
+            h.finalize().iter().map(|b| format!("{b:02x}")).collect()
+        };
+        write(
+            app,
+            "rut.lock",
+            &format!(
+                r#"{{ "format": "rutlock", "format_version": 1, "deps": [{{ "pkg": "dep", "url": "https://cdn.example/x/dep.zip", "sha256": "{sha}" }}] }}"#
+            ),
+        );
+        let mut map = BTreeMap::new();
+        map.insert("https://cdn.example/x/dep.zip".to_string(), zip.to_vec());
+        load_dir_fetched(app, &map).expect("mount the dep zip")
+    };
+    let run_go = |loaded: rut_driver::Walk| -> i32 {
+        let g = loaded
+            .pkgs
+            .iter()
+            .fold(rut_driver::RutRun::new(), |r, p| r.mount(p.clone()))
+            .entrypoint(&loaded.root)
+            .compile()
+            .expect("compile the walk");
+        assert!(
+            g.graph.diags.is_empty(),
+            "{:?}",
+            g.graph.diags.iter().map(|d| &d.msg).collect::<Vec<_>>()
+        );
+        let flat = rut_core::link::flatten(g.graph.program.expect("linked program"));
+        rut_vm::verify::verify(&flat).expect("verify");
+        let mut vm = rut_vm::interp::Vm::builder()
+            .program(std::rc::Rc::new(flat))
+            .limits(rut_vm::interp::Limits {
+                fuel: Some(2_000_000),
+                heap_limit_bytes: Some(16 * 1024 * 1024),
+                interrupt_every: 1024,
+            })
+            .hosts(rut_vm::interp::HostRegistry::new())
+            .build()
+            .expect("vm");
+        vm.call::<_, i32>("go", ()).expect("run go")
+    };
+
+    let root = scratch("fields-xpkg-run");
+    // `pub`: the read crosses and RUNS — the value made by the dep's
+    // `mk` reads back through the consumer's GetF (41)
+    let zip = box_dep("pub ", &root);
+    let app = app_with(
+        "use dep::{ Box, mk };\n\
+         entry fn go() -> i32 { let b = mk(41); return b.v; }\n",
+        &root,
+    );
+    assert_eq!(run_go(mount(&app, &zip)), 41, "`pub v` reads across");
+
+    // the write crosses too: 41 in, 42 back out through the dep's getter
+    let app = app_with(
+        "use dep::{ mk };\n\
+         entry fn go() -> i32 { let b = mk(41); b.v = 42; return b.get(); }\n",
+        &root,
+    );
+    assert_eq!(run_go(mount(&app, &zip)), 42, "`pub v` writes across");
+
+    // private: the compile refuses with the carried wording — the
+    // runtime never sees it
+    let zip = box_dep("", &root);
+    let app = app_with(
+        "use dep::{ mk };\n\
+         entry fn go() -> i32 { let b = mk(41); return b.v; }\n",
+        &root,
+    );
+    let loaded = mount(&app, &zip);
+    let g = loaded
+        .pkgs
+        .iter()
+        .fold(rut_driver::RutRun::new(), |r, p| r.mount(p.clone()))
+        .entrypoint(&loaded.root)
+        .compile()
+        .expect("compile carries the diags");
+    assert!(
+        g.graph.diags.iter().any(|d| d
+            .msg
+            .contains("`Box.v` — `v` is private to package `dep` — declare it `pub` to cross")),
+        "{:?}",
+        g.graph.diags.iter().map(|d| &d.msg).collect::<Vec<_>>()
+    );
+
+    // `pub(pkg)`: refused across the door in the real flow too
+    let zip = box_dep("pub(pkg) ", &root);
+    let app = app_with(
+        "use dep::{ mk };\n\
+         entry fn go() -> i32 { let b = mk(41); return b.v; }\n",
+        &root,
+    );
+    let loaded = mount(&app, &zip);
+    let g = loaded
+        .pkgs
+        .iter()
+        .fold(rut_driver::RutRun::new(), |r, p| r.mount(p.clone()))
+        .entrypoint(&loaded.root)
+        .compile()
+        .expect("compile carries the diags");
+    assert!(
+        g.graph
+            .diags
+            .iter()
+            .any(|d| d.msg.contains(
+                "`Box.v` — `v` is `pub(pkg)` — visible only inside package `dep`; declare it `pub` to cross"
+            )),
+        "{:?}",
+        g.graph.diags.iter().map(|d| &d.msg).collect::<Vec<_>>()
+    );
+}
+
 #[test]
 fn struct_fields_stay_public_cross_module() {
     // the always-pub law pinned: `DataKind::Struct` has no dial — a

@@ -239,7 +239,7 @@ entry fn main() -> nil {
     src.into_flow().skip(1).for_each(fn(x: i32) -> nil {
         joined.push(f"{x}");                    // a shared cell survives the closure
     });
-    log.info(f"total={total} n={joined.len()} first={joined[0]} last={joined[joined.len-1]}");
+    log.info(f"total={total} n={joined.len()} first={joined[0]} last={joined[joined.as_array().len()-1]}");
 }
 ```
 

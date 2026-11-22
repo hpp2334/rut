@@ -1028,13 +1028,12 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
     /// a used (non-generic) CLASS never reaches this arm (the
     /// `extern_classes` check below refuses the instance literal —
     /// construction is the class's own statics, each phase-1 gated), and
-    /// a used STRUCT's fields are always public (the field law has no
-    /// dial), so every field the descriptor carries may be spelled.
-    /// KNOWN HOLE, future work: a used GENERIC class's literal does not
-    /// reach the refusal either — it routes through `compile_struct`'s
-    /// mirror arm (the instantiation row IS the layout), neither refused
-    /// nor visibility-gated; cross-package only, and closing it needs
-    /// wire visibility bits on the mirrored descriptor.
+    /// a used STRUCT's fields stamp `Pub` AT THE STAMP (the always-pub
+    /// exemption folded into the carried rows), so every field the
+    /// descriptor carries may be spelled. A used GENERIC class's literal
+    /// routes through `compile_struct`'s mirror arm (the instantiation
+    /// row IS the layout) — the carried dial gates it there, like every
+    /// field lane.
     fn compile_struct_extern(
         &mut self,
         sty: TypeId,

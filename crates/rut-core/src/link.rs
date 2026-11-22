@@ -1253,6 +1253,7 @@ fn remap_kind(
                 .map(|f| crate::types::FieldInfo {
                     name: nm(f.name),
                     ty: map(f.ty),
+                    vis: f.vis,
                 })
                 .collect(),
         },
@@ -1414,7 +1415,7 @@ mod tests {
     use super::*;
     use crate::binary::FuncCode;
     use crate::ops::Op;
-    use crate::types::{FieldInfo, TY_I32};
+    use crate::types::{FieldInfo, FieldVis, TY_I32};
 
     fn module(name: &str, with_point: bool) -> Program {
         let mut p = Program {
@@ -1431,6 +1432,7 @@ mod tests {
                     fields: vec![FieldInfo {
                         name: x,
                         ty: TY_I32,
+                        vis: FieldVis::Pub,
                     }],
                 },
             });

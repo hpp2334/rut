@@ -146,7 +146,7 @@ entry fn main() -> nil {
         .map(fn(x: i32) -> i32 { return x * 2; })
         .filter(fn(x: i32) -> bool { return x > 3; })
         .take(4)).collected();
-    log.info(f"picked={picked.len} first={picked[0]} last={picked[picked.len-1]}");
+    log.info(f"picked={picked.as_array().len()} first={picked[0]} last={picked[picked.as_array().len()-1]}");
 }
 "#);
     assert_eq!(lines.len(), 1, "{lines:?}");
@@ -170,14 +170,14 @@ entry fn main() -> nil {
     let i = 0;
     while (i < 10) { nums.push(i); i += 1; }
     let page: Vec<i32> = VecFlow<i32>::from_flow(VecFlow<i32>(nums).into_flow().skip(2).take(3)).collected();
-    log.info(f"page n={page.len} first={page[0]} last={page[page.len-1]}");
+    log.info(f"page n={page.as_array().len()} first={page[0]} last={page[page.as_array().len()-1]}");
     let total: i32 = VecFlow<i32>(nums).into_flow().filter(fn(x: i32) -> bool { return x % 2 == 0; }).count();
     log.info(f"evens={total}");
     let grabbed: Vec<i32> = Vec::new();
     for (let x of VecFlow<i32>(nums).into_flow().take(4)) {
         grabbed.push(x);
     }
-    log.info(f"for_of n={grabbed.len} first={grabbed[0]} last={grabbed[grabbed.len-1]}");
+    log.info(f"for_of n={grabbed.as_array().len()} first={grabbed[0]} last={grabbed[grabbed.as_array().len()-1]}");
 }
 "#);
     assert_eq!(lines.len(), 3, "{lines:?}");
@@ -280,10 +280,10 @@ entry fn main() -> nil {
     nums.push(1); nums.push(2);
     // identity: the chain re-enters as a source
     let reentered: Vec<i32> = VecFlow<i32>::from_flow(CountUp::new(4).into_flow().map(fn(x: i32) -> i32 { return x + 1; }).into_flow()).collected();
-    log.info(f"reentered n={reentered.len} last={reentered[reentered.len-1]}");
+    log.info(f"reentered n={reentered.as_array().len()} last={reentered[reentered.as_array().len()-1]}");
     // the user iterable widens through its member, spelled at the sink
     let out: Vec<i32> = VecFlow<i32>::from_flow(CountUp::new(4).into_flow()).collected();
-    log.info(f"countup n={out.len} last={out[out.len-1]}");
+    log.info(f"countup n={out.as_array().len()} last={out[out.as_array().len()-1]}");
 }
 "#);
     assert_eq!(lines.len(), 2, "{lines:?}");
@@ -421,15 +421,15 @@ entry fn main() -> nil {
     let c: Counting = Counting::new();
     let stopped: Vec<i32> = Vec::new();
     for (let x of c) {
-        if (stopped.len == 2) { break; }
+        if (stopped.as_array().len() == 2) { break; }
         stopped.push(x);
     }
-    log.info(f"stopped n={stopped.len} last={stopped[1]} driven={c.n}");
+    log.info(f"stopped n={stopped.as_array().len()} last={stopped[1]} driven={c.n}");
     let nums: Vec<i32> = Vec::new();
     let i = 0;
     while (i < 100) { nums.push(i + 1); i += 1; }
     let out: Vec<i32> = VecFlow<i32>::from_flow(VecFlow<i32>(nums).into_flow().take(2)).collected();
-    log.info(f"out n={out.len} first={out[0]} last={out[1]}");
+    log.info(f"out n={out.as_array().len()} first={out[0]} last={out[1]}");
 }
 "#);
     assert_eq!(lines.len(), 2, "{lines:?}");
@@ -462,7 +462,7 @@ entry fn main() -> nil {
     let a: Vec<i32> = VecFlow<i32>::from_flow(VecFlow<i32>(nums).into_flow().map(double)).collected();
     // the explicit spelling
     let b: Vec<i32> = VecFlow<i32>::from_flow(VecFlow<i32>(nums).into_flow().map<i32>(fn(x: i32) -> i32 { return x * 2; })).collected();
-    log.info(f"a={a.len} b={b.len}");
+    log.info(f"a={a.as_array().len()} b={b.as_array().len()}");
 }
 "#);
     assert_eq!(lines, vec!["a=2 b=2"], "{lines:?}");

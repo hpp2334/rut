@@ -418,17 +418,19 @@ fn stale_versions_reject_stale_artifacts() {
     bytes.extend_from_slice(&7u32.to_le_bytes());
     let err = rut_core::binary::decode(&bytes).unwrap_err();
     assert!(err.contains("unsupported module binary version 7"), "{err}");
-    // and a fresh compile round-trips under v23 (surfaces on the wire
+    // and a fresh compile round-trips under v24 (surfaces on the wire
     // since v16; v17 added the owner-anchored instantiation ledger,
     // v18 the exported generic fns' placeholder signatures, v19 the
     // builder's engine-surface withdrawal, v20 the bracket markers +
     // the closed async classes, v21 the structural interfaces — the
     // trait tables left the wire, v22 the templates section — generic
     // bodies ride the binary, v23 the legacy-tables cut — the retired
-    // symbol/boot rows and the surface section's filler byte are gone)
+    // symbol/boot rows and the surface section's filler byte are gone,
+    // v24 the field dial — every `Data` row's fields gain one vis tag
+    // byte, the member-vis field plan's Act 1)
     let out = compiled("app_main", "entry fn main() -> i32 { return 4; }");
     let prog = out.program.expect("program");
     let bytes = rut_core::binary::encode(&prog);
-    assert_eq!(&bytes[4..8], &23u32.to_le_bytes(), "the header carries v23");
+    assert_eq!(&bytes[4..8], &24u32.to_le_bytes(), "the header carries v24");
     assert!(rut_core::binary::decode(&bytes).is_ok());
 }

@@ -406,6 +406,7 @@ impl<'a> Ctx<'a> {
                     .map(|f| FieldInfo {
                         name: f.name,
                         ty: self.respell_trait_self_deep(f.ty, iface_id, concrete),
+                        vis: f.vis,
                     })
                     .collect();
                 let changed = fs.iter().zip(fields.iter()).any(|(n, o)| n.ty != o.ty);

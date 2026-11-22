@@ -5,7 +5,7 @@
 
 use crate::ops::*;
 use crate::sym::{self, IdentId, Interner};
-use crate::types::{FieldInfo, PrimTy, Repr, RutType, TyKind, TypeId, TypeTable};
+use crate::types::{FieldInfo, FieldVis, PrimTy, Repr, RutType, TyKind, TypeId, TypeTable};
 
 // ---- the loaded program ----
 
@@ -772,7 +772,15 @@ pub const MAGIC: &[u8; 4] = b"RUTC";
 /// reserved boot shells are removed and the symbol/boot ids renumbered
 /// dense; the surface section drops the retired namespace head's filler
 /// byte. Every earlier artifact refuses at this byte.
-pub const VERSION: u32 = 23;
+/// v24: the field dial crosses units — every `Data` row's fields gain
+/// one vis tag byte (the member-visibility dial: pub / pub(pkg) /
+/// pub(super) / private; the member-vis field plan's Act 1). The used
+/// surface's rows now answer the `.field` gate for a record this unit
+/// holds no decl for, closing the cross-package field gap. Stale v23
+/// artifacts misparse the first tagged field row — refused with the
+/// standard version error; the recipe is re-pack + re-tag + `rut
+/// install` re-pin.
+pub const VERSION: u32 = 24;
 
 pub fn encode(prog: &Program) -> Vec<u8> {
     let mut e = Enc::default();
@@ -1204,6 +1212,7 @@ fn encode_kind(e: &mut Enc, k: &TyKind) {
             for f in fields {
                 e.u32(f.name.0);
                 e.u32(f.ty);
+                e.u8(f.vis.tag());
             }
         }
         TyKind::IfaceObj { iface_id } => {
@@ -1959,7 +1968,9 @@ fn decode_kind(d: &mut Dec) -> Result<TyKind, String> {
             for _ in 0..n {
                 let name = IdentId(d.u32()?);
                 let ty = d.u32()?;
-                fields.push(FieldInfo { name, ty });
+                let vis = FieldVis::from_tag(d.u8()?)
+                    .ok_or_else(|| "bad field vis tag (under a Data row)".to_string())?;
+                fields.push(FieldInfo { name, ty, vis });
             }
             TyKind::Data { fields }
         }
@@ -3156,10 +3167,12 @@ mod tests {
                     FieldInfo {
                         name: x,
                         ty: TY_I32,
+                        vis: FieldVis::Pub,
                     },
                     FieldInfo {
                         name: vid,
                         ty: TY_STR,
+                        vis: FieldVis::Pub,
                     },
                 ],
             },

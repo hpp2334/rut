@@ -237,6 +237,7 @@ impl<'a> Ctx<'a> {
                 fields: vec![FieldInfo {
                     name: fname,
                     ty: TY_OPAQUE,
+                    vis: FieldVis::Pub,
                 }],
             },
         });

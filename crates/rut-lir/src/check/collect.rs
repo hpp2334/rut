@@ -331,6 +331,25 @@ impl<'a> Ctx<'a> {
         ));
     }
 
+    /// The AST member dial → the descriptor row's spelling
+    /// ([`rut_core::types::FieldVis`]; rut-core has no AST dep, so the
+    /// row carries this enum and the conversion lives at this
+    /// boundary). Struct fields stamp `Pub` AT THE STAMP — the
+    /// always-pub exemption folded into the row, so a carried struct
+    /// row keeps passing the field gate without the kind on the wire —
+    /// and a class member defaults `Private`.
+    fn field_vis_of(kind: DataKind, fvis: Option<Vis>) -> FieldVis {
+        match kind {
+            DataKind::Struct => FieldVis::Pub,
+            DataKind::Class => match fvis {
+                Some(Vis::Pub) => FieldVis::Pub,
+                Some(Vis::Pkg) => FieldVis::Pkg,
+                Some(Vis::Super) => FieldVis::Super,
+                Some(Vis::Self_) | None => FieldVis::Private,
+            },
+        }
+    }
+
     /// Pass 1b, generic templates — resolve a generic record's field types
     /// under the PARAMETER PLACEHOLDERS (`param_placeholder`'s `#T` rows)
     /// and stamp them on the template row. The template then crosses the
@@ -343,6 +362,7 @@ impl<'a> Ctx<'a> {
             return;
         };
         let ty = self.datas[idx].1.ty;
+        let kind = self.datas[idx].1.kind;
         let generics = self.datas[idx].1.generics.clone();
         let env: Vec<(IdentId, TypeId)> = generics
             .iter()
@@ -358,6 +378,7 @@ impl<'a> Ctx<'a> {
             resolved.push(FieldInfo {
                 name: fd.name.ident,
                 ty: fty,
+                vis: Self::field_vis_of(kind, fd.vis()),
             });
         }
         let pi = self.types.dense(ty) as usize;
@@ -371,6 +392,7 @@ impl<'a> Ctx<'a> {
             return;
         };
         let placeholder = self.datas[idx].1.ty;
+        let kind = self.datas[idx].1.kind;
         let mut resolved: Vec<FieldInfo> = Vec::new();
         for f in fields {
             let FieldRef::Field(fh) = *f else {
@@ -387,6 +409,7 @@ impl<'a> Ctx<'a> {
             resolved.push(FieldInfo {
                 name: fd.name.ident,
                 ty: fty,
+                vis: Self::field_vis_of(kind, fd.vis()),
             });
         }
         // publish the resolved field table on the descriptor (construction
@@ -739,6 +762,7 @@ impl<'a> Ctx<'a> {
             resolved.push(FieldInfo {
                 name: fd.name.ident,
                 ty: fty,
+                vis: Self::field_vis_of(decl.kind, fd.vis()),
             });
         }
         self.cur_mod = saved_mod;
@@ -969,6 +993,7 @@ impl<'a> Ctx<'a> {
                         .map(|(i, &t)| FieldInfo {
                             name: self.intern(&i.to_string()),
                             ty: t,
+                            vis: FieldVis::Pub,
                         })
                         .collect();
                     let name = self.intern(&format!(
@@ -1044,6 +1069,7 @@ impl<'a> Ctx<'a> {
                         .map(|f| FieldInfo {
                             name: f.name,
                             ty: self.subst_template_ty(f.ty, env),
+                            vis: f.vis,
                         })
                         .collect();
                     let changed = fs.iter().zip(fields.iter()).any(|(n, o)| n.ty != o.ty);
