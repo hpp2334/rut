@@ -16,7 +16,7 @@ use clap::Parser;
 #[derive(Parser)]
 #[command(
     name = "rut",
-    version,
+    version = new::full_version(),
     subcommand_required = true,
     arg_required_else_help = true
 )]

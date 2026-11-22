@@ -30,6 +30,43 @@ const LOCK_TEMPLATE: &str = include_str!("../template/rut.lock");
 /// The scaffolded root module — the book's hello.
 const MOD_RUT: &str = include_str!("../template/src/mod.rut");
 
+/// The `--version` string — the CLI's semver beside the std pin baked
+/// into the lock template: `rut 0.2.0 (std-v18)`. The pin is DERIVED
+/// from the already-baked template at runtime — no second pin table
+/// anywhere (the lock is the carrier). The answer is `&'static str`
+/// because clap's `version` door wants a `Str`: the string is a pure
+/// function of compile-time-baked inputs (`CARGO_PKG_VERSION` + the
+/// `include_str!`d template), computed once into a static — that
+/// static IS the lifetime, no leak call.
+pub(crate) fn full_version() -> &'static str {
+    static FULL_VERSION: std::sync::OnceLock<String> = std::sync::OnceLock::new();
+    FULL_VERSION
+        .get_or_init(|| format!("{} ({})", env!("CARGO_PKG_VERSION"), std_pin()))
+        .as_str()
+}
+
+/// The baked std pin — the numeric MAX of the `@std-vNN` tokens in the
+/// lock template (numeric, not lexicographic — `std-v10` beats
+/// `std-v9`; defensive against any mixed-tag lock). The template always
+/// carries pins (`tests/new_lane.rs` holds the law); the `0` fallback
+/// answers `std-v0` only if a template ever drains.
+fn std_pin() -> String {
+    const TAG: &str = "@std-v";
+    let mut rest = LOCK_TEMPLATE;
+    let mut max = 0u64;
+    while let Some(at) = rest.find(TAG) {
+        let tail = &rest[at + TAG.len()..];
+        let end = tail
+            .find(|c: char| !c.is_ascii_digit())
+            .unwrap_or(tail.len());
+        if let Ok(n) = tail[..end].parse::<u64>() {
+            max = max.max(n);
+        }
+        rest = tail;
+    }
+    format!("std-v{max}")
+}
+
 /// the `new` arg surface.
 #[derive(clap::Args)]
 pub(crate) struct NewArgs {
@@ -97,4 +134,43 @@ pub(crate) fn new(args: &NewArgs) {
 /// produce what the manifest grammar accepts.
 fn manifest_text(name: &str) -> String {
     MANIFEST_TEMPLATE.replace("__NAME__", name)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{full_version, LOCK_TEMPLATE};
+
+    /// `--version` carries the semver beside the baked pin — and the
+    /// pin IS the MAX `@std-v` token in the lock template (the same
+    /// scan `std_pin` runs, recomputed here against the raw bytes).
+    #[test]
+    fn version_carries_the_baked_std_pin() {
+        let full = full_version();
+        let (ver, pin) = full
+            .split_once(" (")
+            .and_then(|(v, rest)| rest.strip_suffix(')').map(|p| (v, p)))
+            .expect("full_version must read `SEMVER (std-vNN)`");
+        assert!(is_semver(ver), "{ver:?} is not bare semver");
+        let expected = LOCK_TEMPLATE
+            .match_indices("@std-v")
+            .map(|(at, _)| {
+                let tail = &LOCK_TEMPLATE[at + "@std-v".len()..];
+                let end = tail
+                    .find(|c: char| !c.is_ascii_digit())
+                    .unwrap_or(tail.len());
+                tail[..end].parse::<u64>().unwrap()
+            })
+            .max()
+            .expect("the lock template always carries std pins");
+        assert_eq!(pin, format!("std-v{expected}"));
+    }
+
+    /// `X.Y.Z` — three dot-separated all-digit parts, nothing else.
+    fn is_semver(s: &str) -> bool {
+        let mut parts = s.split('.');
+        let three = (&mut parts)
+            .take(3)
+            .all(|p| !p.is_empty() && p.bytes().all(|b| b.is_ascii_digit()));
+        three && parts.next().is_none()
+    }
 }
