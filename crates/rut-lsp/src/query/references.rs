@@ -29,12 +29,12 @@
 //! KEPT, so the old re-parse lane (candidate source re-lexed and
 //! re-parsed per query) is gone: the scan rides each file's own tokens.
 
-use std::collections::HashSet;
+use std::collections::{BTreeMap, HashMap, HashSet};
 
 use crate::query::definition::{self, Ctx, DefLocation};
 use crate::semantic::Span;
 use crate::world::collection::MountedFile;
-use crate::world::pkg::matches_pkg;
+use crate::world::pkg::{import_map, matches_pkg};
 
 /// what the ident at `pos` was resolved to — drives how far the scan
 /// reaches (locals stay in the doc; module-level names ride the use
@@ -98,7 +98,22 @@ pub fn references(ctx: &Ctx, pos: u32, include_decl: bool) -> Vec<DefLocation> {
     //    pkg. The edge reads the file's GLOB-AWARE import map — a glob
     //    leaf fans no name rows, so a named-leaf read alone would make
     //    a glob import second-class (every OTHER glob-importing file
-    //    silently missed). The live doc speaks for its URI.
+    //    silently missed). The live doc speaks for its URI. One map
+    //    per chain file per QUERY: the (file → import map) table is
+    //    built once (keyed by origin, the chain's file identity) and
+    //    reused across every target — only module-level names reach
+    //    for it (locals stay in the doc; members never cross files).
+    let module_level = targets
+        .iter()
+        .any(|tg| matches!(tg.kind, Kind::ModuleLet | Kind::Type | Kind::Fn));
+    let import_maps: BTreeMap<&str, HashMap<&str, &str>> = if module_level {
+        ctx.chain
+            .iter()
+            .map(|f| (f.mount.origin.as_str(), import_map(ctx.chain, f)))
+            .collect()
+    } else {
+        BTreeMap::new()
+    };
     let mut cand: Vec<&MountedFile> = vec![ctx.doc_file()];
     for tg in &targets {
         match tg.kind {
@@ -107,9 +122,10 @@ pub fn references(ctx: &Ctx, pos: u32, include_decl: bool) -> Vec<DefLocation> {
             Kind::ModuleLet | Kind::Type | Kind::Fn => {
                 cand.push(tg.file);
                 for x in ctx.chain.iter() {
-                    let reverse_edge = crate::world::pkg::import_map(ctx.chain, x)
-                        .iter()
-                        .any(|(&n, &pkg)| n == name && matches_pkg(tg.file, pkg));
+                    let reverse_edge = import_maps.get(x.mount.origin.as_str()).is_some_and(|m| {
+                        m.iter()
+                            .any(|(&n, &pkg)| n == name && matches_pkg(tg.file, pkg))
+                    });
                     if reverse_edge {
                         cand.push(x);
                     }
