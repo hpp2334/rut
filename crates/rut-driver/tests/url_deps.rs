@@ -124,6 +124,14 @@ fn leaf_world(tag: &str, name: &str, body: &str) -> PathBuf {
 
 const UTIL_BODY: &str = "pub fn twice(v: i64) -> i64 {\n    return v * 2;\n}\n";
 
+/// A deep util tree: the root declares `pub mod layout;`, layout
+/// declares `pub mod grid;` — two levels of declared children — and
+/// the consumer walks `use util::layout::grid::{deep}` to the leaf.
+const DEEP_ROOT: &str = "pub mod layout;\npub fn twice(v: i64) -> i64 {\n    return v * 2;\n}\n";
+const DEEP_LAYOUT: &str = "pub mod grid;\npub fn span() -> i64 { return 5; }\n";
+const DEEP_GRID: &str = "pub fn deep() -> i64 { return 6; }\n";
+const DEEP_APP: &str = "use util::layout::grid::{deep};\nuse util::{twice};\nentry fn go() -> i64 {\n    return twice(21) + deep();\n}\n";
+
 /// Rewrite one archive entry (the manifest, say) and re-seal the
 /// container — the doctored-closure fixtures.
 fn resealed(bytes: &[u8], key: &str, text: &str) -> Vec<u8> {
@@ -703,6 +711,198 @@ fn a_gutted_store_tree_falls_back_in_the_pack_lane_too() {
     assert!(
         !app.join(".rut").exists(),
         "the pack never writes the project"
+    );
+}
+
+#[test]
+fn a_gutted_mod_child_falls_back_to_the_temp_unpack() {
+    // the round-1 shape one level deeper: the store entry's root and
+    // level-1 files ride, but a declared mod grandchild's module file
+    // is GUTTED (the `grid/` dir present, `grid/mod.rut` deleted).
+    // The entry-only probe chose the store tree and the mount died at
+    // the child lookup — a state unhealable by install. The deepened
+    // probe walks the declared mod edges, finds the missing
+    // descendant, and takes the temp fallback: the validated bytes
+    // unpack once, the dep loads and runs at full depth, the project
+    // stays clean, and the store entry is left as found.
+    let root = scratch("zipdeepgut");
+    let util = root.join("util");
+    write(&util, "rut.jsonc", &manifest("util", "mod.rut", ""));
+    write(&util, "src/mod.rut", DEEP_ROOT);
+    write(&util, "src/layout/mod.rut", DEEP_LAYOUT);
+    write(&util, "src/layout/grid/mod.rut", DEEP_GRID);
+    let zip = pack_dir_zip(&util).expect("pack util as a source zip");
+    let url = "https://fixtures.test/util.zip";
+    let app = root.join("app");
+    write(
+        &app,
+        "rut.jsonc",
+        &manifest(
+            "app",
+            "mod.rut",
+            &format!(r#", "deps": {{"util": {{"url": "{url}"}}}}"#),
+        ),
+    );
+    write(&app, "src/mod.rut", DEEP_APP);
+
+    // the store entry: manifest + root + layout ride; the grid dir is
+    // there, its module file is not
+    let home = Home::new("zipdeepgut");
+    let pin = sha256_hex(&zip);
+    let unpack = home
+        .path()
+        .join("deps")
+        .join(rut_driver::store_dir("util", &pin))
+        .join(rut_driver::UNPACK_DIR);
+    std::fs::create_dir_all(unpack.join("src/layout/grid")).unwrap();
+    std::fs::write(unpack.join("rut.jsonc"), manifest("util", "mod.rut", "")).unwrap();
+    std::fs::write(unpack.join("src/mod.rut"), DEEP_ROOT).unwrap();
+    std::fs::write(unpack.join("src/layout/mod.rut"), DEEP_LAYOUT).unwrap();
+
+    let mut table = BTreeMap::new();
+    table.insert(url.to_string(), zip);
+    write_lock(&app, &table);
+    let walked = block_on(rut_native::dir_pkgs_with(&app, &Table::from(table)))
+        .expect("the gutted grandchild falls back, the dep mounts");
+    assert_eq!(walked.root, "app");
+    let util = walked
+        .pkgs
+        .iter()
+        .find(|p| p.spec == "util")
+        .expect("the dep mounted");
+    // the mount is the validated bytes' tree at FULL depth — the
+    // declared edges resolved, from the fallback, not the gutted store
+    assert!(
+        util.mods.contains_key("layout") && util.mods.contains_key("layout/grid"),
+        "the fallback mounts the whole tree: {:?}",
+        util.mods.keys().collect::<Vec<_>>()
+    );
+    let answer: i64 = run_entry(walked, "go");
+    assert_eq!(answer, 48);
+    assert!(
+        !app.join(".rut").exists(),
+        "the fallback never writes the project"
+    );
+    // the store entry stays as found — the walk is a pure store
+    // reader (install's own lanes own any repair)
+    assert!(unpack.join("rut.jsonc").is_file());
+    assert!(unpack.join("src/mod.rut").is_file());
+    assert!(unpack.join("src/layout/mod.rut").is_file());
+    assert!(unpack.join("src/layout/grid").is_dir());
+    assert!(
+        !unpack.join("src/layout/grid/mod.rut").exists(),
+        "the walk never repairs the store tree"
+    );
+    // and the run-scoped temp dir died with the walk (zero traces)
+    let leftovers: Vec<String> = std::fs::read_dir(std::env::temp_dir())
+        .unwrap()
+        .flatten()
+        .map(|e| e.file_name().to_string_lossy().into_owned())
+        .filter(|n| n.starts_with(&format!("rut-unpack-{}-", std::process::id())))
+        .collect();
+    assert!(
+        leftovers.is_empty(),
+        "the run-scoped temp dirs die with the walk: {leftovers:?}"
+    );
+}
+
+#[test]
+fn a_whole_deep_store_tree_mounts_from_the_store() {
+    // the deepened probe's positive pin: a fully-present deep tree
+    // (two levels of declared children) probes COMPLETE — the store
+    // tree mounts, no needless temp unpack. The mounted pkg's files
+    // read from the STORE path: the store copies carry a marker
+    // comment the zip's bytes never had, root and grandchild both.
+    let root = scratch("zipdeepstore");
+    let util = root.join("util");
+    write(&util, "rut.jsonc", &manifest("util", "mod.rut", ""));
+    write(&util, "src/mod.rut", DEEP_ROOT);
+    write(&util, "src/layout/mod.rut", DEEP_LAYOUT);
+    write(&util, "src/layout/grid/mod.rut", DEEP_GRID);
+    let zip = pack_dir_zip(&util).expect("pack util as a source zip");
+    let url = "https://fixtures.test/util.zip";
+    let app = root.join("app");
+    write(
+        &app,
+        "rut.jsonc",
+        &manifest(
+            "app",
+            "mod.rut",
+            &format!(r#", "deps": {{"util": {{"url": "{url}"}}}}"#),
+        ),
+    );
+    write(&app, "src/mod.rut", DEEP_APP);
+
+    // the store entry: the whole tree laid out, the store's own
+    // copies marked where it matters (root + the deep grandchild)
+    let home = Home::new("zipdeepstore");
+    let pin = sha256_hex(&zip);
+    let unpack = home
+        .path()
+        .join("deps")
+        .join(rut_driver::store_dir("util", &pin))
+        .join(rut_driver::UNPACK_DIR);
+    std::fs::create_dir_all(unpack.join("src/layout/grid")).unwrap();
+    std::fs::write(unpack.join("rut.jsonc"), manifest("util", "mod.rut", "")).unwrap();
+    std::fs::write(
+        unpack.join("src/mod.rut"),
+        format!("// mounted from the store\n{DEEP_ROOT}"),
+    )
+    .unwrap();
+    std::fs::write(unpack.join("src/layout/mod.rut"), DEEP_LAYOUT).unwrap();
+    std::fs::write(
+        unpack.join("src/layout/grid/mod.rut"),
+        format!("// mounted from the store\n{DEEP_GRID}"),
+    )
+    .unwrap();
+
+    let mut table = BTreeMap::new();
+    table.insert(url.to_string(), zip);
+    write_lock(&app, &table);
+    let walked = block_on(rut_native::dir_pkgs_with(&app, &Table::from(table)))
+        .expect("the whole deep tree mounts from the store");
+    assert_eq!(walked.root, "app");
+    let util = walked
+        .pkgs
+        .iter()
+        .find(|p| p.spec == "util")
+        .expect("the dep mounted");
+    match &util.body {
+        rut_driver::MountedBody::Source { text, .. } => assert!(
+            text.starts_with("// mounted from the store"),
+            "the pkg mounts the STORE tree, not the fixture bytes: {text}"
+        ),
+        b => panic!("the store mount is a source pkg, got {b:?}"),
+    }
+    let grid = util
+        .mods
+        .get("layout/grid")
+        .expect("the grandchild mounted");
+    assert!(
+        grid.text.starts_with("// mounted from the store"),
+        "the deep files read from the store path: {}",
+        grid.text
+    );
+    // no temp fallback ran — the store tree probed complete
+    let leftovers: Vec<String> = std::fs::read_dir(std::env::temp_dir())
+        .unwrap()
+        .flatten()
+        .map(|e| e.file_name().to_string_lossy().into_owned())
+        .filter(|n| n.starts_with(&format!("rut-unpack-{}-", std::process::id())))
+        .collect();
+    assert!(
+        leftovers.is_empty(),
+        "the probe spared the temp unpack: {leftovers:?}"
+    );
+    let answer: i64 = run_entry(walked, "go");
+    assert_eq!(answer, 48);
+    assert!(
+        !app.join(".rut").exists(),
+        "the project dir stays rut.jsonc + rut.lock + src/"
+    );
+    assert!(
+        unpack.exists(),
+        "the store entry outlives the run untouched — the walk never deletes"
     );
 }
 

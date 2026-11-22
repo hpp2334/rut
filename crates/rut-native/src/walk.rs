@@ -1096,19 +1096,75 @@ fn resolve_table(
 /// mount? The manifest rides (the caller's read answered), but the
 /// ENTRY files may have been gutted (hand deletion, partial
 /// eviction) — probe exactly the files [`load_entry_module`]'s entry
-/// arms read: a spelled `entry.type` surface under `src/`, else the
-/// root module (`src/mod.rut` lib, `src/mod.d.rut` host default).
-/// Deeper tree damage still dies loudly at its mount — the gate's
-/// job is the store-vs-fallback decision, not a full re-read.
+/// arms read (a spelled `entry.type` surface under `src/`, else the
+/// root module — `src/mod.rut` lib, `src/mod.d.rut` host default),
+/// then RECURSIVELY the declared `mod` children below that root,
+/// through the same next-hop read the mount runs
+/// ([`dir_child_lookup`] under the driver's [`mount_mod_children`]):
+/// a missing descendant (a gutted child dir, a deleted single-file
+/// child) is the incomplete answer — the mount would die at the
+/// child lookup, and the state is unhealable by install, so the temp
+/// fallback heals it instead. The probe is a pure store reader — no
+/// writes, no repairs. A syntax-broken file mounts childless (the
+/// compile's loud half), so it probes complete; the recursion is
+/// bounded by the mount's own cap (the canonical-identity cycle
+/// guard) — no new knobs.
 fn entry_module_present(dir: &Path, manifest: &Manifest) -> bool {
-    if let Some(rel) = &manifest.entry.type_path {
-        return dir.join(src_rel(rel)).is_file();
+    match manifest.pkg_type {
+        PkgType::Host => {
+            // the spelled surface wins, else the default root — the
+            // entry arm's doors verbatim; the tree below it is a
+            // Decl surface tree (`NAME/mod.d.rut` children)
+            let root = match &manifest.entry.type_path {
+                Some(rel) => dir.join(src_rel(rel)),
+                None => dir.join(DECL_ROOT_FILE),
+            };
+            mod_tree_present(dir, &root, Mode::Decl, "mod.d.rut")
+        }
+        PkgType::Lib => {
+            // the spelled surface (under `src/`) must exist in either
+            // lib state — the mount reads it before anything else
+            if let Some(rel) = &manifest.entry.type_path {
+                if !dir.join(src_rel(rel)).is_file() {
+                    return false;
+                }
+            }
+            // the body — `src/mod.rut` — carries the tree when it
+            // rides; absent, the surface-only dev state stands (with
+            // no surface either the entry mount refuses — incomplete)
+            let body = dir.join(ROOT_FILE);
+            if !body.is_file() {
+                return manifest.entry.type_path.is_some();
+            }
+            mod_tree_present(dir, &body, Mode::Impl, "mod.rut")
+        }
     }
-    dir.join(match manifest.pkg_type {
-        PkgType::Host => DECL_ROOT_FILE,
-        PkgType::Lib => ROOT_FILE,
-    })
-    .is_file()
+}
+
+/// One entry file's mod-tree probe: every declared `mod` edge below
+/// the file resolves, recursively — the SAME next-hop read the entry
+/// mount runs ([`dir_child_lookup`], both spellings), driven by the
+/// driver's own mount walker ([`mount_mod_children`]), so the probe
+/// cannot drift from what the mount reads. Any lookup failure — a
+/// missing descendant, the loud ambiguity, an unreadable file — is
+/// the incomplete answer. READ-ONLY over the tree, like the whole
+/// gate.
+fn mod_tree_present(dir: &Path, root_file: &Path, mode: Mode, child_file: &str) -> bool {
+    // the entry arm reads this file next; it must at least be
+    // readable text (a present-but-unreadable file is the loud read
+    // error at the mount — incomplete here)
+    let Ok(text) = std::fs::read_to_string(root_file) else {
+        return false;
+    };
+    let root_canon = std::fs::canonicalize(root_file)
+        .unwrap_or_else(|_| root_file.to_path_buf())
+        .to_string_lossy()
+        .into_owned();
+    let mut files = BTreeMap::new();
+    files.insert(String::new(), root_file.to_path_buf());
+    let mut lookup =
+        |parent: &str, name: &str| dir_child_lookup(dir, &mut files, parent, name, child_file);
+    mount_mod_children(&text, &root_canon, mode, child_file, &mut lookup).is_ok()
 }
 
 /// Mount a `.zip` url dep — the SOURCE transport's lane: gate 0 (the
@@ -1150,8 +1206,10 @@ fn mount_zip_dep(
         .join(rut_driver::store_dir(spec, sha_hex))
         .join(rut_driver::UNPACK_DIR);
     // the store gate: the tree must exist AND feed the entry mount —
-    // the manifest reads and the entry module's files are present. A
-    // tree carrying only `rut.jsonc` (src/ gutted by hand, a partial
+    // the manifest reads and the entry module's files are present,
+    // recursively through the declared `mod` children (a gutted
+    // grandchild is exactly as fatal at the mount as a gutted root).
+    // A tree carrying only `rut.jsonc` (src/ gutted by hand, a partial
     // eviction) is INCOMPLETE while the artifact vouches: the temp
     // fallback heals it from the validated bytes instead of dying at
     // the entry mount — a state the store's own lanes never repair
