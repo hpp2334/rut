@@ -228,3 +228,4 @@ context; after that, use the zh-CN rendering alone.
 | settle | 结算 | the settle handle → 结算句柄（`HttpFixture` stays code）；settle the dues → 结算到期的 |
 | park | 停放 | the parked pump → 停放的泵；park/resume → 停放/恢复；a parked frame → 停放的帧 |
 | last-write-wins | 后写者胜 | a double complete is NOT loud → 双重完成不会响；the second answer overwrites the slot → 第二个应答覆盖槽位 |
+| field dial | 字段拨盘 | the per-field visibility stamp（`FieldVis` stays code）riding the surface rows——每个被承载的类字段一行可见性（pub / pub(pkg) / pub(super) / private）；struct 字段在盖章处即为 `Pub`（总是公开的豁免）；cross-package 的门只认 `pub` → 跨包的门只认 `pub` |

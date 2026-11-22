@@ -50,7 +50,7 @@ host.
 ```
 offset  field
 0       magic "RUTC"                      # 4 bytes
-4       version: u32                      # VERSION = 22; refuses any other value
+4       version: u32                      # VERSION = 24; refuses any other value
 8       name: str
         name table: u32 count, then count × str
         types: u32 count, then per type { name: IdentId, kind }

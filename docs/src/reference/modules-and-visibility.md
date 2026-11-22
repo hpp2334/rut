@@ -123,7 +123,13 @@ visibility spelling, naming both files). A compiled dependency — a
 packed `.rutbundle` — carries its declarations as a binary surface
 with no source text, so a leaf its surface never carried states the
 bare law: `` `leaf` is not part of `pkga`'s exported surface — nothing
-binds in this file ``.
+binds in this file ``. The rows carry the field dial too — every
+carried class field stamps its visibility — so a member access on a
+dep class gates from the carried rows, exactly as source does: only a
+`pub` field crosses the package line (struct fields stay the
+always-public exemption), and anything stricter refuses, naming the
+origin package — `` `Box.v` — `v` is private to package `dep` —
+declare it `pub` to cross ``.
 
 **The glob — a `*` leaf.** A star binds the walked path's whole `pub`
 surface — bare at the leaf (`use tur_kit::layout::*;`) or riding
