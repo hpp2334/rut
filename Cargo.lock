@@ -1276,11 +1276,15 @@ name = "rut-std"
 version = "0.2.0"
 dependencies = [
  "hashbrown 0.14.5",
+ "js-sys",
  "reqwest",
  "rut-core",
  "rut-driver",
  "rut-native",
  "rut-vm",
+ "wasm-bindgen",
+ "wasm-bindgen-futures",
+ "web-sys",
 ]
 
 [[package]]

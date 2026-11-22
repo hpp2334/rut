@@ -27,7 +27,12 @@ wasm-bindgen = "0.2"
 rut-driver = { path = "../rut-driver" }
 rut-core = { path = "../rut-core" }
 rut-vm = { path = "../rut-vm" }
-rut-std = { path = "../rut-std" }
+# the fetch lane rides with the engine (the playground's `use http::`
+# answers): the feature is target-gated inside rut-std — wasm32 builds
+# compile the fetch backend, native builds (the tests' rlib) compile
+# without it and bind the seam's immediate-fail door instead (the
+# same status-0 shape the no-window node path answers)
+rut-std = { path = "../rut-std", features = ["http-wasm"] }
 rut-ast = { path = "../rut-ast" }
 rut-lexer = { path = "../rut-lexer" }
 

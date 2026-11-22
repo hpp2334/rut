@@ -142,7 +142,7 @@ pub(crate) struct CancelReg(Arc<Mutex<RegMap>>);
 impl CancelReg {
     /// register a parked future's source. Stamps the source's back-link
     /// (first insert wins) so the resolve sites can retire the entry.
-    fn insert(&self, id: usize, src: &Shared) {
+    pub(crate) fn insert(&self, id: usize, src: &Shared) {
         let _ = src.back.set(Arc::downgrade(&self.0));
         self.0
             .lock()
@@ -155,11 +155,11 @@ impl CancelReg {
     fn take(&self, id: usize) -> Option<Shared> {
         self.0.lock().expect("http cancel registry").remove(&id)
     }
-    /// retire the slot without marking (the reqwest pump's own end —
-    /// it holds the registry, unlike the fixture's virtual-clock pump,
-    /// whose send slots linger with the test pkg: bounded, per request).
-    #[cfg(feature = "http")]
-    fn remove(&self, id: usize) {
+    /// retire the slot without marking (the pump's own end — the
+    /// reqwest lane's and the fetch lane's alike: EOF, a mid-read
+    /// failure, or the wire-abort's between-chunk drop all land here).
+    #[cfg(any(feature = "http", all(feature = "http-wasm", target_arch = "wasm32")))]
+    pub(crate) fn remove(&self, id: usize) {
         self.0.lock().expect("http cancel registry").remove(&id);
     }
 }
@@ -435,6 +435,29 @@ impl HttpBodyWriter {
     /// between-chunk — the disclosed law).
     pub fn cancelled(&self) -> bool {
         self.src.lock().failed.as_deref() == Some(CANCELLED)
+    }
+
+    /// THE BUDGET GATE, wasm flavor: true while a `push_chunk` would
+    /// park the producer on the condvar gate — the queue at the
+    /// budget, the one-shot body lane not taken over, no terminal
+    /// yet. The JS thread has no condvar (a park there blocks the
+    /// whole world), so the fetch pump checks this BETWEEN reads and
+    /// parks by re-arming itself one macrotask at a time; the guest's
+    /// one-pop-per-await pacing drains below the budget and the
+    /// parked pump resumes. Feature-free — it reads the same cells
+    /// the condvar gate does, so every backend sees one predicate.
+    pub fn parked_at_budget(&self) -> bool {
+        let g = self.src.lock();
+        g.over_budget() && !g.body_taken && !g.eof && g.failed.is_none()
+    }
+
+    /// the chunk source this writer drives — the cancel registry's
+    /// insert target (the send slot retires through it at every pump
+    /// end, the reqwest lane's bookkeeping shared by the fetch lane;
+    /// the reqwest pump reaches the field directly — same module).
+    #[cfg(all(feature = "http-wasm", target_arch = "wasm32"))]
+    pub(crate) fn source(&self) -> &Shared {
+        &self.src
     }
 }
 
@@ -740,16 +763,18 @@ fn install_read_rows(pkg: &mut HostPkg, reg: &CancelReg) {
 // ------------------------------------------------- the one installer —
 
 /// The send row over ANY answering closure — the ONE installer every
-/// door rides ([`pkg_over`], [`pkg_with`], [`pkg`]). `send` receives
-/// the crossing parts and the completer; it answers exactly once and
-/// then drives the writer. The decl-row arity (the opaque cx + the
-/// four crossing values) lives HERE once — no lane re-spells it.
-/// `reg` is the pkg's cancel registry, captured by every row's abort
-/// arm; the send lane's own slot is registered by whoever completes
-/// the send completer (the reqwest pump at headers; the fixture's
-/// settle on the VM thread) — a custom [`HttpBackend`] that never
-/// registers keeps the disclosed best-effort law for its lane.
-fn pkg_send_with_reg<S>(send: S, reg: CancelReg) -> HostPkg
+/// door rides ([`pkg_over`], [`pkg_with`], [`pkg`], and the wasm
+/// fetch lane's `pkg_fetch` over in [`crate::http_wasm`]). `send`
+/// receives the crossing parts and the completer; it answers exactly
+/// once and then drives the writer. The decl-row arity (the opaque
+/// cx + the four crossing values) lives HERE once — no lane re-spells
+/// it. `reg` is the pkg's cancel registry, captured by every row's
+/// abort arm; the send lane's own slot is registered by whoever
+/// completes the send completer: the reqwest pump at headers, the
+/// fetch pump at headers, the fixture's settle on the VM thread. A
+/// custom [`HttpBackend`] that never registers keeps the disclosed
+/// best-effort law for its lane.
+pub(crate) fn pkg_send_with_reg<S>(send: S, reg: CancelReg) -> HostPkg
 where
     S: Fn(&HttpRequest, rut_vm::Completer<HttpResponse>) + 'static,
 {

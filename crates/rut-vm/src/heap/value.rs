@@ -103,9 +103,14 @@ impl Slot {
         unsafe { self.f }
     }
     pub fn null() -> Slot {
-        Slot {
-            r: std::ptr::null(),
-        }
+        // write the FULL 8 bytes: the pointer arm is pointer-sized (4
+        // bytes on wasm32), and a union field-write leaves the rest
+        // stale — `as_bool()` reads `.i`, so a null slot that kept
+        // garbage in its upper half read as TRUE on wasm32 and every
+        // br-null check took the wrong arm (the async frames' first
+        // wasm drive trapped "setf on non-record" exactly here). The
+        // constructors' own law, four lines up, said it first.
+        Slot { i: 0 }
     }
     /// # Safety
     ///

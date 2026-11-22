@@ -25,6 +25,32 @@ export interface RunnerState {
 /** the exact command the error panel and every loud failure name */
 export const BUILD_WASM_COMMAND = "npm run build:wasm";
 
+/**
+ * THE NET-PARK PUMP (the fetch era): a fetch completer lands from a
+ * JS microtask, so the engine's synchronous run envelope can never
+ * see it settle — the engine PARKS the machine instead (`parked:true`
+ * beside a null trap; the fuel park is the OutOfFuel pair) and this
+ * loop re-drives it, one leg per macrotask, until the session is
+ * idle. Each leg's envelope lands through `apply` (the output
+ * accumulates live); the idle envelope is the answer. `alive` stops
+ * the pump the moment a newer run supersedes this one — a stale leg
+ * must never touch the newer run's machine.
+ */
+export async function pumpNet(
+  first: RunResult,
+  leg: () => RunResult,
+  apply: (res: RunResult) => void,
+  alive: () => boolean = () => true,
+): Promise<RunResult> {
+  let res = first;
+  while (res.parked && res.trap === undefined && alive()) {
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    res = leg();
+    apply(res);
+  }
+  return res;
+}
+
 function decodeBase64(b64: string): Uint8Array {
   const bin = atob(b64);
   const out = new Uint8Array(bin.length);
@@ -122,7 +148,7 @@ export class Runner {
         {
           mode: "wasm",
           banner:
-            "live — rut.wasm · the playground slice: ink, pouch, nmapset, flow, futures, async_host, strbuild, json, calc (+math) mounted; the core prelude rides free",
+            "live — rut.wasm · the playground slice: ink, pouch, nmapset, flow, futures, async_host, strbuild, json, http (the fetch lane), calc (+math) mounted; the core prelude rides free",
         },
         api,
       );

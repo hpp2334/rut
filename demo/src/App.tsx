@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { CASES, DEFAULT_BUDGET, ENABLED_FUEL_DEFAULT, type RutCase } from "./cases";
 import { EXAMPLES } from "./examples";
-import { BUILD_WASM_COMMAND, Runner } from "./runner";
+import { BUILD_WASM_COMMAND, Runner, pumpNet } from "./runner";
 import { CaseList, type CaseGroup } from "./components/CaseList";
 import { DepsPanel, type DepRowView } from "./components/DepsPanel";
 import { Editor, type Highlight } from "./components/Editor";
@@ -393,9 +393,10 @@ export function App(): JSX.Element {
    * auto — compiles the given source and runs it at the given fuel
    * budget (the heap box is shared), then applies through applyRun.
    * LAST-WINS: each run bumps the token, a superseded run's applies
-   * die on the token checks. */
+   * die on the token checks — including the net pump's legs, so a
+   * stale pump can never touch a newer run's machine. */
   const executeRun = useCallback(
-    (src: string, fuelBudget: number) => {
+    async (src: string, fuelBudget: number) => {
       if (!runner) return;
       const token = ++runToken.current;
       setRunning(true);
@@ -418,12 +419,24 @@ export function App(): JSX.Element {
           applyCompileFailure(compiled.diags);
           return;
         }
-        const res = runner.run(
-          compiled.binary,
-          { fuel: fuelBudget, heapBytes: budget.heapBytes },
-        );
+        let res = runner.run(compiled.binary, {
+          fuel: fuelBudget,
+          heapBytes: budget.heapBytes,
+        });
         if (token !== runToken.current) return; // stale
         applyRun(res, compiled, src);
+        // THE NET PUMP: a parked envelope without a fuel trap is a
+        // network wait — the engine parked and this lane re-drives it
+        // one macrotask per leg until idle, each leg's lines landing
+        // live (a fetch completer cannot settle inside the sync call)
+        await pumpNet(
+          res,
+          () => runner.resume(0),
+          (legResult) => {
+            if (token === runToken.current) applyRun(legResult, null, "");
+          },
+          () => token === runToken.current,
+        );
       } finally {
         if (token === runToken.current) setRunning(false);
       }
@@ -534,7 +547,7 @@ export function App(): JSX.Element {
   }, []);
 
   const resume = useCallback(
-    () => {
+    async () => {
       if (!runner) return;
       const token = ++runToken.current;
       setRunning(true);
@@ -542,10 +555,20 @@ export function App(): JSX.Element {
         // REAL resume (survey D5): the parked frame continues — never a
         // re-run. +10M ops, same as the button names.
         const extra = 10_000_000;
-        const res = runner.resume(extra);
+        let res = runner.resume(extra);
         if (token !== runToken.current) return;
         setBudget((b) => ({ ...b, fuel: b.fuel + extra }));
         applyRun(res, null, "");
+        // a resumed frame can retire into net waits (the frame
+        // finished, a launched fetch still runs) — pump them too
+        await pumpNet(
+          res,
+          () => runner.resume(0),
+          (legResult) => {
+            if (token === runToken.current) applyRun(legResult, null, "");
+          },
+          () => token === runToken.current,
+        );
       } finally {
         if (token === runToken.current) setRunning(false);
       }

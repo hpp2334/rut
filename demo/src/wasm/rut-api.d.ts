@@ -157,9 +157,14 @@ export interface RunResult {
   fuelUsed: number;
   heapBytes: number;
   /**
-   * true when the guest trapped OutOfFuel with a live frame —
-   * `resume` continues THAT frame; a fresh `run`
-   * supersedes it (`dropFrame` retires it explicitly)
+   * true when the session needs the page to continue it, in one of two
+   * shapes named by `trap`: the FUEL park (trap "OutOfFuel", a live
+   * frame — `resume(extraFuel)` continues it) and the NET park (trap
+   * null, only host completers pending — a fetch completer lands from
+   * a JS microtask that cannot settle inside the synchronous run call;
+   * re-drive with `resume` one macrotask per leg until parked is
+   * false). A fresh `run` supersedes either (`dropFrame` retires it
+   * explicitly)
    */
   parked?: boolean;
 }

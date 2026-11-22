@@ -30,9 +30,15 @@
 //!   resume(extra_fuel) -> String               continue the parked frame
 //!   drop_frame() -> u32                        retire the parked frame
 //!
-//! Run envelopes carry `"parked":bool` — true when the guest trapped
-//! OutOfFuel with a live frame that `resume` can continue — and
-//! `"err"` beside `"trap"` (err-channel phase 3): a `main` returning
+//! Run envelopes carry `"parked":bool` — true when the session needs
+//! the page to continue it, in ONE of two shapes named by `"trap"`:
+//! the FUEL park (the guest trapped OutOfFuel with a live frame —
+//! `resume` adds fuel and continues it) and the NET park (`trap:
+//! null`, only host completers pending — a fetch completer lands
+//! from a JS microtask that can never settle inside this synchronous
+//! export; the page re-pumps the parked machine one macrotask per
+//! leg through `resume` until idle) — and `"err"` beside `"trap"`
+//! (err-channel phase 3): a `main` returning
 //! the `(?T, err)` pair shape surfaces its non-empty err there, while
 //! panics and budget traps stay on `trap` — the two channels never
 //! mix. The manifest lane is optional: plain `compile` defaults the
@@ -77,6 +83,13 @@ pub struct RutEngine {
     /// An `Rc` because the logger host closure must be `'static`: it
     /// holds a clone, the engine holds the other end.
     output: Rc<RefCell<Vec<String>>>,
+    /// The NET-PARKED session's carried entry-err: main retired at
+    /// the park (its answer is final across the pump legs — the
+    /// resume legs cannot recompute it, the return value is gone),
+    /// so the first park stores it here and every leg's envelope
+    /// carries it. Outer `None` = not net-parked; a fresh `run`
+    /// resets the slot with the machine.
+    net_err: RefCell<Option<Option<String>>>,
 }
 
 #[wasm_bindgen]
@@ -87,6 +100,7 @@ impl RutEngine {
             ctx: RefCell::new(None),
             parked: RefCell::new(None),
             output: Rc::new(RefCell::new(Vec::new())),
+            net_err: RefCell::new(None),
         }
     }
 
@@ -113,11 +127,19 @@ impl RutEngine {
 
     /// compile + run over the compiled program's bytes: accumulated
     /// output, trap, the entry-err channel, budgets, and the parked
-    /// flag (additive fields — older consumers ignore them).
+    /// flag (additive fields — older consumers ignore them). `parked`
+    /// carries TWO shapes, and the trap field names which: the FUEL
+    /// park (OutOfFuel beside a live frame — `resume(extra_fuel)`
+    /// continues it) and the NET park (`trap: null` beside pending
+    /// host completers — only network waits remain, and a fetch
+    /// completer lands from a JS microtask that can never settle
+    /// inside this synchronous export; the page re-drives the parked
+    /// machine one macrotask per leg through `resume` until idle).
     pub fn run(&self, bin: &[u8], fuel: u64, heap_bytes: u64) -> String {
         // a fresh run supersedes any parked frame — the old machine is
         // retired first, and the accumulated output resets with it
         *self.parked.borrow_mut() = None;
+        *self.net_err.borrow_mut() = None;
         let decode_result = rut_core::binary::decode(bin);
         let prog = match decode_result {
             Ok(p) => p,
@@ -140,8 +162,8 @@ impl RutEngine {
         // into the output cell; calc's float fns ride rut-std. The installs
         // answer to the COMPILE-time mount snapshot (the ctx is owned; the
         // session died with the compile call) — the blanket-install lane:
-        // this host ships no `http` (reqwest) and no `bench_cross`, the
-        // rest merge inert unless the program mounts their pkg
+        // this host ships no `bench_cross`, the rest merge inert unless the
+        // program mounts their pkg
         let ctx = self.ctx.borrow().clone().unwrap_or_default();
         let mut hosts = rut_vm::interp::HostRegistry::new();
         let output = Rc::clone(&self.output);
@@ -165,6 +187,22 @@ impl RutEngine {
         // only reaches them when it declares `use strbuild::` (or `use
         // json::` — json's writer rides the builder)
         hosts.install_host_pkg(&ctx, rut_std::strbuild::pkg());
+        // the fetch lane's bodies (the host http rows): a program only
+        // reaches them when it declares `use http::` / `use http_host::`
+        // — the browser window's fetch, the wasm flavor of the std
+        // lane. The JS trio is target-gated: native builds (this
+        // crate's test rlib) bind the seam's immediate-fail backend
+        // instead — the DECLARED default (every offered lib's rows
+        // ride main's manifest) needs the seven rows bound to boot at
+        // all, and the native arm answers the same synchronous
+        // status-0 degrade the no-window node path rides.
+        #[cfg(target_arch = "wasm32")]
+        hosts.install_host_pkg(&ctx, rut_std::http_wasm::pkg_fetch());
+        #[cfg(not(target_arch = "wasm32"))]
+        hosts.install_host_pkg(
+            &ctx,
+            rut_std::http::pkg_over(std::sync::Arc::new(NoFetchBackend)),
+        );
         let mut vm = match rut_vm::interp::Vm::builder()
             .program(Rc::new(prog))
             .limits(limits)
@@ -181,29 +219,43 @@ impl RutEngine {
         // the async driving loop: drain the ready
         // queue, advance the virtual clock to the next sleep deadline — the
         // CLI's own loop (`rut run`): run what's ready, then jump `now` to
-        // the earliest armed timer so sleep futures fire. Idle for programs
-        // that launch nothing. The fuel budget parks (OutOfFuel) still
-        // surface through `call`'s own result — a parked main takes the
-        // parked-slot path below, untouched. A trapped async task stops the
-        // drain (the loud channel answers on the envelope's next read).
+        // the earliest armed timer so sleep futures fire. When NO timer is
+        // armed the sync pump is done — what remains (host completers)
+        // waits outside this export, and [`net_waiting`] reads that as the
+        // NET park. Idle for programs that launch nothing. The fuel budget
+        // parks (OutOfFuel) still surface through `call`'s own result — a
+        // parked main takes the parked-slot path below, untouched. A
+        // trapped async task is the LOUD channel: the drive's trap
+        // surfaces on this envelope (the old loop swallowed it).
+        let mut drive_trap: Option<rut_vm::Trap> = None;
         if out.is_ok() && !vm.is_running() {
-            for _ in 0..1_000_000 {
-                if vm.run_ready().is_err() {
-                    break;
-                }
-                match vm.next_deadline() {
-                    Some(d) => vm.set_now(d),
-                    None => {
-                        if vm.pending_tasks() == 0 {
-                            break;
-                        }
-                    }
-                }
+            if let Err(t) = drive_until_net_park(&mut vm) {
+                drive_trap = Some(t);
             }
         }
-        let (trap, parked, err) = match out {
-            Ok(v) => (None, false, err_of_value(&v)),
-            Err(t) => {
+        let (trap, net_parked, err) = match (out, drive_trap) {
+            (_, Some(t)) => {
+                *self.net_err.borrow_mut() = None;
+                let parked = t.kind == rut_vm::TrapKind::OutOfFuel && vm.is_running();
+                (Some(t.name()), parked, None)
+            }
+            (Ok(v), None) => {
+                let e = err_of_value(&v);
+                if net_waiting(&mut vm) {
+                    // THE NET PARK: main retired, no timer armed, only
+                    // host completers pending. The machine moves to the
+                    // parked slot whole — the page's pump re-drives it
+                    // one macrotask per leg (`resume`), and the
+                    // envelope says parked:true beside a null trap.
+                    *self.net_err.borrow_mut() = Some(e.clone());
+                    (None, true, e)
+                } else {
+                    *self.net_err.borrow_mut() = None;
+                    (None, false, e)
+                }
+            }
+            (Err(t), None) => {
+                *self.net_err.borrow_mut() = None;
                 let parked = t.kind == rut_vm::TrapKind::OutOfFuel && vm.is_running();
                 (Some(t.name()), parked, None)
             }
@@ -211,7 +263,7 @@ impl RutEngine {
         // read the counters BEFORE the machine moves into the parked slot
         let fuel_used = vm.fuel_used;
         let heap = vm.heap_usage();
-        if parked {
+        if net_parked {
             *self.parked.borrow_mut() = Some(vm);
         }
         let lines = self.output.borrow().clone();
@@ -221,16 +273,22 @@ impl RutEngine {
             err.as_deref(),
             fuel_used,
             heap,
-            parked,
+            net_parked,
         )
     }
 
     /// Continue the parked frame: add `extra_fuel` to the SAME machine and
-    /// re-enter the run loop at the parked pc. The output envelope carries
+    /// re-enter the run loop at the parked pc — the FUEL park's leg. The
+    /// NET park's leg (`trap: null` was parked): the frame machine is
+    /// already idle (main retired at the park), so `extra_fuel` is
+    /// meaningless there — the leg re-drives the async set so the host
+    /// completers that landed since the last leg cross, and parks again
+    /// while network waits remain. Either way the output envelope carries
     /// the ACCUMULATED lines of run+resumes (the output cell is never
     /// reset here — only a fresh `run` resets it), cumulative `fuelUsed`,
     /// and `parked:true` when the frame parked again (it can run out of
-    /// fuel twice — each resume keeps going). With no parked frame this
+    /// fuel twice — each resume keeps going — and a net session can park
+    /// across as many legs as the wire needs). With no parked frame this
     /// is LOUD: the trap names it, nothing silently re-runs.
     pub fn resume(&self, extra_fuel: u64) -> String {
         let mut vm = match self.parked.borrow_mut().take() {
@@ -246,15 +304,71 @@ impl RutEngine {
                 )
             }
         };
-        vm.add_fuel(extra_fuel);
-        let out = vm.resume::<RutValue>();
-        let (trap, parked, err) = match out {
-            Ok(v) => (None, false, err_of_value(&v)),
-            Err(t) => {
-                let parked = t.kind == rut_vm::TrapKind::OutOfFuel && vm.is_running();
-                (Some(t.name()), parked, None)
+        let fuel_leg = vm.is_running();
+        let mut trap: Option<String> = None;
+        let mut parked = false;
+        let mut err: Option<String> = None;
+        if fuel_leg {
+            vm.add_fuel(extra_fuel);
+            match vm.resume::<RutValue>() {
+                Ok(v) => {
+                    err = err_of_value(&v);
+                    if !vm.is_running() {
+                        // the frame retired cleanly — the async set
+                        // may hold waits: the same drive + net
+                        // verdict as a fresh run
+                        match drive_until_net_park(&mut vm) {
+                            Err(t) => {
+                                *self.net_err.borrow_mut() = None;
+                                trap = Some(t.name());
+                            }
+                            Ok(()) => {
+                                if net_waiting(&mut vm) {
+                                    parked = true;
+                                    *self.net_err.borrow_mut() = Some(err.clone());
+                                } else {
+                                    *self.net_err.borrow_mut() = None;
+                                }
+                            }
+                        }
+                    }
+                }
+                Err(t) => {
+                    *self.net_err.borrow_mut() = None;
+                    parked = t.kind == rut_vm::TrapKind::OutOfFuel && vm.is_running();
+                    trap = Some(t.name());
+                }
             }
-        };
+        } else {
+            // THE NET LEG: re-drive so the landed completers cross;
+            // the entry-err is the park's carried answer (main
+            // retired there)
+            match drive_until_net_park(&mut vm) {
+                Err(t) => {
+                    *self.net_err.borrow_mut() = None;
+                    parked = t.kind == rut_vm::TrapKind::OutOfFuel && vm.is_running();
+                    trap = Some(t.name());
+                }
+                Ok(()) => {
+                    // the slot is Option<Option<String>>: outer None =
+                    // not net-parked (never here), inner = the entry-err
+                    err = (*self.net_err.borrow()).clone().unwrap_or(None);
+                    if net_waiting(&mut vm) {
+                        parked = true;
+                    } else {
+                        // the session is idle — the carried err has
+                        // been delivered (this envelope IS the last
+                        // leg's); the slot retires with the machine
+                        *self.net_err.borrow_mut() = None;
+                    }
+                }
+            }
+        }
+        // the channels law: a trap never fills err (and the stored
+        // entry-err dies with the trap — never mixed)
+        if trap.is_some() {
+            err = None;
+        }
         let fuel_used = vm.fuel_used;
         let heap = vm.heap_usage();
         if parked {
@@ -286,6 +400,35 @@ impl RutEngine {
 impl Default for RutEngine {
     fn default() -> Self {
         Self::new()
+    }
+}
+
+/// The native arm's http bodies (the test rlib has no JS): the seam's
+/// immediate-fail backend — every send answers the status-0 transport
+/// failure synchronously (the born-dead body degrades follow), the
+/// same shape the fetch lane's no-window arm answers. ONE exception
+/// keeps the net-park lane pinnable natively: a `park:` URL holds the
+/// send completer PENDING — the `#hframe@` host future waits outside
+/// this synchronous export exactly the way a real fetch does between
+/// pump legs, so the engine's park verdict and the resume legs ride
+/// real std rows. The fetch backend itself is wasm32-only: the JS
+/// trio is a target-gated dependency of rut-std's `http-wasm` feature.
+#[cfg(not(target_arch = "wasm32"))]
+struct NoFetchBackend;
+
+#[cfg(not(target_arch = "wasm32"))]
+impl rut_std::http::HttpBackend for NoFetchBackend {
+    fn send(
+        &self,
+        req: &rut_std::http::HttpRequest,
+        out: rut_vm::Completer<rut_std::http::HttpResponse>,
+    ) {
+        if req.url.starts_with("park:") {
+            return; // the net-park vehicle: nothing completes this send
+        }
+        out.complete(rut_std::http::HttpResponse::failed(
+            "no fetch on this host (the fetch lane ships on wasm32)".to_string(),
+        ));
     }
 }
 
@@ -450,10 +593,7 @@ fn compile_playground(
     // the book lane (the run buttons in docs/): `json` and `strbuild`
     // complete the CLI's loose-file host set — a book block that
     // `use json::` / `use strbuild::` gets the same packages `rut run`
-    // offers, so the book's buttons answer exactly like the CLI. The
-    // HTTP pair stays CLI-only by law: reqwest does not build on
-    // wasm32-unknown-unknown (this crate's own dependency note), so a
-    // `use http::` block fails to resolve here — loud, never silent.
+    // offers, so the book's buttons answer exactly like the CLI.
     // strbuild's rows ride the `strbuild_host` decl surface (the
     // ink/ink_host pattern), lowered here exactly like `ink_host`
     // above; the bodies bind in `run` (`rut_std::strbuild::pkg()`)
@@ -462,6 +602,32 @@ fn compile_playground(
         include_str!("../../../rut/strbuild_host/src/strbuild_host.d.rut"),
         "strbuild_host.d.rut",
         &[],
+    );
+    // the http pair: the decl surface lowers exactly like the other
+    // host surfaces — its MOD TREE rides the children map (`net/` the
+    // request lane + readbacks, `stream/` the body lanes; the rows
+    // register path-qualified) — and the class face mounts as a
+    // source pkg through `std_pkg!` below. A `use http::` block now
+    // resolves here exactly the way the CLI's does; the bodies bind
+    // in `run` (`rut_std::http_wasm::pkg_fetch()` — the fetch lane,
+    // the wasm flavor of the std transport). The old note ("the HTTP
+    // pair stays CLI-only: reqwest does not build on wasm32") is
+    // superseded by the swappable-backend seam — this host brings its
+    // OWN backend, and rut/http + rut/http_host stay byte-identical.
+    let http_host = host_surface(
+        "http_host",
+        include_str!("../../../rut/http_host/src/mod.d.rut"),
+        "mod.d.rut",
+        &[
+            (
+                "net",
+                include_str!("../../../rut/http_host/src/net/mod.d.rut"),
+            ),
+            (
+                "stream",
+                include_str!("../../../rut/http_host/src/stream/mod.d.rut"),
+            ),
+        ],
     );
     // calc_host rides as a lowered surface — the same shape a
     // `tree_pkg("calc_host")` walk yields (the wasm host has no
@@ -504,6 +670,8 @@ fn compile_playground(
         strbuild_host,
         std_pkg!("strbuild"),
         std_pkg!("json"),
+        http_host,
+        std_pkg!("http"),
         calc_host,
         std_pkg!("calc", "math" => "math"),
     ];
@@ -589,6 +757,50 @@ fn compile_playground(
 }
 
 // ---- the envelope writers (no serde on this path) ----
+
+/// The async driving loop, net-park flavor: drain the ready queue,
+/// advance the virtual clock to the next armed timer — and STOP when
+/// no timer is armed. Whatever remains then (host futures parked on
+/// their completers) waits OUTSIDE this synchronous export: a fetch
+/// completer lands from a JS microtask that can never settle while a
+/// wasm-bindgen call is on the stack. The old loop spun a million
+/// useless `run_ready` rounds on exactly that shape; this one stops
+/// at the first quiet round and lets the page's pump re-drive the
+/// machine on a macrotask. Capped, so a program that never idles
+/// fails loudly instead of hanging. A trapped async task surfaces
+/// through the `Err` arm — the loud channel (the old loop swallowed
+/// it and the envelope reported a clean main).
+fn drive_until_net_park(vm: &mut rut_vm::interp::Vm) -> Result<(), rut_vm::Trap> {
+    for _ in 0..1_000_000 {
+        vm.run_ready()?;
+        match vm.next_deadline() {
+            Some(d) => vm.set_now(d),
+            None => {
+                // no timer armed. But the expiry above may have JUST
+                // moved fired timers into the ready queue — one probe
+                // round answers which: progress means keep driving;
+                // a quiet round with no deadline means the pending set
+                // (host futures only) waits on completers outside this
+                // export — the net park.
+                if vm.pending_tasks() == 0 {
+                    return Ok(()); // idle
+                }
+                if vm.run_ready()? == 0 {
+                    return Ok(()); // quiet round: net waits remain
+                }
+            }
+        }
+    }
+    Ok(())
+}
+
+/// The net-park verdict after [`drive_until_net_park`]: no timer is
+/// armed and frames are still pending — the pending set can only be
+/// host futures parked on their completers (the loop drained the
+/// ready queue and every due timer), so only NETWORK waits remain.
+fn net_waiting(vm: &mut rut_vm::interp::Vm) -> bool {
+    vm.next_deadline().is_none() && vm.pending_tasks() > 0
+}
 
 fn json_escape(s: &str, out: &mut String) {
     out.push('"');
@@ -1039,6 +1251,171 @@ entry fn main() {
         assert_eq!(
             field(&j, "output"),
             "[\"t-3\",\"t-2\",\"t-1\",\"lift-off\"]",
+            "{j}"
+        );
+    }
+
+    // ---- the net-park lane (the fetch era): a host wait with NO
+    // timer armed parks the machine beside a NULL trap — the net
+    // shape (the fuel shape is the OutOfFuel pair) — and the pump
+    // legs re-drive it. The vehicle is the real std row family over
+    // the native arm's `park:` URL (the completer stays pending —
+    // the `#hframe@` host future waits outside this synchronous
+    // export exactly the way a browser fetch does between pump legs).
+    // Natively nothing ever completes it, so the legs re-park: the
+    // honest pin of the park itself. In the browser the fetch
+    // backend's completers land between legs (JS microtasks), and the
+    // same legs carry the session to idle. ----
+
+    const NET_PARK: &str = r#"
+use http::{ HttpClient };
+use futures::{ launch_future };
+use ink::{ Logger };
+
+async fn waiter(log: Logger, client: HttpClient) {
+    let resp = await client.get("park:the-completer-stays-pending").build().send();
+    log.info(f"status={resp.status()}");
+}
+
+entry fn main() {
+    let log = Logger("net");
+    launch_future(waiter(log, HttpClient::new()));
+    log.info("launched");
+}
+"#;
+
+    // the fuel-then-net transition: main fuel-parks inside its loop;
+    // the resumed leg runs main to its return while the launched
+    // waiter keeps waiting — the session lands in the NET park with
+    // the fuel legs' lines accumulated
+    const FUEL_THEN_NET: &str = r#"
+use http::{ HttpClient };
+use futures::{ launch_future };
+use ink::{ Logger };
+
+async fn waiter(log: Logger, client: HttpClient) {
+    let resp = await client.get("park:the-completer-stays-pending").build().send();
+    log.info(f"status={resp.status()}");
+}
+
+entry fn main() {
+    let log = Logger("net");
+    launch_future(waiter(log, HttpClient::new()));
+    let i = 0;
+    while (i < 2000000) {
+        i += 1;
+        if (i % 1000000 == 0) {
+            log.info(f"tick {i}");
+        }
+    }
+}
+"#;
+
+    #[test]
+    fn a_net_wait_parks_beside_a_null_trap_and_the_legs_re_park() {
+        let engine = RutEngine::new();
+        let bin = compile_case(&engine, NET_PARK);
+        // leg 1: main retires after "launched"; the waiter parks on the
+        // send completer — parked:true BESIDE a null trap (the fuel
+        // park would name OutOfFuel)
+        let j1 = engine.run(&bin, 10_000_000, 4 * 1024 * 1024);
+        assert_eq!(field(&j1, "trap"), "null", "{j1}");
+        assert_eq!(field(&j1, "parked"), "true", "{j1}");
+        assert_eq!(field(&j1, "output"), "[\"launched\"]", "{j1}");
+        // leg 2 — the net leg: the frame machine is idle (main retired
+        // at the park), so extra_fuel is meaningless; the leg re-drives
+        // the async set and re-parks on the same wait
+        let j2 = engine.resume(0);
+        assert_eq!(field(&j2, "trap"), "null", "{j2}");
+        assert_eq!(field(&j2, "parked"), "true", "{j2}");
+        assert_eq!(field(&j2, "output"), "[\"launched\"]", "{j2}");
+        // the parked session retires whole
+        assert_eq!(engine.drop_frame(), 1, "{j2}");
+    }
+
+    #[test]
+    fn the_fuel_leg_can_land_in_net_waits_and_stays_parked() {
+        let engine = RutEngine::new();
+        let bin = compile_case(&engine, FUEL_THEN_NET);
+        // leg 1: the fuel park inside main (the fuel shape)
+        let j1 = engine.run(&bin, 12_000_000, 4 * 1024 * 1024);
+        assert_eq!(field(&j1, "trap"), "OutOfFuel", "{j1}");
+        assert_eq!(field(&j1, "parked"), "true", "{j1}");
+        // leg 2 (+16M): main runs to its RETURN — the waiter's send
+        // completer is still pending, so the session re-parks in the
+        // net shape (null trap), the fuel legs' lines carried
+        let j2 = engine.resume(16_000_000);
+        assert_eq!(field(&j2, "trap"), "null", "{j2}");
+        assert_eq!(field(&j2, "parked"), "true", "{j2}");
+        assert_eq!(
+            field(&j2, "output"),
+            "[\"tick 1000000\",\"tick 2000000\"]",
+            "{j2}"
+        );
+        assert_eq!(engine.drop_frame(), 1, "{j2}");
+    }
+
+    // ---- the http mounts (the fetch lane): the decl surface (its
+    // net/stream mod tree) + the class face lower in
+    // `compile_playground`, so a `use http::` program compiles here
+    // exactly like the CLI's. The BODIES bind only on wasm32 (the
+    // fetch backend — `pkg_fetch`); natively the Vm join refuses the
+    // declared-but-unbound rows loudly, the construction error the
+    // boot law names. ----
+
+    const NET_PROBE: &str = r#"
+use http::{ HttpClient };
+use futures::{ launch_future };
+use ink::{ Logger };
+
+async fn drain(log: Logger, client: HttpClient, url: str) {
+    let resp = await client.get(url).build().send();
+    let st = resp.status();
+    if (st == 0) {
+        let why = resp.transport_error();
+        log.info("drain: transport failed");
+        let w: str = why;
+        log.info(w);
+        return;
+    }
+    let body = await resp.body();
+    log.info(f"drain: status={st} bytes={body.len()}");
+}
+
+entry fn main() {
+    let log = Logger("net");
+    let client = HttpClient::new();
+    launch_future(
+        drain(log, client, "https://cdn.jsdelivr.net/gh/hpp2334/rut/dist/std/ink.zip"),
+    );
+}
+"#;
+
+    #[test]
+    fn the_http_pair_mounts_and_a_use_http_program_compiles() {
+        let engine = RutEngine::new();
+        let json = engine.compile(NET_PROBE);
+        assert!(
+            json.contains("\"diags\":[],"),
+            "the net probe compiles: {json}"
+        );
+        assert!(json.contains("\"binary\":"), "{json}");
+    }
+
+    #[test]
+    fn the_http_program_answers_the_immediate_transport_failure_natively() {
+        // the native test rlib binds the seam's immediate-fail door
+        // (the fetch backend is wasm32-only): the net case answers the
+        // status-0 degrade synchronously — the same first-run shape
+        // the node smoke rides through the no-window arm
+        let engine = RutEngine::new();
+        let bin = compile_case(&engine, NET_PROBE);
+        let j = engine.run(&bin, 10_000_000, 4 * 1024 * 1024);
+        assert_eq!(field(&j, "trap"), "null", "{j}");
+        assert_eq!(field(&j, "parked"), "false", "{j}");
+        assert_eq!(
+            field(&j, "output"),
+            "[\"drain: transport failed\",\"no fetch on this host (the fetch lane ships on wasm32)\"]",
             "{j}"
         );
     }

@@ -35,8 +35,33 @@ reqwest = { version = "0.12", default-features = false, features = [
     "brotli",
 ], optional = true }
 
+# the fetch transport of the std HTTP lane's wasm DOOR (`pkg_fetch`):
+# TARGET-gated to wasm32 so the native graphs never see the JS trio,
+# and DEFAULT-OFF behind `http-wasm` (the same law the reqwest lane
+# runs — a wasm embedder opts in; everyone else compiles none of it).
+# rut-wasm turns the feature on: its playground engine ships the
+# fetch lane.
+[target.'cfg(target_arch = "wasm32")'.dependencies]
+wasm-bindgen = { version = "0.2", optional = true }
+web-sys = { version = "0.3", optional = true, features = [
+    "Headers",
+    "ReadableStream",
+    "ReadableStreamDefaultReader",
+    "RequestInit",
+    "Response",
+    "Window",
+] }
+js-sys = { version = "0.3", optional = true }
+wasm-bindgen-futures = { version = "0.4", optional = true }
+
 [features]
 http = ["dep:reqwest"]
+http-wasm = [
+    "dep:wasm-bindgen",
+    "dep:web-sys",
+    "dep:js-sys",
+    "dep:wasm-bindgen-futures",
+]
 
 [dev-dependencies]
 # the decl↔body contract tests: mount `rut/http_host`,

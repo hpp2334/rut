@@ -7,7 +7,7 @@
 //   1. the runner law: a missing/invalid artifact boots to mode
 //      "error" naming the exact `npm run build:wasm` command; the
 //      error runner has no working methods — no silent anything;
-//   2. every prepared case (9 inline + 18 classics) REALLY compiles
+//   2. every prepared case (10 inline + 18 classics) REALLY compiles
 //      and runs through the wasm engine at the shipped default budget
 //      (fuel off — uncapped; fuel-demo's infinite-loop source is
 //      covered by the resume lane's explicit budgets); the only trap
@@ -30,7 +30,7 @@
 //   6. THE HIGHLIGHT (phase 3, survey D3): through the SAME demo
 //      binding the editor uses (src/lsp/rut-lsp.ts bundled into the
 //      smoke entry) over the SHIPPED public/rut-lsp.wasm — the 14-type
-//      legend, ZERO false diagnostics across all 26 cases (the
+//      legend, ZERO false diagnostics across all 28 cases (the
 //      extension e2e's own law applied to the demo), and a census of
 //      known lines across the cases (keywords, primitives, types, fn
 //      names, strings at known positions) whose token classes match
@@ -143,7 +143,7 @@ check(runner.state.mode === 'wasm', 'the artifact boots to wasm mode', runner.st
 check(runner.isLive, 'the wasm runner is live');
 
 const all = [...api.CASES, ...api.EXAMPLES];
-check(all.length === 27, 'the full corpus is present (9 inline + 18 classics)', String(all.length));
+check(all.length === 28, 'the full corpus is present (10 inline + 18 classics)', String(all.length));
 
 // the trap the corpus teaches BY DESIGN (the case's blurb says so) —
 // the only trap admitted in the uncapped default lane. fuel-demo is
@@ -410,7 +410,7 @@ if (!existsSync(LSP_ARTIFACT)) {
     check(legend.includes(want), `the legend names '${want}'`);
   }
 
-  // ZERO false diagnostics across all 26 cases through the binding —
+  // ZERO false diagnostics across all 28 cases through the binding —
   // the extension e2e's own law (a gate that cannot pass while the
   // shipped artifact and the language drift), applied to the demo
   const analyses = new Map();
@@ -630,7 +630,7 @@ console.log('\n[7] the dep lane: CDN-shaped boot over the virtual store (offline
     JSON.stringify(wout),
   );
   check(
-    notes.some((n) => n.includes("dep 'ghost'")),
+    notes.some((n) => n.includes('dep `ghost`')),
     'the refusal hints once through the notify lane',
     JSON.stringify(notes),
   );
