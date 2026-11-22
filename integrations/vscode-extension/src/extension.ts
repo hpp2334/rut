@@ -36,7 +36,7 @@ import {
 } from './providers';
 import { analyzeDoc } from './util';
 import { RutLsp } from './wasm';
-import { indexWorkspace } from './workspace';
+import { discoverProjects, indexWorkspace, invalidateProjects } from './workspace';
 
 export async function activate(context: vscode.ExtensionContext): Promise<void> {
     const wasmPath = path.join(context.extensionPath, 'bin', 'rut-lsp.wasm');
@@ -130,11 +130,25 @@ async function registerAll(context: vscode.ExtensionContext, rut: RutLsp): Promi
     // analysis (a superseded reload resolves null; the later reload's
     // own resolution re-schedules, so the refresh is never lost).
     const reloadDeps = (): void => {
-        const roots = (vscode.workspace.workspaceFolders ?? []).map((f) => f.uri.fsPath);
-        void rut.reloadDeps(roots).then(() => {
-            for (const doc of vscode.workspace.textDocuments) {
-                schedule(doc);
+        // the walk's roots: the workspace folders UNION every
+        // discovered project dir (nested `rut.jsonc` trees ride the
+        // same per-root walk — the actor loops roots, the collection
+        // dedupes first-mount-wins; a folder that is itself a project
+        // is one root, not two)
+        const folders = (vscode.workspace.workspaceFolders ?? []).map((f) => f.uri.fsPath);
+        void discoverProjects(rut).then((projects) => {
+            const roots = [...folders];
+            for (const project of projects) {
+                const dir = project.dir.fsPath;
+                if (!roots.includes(dir)) {
+                    roots.push(dir);
+                }
             }
+            void rut.reloadDeps(roots).then(() => {
+                for (const doc of vscode.workspace.textDocuments) {
+                    schedule(doc);
+                }
+            });
         });
     };
 
@@ -166,15 +180,26 @@ async function registerAll(context: vscode.ExtensionContext, rut: RutLsp): Promi
 function watchDeps(context: vscode.ExtensionContext, rut: RutLsp, reloadDeps: () => void): void {
     const watchers: vscode.Disposable[] = [];
     const watchFolder = (folder: vscode.WorkspaceFolder): void => {
+        // a MANIFEST event re-shapes the discovery cache before the
+        // reload — a rut.jsonc created, changed, or deleted mid-session
+        // changes the project set the roots derive from (a created one
+        // joins the walk on the next tick, a deleted one leaves it,
+        // the scan's findFiles re-runs either way); a mod.rut event
+        // only re-walks the roots discovery already named
+        const onManifest = (): void => {
+            invalidateProjects();
+            reloadDeps();
+        };
         for (const pattern of [`**/${MANIFEST_NAME}`, '**/mod.rut']) {
+            const fire = pattern === `**/${MANIFEST_NAME}` ? onManifest : reloadDeps;
             const watcher = vscode.workspace.createFileSystemWatcher(
                 new vscode.RelativePattern(folder, pattern),
             );
             watchers.push(
                 watcher,
-                watcher.onDidChange(() => reloadDeps()),
-                watcher.onDidCreate(() => reloadDeps()),
-                watcher.onDidDelete(() => reloadDeps()),
+                watcher.onDidChange(fire),
+                watcher.onDidCreate(fire),
+                watcher.onDidDelete(fire),
             );
         }
     };
@@ -190,6 +215,7 @@ function watchDeps(context: vscode.ExtensionContext, rut: RutLsp, reloadDeps: ()
     rearm();
     context.subscriptions.push(
         vscode.workspace.onDidChangeWorkspaceFolders(() => {
+            invalidateProjects(); // the folder set re-shapes discovery
             rearm();
             void indexWorkspace(rut).then(() => reloadDeps());
         }),

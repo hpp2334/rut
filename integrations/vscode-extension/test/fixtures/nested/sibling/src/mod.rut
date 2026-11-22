@@ -1,0 +1,14 @@
+// sibling — the nested fixture's SECOND probe doc: same probes, a
+// different layout, so a diagnostic range leaked from connector
+// cannot masquerade as this file's own. Its `tag` local must answer
+// here only.
+use ink::{ Logger };
+
+entry fn main() {
+    let log = Logger("sibling");
+    let pad = 1;
+    let tag = "sibling-local";
+    let said = tag;
+    log.info("yo");
+    let x = y;
+}

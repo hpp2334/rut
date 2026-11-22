@@ -1,0 +1,10 @@
+{
+    // sibling — the nested fixture's SECOND project, RENDERED by the
+    // host test: same probes as connector, a different layout, so a
+    // diagnostic range leaked from the sibling twin cannot masquerade
+    // as this file's own. Distinct-named siblings coexist fully.
+    "name": "sibling",
+    "deps": {
+        "ink": { "path": "../ink" }
+    }
+}

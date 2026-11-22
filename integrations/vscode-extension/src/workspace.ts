@@ -1,12 +1,15 @@
 // the workspace index — the wasm face's fs scan (the CLI's install
-// lane walks the same shape): every `**/*.rut` under the workspace folders indexes into the
-// SAME `defs` store the dep walk fills, `mod.rut` files under a
-// folder-level package stamped with their (pkg, mod path) pair.
+// lane walks the same shape): every `**/*.rut` under the workspace
+// folders indexes into the SAME `defs` store the dep walk fills, each
+// file stamped by its OWNING project — the nearest enclosing
+// `rut.jsonc` dir — so one folder can carry several nested projects
+// (the folder root need not be a project at all).
 
 import * as fs from 'node:fs';
 import * as path from 'node:path';
 import * as vscode from 'vscode';
-import { MANIFEST_NAME, MAX_WORKSPACE_FILES } from './constants';
+import { IGNORED, MANIFEST_NAME, MAX_WORKSPACE_FILES } from './constants';
+import { mergeProjectDirs, ownerDir, stripSrcShell } from './ownership';
 import { hintOnce, readFileNullable } from './util';
 import { isEnvelope, type RutLsp } from './wasm';
 
@@ -14,67 +17,78 @@ import { isEnvelope, type RutLsp } from './wasm';
 // live Rust-side, in the crate that owns the walk)
 const MAX_MOD_FILES = 200;
 
-// the folder-level package's name (its manifest parses in the wasm) —
-// `null` when the folder has no manifest or a broken one
-export async function folderPkgName(rut: RutLsp, folder: vscode.Uri): Promise<string | null> {
-    const bytes = await readFileNullable(vscode.Uri.joinPath(folder, MANIFEST_NAME));
-    if (bytes === null) {
-        return null;
-    }
-    const table = await rut.parseManifest(new TextDecoder().decode(bytes));
-    return isEnvelope(table) ? null : table.name;
+// one discovered rut project: its manifest dir + the pkg name the
+// manifest parses to (an unnamed manifest rides the dir's basename —
+// the walk's own derivation; a broken one is no project at all)
+export interface ProjectDir {
+    dir: vscode.Uri;
+    pkg: string;
 }
 
-// is there a `rut.jsonc` between the file's dir and the folder root
-// (inclusive of the file's dir, exclusive of the folder)? Then the
-// file belongs to a NESTED package — its own manifest walk owns its
-// mod paths, the folder stamp would lie
-function nestedManifest(folderFs: string, fileFs: string): boolean {
-    let dir = path.dirname(fileFs);
-    while (dir.length > folderFs.length) {
-        if (fs.existsSync(path.join(dir, MANIFEST_NAME))) {
-            return true;
-        }
-        const parent = path.dirname(dir);
-        if (parent === dir) {
-            break;
-        }
-        dir = parent;
-    }
-    return false;
+// the parsed pkg names, memoized per manifest dir — discovery and the
+// ownership walk re-ask the same dirs on every re-index. Invalidated
+// wholesale (`invalidateProjects`) on the manifest watchers and the
+// folder-change hook: a manifest landing, changing, or deleting
+// re-shapes the project set.
+const pkgCache = new Map<string, string | null>();
+
+export function invalidateProjects(): void {
+    pkgCache.clear();
 }
 
-// a package file's dir relative to the manifest, minus the leading
-// `src` component, is its mod path (`src` → `''` the root,
-// `src/layout` → `layout`) — the package's module tree lives under its
-// `src/` shell. Anything outside the shell (the old
-// root-beside-manifest spelling included) is not a module file: `null`.
-function stripSrcShell(rel: string): string | null {
-    const norm = rel.split(path.sep).join('/');
-    if (norm === 'src') {
-        return '';
+// the dir's pkg name — `null` when there is no manifest or a broken
+// one (memoized; the parse rides the wasm)
+async function pkgOf(rut: RutLsp, dir: vscode.Uri): Promise<string | null> {
+    const cached = pkgCache.get(dir.fsPath);
+    if (cached !== undefined) {
+        return cached;
     }
-    if (norm.startsWith('src/')) {
-        return norm.slice('src/'.length);
+    const bytes = await readFileNullable(vscode.Uri.joinPath(dir, MANIFEST_NAME));
+    let pkg: string | null = null;
+    if (bytes !== null) {
+        const table = await rut.parseManifest(new TextDecoder().decode(bytes));
+        if (!isEnvelope(table)) {
+            pkg = table.name ?? path.basename(dir.fsPath);
+        }
     }
-    return null;
+    pkgCache.set(dir.fsPath, pkg);
+    return pkg;
+}
+
+// every rut project dir the editor can see: each workspace folder
+// whose root carries a manifest, plus every `**/rut.jsonc` the scan
+// finds (the shared ignore set — target/, node_modules/, .git/,
+// dot-dirs are never projects). Sibling projects never shadow each
+// other: each entry owns its own tree, at any nesting depth.
+export async function discoverProjects(rut: RutLsp): Promise<ProjectDir[]> {
+    const found = await vscode.workspace.findFiles(
+        `**/${MANIFEST_NAME}`,
+        IGNORED,
+        MAX_WORKSPACE_FILES,
+    );
+    const out: ProjectDir[] = [];
+    for (const fsPath of mergeProjectDirs(
+        (vscode.workspace.workspaceFolders ?? []).map((f) => f.uri.fsPath),
+        found.map((f) => path.dirname(f.fsPath)),
+    )) {
+        const dir = vscode.Uri.file(fsPath);
+        const pkg = await pkgOf(rut, dir);
+        if (pkg !== null) {
+            out.push({ dir, pkg });
+        }
+    }
+    return out;
 }
 
 export async function indexWorkspace(rut: RutLsp): Promise<void> {
-    const files = await vscode.workspace.findFiles(
-        '**/*.rut',
-        '{**/target/**,**/node_modules/**,**/.git/**,**/.*/**}',
-        MAX_WORKSPACE_FILES,
-    );
+    const files = await vscode.workspace.findFiles('**/*.rut', IGNORED, MAX_WORKSPACE_FILES);
     const dec = new TextDecoder();
-    const pkgs = new Map<string, string | null>();
-    for (const folder of vscode.workspace.workspaceFolders ?? []) {
-        pkgs.set(folder.uri.fsPath, await folderPkgName(rut, folder.uri));
-    }
+    const owners = new Map((await discoverProjects(rut)).map((p) => [p.dir.fsPath, p.pkg]));
+    const projectDirs = new Set(owners.keys());
     // the BFS frontier: stamped files whose `mod NAME;` edges may carry
     // single-file children (`NAME.rut` beside the declaring file)
     const frontier: Array<{
-        folder: vscode.Uri;
+        owner: vscode.Uri;
         dir: vscode.Uri;
         pkg: string;
         modPath: string;
@@ -83,19 +97,16 @@ export async function indexWorkspace(rut: RutLsp): Promise<void> {
     for (const file of files) {
         const bytes = await vscode.workspace.fs.readFile(file);
         const folder = vscode.workspace.getWorkspaceFolder(file)?.uri;
-        const pkg = folder ? (pkgs.get(folder.fsPath) ?? null) : null;
-        // a `mod.rut` under a folder-level package stamps its mod path
-        // (the dir relative to the folder, minus the `src/` shell —
-        // `src/mod.rut` is the root `''`) — the position-path tier's data.
-        // A file outside the shell keeps today's plain shape (the dep walk
-        // re-stamps the deps it mounts anyway)
-        if (
-            pkg &&
-            folder &&
-            path.basename(file.fsPath) === 'mod.rut' &&
-            !nestedManifest(folder.fsPath, file.fsPath)
-        ) {
-            const rel = path.relative(folder.fsPath, path.dirname(file.fsPath));
+        // the file's OWNING project stamps it: a `mod.rut` under the
+        // owner's `src/` shell stamps its mod path (the dir relative to
+        // the OWNER, minus the `src/` shell — `src/mod.rut` is the root
+        // `''`) — the position-path tier's data. A file with no owner,
+        // or outside the shell, keeps the plain unstamped shape (the
+        // dep walk re-stamps the deps it mounts anyway)
+        const ownerFs = folder ? ownerDir(folder.fsPath, file.fsPath, projectDirs) : null;
+        const pkg = ownerFs ? (owners.get(ownerFs) ?? null) : null;
+        if (pkg && ownerFs && path.basename(file.fsPath) === 'mod.rut') {
+            const rel = path.relative(ownerFs, path.dirname(file.fsPath));
             const modPath = stripSrcShell(rel);
             if (modPath === null) {
                 await rut.indexFile(file.toString(), dec.decode(bytes));
@@ -104,7 +115,7 @@ export async function indexWorkspace(rut: RutLsp): Promise<void> {
             const stamped = await rut.indexModAt(file.toString(), pkg, modPath, dec.decode(bytes));
             if (!isEnvelope(stamped) && stamped.decls.length > 0) {
                 frontier.push({
-                    folder,
+                    owner: vscode.Uri.file(ownerFs),
                     dir: vscode.Uri.file(path.dirname(file.fsPath)),
                     pkg,
                     modPath,
@@ -118,8 +129,9 @@ export async function indexWorkspace(rut: RutLsp): Promise<void> {
     // the declared children, breadth-first: each stamped edge probes
     // `NAME.rut` beside the declaring file (BOTH spellings is the
     // loader's loud ambiguity — hinted once). A child stamps at (pkg,
-    // child path) and its own decls enqueue — declarations are the
-    // graph, bounded by this scan's own file budget.
+    // child path) under the SAME owner and its own decls enqueue —
+    // declarations are the graph, bounded by this scan's own file
+    // budget.
     let budget = MAX_MOD_FILES;
     while (frontier.length > 0 && budget > 0) {
         // the loop guard guarantees a node — shift() only answers
@@ -128,7 +140,7 @@ export async function indexWorkspace(rut: RutLsp): Promise<void> {
         if (next === undefined) {
             break;
         }
-        const { folder, dir, pkg, modPath, decls } = next;
+        const { owner, dir, pkg, modPath, decls } = next;
         for (const decl of decls) {
             if (budget <= 0) {
                 break;
@@ -149,8 +161,8 @@ export async function indexWorkspace(rut: RutLsp): Promise<void> {
                 continue; // nothing under either spelling — nothing to stamp here
             }
             const childUri = hasFile ? fileChild : dirChild;
-            if (nestedManifest(folder.fsPath, childUri.fsPath)) {
-                continue; // a nested package's own walk owns it
+            if (ownerDir(owner.fsPath, childUri.fsPath, projectDirs) !== owner.fsPath) {
+                continue; // a nested package's own manifest owns it
             }
             const childPath = modPath === '' ? decl.name : `${modPath}/${decl.name}`;
             if (!hasFile) {
@@ -158,7 +170,7 @@ export async function indexWorkspace(rut: RutLsp): Promise<void> {
                 // EXCEPT under a file-form parent, whose child's bare
                 // relative dir (minus the `src/` shell) is not its mod path;
                 // only that correction spends the budget here
-                const bareRel = path.relative(folder.fsPath, path.dirname(childUri.fsPath));
+                const bareRel = path.relative(owner.fsPath, path.dirname(childUri.fsPath));
                 if (stripSrcShell(bareRel) === childPath) {
                     continue;
                 }
@@ -175,7 +187,7 @@ export async function indexWorkspace(rut: RutLsp): Promise<void> {
             budget--;
             if (!isEnvelope(stamped) && stamped.decls.length > 0) {
                 frontier.push({
-                    folder,
+                    owner,
                     dir: hasFile ? dir : vscode.Uri.joinPath(dir, decl.name),
                     pkg,
                     modPath: childPath,

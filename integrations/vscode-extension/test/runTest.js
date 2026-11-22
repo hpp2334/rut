@@ -89,6 +89,9 @@ async function run() {
     // 6. the dep walk — the crate's read-only walk through the injected env
     await depWalkChecks(log);
 
+    // 7. nested projects — discovery feeds the walk (the multi-project lane)
+    await nestedChecks(log);
+
     log('ALL CHECKS PASSED');
 }
 
@@ -313,6 +316,230 @@ async function depWalkChecks(log) {
         vscode.window.showErrorMessage = realError;
         vscode.window.showInformationMessage = realInfo;
     }
+}
+
+// ---- the nested projects (the multi-project lane) ----
+//
+// A workspace folder whose ROOT carries no manifest, with nested rut
+// projects inside — the ideal-toys shape that stranded every editor
+// world before discovery: `reloadDeps` passed only the folder (the
+// walk read `{root}/rut.jsonc`, found none, returned — nothing
+// mounted) and the scan stamped nothing (the folder-root-only pkg
+// refused the nested manifest). Discovery answers a SET: every
+// `**/rut.jsonc` under the shared ignore set is a project, the walk
+// loops roots, the collection dedupes first-mount-wins. The fixtures
+// render from templates (the dep-walk trick — the in-repo copies stay
+// inert), then the folder add rides the change hook's full re-run
+// (re-discovery + re-scan).
+//
+// Assertions, through the REAL editor surfaces, in EACH project's doc:
+//   (a) `let x = y;` squiggles `unknown name` (the check lane runs —
+//       the doc's own project mounted),
+//   (b) hover on `log.info`'s `info` resolves (the ink path dep
+//       mounted from the nested root),
+//   (c) the MULTI pin: both docs answer independently — sibling's
+//       squiggle sits on sibling's own line (connector's range never
+//       leaks), and each doc's identical `tag` local defines into its
+//       OWN file,
+//   (d) a manifest under `target/` is never a project: the trap doc
+//       stays parse-only (no unknown-name squiggle),
+//   (e) the same-name twin is non-fatal: first-mount-wins, the twin's
+//       own doc still answers,
+//   (f) a project created MID-SESSION joins the root set (the
+//       manifest watcher invalidates discovery; the reload walks it).
+async function nestedChecks(log) {
+    const vscode = require('vscode');
+    const FIXTURES = join(__dirname, 'fixtures', 'nested');
+    const tmp = fs.mkdtempSync(join(os.tmpdir(), 'rut-nested-'));
+    const root = join(tmp, 'ws'); // the folder root: NO manifest here
+    fs.mkdirSync(root);
+    fs.cpSync(FIXTURES, root, { recursive: true });
+    // the in-repo manifests are `.template`s — the rendered copies in
+    // the tmp folder are the live projects
+    const render = (dir) => {
+        const template = fs.readFileSync(join(root, dir, 'rut.jsonc.template'), 'utf8');
+        fs.writeFileSync(join(root, dir, 'rut.jsonc'), template);
+    };
+    for (const dir of ['connector', 'sibling', 'ink', 'twin']) {
+        render(dir);
+    }
+
+    // a needle's 0-based position in `text`, offset by `offset` chars
+    const posOf = (text, needle, offset = 0) => {
+        const at = text.indexOf(needle);
+        assert.ok(at >= 0, `probe ${JSON.stringify(needle)} missing from the fixture`);
+        const lineStart = text.lastIndexOf('\n', at) + 1;
+        return new vscode.Position(
+            text.slice(0, at).split('\n').length - 1,
+            at - lineStart + offset,
+        );
+    };
+    const unknownY = (uri) =>
+        vscode.languages
+            .getDiagnostics(uri)
+            .filter((d) => d.message.includes('unknown name') && d.message.includes('`y`'));
+
+    assert.ok(
+        vscode.workspace.updateWorkspaceFolders(vscode.workspace.workspaceFolders.length, 0, {
+            uri: vscode.Uri.file(root),
+        }),
+        'adding the nested fixture folder failed',
+    );
+
+    // open BOTH project docs (real files under the new folder)
+    const aPath = join(root, 'connector', 'src', 'mod.rut');
+    const bPath = join(root, 'sibling', 'src', 'mod.rut');
+    const aUri = vscode.Uri.file(aPath);
+    const bUri = vscode.Uri.file(bPath);
+    const aText = fs.readFileSync(aPath, 'utf8');
+    const bText = fs.readFileSync(bPath, 'utf8');
+    await vscode.window.showTextDocument(await vscode.workspace.openTextDocument(aUri), {
+        preview: true,
+    });
+    await vscode.window.showTextDocument(await vscode.workspace.openTextDocument(bUri), {
+        preview: true,
+    });
+
+    // (a) each doc squiggles its own `y` — the scan's ownership stamp
+    // (nearest manifest dir) is what turns the check lane on
+    const yA = posOf(aText, 'let x = y;', 8); // the `y` token
+    const yB = posOf(bText, 'let x = y;', 8);
+    assert.notStrictEqual(
+        yA.line,
+        yB.line,
+        'fixture layout: the probes must sit on distinct lines',
+    );
+    const aDiags = await poll('connector squiggle', async () => {
+        const d = unknownY(aUri);
+        return d.length > 0 ? d : null;
+    });
+    const bDiags = await poll('sibling squiggle', async () => {
+        const d = unknownY(bUri);
+        return d.length > 0 ? d : null;
+    });
+    assert.strictEqual(aDiags[0].source, 'rut', `diag source: ${JSON.stringify(aDiags[0])}`);
+    assert.strictEqual(
+        aDiags[0].range.start.line,
+        yA.line,
+        `connector's y squiggle sits on its own line: ${JSON.stringify(aDiags[0].range)}`,
+    );
+    assert.strictEqual(
+        bDiags[0].range.start.line,
+        yB.line,
+        `sibling's y squiggle sits on its own line: ${JSON.stringify(bDiags[0].range)}`,
+    );
+    assert.ok(
+        bDiags.every((d) => d.range.start.line !== yA.line),
+        "connector's y range leaked into sibling's diagnostics",
+    );
+    log(`nested: connector y-squiggle (line ${yA.line}), sibling y-squiggle (line ${yB.line})`);
+
+    // (b) hover resolves the ink dep's impl fn in EACH project (the
+    // nested root mounted its path dep like any root does)
+    const hoverInfo = async (uri, text) => {
+        const at = posOf(text, 'log.info', 4); // the `info` member
+        const h = await vscode.commands.executeCommand('vscode.executeHoverProvider', uri, at);
+        return h && h.length > 0 ? h[0] : null;
+    };
+    for (const [name, uri, text] of [
+        ['connector', aUri, aText],
+        ['sibling', bUri, bText],
+    ]) {
+        const h = await poll(`${name} ink hover`, () => hoverInfo(uri, text));
+        const value = h.contents.map((c) => c.value).join('\n');
+        assert.ok(
+            value.includes('fn info'),
+            `${name}'s log.info hover is not ink's impl fn: ${value.slice(0, 80)}`,
+        );
+    }
+    log('nested: log.info hovers resolve into the ink dep from both projects');
+
+    // (c) the identical locals hold: each doc's `tag` usage defines
+    // into its OWN file — the per-doc entrypoint + per-file stamps
+    // hold under N=2
+    const tagA = posOf(aText, 'let said = tag;', 11); // the `tag` token
+    const tagB = posOf(bText, 'let said = tag;', 11);
+    const defTargets = async (uri, at) =>
+        vscode.commands.executeCommand('vscode.executeDefinitionProvider', uri, at);
+    const defA = await poll('connector tag definition', () => defTargets(aUri, tagA));
+    const defB = await poll('sibling tag definition', () => defTargets(bUri, tagB));
+    assert.ok(
+        defA.some((l) => l.uri.fsPath === aPath),
+        `connector's tag defines into its own file: ${JSON.stringify(defA)}`,
+    );
+    assert.ok(
+        defB.some((l) => l.uri.fsPath === bPath),
+        `sibling's tag defines into its own file: ${JSON.stringify(defB)}`,
+    );
+    log('nested: the identical `tag` locals each define into their own project');
+
+    // (d) a manifest under `target/` is never a project — the trap doc
+    // stays unstamped, parse-only: no unknown-name squiggle ever (the
+    // analysis lanes are proved live by the squiggles above)
+    const trapUri = vscode.Uri.file(join(root, 'target', 'src', 'mod.rut'));
+    await vscode.window.showTextDocument(await vscode.workspace.openTextDocument(trapUri), {
+        preview: true,
+    });
+    await sleep(1000); // a generous settle — the negative must hold
+    assert.strictEqual(
+        unknownY(trapUri).length,
+        0,
+        'a manifest under target/ must never be a project',
+    );
+    log('nested: the target/ trap stayed invisible (parse-only)');
+
+    // (e) the same-name twin: first-mount-wins is non-fatal — the
+    // twin's own doc still answers its probe
+    const twinPath = join(root, 'twin', 'src', 'mod.rut');
+    const twinUri = vscode.Uri.file(twinPath);
+    const twinText = fs.readFileSync(twinPath, 'utf8');
+    await vscode.window.showTextDocument(await vscode.workspace.openTextDocument(twinUri), {
+        preview: true,
+    });
+    const yTwin = posOf(twinText, 'let x = y;', 8);
+    const twinDiags = await poll('twin squiggle', async () => {
+        const d = unknownY(twinUri);
+        return d.length > 0 ? d : null;
+    });
+    assert.strictEqual(
+        twinDiags[0].range.start.line,
+        yTwin.line,
+        `the twin doc answers its own probe: ${JSON.stringify(twinDiags[0].range)}`,
+    );
+    log('nested: the same-name twin is non-fatal (its doc answers)');
+
+    // (f) a project created MID-SESSION joins the root set: the
+    // manifest watcher invalidates discovery, the reload walks the new
+    // root, `use late::` completes its surface. The palette command
+    // rides as the sanctioned catch-up for watcher or search-index lag.
+    fs.mkdirSync(join(root, 'late', 'src'), { recursive: true });
+    fs.writeFileSync(
+        join(root, 'late', 'rut.jsonc'),
+        '{\n    // late — created mid-session\n    "name": "late"\n}\n',
+    );
+    fs.writeFileSync(
+        join(root, 'late', 'src', 'mod.rut'),
+        'pub fn late_fn() -> i32 {\n    return 7;\n}\n',
+    );
+    const lateProbe = await vscode.workspace.openTextDocument({
+        language: 'rut',
+        content: 'use late::\nfn main() -> nil {\n}\n',
+    });
+    let mounted = false;
+    for (let i = 0; i < 60 && !mounted; i++) {
+        if (i === 15) {
+            await vscode.commands.executeCommand('rut.reindexDeps');
+        }
+        await sleep(200);
+        const items = await vscode.commands.executeCommand(
+            'vscode.executeCompletionItemProvider',
+            lateProbe.uri,
+            new vscode.Position(0, 10), // right after `use late::`
+        );
+        mounted = items.map((x) => x.label).includes('late_fn');
+    }
+    assert.ok(mounted, 'a manifest created mid-session must join the root set');
+    log('nested: the mid-session project `late` mounted (discovery re-ran)');
 }
 
 module.exports = { run };

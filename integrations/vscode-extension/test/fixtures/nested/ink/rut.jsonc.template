@@ -1,0 +1,7 @@
+{
+    // ink — the shared path dep both nested projects declare (RENDERED
+    // by the host test): the ink shape, a Logger class whose impl fn
+    // the hover probes resolve (the dep index rides the consumer's
+    // member click — crates/rut-lsp/tests/deps.rs's law).
+    "name": "ink"
+}

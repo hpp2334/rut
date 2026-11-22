@@ -1,0 +1,13 @@
+// connector — the nested fixture's first probe doc. The world pins,
+// per project: `y` squiggles (unknown name), `info` hovers (the ink
+// dep's impl fn), and the `tag` local answers THIS file only — the
+// sibling project's world must not shadow it.
+use ink::{ Logger };
+
+entry fn main() {
+    let log = Logger("connector");
+    log.info("hi");
+    let tag = "connector-local";
+    let said = tag;
+    let x = y;
+}

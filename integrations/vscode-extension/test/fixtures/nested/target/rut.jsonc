@@ -1,0 +1,7 @@
+{
+    // trap — this manifest sits under `target/`, the scans' shared
+    // ignore set: discovery must never see it, so `trap` is never a
+    // project (its probe doc stays unstamped, parse-only — no
+    // unknown-name squiggle). The host suite asserts the negative.
+    "name": "trap"
+}

@@ -1,0 +1,6 @@
+// trap — never a project (its manifest lives under `target/`, the
+// scans' shared ignore set): this doc must stay unstamped,
+// parse-only — `y` never squiggles here.
+entry fn main() {
+    let x = y;
+}

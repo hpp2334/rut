@@ -1,0 +1,12 @@
+// ink — the shared dep's surface: a Logger class + the impl fn the
+// nested fixture's hover probes resolve (the ink shape —
+// crates/rut-lsp/tests/deps.rs `dep_impl_methods_ride_the_dep_index`).
+pub class Logger {
+    internal: opaque;
+}
+
+impl Logger {
+    pub fn info(self, msg: str) -> nil {
+        return;
+    }
+}

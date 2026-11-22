@@ -83,12 +83,11 @@ directory (both spellings is the loader's loud ambiguity, mirrored as
 a one-time hint) (`pub mod` marks the edge visible across packages).
 The extension rides the same model:
 
-- The **workspace scan** stamps every `mod.rut` under a folder-level
-  package's `src/` shell with its mod path (the wasm indexes it via
-  `index_mod_at`)
-  — a nested package's own manifest keeps it out of the parent's tree —
-  then follows each stamped file's `mod` decls to stamp the
-  single-file `NAME.rut` children at their child paths.
+- The **workspace scan** stamps every `mod.rut` under its owning
+  project's `src/` shell with its mod path (the wasm indexes it via
+  `index_mod_at`) — a nested package's own manifest keeps it out of
+  the parent's tree — then follows each stamped file's `mod` decls to
+  stamp the single-file `NAME.rut` children at their child paths.
 - The **dep walk** (in the crate, over the injected env) mounts each
   path dep's tree from its root module's declarations (the wasm
   parses; the walk only reads the files the decls name, probing
@@ -103,6 +102,24 @@ The extension rides the same model:
 - **Hover** renders `pub? mod NAME;` decls (kind, mounted file, child
   count) and resolves use-path segments to their mounted modules.
 
+## Nested projects — one folder, several rut projects
+
+A workspace folder does not have to BE a rut project. Discovery
+answers a SET: every `rut.jsonc` under the folders (the source scan's
+own ignore set — `target/`, `node_modules/`, `.git/`, and dot-dirs
+are never projects) is a discovered project, at any nesting depth,
+and each file belongs to the NEAREST enclosing manifest dir. Every
+discovered project joins the dep walk's roots (`reloadDeps` passes
+the workspace folders union the discovered projects — the actor
+loops roots, the collection dedupes first-mount-wins), so a nested
+project's path and url deps mount exactly like a folder-root
+project's always did. Diagnostics stay per-project: an open doc's
+check lane compiles its OWN package, and a manifest created
+mid-session joins the root set on the next tick (the `**/rut.jsonc`
+watcher invalidates the discovery cache before reloading).
+Cross-project name visibility in the editor follows the multi-root
+semantics unchanged.
+
 ## Semantic diagnostics — the check lane
 
 Diagnostics are two lanes merged, one engine
@@ -115,7 +132,7 @@ Diagnostics are two lanes merged, one engine
   type errors surface in the editor — `checked = true;` (bool into a
   `str` binding), a record literal missing a field, an arity mistake —
   at the same site `rut run` reports them. The document's package is
-  known from its stamps: a `mod.rut` under a folder-level package's
+  known from its stamps: a `mod.rut` under its owning project's
   `src/` shell (the
   workspace scan) or a dep file opened for editing (the dep walk).
   Diags map back through the graph's file stamps — each squiggle
@@ -134,7 +151,8 @@ The dep lane is the crate's, not the extension's: after the workspace
 scan the extension reloads the deps through the actor-owned walk
 (`rut.reloadDeps(roots)` — the core defers under its own debounce
 window and coalesces), and one
-walk per window runs every workspace folder — the wasm
+walk per window runs every root — the workspace folders union the
+discovered nested projects — the wasm
 parses the root `rut.jsonc` and its whole dep closure over the
 injected read-only env, mounting everything into the same defs store
 the scan fills. The extension NEVER fetches and NEVER writes: the
@@ -276,6 +294,11 @@ npm run lint           # biome check: 4-space formatting + the recommended
                        # lint set (biome.json; syntaxes/ and schemas/ excluded)
 npm run format         # biome check --write
 npm run typecheck      # tsc --noEmit: the hosts against the crate's .d.ts
+npm run test:units     # the workspace scan's pure tier: discovery's
+                       # merge + ownership + the src/ shell, compiled
+                       # straight from src/ under plain node — the
+                       # multi-project pins (sibling manifests, a root
+                       # manifest beside nested ones, the folder bound)
 npm run test:grammar   # standalone TextMate gate: the grammar asserted over
                        # the repo corpus (rut/ + examples/ + demo/ +
                        # benches/workloads/) via vscode-textmate/oniguruma —
@@ -328,6 +351,16 @@ the folder boundary, plus a url dep pinned by the rendered `rut.lock`
 store-hit mount (a dep dir published under a temp `$RUT_HOME`, its
 meta vouching the lock pin), and the auto-import insert all assert
 there (needs `code`; the lane skips loudly without it).
+
+`test/fixtures/nested/` is the multi-project fixture the host suite
+renders: a folder root with NO manifest carrying nested projects
+(`connector/`, `sibling/`, plus the same-name `twin/` and the
+ignored `target/` trap) over a shared `ink` path dep — the y-squiggle
+and the `log.info` hover answer in EACH project's doc, the identical
+locals define into their own files, and a project created
+mid-session joins the walk (needs `code`; the lane skips loudly
+without it). The pure path math behind it is pinned without VS Code
+by `npm run test:units`.
 
 The wasm module itself is gated by the lanes above: the grammar
 corpus, the through-wasm e2e, and the skip-tolerant host suite —

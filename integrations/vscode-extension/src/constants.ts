@@ -18,3 +18,9 @@ export const MAX_WORKSPACE_FILES = 500;
 
 // the manifest's one name — one directory is one module
 export const MANIFEST_NAME = 'rut.jsonc';
+
+// the scans' one ignore set — the `*.rut` walk and the `rut.jsonc`
+// discovery pass the SAME glob to findFiles: a manifest inside
+// `target/` is never a project, a source inside `node_modules/` is
+// never a module
+export const IGNORED = '{**/target/**,**/node_modules/**,**/.git/**,**/.*/**}';

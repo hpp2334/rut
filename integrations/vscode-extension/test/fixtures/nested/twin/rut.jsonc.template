@@ -1,0 +1,8 @@
+{
+    // twin — the same-name twin: its manifest name DUPLICATES
+    // connector's. The collection's first-mount-wins dedupe decides
+    // which twin's stamps own the name; the pin is that this is
+    // NON-FATAL — no crash, the twins coexist, and a twin doc still
+    // answers its own probe. (RENDERED by the host test.)
+    "name": "connector"
+}

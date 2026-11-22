@@ -1,0 +1,6 @@
+// twin — the same-name twin's probe doc: `y` squiggles here too (the
+// doc's own upsert answers — the first-mount-wins dedupe is
+// non-fatal).
+entry fn main() {
+    let x = y;
+}

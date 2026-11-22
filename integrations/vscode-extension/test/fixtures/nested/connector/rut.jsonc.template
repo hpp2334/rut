@@ -1,0 +1,11 @@
+{
+    // connector — the nested fixture's first project, RENDERED by the
+    // host test (test/runTest.js): the template trick keeps the
+    // in-repo copy inert (no rut.jsonc here, no discovery twin); the
+    // tmp folder's copy is the live project. `ink` is the shared path
+    // dep the hover probe resolves through.
+    "name": "connector",
+    "deps": {
+        "ink": { "path": "../ink" }
+    }
+}
