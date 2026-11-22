@@ -1,8 +1,8 @@
 {
     "name": "rut-vscode",
     "displayName": "rut",
-    "description": "rut language support \u2014 semantic tokens, diagnostics, document symbols, hover, completions and go-to-definition via an in-process wasm module (no server process)",
-    "version": "0.3.5",
+    "description": "rut language support — semantic tokens, diagnostics, document symbols, hover, completions and go-to-definition via an in-process wasm module (no server process)",
+    "version": "0.3.6",
     "publisher": "rut",
     "license": "MIT OR Apache-2.0",
     "repository": {
