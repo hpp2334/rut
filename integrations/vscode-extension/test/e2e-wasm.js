@@ -1660,6 +1660,148 @@ async function main() {
         }
         smokes++;
 
+        // ---- nested roots (the host's 6bfae0c1 discovery shape, pinned
+        // node-side): a manifest-less workspace folder is NOT a root; the
+        // nested project dir IS — the stamps + walk + check lane answer
+        // for a nested root exactly as for a folder root. The env map is
+        // the harness's filesystem (the fake-map idiom); the dep rides a
+        // PATH row (the gproj idiom — the store isn't reachable here);
+        // the bytes are the host suite's own nested fixture (connector +
+        // its shared ink path dep, the templates rendered exactly the way
+        // test/runTest.js renders them). ----
+        {
+            const nf = (rel) =>
+                fs.readFileSync(path.join(__dirname, 'fixtures', 'nested', rel), 'utf8');
+            const WS = '/ws/nested-ws'; // the folder root: NO manifest here
+            const PROJ = `${WS}/connector`; // the nested project dir IS the manifest dir
+            const DOC = `${PROJ}/src/mod.rut`;
+            const docSrc = nf('connector/src/mod.rut');
+            const inkSrc = nf('ink/src/mod.rut');
+            const files = new Map([
+                [`${PROJ}/rut.jsonc`, nf('connector/rut.jsonc.template')],
+                [`${PROJ}/rut.lock`, nf('connector/rut.lock')],
+                [DOC, docSrc],
+                [`${WS}/ink/rut.jsonc`, nf('ink/rut.jsonc.template')],
+                [`${WS}/ink/src/mod.rut`, inkSrc],
+            ]);
+            const norm = (rp) => rp.replace(/\/[^/]+\/\.\./g, '').replace('//', '/');
+            const enc = new TextEncoder();
+            const nest = await RutLsp.load(fs.readFileSync(WASM_PATH), {
+                read: (rp) => {
+                    const v = files.get(norm(rp));
+                    return v === undefined ? null : enc.encode(v);
+                },
+                readDir: (p) => {
+                    const dir = norm(p);
+                    const names = [...files.keys()]
+                        .filter((k) => k.startsWith(`${dir}/`))
+                        .map((k) => k.slice(dir.length + 1).split('/')[0]);
+                    return names.length ? [...new Set(names)] : null;
+                },
+                isDir: (p) => {
+                    const dir = norm(p);
+                    return files.has(dir) || [...files.keys()].some((k) => k.startsWith(`${dir}/`));
+                },
+                notify: () => {},
+                wakeAfter: (ms, wake) => setTimeout(wake, ms),
+            });
+
+            // the host's scan lane: the nested manifest names the pkg,
+            // the root module stamps (pkg, '') — the same pair
+            // indexWorkspace derives for a nested owner
+            const table = await nest.parseManifest(files.get(`${PROJ}/rut.jsonc`));
+            assert.ok(
+                !table.error && table.name === 'connector',
+                `nested manifest: ${JSON.stringify(table)}`,
+            );
+            const stamped = await nest.indexModAt(`file://${DOC}`, table.name, '', docSrc);
+            assert.ok(!stamped.error, `the nested root stamps: ${JSON.stringify(stamped)}`);
+
+            // the FOLDER-only shape (what the walk walked before
+            // discovery): the manifest-less folder is NOT a root — a
+            // clean walk that mounts nothing. The stamped doc's check
+            // lane stays quiet while the dep closure is unresolved (the
+            // `y` squiggle included) and bare completion offers no
+            // Logger — the dep world is simply absent
+            const folderOut = await nest.resolveDeps([WS]);
+            assert.ok(
+                !folderOut.error && folderOut.missing.length === 0,
+                `folder walk: ${JSON.stringify(folderOut)}`,
+            );
+            const pre = await nest.analyze(`file://${DOC}`, docSrc);
+            const preY = (pre.diags || []).filter(
+                (d) => d.message.includes('unknown name') && d.message.includes('`y`'),
+            );
+            if (preY.length !== 0) {
+                bad.push(
+                    `the folder-only walk must leave the check lane quiet (got ${JSON.stringify(pre.diags.map((d) => d.message))})`,
+                );
+            }
+            const preBare = await nest.complete(`file://${DOC}`, 0, 0, docSrc);
+            if (preBare.some((i) => i.label === 'Logger')) {
+                bad.push(
+                    "bare completion offers 'Logger' with no root walked — std is not ambient",
+                );
+            }
+
+            // the DISCOVERED shape — the host's own lane: reloadDeps over
+            // the nested project dir, the actor's deferred walk, the
+            // promise carrying the WalkOut
+            const wout = await nest.reloadDeps([PROJ]);
+            assert.ok(
+                wout !== null && !wout.error && wout.missing.length === 0,
+                `the nested root mounts: ${JSON.stringify(wout)}`,
+            );
+
+            // (a) the check lane runs for the nested doc: the unbound `y`
+            // squiggles `unknown name` on its own line, and the mounted
+            // world answers bare completion with the dep's class
+            const post = await nest.analyze(`file://${DOC}`, docSrc);
+            const yLine = posOnLine(docSrc, /let x = y;/, 'y')[0];
+            const squiggles = (post.diags || []).filter(
+                (d) => d.message.includes('unknown name') && d.message.includes('`y`'),
+            );
+            if (squiggles.length !== 1 || squiggles[0].range.start.line !== yLine) {
+                bad.push(
+                    `nested y-squiggle drifted: ${JSON.stringify((post.diags || []).map((d) => [d.message, d.range.start.line]))}`,
+                );
+            }
+            const postBare = await nest.complete(`file://${DOC}`, 0, 0, docSrc);
+            if (!postBare.some((i) => i.label === 'Logger')) {
+                bad.push(
+                    `the nested root walked, yet bare completion lacks ink's 'Logger' (${postBare.length} items)`,
+                );
+            }
+
+            // (b) the dep-member probes: hover names ink's impl fn, the
+            // definition lands in the walked dep's file at the declaring
+            // ident — through the ctor-typed `log` local
+            const [hl, hc] = posOnLine(docSrc, /log\.info\("hi"\);/, 'info');
+            const h = await nest.hover(`file://${DOC}`, hl, hc);
+            if (
+                !h?.contents.value.includes('fn info') ||
+                !h.contents.value.includes('in `Logger`')
+            ) {
+                bad.push(
+                    `nested ink hover missed: ${h && JSON.stringify(h.contents.value.slice(0, 80))}`,
+                );
+            }
+            const want = {
+                uri: `file://${PROJ}/../ink/src/mod.rut`,
+                range: identAt(inkSrc, /^\s*pub fn info\(self, msg: str\)/, 'info'),
+                len: 4,
+            };
+            const locs = await nest.definition(`file://${DOC}`, hl, hc);
+            if (!locs.length || locs[0].uri !== want.uri) {
+                bad.push(
+                    `nested ink jump lost the dep file (got ${JSON.stringify(locs.map((l) => l.uri))})`,
+                );
+            } else {
+                eqRange(locs, want, 'nested ink member');
+            }
+            smokes++;
+        }
+
         {
             const wsRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'rut-e2e-walk-'));
             try {
@@ -2375,7 +2517,7 @@ async function main() {
             `inlay-corpus-ground-truth/inlay-for-of-corpus/inlay-synthetic-laws/` +
             `refs-shadow/refs-cross/sighelp/` +
             `manifest-dep-table/manifest-decl+error/walked-dep-use-tier/` +
-            `path-dep-segments/` +
+            `path-dep-segments/nested-roots+folder-not-a-root/` +
             `eof-member+locals/` +
             `complete-doc-sync/check-lane-mismatch+missing-field/` +
             `env-injected+env-less/` +

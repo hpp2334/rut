@@ -154,9 +154,13 @@ async function registerAll(context: vscode.ExtensionContext, rut: RutLsp): Promi
 
     // the palette's manual re-index — the same lane activation and the
     // folder-change hook ride, on demand: covers watcher misses (a mount
-    // a glob never saw, a walk that raced an edit)
+    // a glob never saw, a walk that raced an edit). Discovery re-asks
+    // fresh: the very misses this command covers can include a manifest
+    // event the watchers never saw, and a stale pkg cache would derive
+    // the roots from yesterday's project set.
     subscriptions.push(
         vscode.commands.registerCommand('rut.reindexDeps', () => {
+            invalidateProjects();
             reloadDeps();
         }),
     );
