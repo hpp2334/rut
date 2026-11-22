@@ -215,3 +215,4 @@ context; after that, use the zh-CN rendering alone.
 | face / shell | 面 / 外壳 | the stdio face → stdio 面；the wasm face → wasm 面；the two shells that serve the core → 服务核心的两个外壳；the core owns no transport → 核心不承担传输 |
 | const binding | 常量绑定 | the `const` statement head（`const` stays code）——mutability 的唯一 opt-out（退出选择）：浅层（shallow → 浅层），只拒绝绑定自身的重新赋值（reassign → 重新赋值），透过值的写入（write-through → 穿透写入）照旧；`const`-binding law → 常量绑定法则 |
 | surface const | 表面常量 | 依赖的 `.d.rut` 接口（或宿主包）导出的加载期常量，经一条 `use` 裸名绑定——接口里拼作 `let`，从不是 `const`；与常量绑定（`const` 语句头）严格区分，两个 "const" 勿混译 |
+| glob | glob | the `*` use leaf（`*` stays code）——保留不译；glob leaf → glob 叶子；the star → 星号；glob-bind → glob 绑定；precedence ladder → 优先级阶梯（glob < 显式叶子 < 本文件自己的声明）；shadowing → 遮蔽；idempotent → 幂等 |
