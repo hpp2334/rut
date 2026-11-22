@@ -39,8 +39,8 @@ mod ty;
 
 pub use doc::{CommentData, DocData};
 pub use error::ErrorNode;
-pub use handle::{AnyHandle, Arena, Handle, NodeKind, NodeKindId, NodeStore};
-pub use store::Ast;
+pub use handle::{AnyHandle, Arena, Handle, NodeKind, NodeStore};
+pub use store::{Ast, NodeKindId};
 // the construction macros ride the same chain (crate-root reachable
 // via the root gate, crate-only visible — the capsule's allocation
 // lane). The marker here is LOAD-BEARING, not redundant: macro_rules

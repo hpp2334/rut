@@ -18,9 +18,10 @@
 use rut_lexer::span::Span;
 use std::marker::PhantomData;
 
-/// the arena kind id — stamped by the `arenas!` macro (one running
-/// index over the inventory; dense, unique by construction)
-pub type NodeKindId = u16;
+// the arena kind — the CLOSED enum the `arenas!` macro stamps (one
+// variant per row of the inventory), defined beside the store it
+// indexes; the generic lanes match on it (`AnyHandle::kind`)
+use crate::ast::store::NodeKindId;
 
 /// The kind identity — `const KIND` (the arena's id) and `const NAME`
 /// (the printable label) stamped by the `arenas!` macro beside every
@@ -350,20 +351,7 @@ pub(crate) use slot_any;
 
 #[cfg(test)]
 mod tests {
-    use super::{AnyHandle, Arena, Handle, NodeKind, NodeKindId};
-
-    // stand-in kinds for the tests — ids beyond the real inventory
-    // (the arenas! stamp owns 0..)
-    struct Item;
-    struct Other;
-    impl NodeKind for Item {
-        const KIND: NodeKindId = 250;
-        const NAME: &'static str = "Item";
-    }
-    impl NodeKind for Other {
-        const KIND: NodeKindId = 251;
-        const NAME: &'static str = "Other";
-    }
+    use super::{AnyHandle, Arena, Handle, NodeKindId};
 
     #[test]
     fn arena_alloc_appends_and_reads() {
@@ -423,20 +411,27 @@ mod tests {
 
     #[test]
     fn any_handle_downcasts_by_kind_first() {
-        let hi = Handle::<Item>::new(3);
-        let ho = Handle::<Other>::new(3);
+        // two real kinds, same slot index — the kind is the only
+        // difference the address carries
+        let hi = Handle::<crate::ast::item::ModuleNode>::new(3);
+        let ho = Handle::<crate::ast::item::UseNode>::new(3);
         let ai = hi.any();
         let ao = ho.any();
-        assert_eq!(ai.downcast::<Item>(), Some(hi));
-        assert_eq!(ai.downcast::<Other>(), None, "never the wrong arena");
-        assert!(ai.is::<Item>());
-        assert!(!ai.is::<Other>());
+        assert_eq!(ai.downcast::<crate::ast::item::ModuleNode>(), Some(hi),);
+        assert_eq!(
+            ai.downcast::<crate::ast::item::UseNode>(),
+            None,
+            "never the wrong arena"
+        );
+        assert!(ai.is::<crate::ast::item::ModuleNode>());
+        assert!(!ai.is::<crate::ast::item::UseNode>());
         assert_ne!(ai, ao, "same idx, different kind — different addresses");
         assert_eq!(AnyHandle::from(hi), ai);
-        // kind names come from the real inventory (the arenas! stamp)
-        let real = Handle::<crate::ast::item::ModuleNode>::new(0);
-        assert_eq!(real.any().kind_name(), "Module");
-        // a bogus id names itself honestly
-        assert_eq!(AnyHandle { kind: 999, idx: 0 }.kind_name(), "unknown");
+        // the kind IS the closed enum — a bogus kind is unrepresentable
+        // (the compiler refuses it; there is no "unknown" to fall into)
+        assert_eq!(ai.kind, NodeKindId::Module);
+        assert_eq!(ao.kind, NodeKindId::Use);
+        assert_eq!(ai.kind_name(), "Module");
+        assert_eq!(ao.kind_name(), "Use");
     }
 }

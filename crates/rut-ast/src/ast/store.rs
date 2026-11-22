@@ -23,21 +23,24 @@ use rut_core::{IdentId, Interner};
 use rut_lexer::diag::Diag;
 use rut_lexer::span::Span;
 
-use crate::ast::handle::{AnyHandle, Arena, Handle, HasSpan, NodeKind, NodeKindId, NodeStore};
+use crate::ast::handle::{AnyHandle, Arena, Handle, HasSpan, NodeKind, NodeStore};
 use crate::ast::index::TreeIndex;
 
 // ---- the node inventory: one private arena per kind ----
 //
-// Every node kind in the tree, exactly once, as `field: Ty => "Wire"`.
-// The macro wires the fields, the NodeStore impls (typed
-// `allocate`/`get`), and the NodeKind stamps — `KIND` is the running
-// index over this list (dense, unique by construction: a kind CANNOT
-// lack an id) and `NAME` the single printable-name table (a kind
-// CANNOT lack a name — the arity forces the literal). The wire labels
-// and `AnyHandle::kind_name` both read that one table.
+// Every node kind in the tree, exactly once, as `field: Ty => Variant,
+// "Wire"`. The macro wires the fields, the NodeStore impls (typed
+// `allocate`/`get`), the `NodeKindId` enum (one variant per row — a
+// kind CANNOT lack one: the arity forces it), and the NodeKind stamps
+// — `KIND` is the row's own variant and `NAME` the single
+// printable-name table (a kind CANNOT lack a name either; variant and
+// label are separate columns because two pairs share labels — `Struct`
+// the item and `Struct` the literal, `If` the statement and `If` the
+// expression). The wire labels and `AnyHandle::kind_name` both read
+// that one table.
 macro_rules! arenas {
     ($($rest:tt)*) => {
-        arenas_munch!(@emit [] 0u16; $($rest)*);
+        arenas_munch!(@emit []; $($rest)*);
     };
 }
 
@@ -46,22 +49,34 @@ macro_rules! arenas {
 // trailing `(expr)` — the kind's absence rule for the completeness
 // query (the slots whose `None` makes the node incomplete).
 macro_rules! arenas_munch {
-    // step: carry one row (id, name, field, ty, incompleteness), bump the id
-    (@emit [$($acc:tt)*] $next:tt;
-        $field:ident : $ty:ty => $name:literal $(($inc:expr))?
+    // step: carry one row (variant, name, field, ty, incompleteness)
+    (@emit [$($acc:tt)*];
+        $field:ident : $ty:ty => $variant:ident , $name:literal $(($inc:expr))?
         $(, $($rest:tt)* )?
     ) => {
         arenas_munch!(
             @emit
-            [$($acc)* [$next $name $field [$ty] [$($inc)?]]]
-            ($next + 1);
+            [$($acc)* [$variant $name $field [$ty] [$($inc)?]]]
+            ;
             $( $($rest)* )?
         );
     };
     // base: every kind carries its row — emit the store
     (@emit [$(
-        [$n:tt $name:tt $field:ident [$ty:tt] [$($inc:tt)*]]
-    )*] $next:tt;) => {
+        [$variant:ident $name:tt $field:ident [$ty:tt] [$($inc:tt)*]]
+    )*];) => {
+        /// The arena kind — one variant per row of the inventory,
+        /// stamped by the `arenas!` macro (unique by construction).
+        /// The CLOSED vocabulary the generic lanes match on:
+        /// `AnyHandle::kind` carries it, and a bogus kind is
+        /// unrepresentable — the compiler refuses it. The derived
+        /// order is the inventory's row order (the index's
+        /// deterministic tie-break rides it)
+        #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
+        pub enum NodeKindId {
+            $($variant),*
+        }
+
         pub struct Ast {
             $( $field: Arena<$ty>, )*
             interner: Interner,
@@ -145,7 +160,7 @@ macro_rules! arenas_munch {
             fn span(&self) -> rut_lexer::span::Span { self.span }
         } )*
         $( impl NodeKind for $ty {
-            const KIND: NodeKindId = $n;
+            const KIND: NodeKindId = NodeKindId::$variant;
             const NAME: &'static str = $name;
         } )*
         // the completeness impl — default complete, or the row's
@@ -153,62 +168,53 @@ macro_rules! arenas_munch {
         // own hygiene context)
         $( incomplete_impl!($ty, [$($inc)*]); )*
 
-        /// the kind dispatch — one probe per stamped kind, id-compared
-        /// (the ids are the macro's own running index). `None` = dead
-        /// slot or bogus id: the printer's `dead` row, never a
-        /// wrong-arena read.
+        /// the kind dispatch — one arm per stamped kind (the enum's
+        /// own match; the macro's arity keeps it exhaustive). `None` =
+        /// dead slot: the printer's `dead` row, never a wrong-arena
+        /// read.
         pub(crate) fn span_of_any(ast: &Ast, h: AnyHandle) -> Option<Span> {
-            let kind = h.kind;
-            let idx = h.idx;
-            $(
-                if kind == <$ty as NodeKind>::KIND {
-                    return ast.$field.get(idx).map(|n| n.span());
-                }
-            )*
-            None
+            match h.kind {
+                $(
+                    NodeKindId::$variant => ast.$field.get(h.idx).map(|n| n.span()),
+                )*
+            }
         }
 
         /// the completeness query's dispatch — the per-kind absence
-        /// rules above, over the same inventory. A dead slot or bogus
-        /// id is not an incomplete node.
+        /// rules above, over the same inventory. A dead slot is not
+        /// an incomplete node.
         pub(crate) fn incomplete_of_any(ast: &Ast, h: AnyHandle) -> bool {
-            let kind = h.kind;
-            let idx = h.idx;
-            $(
-                if kind == <$ty as NodeKind>::KIND {
-                    return ast
+            match h.kind {
+                $(
+                    NodeKindId::$variant => ast
                         .$field
-                        .get(idx)
-                        .is_some_and(|n| <$ty as crate::ast::handle::IsIncomplete>::is_incomplete(n));
-                }
-            )*
-            false
+                        .get(h.idx)
+                        .is_some_and(|n| <$ty as crate::ast::handle::IsIncomplete>::is_incomplete(n)),
+                )*
+            }
         }
 
-        /// the printable name of a kind id — the same single table the
-        /// printer's labels read (`AnyHandle::kind_name` rides this)
+        /// the printable name of a kind — the same single table the
+        /// printer's labels read (`AnyHandle::kind_name` rides this).
+        /// Exhaustive by construction: a new row cannot lack its arm
         pub(crate) fn kind_name_of(kind: NodeKindId) -> &'static str {
-            $(
-                if kind == <$ty as NodeKind>::KIND {
-                    return <$ty as NodeKind>::NAME;
-                }
-            )*
-            "unknown"
+            match kind {
+                $( NodeKindId::$variant => $name, )*
+            }
         }
 
         /// remove the node at a universal address — the kind dispatch
         /// over the arenas, punching the slot's hole (stale handles
         /// then die loudly on read, never read yesterday's node). The
-        /// edit lane's door; `false` = dead slot or bogus id.
+        /// edit lane's door; `false` = dead slot.
         pub(crate) fn remove_any(ast: &mut Ast, h: AnyHandle) -> bool {
-            let kind = h.kind;
-            let idx = h.idx;
-            $(
-                if kind == <$ty as NodeKind>::KIND {
-                    return <$ty as NodeStore>::arena_mut(ast).remove(idx).is_some();
-                }
-            )*
-            false
+            match h.kind {
+                $(
+                    NodeKindId::$variant => {
+                        <$ty as NodeStore>::arena_mut(ast).remove(h.idx).is_some()
+                    }
+                )*
+            }
         }
     };
 }
@@ -232,82 +238,82 @@ macro_rules! incomplete_impl {
 
 arenas! {
     // items
-    modules: crate::ast::item::ModuleNode => "Module",
-    mod_decls: crate::ast::item::ModDeclNode => "ModDecl",
-    uses: crate::ast::item::UseNode => "Use" (
+    modules: crate::ast::item::ModuleNode => Module, "Module",
+    mod_decls: crate::ast::item::ModDeclNode => ModDecl, "ModDecl",
+    uses: crate::ast::item::UseNode => Use, "Use" (
         |n: &Self| n.names.is_empty() && n.group.is_none()
     ),
-    aliases: crate::ast::item::AliasNode => "Alias",
-    module_lets: crate::ast::item::ModuleLetNode => "ModuleLet",
-    enums: crate::ast::item::EnumNode => "Enum",
-    structs: crate::ast::item::StructNode => "Struct",
-    classes: crate::ast::item::ClassNode => "Class",
-    interfaces: crate::ast::item::InterfaceNode => "Interface",
-    impls: crate::ast::item::ImplNode => "Impl",
-    fns: crate::ast::item::FnNode => "Fn",
-    surface_fns: crate::ast::item::SurfaceFnNode => "SurfaceFn",
-    surface_structs: crate::ast::item::SurfaceStructNode => "SurfaceStruct",
-    builtin_tys: crate::ast::item::BuiltinTyNode => "BuiltinTy",
-    builtin_primitives: crate::ast::item::BuiltinPrimitiveNode => "BuiltinPrimitive",
-    builtin_impls: crate::ast::item::BuiltinImplNode => "BuiltinImpl",
+    aliases: crate::ast::item::AliasNode => Alias, "Alias",
+    module_lets: crate::ast::item::ModuleLetNode => ModuleLet, "ModuleLet",
+    enums: crate::ast::item::EnumNode => Enum, "Enum",
+    structs: crate::ast::item::StructNode => Struct, "Struct",
+    classes: crate::ast::item::ClassNode => Class, "Class",
+    interfaces: crate::ast::item::InterfaceNode => Interface, "Interface",
+    impls: crate::ast::item::ImplNode => Impl, "Impl",
+    fns: crate::ast::item::FnNode => Fn, "Fn",
+    surface_fns: crate::ast::item::SurfaceFnNode => SurfaceFn, "SurfaceFn",
+    surface_structs: crate::ast::item::SurfaceStructNode => SurfaceStruct, "SurfaceStruct",
+    builtin_tys: crate::ast::item::BuiltinTyNode => BuiltinTy, "BuiltinTy",
+    builtin_primitives: crate::ast::item::BuiltinPrimitiveNode => BuiltinPrimitive, "BuiltinPrimitive",
+    builtin_impls: crate::ast::item::BuiltinImplNode => BuiltinImpl, "BuiltinImpl",
     // members
-    field_decls: crate::ast::item::FieldDeclNode => "FieldDecl",
-    method_decls: crate::ast::item::MethodDeclNode => "MethodDecl",
-    enum_members: crate::ast::item::EnumMemberNode => "EnumMember",
-    params: crate::ast::item::ParamNode => "Param",
-    self_params: crate::ast::item::SelfParamNode => "SelfParam",
+    field_decls: crate::ast::item::FieldDeclNode => FieldDecl, "FieldDecl",
+    method_decls: crate::ast::item::MethodDeclNode => MethodDecl, "MethodDecl",
+    enum_members: crate::ast::item::EnumMemberNode => EnumMember, "EnumMember",
+    params: crate::ast::item::ParamNode => Param, "Param",
+    self_params: crate::ast::item::SelfParamNode => SelfParam, "SelfParam",
     // statements
-    let_stmts: crate::ast::stmt::LetStmtNode => "LetStmt",
-    if_stmts: crate::ast::stmt::IfNode => "If",
-    whiles: crate::ast::stmt::WhileNode => "While",
-    for_ofs: crate::ast::stmt::ForOfNode => "ForOf",
-    for_cs: crate::ast::stmt::ForCNode => "ForC",
-    returns: crate::ast::stmt::ReturnNode => "Return",
-    breaks: crate::ast::stmt::BreakNode => "Break",
-    continues: crate::ast::stmt::ContinueNode => "Continue",
-    when_stmts: crate::ast::stmt::WhenStmtNode => "WhenStmt",
+    let_stmts: crate::ast::stmt::LetStmtNode => LetStmt, "LetStmt",
+    if_stmts: crate::ast::stmt::IfNode => If, "If",
+    whiles: crate::ast::stmt::WhileNode => While, "While",
+    for_ofs: crate::ast::stmt::ForOfNode => ForOf, "ForOf",
+    for_cs: crate::ast::stmt::ForCNode => ForC, "ForC",
+    returns: crate::ast::stmt::ReturnNode => Return, "Return",
+    breaks: crate::ast::stmt::BreakNode => Break, "Break",
+    continues: crate::ast::stmt::ContinueNode => Continue, "Continue",
+    when_stmts: crate::ast::stmt::WhenStmtNode => WhenStmt, "WhenStmt",
     // expressions
-    blocks: crate::ast::expr::BlockNode => "Block",
-    lits: crate::ast::expr::LitNode => "Lit",
-    paths: crate::ast::expr::PathNode => "Path",
-    selfs: crate::ast::expr::SelfNode => "Self",
-    calls: crate::ast::expr::CallNode => "Call" (|n: &Self| n.rparen.is_none()),
-    methods: crate::ast::expr::MethodNode => "Method" (
+    blocks: crate::ast::expr::BlockNode => Block, "Block",
+    lits: crate::ast::expr::LitNode => Lit, "Lit",
+    paths: crate::ast::expr::PathNode => Path, "Path",
+    selfs: crate::ast::expr::SelfNode => SelfExpr, "Self",
+    calls: crate::ast::expr::CallNode => Call, "Call" (|n: &Self| n.rparen.is_none()),
+    methods: crate::ast::expr::MethodNode => Method, "Method" (
         |n: &Self| n.member.is_none() || n.rparen.is_none()
     ),
-    fields: crate::ast::expr::FieldNode => "Field",
-    indexes: crate::ast::expr::IndexNode => "Index",
-    unaries: crate::ast::expr::UnaryNode => "Unary",
-    binaries: crate::ast::expr::BinaryNode => "Binary",
-    assigns: crate::ast::expr::AssignNode => "Assign",
-    lambdas: crate::ast::expr::LambdaNode => "Lambda",
-    fstrs: crate::ast::expr::FStrNode => "FStr",
-    struct_lits: crate::ast::expr::StructLitNode => "Struct",
-    tuples: crate::ast::expr::TupleNode => "Tuple",
-    array_lits: crate::ast::expr::ArrayLitNode => "ArrayLit",
-    array_repeats: crate::ast::expr::ArrayRepeatNode => "ArrayRepeat",
-    when_exprs: crate::ast::expr::WhenExprNode => "WhenExpr",
-    if_exprs: crate::ast::expr::IfExprNode => "If",
-    awaits: crate::ast::expr::AwaitNode => "Await",
-    async_blocks: crate::ast::expr::AsyncBlockNode => "AsyncBlock",
-    is_exprs: crate::ast::expr::IsNode => "Is",
-    casts: crate::ast::expr::CastNode => "Cast",
+    fields: crate::ast::expr::FieldNode => Field, "Field",
+    indexes: crate::ast::expr::IndexNode => Index, "Index",
+    unaries: crate::ast::expr::UnaryNode => Unary, "Unary",
+    binaries: crate::ast::expr::BinaryNode => Binary, "Binary",
+    assigns: crate::ast::expr::AssignNode => Assign, "Assign",
+    lambdas: crate::ast::expr::LambdaNode => Lambda, "Lambda",
+    fstrs: crate::ast::expr::FStrNode => FStr, "FStr",
+    struct_lits: crate::ast::expr::StructLitNode => StructLit, "Struct",
+    tuples: crate::ast::expr::TupleNode => Tuple, "Tuple",
+    array_lits: crate::ast::expr::ArrayLitNode => ArrayLit, "ArrayLit",
+    array_repeats: crate::ast::expr::ArrayRepeatNode => ArrayRepeat, "ArrayRepeat",
+    when_exprs: crate::ast::expr::WhenExprNode => WhenExpr, "WhenExpr",
+    if_exprs: crate::ast::expr::IfExprNode => IfExpr, "If",
+    awaits: crate::ast::expr::AwaitNode => Await, "Await",
+    async_blocks: crate::ast::expr::AsyncBlockNode => AsyncBlock, "AsyncBlock",
+    is_exprs: crate::ast::expr::IsNode => Is, "Is",
+    casts: crate::ast::expr::CastNode => Cast, "Cast",
     // types
-    ty_paths: crate::ast::ty::TyPathNode => "TyPath",
-    self_tys: crate::ast::ty::SelfTyNode => "SelfTy",
-    ty_fns: crate::ast::ty::TyFnNode => "TyFn",
-    ty_opts: crate::ast::ty::TyOptNode => "TyOpt",
-    ty_arrays: crate::ast::ty::TyArrayNode => "TyArray",
-    ty_tuples: crate::ast::ty::TyTupleNode => "TyTuple",
-    ty_unions: crate::ast::ty::TyUnionNode => "TyUnion",
+    ty_paths: crate::ast::ty::TyPathNode => TyPath, "TyPath",
+    self_tys: crate::ast::ty::SelfTyNode => SelfTy, "SelfTy",
+    ty_fns: crate::ast::ty::TyFnNode => TyFn, "TyFn",
+    ty_opts: crate::ast::ty::TyOptNode => TyOpt, "TyOpt",
+    ty_arrays: crate::ast::ty::TyArrayNode => TyArray, "TyArray",
+    ty_tuples: crate::ast::ty::TyTupleNode => TyTuple, "TyTuple",
+    ty_unions: crate::ast::ty::TyUnionNode => TyUnion, "TyUnion",
     // patterns
-    pat_lits: crate::ast::pat::PatLitNode => "PatLit",
-    pat_paths: crate::ast::pat::PatPathNode => "PatPath",
-    pat_wilds: crate::ast::pat::PatWildNode => "PatWild",
-    pat_elses: crate::ast::pat::PatElseNode => "PatElse",
+    pat_lits: crate::ast::pat::PatLitNode => PatLit, "PatLit",
+    pat_paths: crate::ast::pat::PatPathNode => PatPath, "PatPath",
+    pat_wilds: crate::ast::pat::PatWildNode => PatWild, "PatWild",
+    pat_elses: crate::ast::pat::PatElseNode => PatElse, "PatElse",
     // arms + recovery
-    when_arms: crate::ast::expr::WhenArmNode => "WhenArm",
-    error_nodes: crate::ast::error::ErrorNode => "Error",
+    when_arms: crate::ast::expr::WhenArmNode => WhenArm, "WhenArm",
+    error_nodes: crate::ast::error::ErrorNode => Error, "Error",
 }
 
 impl Ast {

@@ -262,10 +262,9 @@ fn a_dead_slot_prints_the_dead_row() {
     };
     let json = AstPrinter::json(&AstPrinter::subtree(ast, dead));
     assert_eq!(json, "{\"id\":0,\"kind\":\"dead\",\"span\":[0,0]}");
-    // and a bogus kind id names the same honest row
-    let bogus = AnyHandle { kind: 999, idx: 0 };
-    let json = AstPrinter::json(&AstPrinter::subtree(ast, bogus));
-    assert_eq!(json, "{\"id\":0,\"kind\":\"dead\",\"span\":[0,0]}");
+    // (a bogus KIND cannot be spelled anymore — the closed enum
+    // refuses it at compile time; only the dead slot remains, and
+    // it prints the same honest row)
     // the doors degrade, never lie: no parent, and span_of refuses
     assert_eq!(ast.parent(dead), None);
 }

@@ -3,7 +3,7 @@
 //! probe's own node kind (or its ancestors') names the tier — the
 //! Edge verdict the dispatcher matches. No token scans.
 
-use rut_ast::{AnyHandle, Ast, FieldNode, MethodNode, PathNode, UseNode};
+use rut_ast::{AnyHandle, Ast, FieldNode, MethodNode, NodeKindId, PathNode, UseNode};
 
 use crate::world::collection::Chain;
 
@@ -25,23 +25,23 @@ pub(super) fn typing_edge(chain: &Chain, pos: u32, src: &str) -> Edge {
     // byte sits in dead space — the walk looks a little further back
     // for the node the cursor is actually typing into (the blank after
     // a colon, the gap at EOF); the first non-wrapper stands.
-    const CONTEXT_KINDS: [&str; 10] = [
-        "LetStmt",
-        "Fn",
-        "Use",
-        "Param",
-        "FieldDecl",
-        "Method",
-        "Field",
-        "Path",
-        "TyPath",
-        "Call",
+    const CONTEXT_KINDS: [NodeKindId; 10] = [
+        NodeKindId::LetStmt,
+        NodeKindId::Fn,
+        NodeKindId::Use,
+        NodeKindId::Param,
+        NodeKindId::FieldDecl,
+        NodeKindId::Method,
+        NodeKindId::Field,
+        NodeKindId::Path,
+        NodeKindId::TyPath,
+        NodeKindId::Call,
     ];
     let mut p0 = None;
     for back in 1..=16u32 {
         match pos.checked_sub(back).and_then(|p| ast.node_at(p)) {
-            Some(h) if matches!(h.kind_name(), "Module" | "Block") => continue,
-            Some(h) if CONTEXT_KINDS.contains(&h.kind_name()) => {
+            Some(h) if matches!(h.kind, NodeKindId::Module | NodeKindId::Block) => continue,
+            Some(h) if CONTEXT_KINDS.contains(&h.kind) => {
                 p0 = Some(h);
                 break;
             }
