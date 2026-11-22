@@ -90,11 +90,11 @@ fn assignment_is_right_associative() {
     let ExprRef::Path(pt) = o.target else {
         panic!("x, got {:?}", o.target);
     };
-    assert_eq!(ast.name(pt.get(ast).segs[0].name), "x");
+    assert_eq!(ast.name(pt.get(ast).segs[0].name.ident), "x");
     let ExprRef::Path(it) = ih.get(ast).target else {
         panic!("y, got {:?}", ih.get(ast).target);
     };
-    assert_eq!(ast.name(it.get(ast).segs[0].name), "y");
+    assert_eq!(ast.name(it.get(ast).segs[0].name.ident), "y");
 }
 
 #[test]

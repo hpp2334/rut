@@ -42,12 +42,17 @@ fn classify_item(ast: &Ast, item: ItemRef, out: &mut Vec<(Span, TokenType)>) {
         }
         ItemRef::Alias(h) => {
             let d = h.get(ast);
-            emit(ast.name(d.name), d.name_span, TokenType::Type, out);
+            emit(ast.name(d.name.ident), d.name.span, TokenType::Type, out);
             classify_ty(ast, d.target, out);
         }
         ItemRef::SurfaceFn(h) => {
             let d = h.get(ast);
-            emit(ast.name(d.name), d.name_span, TokenType::Function, out);
+            emit(
+                ast.name(d.name.ident),
+                d.name.span,
+                TokenType::Function,
+                out,
+            );
             classify_params(ast, &d.params, out);
             if let Some(r) = d.ret {
                 classify_ty(ast, r, out);
@@ -55,7 +60,12 @@ fn classify_item(ast: &Ast, item: ItemRef, out: &mut Vec<(Span, TokenType)>) {
         }
         ItemRef::ModuleLet(h) => {
             let d = h.get(ast);
-            emit(ast.name(d.name), d.name_span, TokenType::Variable, out);
+            emit(
+                ast.name(d.name.ident),
+                d.name.span,
+                TokenType::Variable,
+                out,
+            );
             if let Some(t) = d.ty {
                 classify_ty(ast, t, out);
             }
@@ -67,17 +77,22 @@ fn classify_item(ast: &Ast, item: ItemRef, out: &mut Vec<(Span, TokenType)>) {
         }
         ItemRef::Struct(h) => {
             let d = h.get(ast);
-            emit(ast.name(d.name), d.name_span, TokenType::Class, out);
+            emit(ast.name(d.name.ident), d.name.span, TokenType::Class, out);
             classify_members(ast, &d.fields, &d.methods, out);
         }
         ItemRef::Class(h) => {
             let d = h.get(ast);
-            emit(ast.name(d.name), d.name_span, TokenType::Class, out);
+            emit(ast.name(d.name.ident), d.name.span, TokenType::Class, out);
             classify_members(ast, &d.fields, &d.methods, out);
         }
         ItemRef::Interface(h) => {
             let d = h.get(ast);
-            emit(ast.name(d.name), d.name_span, TokenType::Interface, out);
+            emit(
+                ast.name(d.name.ident),
+                d.name.span,
+                TokenType::Interface,
+                out,
+            );
             classify_methods(ast, &d.methods, out);
         }
         ItemRef::Impl(h) => {
@@ -90,17 +105,17 @@ fn classify_item(ast: &Ast, item: ItemRef, out: &mut Vec<(Span, TokenType)>) {
         }
         ItemRef::SurfaceStruct(h) => {
             let d = h.get(ast);
-            emit(ast.name(d.name), d.name_span, TokenType::Class, out);
+            emit(ast.name(d.name.ident), d.name.span, TokenType::Class, out);
             classify_fields(ast, &d.fields, out);
         }
         ItemRef::BuiltinTy(h) => {
             let d = h.get(ast);
-            emit(ast.name(d.name), d.name_span, TokenType::Class, out);
+            emit(ast.name(d.name.ident), d.name.span, TokenType::Class, out);
             classify_methods(ast, &d.members, out);
         }
         ItemRef::BuiltinPrimitive(h) => {
             let d = h.get(ast);
-            emit(ast.name(d.name), d.name_span, TokenType::Class, out);
+            emit(ast.name(d.name.ident), d.name.span, TokenType::Class, out);
             classify_methods(ast, &d.members, out);
         }
         // `builtin impl i32 { .. }` declares no new name — the primitive
@@ -114,7 +129,12 @@ fn classify_item(ast: &Ast, item: ItemRef, out: &mut Vec<(Span, TokenType)>) {
         // the path law colors too)
         ItemRef::ModDecl(h) => {
             let d: &ModDeclNode = h.get(ast);
-            emit(ast.name(d.name), d.name_span, TokenType::Namespace, out);
+            emit(
+                ast.name(d.name.ident),
+                d.name.span,
+                TokenType::Namespace,
+                out,
+            );
         }
         ItemRef::Use(h) => {
             let d: &UseNode = h.get(ast);
@@ -127,7 +147,12 @@ fn classify_item(ast: &Ast, item: ItemRef, out: &mut Vec<(Span, TokenType)>) {
 }
 
 fn classify_fn(ast: &Ast, d: &FnNode, out: &mut Vec<(Span, TokenType)>) {
-    emit(ast.name(d.name), d.name_span, TokenType::Function, out);
+    emit(
+        ast.name(d.name.ident),
+        d.name.span,
+        TokenType::Function,
+        out,
+    );
     for (_, b) in &d.bounds {
         classify_ty(ast, *b, out);
     }
@@ -141,13 +166,18 @@ fn classify_fn(ast: &Ast, d: &FnNode, out: &mut Vec<(Span, TokenType)>) {
 /// `pub? enum Name { A, B }` — the enum's own name plus its members,
 /// each at its recorded span
 fn classify_enum(ast: &Ast, d: &EnumNode, out: &mut Vec<(Span, TokenType)>) {
-    emit(ast.name(d.name), d.name_span, TokenType::Enum, out);
+    emit(ast.name(d.name.ident), d.name.span, TokenType::Enum, out);
     for m in &d.members {
         let rut_ast::MemberRef::Member(h) = m else {
             continue; // the recovery slot carries no name
         };
         let md = h.get(ast);
-        emit(ast.name(md.name), md.name_span, TokenType::EnumMember, out);
+        emit(
+            ast.name(md.name.ident),
+            md.name.span,
+            TokenType::EnumMember,
+            out,
+        );
     }
 }
 
@@ -156,23 +186,23 @@ fn classify_enum(ast: &Ast, d: &EnumNode, out: &mut Vec<(Span, TokenType)>) {
 /// a module → namespace, capitalized = a type), the imported names as
 /// the leaf members (capitalized = a type, lowercase = a function)
 fn classify_use(ast: &Ast, d: &UseNode, out: &mut Vec<(Span, TokenType)>) {
-    for (id, sp) in d.path.iter().zip(&d.path_spans) {
-        let s = ast.name(*id);
+    for n in &d.path {
+        let s = ast.name(n.ident);
         let ty = if is_cap(s) {
             TokenType::Type
         } else {
             TokenType::Namespace
         };
-        emit(s, *sp, ty, out);
+        emit(s, n.span, ty, out);
     }
-    for (id, sp) in d.names.iter().zip(&d.name_spans) {
-        let s = ast.name(*id);
+    for n in &d.names {
+        let s = ast.name(n.ident);
         let ty = if is_cap(s) {
             TokenType::Type
         } else {
             TokenType::Function
         };
-        emit(s, *sp, ty, out);
+        emit(s, n.span, ty, out);
     }
 }
 
@@ -192,7 +222,12 @@ fn classify_fields(ast: &Ast, fields: &[FieldRef], out: &mut Vec<(Span, TokenTyp
             continue; // the recovery slot carries no name
         };
         let d: &FieldDeclNode = h.get(ast);
-        emit(ast.name(d.name), d.name_span, TokenType::Property, out);
+        emit(
+            ast.name(d.name.ident),
+            d.name.span,
+            TokenType::Property,
+            out,
+        );
         classify_ty(ast, d.ty, out);
         if let Some(init) = d.init {
             classify_expr(ast, init, out);
@@ -206,7 +241,7 @@ fn classify_methods(ast: &Ast, methods: &[MethodRef], out: &mut Vec<(Span, Token
             continue;
         };
         let d: &MethodDeclNode = h.get(ast);
-        emit(ast.name(d.name), d.name_span, TokenType::Method, out);
+        emit(ast.name(d.name.ident), d.name.span, TokenType::Method, out);
         for (_, b) in &d.bounds {
             classify_ty(ast, *b, out);
         }
@@ -228,7 +263,12 @@ fn classify_params(ast: &Ast, params: &[ParamRef], out: &mut Vec<(Span, TokenTyp
             continue;
         };
         let d = h.get(ast);
-        emit(ast.name(d.name), d.name_span, TokenType::Parameter, out);
+        emit(
+            ast.name(d.name.ident),
+            d.name.span,
+            TokenType::Parameter,
+            out,
+        );
         if let Some(t) = d.ty {
             classify_ty(ast, t, out);
         }
@@ -239,7 +279,12 @@ fn classify_stmt(ast: &Ast, s: StmtRef, out: &mut Vec<(Span, TokenType)>) {
     match s {
         StmtRef::Let(h) => {
             let d = h.get(ast);
-            emit(ast.name(d.name), d.name_span, TokenType::Variable, out);
+            emit(
+                ast.name(d.name.ident),
+                d.name.span,
+                TokenType::Variable,
+                out,
+            );
             if let Some(t) = d.ty {
                 classify_ty(ast, t, out);
             }
@@ -247,13 +292,13 @@ fn classify_stmt(ast: &Ast, s: StmtRef, out: &mut Vec<(Span, TokenType)>) {
         }
         StmtRef::ForOf(h) => {
             let d = h.get(ast);
-            emit(ast.name(d.var), d.name_span, TokenType::Variable, out);
+            emit(ast.name(d.var.ident), d.var.span, TokenType::Variable, out);
             classify_expr(ast, d.iter, out);
             classify_block(ast, d.body, out);
         }
         StmtRef::ForC(h) => {
             let d = h.get(ast);
-            emit(ast.name(d.var), d.name_span, TokenType::Variable, out);
+            emit(ast.name(d.var.ident), d.var.span, TokenType::Variable, out);
             classify_expr(ast, d.init, out);
             classify_expr(ast, d.cond, out);
             classify_expr(ast, d.update, out);
@@ -369,8 +414,8 @@ fn classify_expr(ast: &Ast, e: ExprRef, out: &mut Vec<(Span, TokenType)>) {
         // `d.draw(g)`, `Vec.from(..)` — the name trails its receiver
         ExprRef::Method(h) => {
             let d = h.get(ast);
-            if let Some((name, name_span)) = d.member() {
-                emit(ast.name(name), name_span, TokenType::Method, out);
+            if let Some(n) = d.member {
+                emit(ast.name(n.ident), n.span, TokenType::Method, out);
             }
             classify_expr(ast, d.recv, out);
             for a in &d.args {
@@ -382,14 +427,24 @@ fn classify_expr(ast: &Ast, e: ExprRef, out: &mut Vec<(Span, TokenType)>) {
         }
         ExprRef::Field(h) => {
             let d = h.get(ast);
-            emit(ast.name(d.name), d.name_span, TokenType::Property, out);
+            emit(
+                ast.name(d.name.ident),
+                d.name.span,
+                TokenType::Property,
+                out,
+            );
             classify_expr(ast, d.recv, out);
         }
         // struct literal labels (`Point { x: 1 }`) lead their values
         ExprRef::Struct(h) => {
             let d = h.get(ast);
             for fi in &d.fields {
-                emit(ast.name(fi.name), fi.name_span, TokenType::Property, out);
+                emit(
+                    ast.name(fi.name.ident),
+                    fi.name.span,
+                    TokenType::Property,
+                    out,
+                );
                 classify_expr(ast, fi.value, out);
             }
             classify_ty(ast, d.ty, out);
@@ -422,9 +477,9 @@ fn classify_expr(ast: &Ast, e: ExprRef, out: &mut Vec<(Span, TokenType)>) {
             if let ExprRef::Path(ph) = d.callee {
                 let pd = ph.get(ast);
                 if pd.segs.len() == 1 {
-                    let name = ast.name(pd.segs[0].name);
+                    let name = ast.name(pd.segs[0].name.ident);
                     if !is_primitive_ty(name) {
-                        emit(name, pd.segs[0].name_span, TokenType::Function, out);
+                        emit(name, pd.segs[0].name.span, TokenType::Function, out);
                     }
                 }
             }
@@ -563,7 +618,7 @@ fn classify_path_segs(
 ) {
     let n = segs.len();
     for (i, seg) in segs.iter().enumerate() {
-        let s = ast.name(seg.name);
+        let s = ast.name(seg.name.ident);
         if owned_by_tokens(s) {
             continue; // the token layer's class stands
         }
@@ -578,7 +633,7 @@ fn classify_path_segs(
             }
             TypeRule::Value => value_seg_class(s, i, n),
         };
-        out.push((seg.name_span, ty));
+        out.push((seg.name.span, ty));
     }
 }
 

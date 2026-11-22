@@ -77,13 +77,15 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
     pub(crate) fn union_provenance(&mut self, recv: ExprRef) -> Option<(IdentId, TyRef)> {
         match recv {
             ExprRef::Path(ph) if ph.get(self.ctx.ast).segs.len() == 1 => {
-                let g = *self.union_syms.get(&ph.get(self.ctx.ast).segs[0].name)?;
+                let g = *self
+                    .union_syms
+                    .get(&ph.get(self.ctx.ast).segs[0].name.ident)?;
                 self.union_bounds.get(&g).map(|&b| (g, b))
             }
             ExprRef::Field(fh) => {
                 let (base, name) = {
                     let n = fh.get(self.ctx.ast);
-                    (n.recv, n.name)
+                    (n.recv, n.name.ident)
                 };
                 // the chain head: a single-seg path — or the receiver
                 // itself (`self.k`: the `Self_` node, bound as `self`)
@@ -93,7 +95,7 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                         if segs.len() != 1 || !segs[0].generics.is_empty() {
                             return None;
                         }
-                        segs[0].name
+                        segs[0].name.ident
                     }
                     ExprRef::Self_(h) if !h.get(self.ctx.ast).is_ty => sym::SELF,
                     _ => return None,
@@ -105,7 +107,7 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                         if th.get(self.ctx.ast).segs.len() == 1
                             && th.get(self.ctx.ast).segs[0].generics.is_empty() =>
                     {
-                        let g = th.get(self.ctx.ast).segs[0].name;
+                        let g = th.get(self.ctx.ast).segs[0].name.ident;
                         self.union_bounds.get(&g).map(|&b| (g, b))
                     }
                     _ => None,
@@ -140,7 +142,7 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                 return None;
             };
             let fd = fh.get(self.ctx.ast);
-            (fd.name == name).then_some(fd.ty)
+            (fd.name.ident == name).then_some(fd.ty)
         })
     }
 
@@ -155,10 +157,10 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                         && th.get(self.ctx.ast).segs[0].generics.is_empty()
                         && self
                             .union_bounds
-                            .contains_key(&th.get(self.ctx.ast).segs[0].name) =>
+                            .contains_key(&th.get(self.ctx.ast).segs[0].name.ident) =>
                 {
                     self.union_syms
-                        .insert(name, th.get(self.ctx.ast).segs[0].name);
+                        .insert(name, th.get(self.ctx.ast).segs[0].name.ident);
                 }
                 _ => {
                     self.union_syms.remove(&name);

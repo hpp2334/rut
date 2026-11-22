@@ -197,18 +197,18 @@ impl MountedFile {
             if let Some(d) = h.downcast::<SurfaceFnNode>() {
                 let d = d.get(ast);
                 if matches!(d.linkage(), rut_ast::Linkage::Builtin { ambient: false }) {
-                    out.push(ast.name(d.name).to_string());
+                    out.push(ast.name(d.name.ident).to_string());
                 }
             }
         }
         for &h in &self.decls.types {
             if let Some(d) = h.downcast::<BuiltinTyNode>() {
                 if !d.get(ast).ambient() {
-                    out.push(ast.name(d.get(ast).name).to_string());
+                    out.push(ast.name(d.get(ast).name.ident).to_string());
                 }
             } else if let Some(d) = h.downcast::<BuiltinPrimitiveNode>() {
                 if !d.get(ast).ambient() {
-                    out.push(ast.name(d.get(ast).name).to_string());
+                    out.push(ast.name(d.get(ast).name.ident).to_string());
                 }
             }
         }

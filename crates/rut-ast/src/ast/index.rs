@@ -356,16 +356,16 @@ mod tests {
 
     /// the index's SHAPE — cursor rows and parent rows, projected
     fn shape(idx: &TreeIndex, ast: &crate::Ast) -> (Vec<Row>, BTreeMap<Row, Row>) {
-        let name_span = |h: crate::AnyHandle| -> Row {
+        let name_row = |h: crate::AnyHandle| -> Row {
             let s = ast.span_of(h);
             ((s.lo, s.hi), h.kind_name())
         };
-        let mut rows: Vec<Row> = idx.rows.iter().map(|&(_, h)| name_span(h)).collect();
+        let mut rows: Vec<Row> = idx.rows.iter().map(|&(_, h)| name_row(h)).collect();
         rows.sort();
         let mut parents: BTreeMap<Row, Row> = BTreeMap::new();
         for &(_, h) in &idx.rows {
             if let Some(p) = idx.parent(h) {
-                parents.insert(name_span(h), name_span(p));
+                parents.insert(name_row(h), name_row(p));
             }
         }
         (rows, parents)

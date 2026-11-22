@@ -50,7 +50,7 @@ pub(crate) fn expr_ty(home: &MountedFile, idxs: &[&MountedFile], e: ExprRef) -> 
         }
         ExprRef::Method(h) => {
             let d = h.get(ast);
-            let (name, _) = d.member()?;
+            let name = d.member?.ident;
             if ast.name(name) == "new" {
                 // `Type.new(..)` — the original init_ty shape
                 if let ExprRef::Path(ph) = d.recv {
@@ -58,7 +58,7 @@ pub(crate) fn expr_ty(home: &MountedFile, idxs: &[&MountedFile], e: ExprRef) -> 
                         .get(ast)
                         .segs
                         .first()
-                        .map(|s| ast.name(s.name).to_string());
+                        .map(|s| ast.name(s.name.ident).to_string());
                 }
                 return None;
             }
@@ -68,7 +68,7 @@ pub(crate) fn expr_ty(home: &MountedFile, idxs: &[&MountedFile], e: ExprRef) -> 
         ExprRef::Field(h) => {
             let d = h.get(ast);
             let ty = expr_ty(home, idxs, d.recv)?;
-            field_ty(idxs, &head_of_ty(&ty), ast.name(d.name))
+            field_ty(idxs, &head_of_ty(&ty), ast.name(d.name.ident))
         }
         ExprRef::Index(h) => {
             let d = h.get(ast);
@@ -137,7 +137,7 @@ fn path_ty(
     segs: &[PathSeg],
 ) -> Option<String> {
     let ast = home.doc.ast();
-    let head = segs.first()?.name;
+    let head = segs.first()?.name.ident;
     let text = ast.name(head);
     if segs.len() >= 2 {
         // a RESOLVED head leads the walk — a binding head before `::`
@@ -152,7 +152,7 @@ fn path_ty(
         if let Some(start) = head_ty {
             let mut cur = start;
             for seg in &segs[1..] {
-                cur = field_ty(idxs, &head_of_ty(&cur), ast.name(seg.name))?;
+                cur = field_ty(idxs, &head_of_ty(&cur), ast.name(seg.name.ident))?;
             }
             return Some(cur);
         }
@@ -172,7 +172,7 @@ fn call_ty(idxs: &[&MountedFile], ast: &Ast, callee: ExprRef) -> Option<String> 
     if let ExprRef::Path(h) = callee {
         let segs = &h.get(ast).segs;
         if segs.len() == 1 {
-            let name = ast.name(segs[0].name);
+            let name = ast.name(segs[0].name.ident);
             let hits: Vec<_> = idxs
                 .iter()
                 .flat_map(|f| f.fns())
@@ -198,8 +198,8 @@ fn call_ty(idxs: &[&MountedFile], ast: &Ast, callee: ExprRef) -> Option<String> 
             return None;
         }
         // `Type::new(..)` — the two-seg shape IS the head's type
-        if segs.len() == 2 && ast.name(segs[1].name) == "new" {
-            return Some(ast.name(segs[0].name).to_string());
+        if segs.len() == 2 && ast.name(segs[1].name.ident) == "new" {
+            return Some(ast.name(segs[0].name.ident).to_string());
         }
         return None;
     }

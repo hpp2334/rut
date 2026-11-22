@@ -103,8 +103,10 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                 // value position keeps its old unknown-name diagnostic)
                 let is_ty = sh.get(self.ctx.ast).is_ty;
                 let seg = PathSeg {
-                    name: if is_ty { sym::SELF_TY } else { sym::SELF },
-                    name_span: sp,
+                    name: rut_ast::Name {
+                        ident: if is_ty { sym::SELF_TY } else { sym::SELF },
+                        span: sp,
+                    },
                     generics: Vec::new(),
                 };
                 self.compile_path(node, vec![seg], expected, sp)
@@ -119,9 +121,10 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
             ExprRef::Method(mh) => {
                 let (recv, name, generics, args) = {
                     let n = mh.get(self.ctx.ast);
-                    let (name, _nsp) = n
-                        .member()
-                        .expect("a broken tree never lowers — is_clean gates first");
+                    let name = n
+                        .member
+                        .expect("a broken tree never lowers — is_clean gates first")
+                        .ident;
                     (n.recv, name, n.generics.clone(), n.args.clone())
                 };
                 self.compile_method(recv, name, generics, args, expected, sp)
@@ -129,7 +132,7 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
             ExprRef::Field(fh) => {
                 let (recv, name) = {
                     let n = fh.get(self.ctx.ast);
-                    (n.recv, n.name)
+                    (n.recv, n.name.ident)
                 };
                 self.compile_field(recv, name, sp)
             }
@@ -339,11 +342,11 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                 if let TyRef::Path(th) = ty {
                     let segs = &th.get(self.ctx.ast).segs;
                     if segs.len() == 1 {
-                        let n = self.ctx.name(segs[0].name).to_string();
+                        let n = self.ctx.name(segs[0].name.ident).to_string();
                         // trait RHS —capability probe (or fold). A generic
                         // head (`Vec<i64>`) is never a trait spelling.
                         if segs[0].generics.is_empty() {
-                            if let Some(tid) = self.ctx.iface_id_of(segs[0].name) {
+                            if let Some(tid) = self.ctx.iface_id_of(segs[0].name.ident) {
                                 match self.ctx.types.kind(rt).clone() {
                                     TyKind::IfaceObj { iface_id } if iface_id == tid => {
                                         self.emit(Op::ConstRaw { dst, bits: 1 }, sp.lo);
@@ -390,7 +393,7 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                             // revised, builtin-surface phase 2): the surface
                             // spelling IS the boot name (`sym::OPAQUE`)
                             if n == "opaque"
-                                && self.ctx.extern_native_type(segs[0].name)
+                                && self.ctx.extern_native_type(segs[0].name.ident)
                                     == Some(rut_core::binary::NativeTy::Opaque)
                             {
                                 match self.ctx.types.kind(rt).clone() {
@@ -761,7 +764,7 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
     ) -> TcResult<TypeId> {
         // single name: local / module let / enum member of... / builtin value
         if segs.len() == 1 && segs[0].generics.is_empty() {
-            let name = segs[0].name;
+            let name = segs[0].name.ident;
             if let Some(l) = self.lookup(name).cloned() {
                 // inlined `Slice` accessor: `self` is the receiver register
                 // itself — no copy (sequence access)
@@ -868,7 +871,7 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
         // two segments: local field chain `p.x`, `req.value.reply` — locals
         // shadow type names (a local is a value position)
         if segs.len() >= 2 && segs[0].generics.is_empty() {
-            if let Some(l) = self.lookup(segs[0].name).cloned() {
+            if let Some(l) = self.lookup(segs[0].name.ident).cloned() {
                 // the chain head: a promoted binding loads its shared
                 // cell's value first (the capture law's accessor); an
                 // ordinary one chains off its register raw, as before
@@ -895,26 +898,26 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                             format!(
                                 "`{}` has no field `{}` — `{}` is not a record",
                                 self.ctx.type_name(cur_ty),
-                                self.ctx.name(seg.name),
+                                self.ctx.name(seg.name.ident),
                                 self.ctx.type_name(cur_ty)
                             ),
                         );
                         return Err(());
                     };
-                    let Some(fidx) = fields.iter().position(|f| f.name == seg.name) else {
+                    let Some(fidx) = fields.iter().position(|f| f.name == seg.name.ident) else {
                         self.ctx.err(
                             sp,
                             format!(
                                 "`{}` has no field `{}`",
                                 self.ctx.type_name(cur_ty),
-                                self.ctx.name(seg.name)
+                                self.ctx.name(seg.name.ident)
                             ),
                         );
                         return Err(());
                     };
                     // the member-visibility law rides each hop: a plain
                     // field is module-private (structs exempt by law)
-                    if let Some(msg) = self.ctx.field_vis_err(cur_ty, seg.name) {
+                    if let Some(msg) = self.ctx.field_vis_err(cur_ty, seg.name.ident) {
                         self.ctx.err(sp, msg);
                         return Err(());
                     }
@@ -937,8 +940,8 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
         }
         // two segments: Enum.Member value
         if segs.len() == 2 {
-            let base = segs[0].name;
-            let member = segs[1].name;
+            let base = segs[0].name.ident;
+            let member = segs[1].name.ident;
             if !segs[0].generics.is_empty() || !segs[1].generics.is_empty() {
                 self.ctx
                     .err(sp, "generic paths are not supported in this build");
@@ -1007,11 +1010,15 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
             return r;
         }
         // a used package's head: uses are the only cross-package door
-        if self.ctx.used_pkgs.contains(self.ctx.name(segs[0].name)) {
-            self.package_head_error(&segs, segs[segs.len() - 1].name, sp);
+        if self
+            .ctx
+            .used_pkgs
+            .contains(self.ctx.name(segs[0].name.ident))
+        {
+            self.package_head_error(&segs, segs[segs.len() - 1].name.ident, sp);
             return Err(());
         }
-        if self.ctx.poisoned(segs[0].name) {
+        if self.ctx.poisoned(segs[0].name.ident) {
             return Err(()); // the failed `let` is already diagnosed
         }
         self.ctx.err(
@@ -1019,7 +1026,7 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
             format!(
                 "unknown name `{}`",
                 segs.iter()
-                    .map(|s| self.ctx.name(s.name).to_string())
+                    .map(|s| self.ctx.name(s.name.ident).to_string())
                     .collect::<Vec<_>>()
                     .join(".")
             ),
@@ -1045,7 +1052,7 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
             return None;
         }
         let from = self.ctx.cur_mod.clone();
-        let Some(mut m) = self.ctx.resolve_mod_head(&from, segs[0].name) else {
+        let Some(mut m) = self.ctx.resolve_mod_head(&from, segs[0].name.ident) else {
             // the dep-module lane (`math::PI` after `use calc::{ math }`,
             // or `calc::math::PI` off the pkg-name root)
             return self.compile_dep_mod_value(segs, sp);
@@ -1057,7 +1064,7 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                 .mods
                 .scopes
                 .get(&m)
-                .and_then(|s| s.children.get(self.ctx.name(seg.name)))
+                .and_then(|s| s.children.get(self.ctx.name(seg.name.ident)))
             {
                 m = path.clone();
                 continue;
@@ -1066,15 +1073,15 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
             // the leaf
             if i != segs.len() - 1 {
                 if i == segs.len() - 2 {
-                    let member = segs[segs.len() - 1].name;
-                    if let Some(e) = self.ctx.enum_in(&m, seg.name) {
+                    let member = segs[segs.len() - 1].name.ident;
+                    if let Some(e) = self.ctx.enum_in(&m, seg.name.ident) {
                         if !self.ctx.vis_crosses(&from, &m, e.vis) {
                             self.ctx.err(
                                 sp,
                                 format!(
                                     "{m}.{} — {}",
-                                    self.ctx.name(seg.name),
-                                    self.ctx.vis_hint(seg.name, &from, &m, e.vis)
+                                    self.ctx.name(seg.name.ident),
+                                    self.ctx.vis_hint(seg.name.ident, &from, &m, e.vis)
                                 ),
                             );
                             return Some(Err(()));
@@ -1099,7 +1106,7 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                             format!(
                                 "`{}` is not a member of enum {}",
                                 self.ctx.name(member),
-                                self.ctx.name(seg.name)
+                                self.ctx.name(seg.name.ident)
                             ),
                         );
                         return Some(Err(()));
@@ -1109,14 +1116,14 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                     sp,
                     format!(
                         "`{}` is not a module under `{}` — only `mod` children extend a qualified path",
-                        self.ctx.name(seg.name),
+                        self.ctx.name(seg.name.ident),
                         m
                     ),
                 );
                 return Some(Err(()));
             }
             // the leaf: a fn value, a module let, or a type (not a value)
-            let name = seg.name;
+            let name = seg.name.ident;
             if !seg.generics.is_empty() {
                 self.ctx
                     .err(sp, "type arguments are not valid in a value path");
@@ -1204,7 +1211,7 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
             sp,
             format!(
                 "`{}` is a module — modules are not values",
-                self.ctx.name(segs[segs.len() - 1].name)
+                self.ctx.name(segs[segs.len() - 1].name.ident)
             ),
         );
         Some(Err(()))
@@ -1221,25 +1228,25 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
         segs: &[PathSeg],
         sp: rut_lexer::span::Span,
     ) -> Option<TcResult<TypeId>> {
-        let mut m = self.ctx.extern_mod(segs[0].name)?;
+        let mut m = self.ctx.extern_mod(segs[0].name.ident)?;
         let walked = |up_to: usize| -> String {
             segs[..up_to]
                 .iter()
-                .map(|s| self.ctx.name(s.name).to_string())
+                .map(|s| self.ctx.name(s.name.ident).to_string())
                 .collect::<Vec<_>>()
                 .join("::")
         };
         // the INTERIOR segments walk children; the LAST segment is the
         // member (a const) — the path is `mod..mod::CONST`
         for (i, seg) in segs.iter().enumerate().skip(1).take(segs.len() - 2) {
-            match m.children.get(&seg.name).cloned() {
+            match m.children.get(&seg.name.ident).cloned() {
                 Some(child) => m = child,
                 None => {
                     self.ctx.err(
                         sp,
                         format!(
                             "`{}` is not a module of `{}` — only `pub mod` children extend a dep module path",
-                            self.ctx.name(seg.name),
+                            self.ctx.name(seg.name.ident),
                             walked(i)
                         ),
                     );
@@ -1248,7 +1255,7 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
             }
         }
         let path = walked(segs.len() - 1);
-        let name = segs[segs.len() - 1].name;
+        let name = segs[segs.len() - 1].name.ident;
         if let Some(&(ty, bits)) = m.consts.get(&name) {
             let reg = self.new_reg(ty);
             self.emit(Op::ConstRaw { dst: reg, bits }, sp.lo);

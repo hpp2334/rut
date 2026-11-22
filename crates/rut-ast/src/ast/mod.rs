@@ -5,7 +5,7 @@
 //!   privacy wall as rut-lsp's `semantic`): the vocabulary is
 //!   reachable only through the flat re-exports below (which the
 //!   crate root globs), never an `ast::` module path
-//! - every node kind is its own struct; span + name_span + doc live
+//! - every node kind is its own struct; span + name + doc live
 //!   IN the node (D1); per-kind private arenas (D2)
 //! - `Ast` is a CAPSULE: plain mut doors for the parse lane
 //!   (`new`/`intern`/`set_root`/`alloc`/`set_errors` — `pub(crate)`:
@@ -31,6 +31,7 @@ mod expr;
 mod handle;
 mod index;
 mod item;
+mod name;
 mod pat;
 mod printer;
 mod stmt;
@@ -40,6 +41,7 @@ mod ty;
 pub use doc::{CommentData, DocData};
 pub use error::ErrorNode;
 pub use handle::{AnyHandle, Arena, Handle, NodeKind, NodeStore};
+pub use name::Name;
 pub use store::{Ast, NodeKindId};
 // the construction macros ride the same chain (crate-root reachable
 // via the root gate, crate-only visible — the capsule's allocation
@@ -72,8 +74,8 @@ pub use stmt::{
 pub use expr::{
     ArrayLitNode, ArrayRepeatNode, AssignNode, AsyncBlockNode, AwaitNode, BinOp, BinaryNode,
     BlockNode, CallNode, CastNode, ExprRef, FPartAst, FStrNode, FieldInit, FieldNode, IfExprNode,
-    IndexNode, IsNode, LambdaNode, Lit, LitNode, MemberIdent, MethodNode, PathNode, PathSeg,
-    SelfNode, StructLitNode, TupleNode, UnOp, UnaryNode, WhenArmNode, WhenExprNode,
+    IndexNode, IsNode, LambdaNode, Lit, LitNode, MethodNode, PathNode, PathSeg, SelfNode,
+    StructLitNode, TupleNode, UnOp, UnaryNode, WhenArmNode, WhenExprNode,
 };
 // types + patterns
 pub use pat::{PatElseNode, PatLitNode, PatPathNode, PatRef, PatWildNode};

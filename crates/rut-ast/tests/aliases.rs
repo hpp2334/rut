@@ -20,11 +20,11 @@ fn alias_parses_transparent_shape() {
     };
     let d = h.get(ast);
     assert_eq!(d.vis(), Vis::Self_);
-    assert_eq!(ast.name(d.name), "Meters");
+    assert_eq!(ast.name(d.name.ident), "Meters");
     let TyRef::Path(t) = d.target else {
         panic!("expected a path target");
     };
-    assert_eq!(ast.name(t.get(ast).segs[0].name), "i64");
+    assert_eq!(ast.name(t.get(ast).segs[0].name.ident), "i64");
 }
 
 #[test]
@@ -45,7 +45,7 @@ fn union_alias_parses_ty_union() {
     let names: Vec<&str> = elems
         .iter()
         .map(|&e| match e {
-            TyRef::Path(ph) => ast.name(ph.get(ast).segs[0].name),
+            TyRef::Path(ph) => ast.name(ph.get(ast).segs[0].name.ident),
             _ => panic!("expected path members"),
         })
         .collect();
@@ -86,7 +86,7 @@ fn inline_requires_on_fn_parses() {
     let TyRef::Path(t) = f.bounds[0].1 else {
         panic!("expected a path bound");
     };
-    assert_eq!(ast.name(t.get(ast).segs[0].name), "Show");
+    assert_eq!(ast.name(t.get(ast).segs[0].name.ident), "Show");
 }
 
 #[test]
@@ -215,7 +215,7 @@ class Box<K requires D, V> {
     let TyRef::Path(t) = c.requires[0].1 else {
         panic!("expected a path bound");
     };
-    assert_eq!(ast.name(t.get(ast).segs[0].name), "D");
+    assert_eq!(ast.name(t.get(ast).segs[0].name.ident), "D");
 }
 
 #[test]

@@ -8,7 +8,7 @@ mod fstring;
 mod lit;
 mod ops;
 
-pub use access::{CallNode, FieldNode, IndexNode, MemberIdent, MethodNode};
+pub use access::{CallNode, FieldNode, IndexNode, MethodNode};
 pub use control::{
     AsyncBlockNode, AwaitNode, CastNode, IfExprNode, IsNode, WhenArmNode, WhenExprNode,
 };
@@ -24,10 +24,10 @@ use rut_lexer::span::Span;
 /// paths, type paths, and pattern paths.
 #[derive(Clone, Debug)]
 pub struct PathSeg {
-    pub name: rut_core::IdentId,
-    /// the segment ident token's own span (recorded at the match site —
-    /// the classifier's position recovery used to token-walk for it)
-    pub name_span: Span,
+    /// the segment ident and its own token span (recorded at the match
+    /// site — the classifier's position recovery used to token-walk
+    /// for it)
+    pub name: crate::Name,
     /// generic arguments — type slots
     pub generics: Vec<crate::ast::ty::TyRef>,
 }
@@ -201,12 +201,11 @@ pub struct TupleNode {
     pub elems: Vec<ExprRef>,
 }
 
-/// one `name: value` field of a struct literal — the name token's
-/// span rides along (a shorthand's value path spells exactly it)
+/// one `name: value` field of a struct literal — the name carries its
+/// own token span (a shorthand's value path spells exactly it)
 #[derive(Clone, Debug)]
 pub struct FieldInit {
-    pub name: rut_core::IdentId,
-    pub name_span: Span,
+    pub name: crate::Name,
     pub value: ExprRef,
 }
 

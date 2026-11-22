@@ -23,7 +23,7 @@ impl<'a> UseView<'a> {
     pub(crate) fn name(&self) -> &'a str {
         let ast = self.file.doc.ast();
         let d = self.d().get(ast);
-        ast.name(d.names[self.i])
+        ast.name(d.names[self.i].ident)
     }
 
     pub(crate) fn vis(&self) -> Vis {
@@ -33,7 +33,7 @@ impl<'a> UseView<'a> {
     pub(crate) fn pkg(&self) -> &'a str {
         let ast = self.file.doc.ast();
         let d = self.d().get(ast);
-        ast.name(d.path[0])
+        ast.name(d.path[0].ident)
     }
 
     pub(crate) fn path(&self) -> Vec<String> {
@@ -42,7 +42,7 @@ impl<'a> UseView<'a> {
             .get(ast)
             .path
             .iter()
-            .map(|id| ast.name(*id).to_string())
+            .map(|n| ast.name(n.ident).to_string())
             .collect()
     }
 }

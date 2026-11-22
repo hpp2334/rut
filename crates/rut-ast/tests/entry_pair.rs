@@ -211,7 +211,7 @@ fn docs_ride_the_tree_and_views_borrow() {
         "the Go-convention chain, borrowed views"
     );
     // the name verdict — recorded, not recovered
-    assert_eq!(f.name_span.text(text), "inc");
+    assert_eq!(f.name.span.text(text), "inc");
     // spans are exact: the fn ends at its own `}`
     assert!(f.span.text(text).ends_with("}"), "{:?}", f.span.text(text));
 

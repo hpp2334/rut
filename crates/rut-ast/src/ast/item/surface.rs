@@ -6,6 +6,7 @@ use crate::ast::doc::DocData;
 use crate::ast::item::{FieldRef, ItemRef, MethodRef, ParamRef, Vis};
 use crate::ast::ty::TyRef;
 use crate::slot_alloc;
+use crate::Name;
 use rut_core::IdentId;
 use rut_lexer::span::Span;
 
@@ -51,8 +52,7 @@ pub struct SurfaceFnNode {
     /// the modifier chain in source order — `vis()`/`linkage()`/
     /// `is_async()` derive from it
     pub modifiers: Vec<ModifierNode>,
-    pub name: IdentId,
-    pub name_span: Span,
+    pub name: Name,
     pub generics: Vec<IdentId>,
     pub params: Vec<ParamRef>,
     pub ret: Option<TyRef>,
@@ -86,8 +86,7 @@ pub struct SurfaceStructNode {
     /// the modifier chain in source order — `vis()`/`linkage()` derive
     /// from it
     pub modifiers: Vec<ModifierNode>,
-    pub name: IdentId,
-    pub name_span: Span,
+    pub name: Name,
     pub fields: Vec<FieldRef>,
     pub doc: DocData,
 }
@@ -115,8 +114,7 @@ pub struct BuiltinTyNode {
     /// the modifier chain in source order — `vis()`/`ambient()` derive
     /// from it
     pub modifiers: Vec<ModifierNode>,
-    pub name: IdentId,
-    pub name_span: Span,
+    pub name: Name,
     pub generics: Vec<IdentId>,
     pub members: Vec<MethodRef>,
     pub doc: DocData,
@@ -145,8 +143,7 @@ pub struct BuiltinPrimitiveNode {
     /// the modifier chain in source order — `vis()`/`ambient()` derive
     /// from it
     pub modifiers: Vec<ModifierNode>,
-    pub name: IdentId,
-    pub name_span: Span,
+    pub name: Name,
     pub members: Vec<MethodRef>,
     pub doc: DocData,
 }
@@ -173,9 +170,8 @@ pub struct BuiltinImplNode {
     pub span: Span,
     /// the modifier chain in source order
     pub modifiers: Vec<ModifierNode>,
-    /// the receiver primitive's name
-    pub prim: IdentId,
-    pub name_span: Span,
+    /// the receiver primitive's name and its own span
+    pub prim: Name,
     pub methods: Vec<MethodRef>,
 }
 

@@ -298,7 +298,7 @@ fn inherent_impl_is_the_one_form() {
     let TyRef::Path(t) = ih.get(ast).target else {
         panic!("expected a path target, got {:?}", ih.get(ast).target);
     };
-    assert_eq!(ast.name(t.get(ast).segs[0].name), "P");
+    assert_eq!(ast.name(t.get(ast).segs[0].name.ident), "P");
     assert!(matches!(items[3], ItemRef::Impl(_)));
 }
 
@@ -317,7 +317,7 @@ fn interface_vis_parses_into_the_item() {
     };
     let d = ih.get(ast);
     assert_eq!(d.vis(), Vis::Pub);
-    assert_eq!(ast.name(d.name), "Show");
+    assert_eq!(ast.name(d.name.ident), "Show");
     assert_eq!(d.methods.len(), 1);
 }
 

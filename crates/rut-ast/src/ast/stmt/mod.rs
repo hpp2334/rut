@@ -7,7 +7,7 @@ use crate::ast::expr::{BlockNode, ExprRef};
 use crate::ast::handle::{AnyHandle, Handle};
 use crate::ast::ty::TyRef;
 use crate::slot_alloc;
-use rut_core::IdentId;
+use crate::Name;
 use rut_lexer::span::Span;
 
 /// the statement walk surface
@@ -107,12 +107,11 @@ pub struct LetStmtNode {
     /// the binding itself errors, writes through it (`x.f = ..`) are
     /// allowed
     pub is_const: bool,
-    pub name: IdentId,
-    pub name_span: Span,
-    /// `let (a, b) = ..` — tuple destructuring: each member's ident +
-    /// its own token span (name_span is names\[0]'s; the per-member
-    /// spans are the bindings pass's decl targets — no token recovery)
-    pub destructure: Option<Vec<(IdentId, Span)>>,
+    pub name: Name,
+    /// `let (a, b) = ..` — tuple destructuring: each member's name +
+    /// its own token span (`name` is names\[0]; the per-member spans
+    /// are the bindings pass's decl targets — no token recovery)
+    pub destructure: Option<Vec<Name>>,
     pub ty: Option<TyRef>,
     pub init: ExprRef,
 }
@@ -135,8 +134,7 @@ pub struct WhileNode {
 #[derive(Clone, Debug)]
 pub struct ForOfNode {
     pub span: Span,
-    pub var: IdentId,
-    pub name_span: Span,
+    pub var: Name,
     /// the header spelled `const` — a fresh per-iteration binding that
     /// the body may not reassign
     pub is_const: bool,
@@ -147,8 +145,7 @@ pub struct ForOfNode {
 #[derive(Clone, Debug)]
 pub struct ForCNode {
     pub span: Span,
-    pub var: IdentId,
-    pub name_span: Span,
+    pub var: Name,
     /// `const` in a for-c header is refused at parse (the induction
     /// variable is genuinely reassigned) — there is no flag to carry
     pub init: ExprRef,

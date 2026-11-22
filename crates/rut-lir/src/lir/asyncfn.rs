@@ -177,13 +177,13 @@ pub(crate) fn compile_async_fn(ctx: &mut Ctx, inst: &Inst, fid: u32) -> TcResult
         };
         let (name, t) = {
             let n = ph.get(ctx.ast);
-            (n.name, n.ty)
+            (n.name.ident, n.ty)
         };
         if let Some(t) = t {
             let spells_cx = name == sym::CX
                 || matches!(t, TyRef::Path(ref th)
                     if th.get(ctx.ast).segs.len() == 1
-                        && th.get(ctx.ast).segs[0].name == sym::RUN_CONTEXT);
+                        && th.get(ctx.ast).segs[0].name.ident == sym::RUN_CONTEXT);
             if spells_cx {
                 ctx.err(p.span(ctx.ast), format!(
                     "`{}`: an async fn's parameters are ordinary values — the resume context is injected as `cx`, never spelled",
@@ -211,7 +211,7 @@ pub(crate) fn compile_async_fn(ctx: &mut Ctx, inst: &Inst, fid: u32) -> TcResult
         };
         let (name, t) = {
             let n = ph.get(ctx.ast);
-            (n.name, n.ty)
+            (n.name.ident, n.ty)
         };
         match t {
             Some(t) => {
@@ -1029,7 +1029,7 @@ pub(crate) fn compile_async_call(
             } else {
                 let tracked = match a {
                     ExprRef::Path(ph) if ph.get(c.ctx.ast).segs.len() == 1 => {
-                        c.origins_of(ph.get(c.ctx.ast).segs[0].name)
+                        c.origins_of(ph.get(c.ctx.ast).segs[0].name.ident)
                     }
                     _ => Vec::new(),
                 };

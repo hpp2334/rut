@@ -31,7 +31,7 @@ fn host_fn_parses() {
     };
     let d = h.get(ast);
     assert_eq!(d.linkage(), Linkage::Host);
-    assert_eq!(ast.name(d.name), "string_len");
+    assert_eq!(ast.name(d.name.ident), "string_len");
     assert_eq!(d.params.len(), 1);
     let ItemRef::SurfaceFn(h2) = items[1] else {
         panic!("expected a SurfaceFn item, got {:?}", items[1]);
@@ -135,7 +135,7 @@ pub host fn legacy_ping() -> bool;
     let edge = |i: usize| match items[i] {
         ItemRef::ModDecl(h) => {
             let d = h.get(ast);
-            (d.vis(), ast.name(d.name).to_string())
+            (d.vis(), ast.name(d.name.ident).to_string())
         }
         k => panic!("expected a mod decl at {i}, got {k:?}"),
     };
@@ -151,7 +151,7 @@ pub host fn legacy_ping() -> bool;
         "`pub host fn` keeps its pub beside mod edges"
     );
     assert_eq!(d.linkage(), Linkage::Host);
-    assert_eq!(ast.name(d.name), "legacy_ping");
+    assert_eq!(ast.name(d.name.ident), "legacy_ping");
 }
 
 #[test]
@@ -195,7 +195,7 @@ fn builtin_ty_parses() {
         panic!("expected a BuiltinTy item, got {:?}", items[0]);
     };
     let d = h.get(ast);
-    assert_eq!(ast.name(d.name), "Option");
+    assert_eq!(ast.name(d.name.ident), "Option");
     assert_eq!(d.generics.len(), 1);
     assert_eq!(d.members.len(), 2);
 }
@@ -266,7 +266,7 @@ fn host_struct_parses() {
         panic!("expected a SurfaceStruct item, got {:?}", items[0]);
     };
     let d = h.get(ast);
-    assert_eq!(ast.name(d.name), "Location");
+    assert_eq!(ast.name(d.name.ident), "Location");
     assert_eq!(d.fields.len(), 3);
 }
 
@@ -320,7 +320,7 @@ fn host_async_fn_parses() {
     let d = h.get(ast);
     assert_eq!(d.linkage(), Linkage::Host);
     assert!(d.is_async(), "the async marker must land on the decl");
-    assert_eq!(ast.name(d.name), "fetch");
+    assert_eq!(ast.name(d.name.ident), "fetch");
     assert_eq!(d.params.len(), 1);
     assert!(d.ret.is_some());
     // the sync lane keeps its flag down
@@ -388,7 +388,7 @@ fn builtin_impl_decl() {
         panic!("expected a BuiltinImpl item, got {:?}", items[0]);
     };
     let d = h.get(ast);
-    assert_eq!(ast.name(d.prim), "i32");
+    assert_eq!(ast.name(d.prim.ident), "i32");
     assert_eq!(d.methods.len(), 3);
     // it is a declaration form: an implementation file rejects it
     let (_, diags) = parse(
@@ -422,7 +422,7 @@ fn builtin_primitive_parses() {
         panic!("expected a BuiltinPrimitive item, got {:?}", items[0]);
     };
     let d = h.get(ast);
-    assert_eq!(ast.name(d.name), "opaque");
+    assert_eq!(ast.name(d.name.ident), "opaque");
     assert_eq!(
         d.members.len(),
         2,
@@ -693,12 +693,12 @@ pub host fn legacy() -> bool;
         panic!("expected a ModDecl, got {:?}", items[0]);
     };
     let gone = nh.get(ast);
-    assert_eq!(ast.name(gone.name), "gone");
+    assert_eq!(ast.name(gone.name.ident), "gone");
     assert_eq!(gone.vis(), Vis::Self_);
     let ItemRef::ModDecl(ph) = items[1] else {
         panic!("expected a ModDecl, got {:?}", items[1]);
     };
-    assert_eq!(ast.name(ph.get(ast).name), "net");
+    assert_eq!(ast.name(ph.get(ast).name.ident), "net");
     assert_eq!(ph.get(ast).vis(), Vis::Pub);
 }
 
@@ -747,7 +747,7 @@ pub struct Pair {
         panic!("expected the free fn, got {:?}", items[1]);
     };
     let f = fh.get(ast);
-    assert_eq!(ast.name(f.name), "freeze");
+    assert_eq!(ast.name(f.name.ident), "freeze");
     assert_eq!(f.generics.len(), 0);
     // the bodiless spelling carries an empty block (the arena's fn
     // shape) — no machine lowers it

@@ -232,7 +232,7 @@ impl<'a> Ctx<'a> {
                     .map(|r| self.resolve_sig_ty(r, &[], Some(obj)))
                     .unwrap_or(TY_NIL);
                 out.push(MemberReq {
-                    name: md.name,
+                    name: md.name.ident,
                     is_async: Some(md.is_async()),
                     ptys,
                     ret,
@@ -547,7 +547,7 @@ impl<'a> Ctx<'a> {
             TyRef::Path(h) => {
                 let segs = &h.get(self.ast).segs;
                 if segs.len() == 1 && segs[0].generics.is_empty() {
-                    Some(segs[0].name)
+                    Some(segs[0].name.ident)
                 } else {
                     None
                 }
@@ -609,7 +609,7 @@ impl<'a> Ctx<'a> {
             TyRef::Path(h) => {
                 let segs = &h.get(self.ast).segs;
                 if segs.len() == 1 && segs[0].generics.is_empty() {
-                    self.find_alias(segs[0].name)
+                    self.find_alias(segs[0].name.ident)
                         .is_some_and(|a| matches!(a.resolved, Some(AliasTarget::Union)))
                 } else {
                     false

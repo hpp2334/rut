@@ -155,14 +155,20 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
             // Fn bodies are always blocks
             FoundDecl::Fn(fh) => {
                 let f = fh.get(ctx.ast);
-                (f.params.clone(), f.ret, f.generics.clone(), f.body, f.name)
+                (
+                    f.params.clone(),
+                    f.ret,
+                    f.generics.clone(),
+                    f.body,
+                    f.name.ident,
+                )
             }
             FoundDecl::Method(mh) => {
                 let m = mh.get(ctx.ast);
                 let Some(b) = m.body else {
                     return Ok(()); // bodiless shouldn't be queued
                 };
-                (m.params.clone(), m.ret, m.generics.clone(), b, m.name)
+                (m.params.clone(), m.ret, m.generics.clone(), b, m.name.ident)
             }
         };
         // Type-union bounds in scope for THIS instantiation (native-fastpath
@@ -278,7 +284,7 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                             p.span(c.ctx.ast),
                             format!(
                                 "parameter `{}` needs a type annotation here",
-                                c.ctx.name(ph.get(c.ctx.ast).name)
+                                c.ctx.name(ph.get(c.ctx.ast).name.ident)
                             ),
                         );
                         TY_I32
@@ -317,7 +323,7 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                 ParamRef::Param(ph) => {
                     let (name, ty_node) = {
                         let n = ph.get(c.ctx.ast);
-                        (n.name, n.ty)
+                        (n.name.ident, n.ty)
                     };
                     let reg = c.new_reg(param_tys[i]);
                     // trait-typed parameters: the Inst carries this call's
@@ -515,7 +521,7 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
         // bind params then captures
         for (i, p) in params.iter().enumerate() {
             if let ParamRef::Param(ph) = *p {
-                let name = ph.get(c.ctx.ast).name;
+                let name = ph.get(c.ctx.ast).name.ident;
                 let reg = c.new_reg(param_tys[i]);
                 c.locals.push(Local {
                     name,

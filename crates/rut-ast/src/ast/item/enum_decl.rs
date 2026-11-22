@@ -8,7 +8,7 @@ use crate::ast::handle::{AnyHandle, Handle};
 use crate::ast::item::class::{item_vis, ModifierNode};
 use crate::ast::item::ItemRef;
 use crate::slot_alloc;
-use rut_core::IdentId;
+use crate::Name;
 use rut_lexer::span::Span;
 
 /// `pub? enum Name { A, B, .. }`
@@ -21,8 +21,7 @@ pub struct EnumNode {
     pub body_span: Span,
     /// the modifier chain in source order — `vis()` derives from it
     pub modifiers: Vec<ModifierNode>,
-    pub name: IdentId,
-    pub name_span: Span,
+    pub name: Name,
     pub members: Vec<MemberRef>,
     pub doc: DocData,
 }
@@ -34,13 +33,12 @@ impl EnumNode {
     }
 }
 
-/// one enum member — a node since v2 (its `name_span` is recorded at
-/// parse; the ordered-token-matching recovery is gone).
+/// one enum member — a node since v2 (its name is recorded at parse;
+/// the ordered-token-matching recovery is gone).
 #[derive(Clone, Debug)]
 pub struct EnumMemberNode {
     pub span: Span,
-    pub name: IdentId,
-    pub name_span: Span,
+    pub name: Name,
     pub doc: DocData,
 }
 

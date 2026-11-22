@@ -422,7 +422,7 @@ fn decl_site_span(ast: &rut_ast::Ast, h: rut_ast::AnyHandle, pos: u32) -> Option
         ($t:ty) => {
             if let Some(d) = h.downcast::<$t>() {
                 let dd = d.get(ast);
-                return on_name(dd.name_span, pos).then_some(dd.name_span);
+                return on_name(dd.name.span, pos).then_some(dd.name.span);
             }
         };
     }
@@ -436,17 +436,17 @@ fn decl_site_span(ast: &rut_ast::Ast, h: rut_ast::AnyHandle, pos: u32) -> Option
     // scope, so the scope-containment resolve can't see them)
     if let Some(d) = h.downcast::<rut_ast::ParamNode>() {
         let dd = d.get(ast);
-        return on_name(dd.name_span, pos).then_some(dd.name_span);
+        return on_name(dd.name.span, pos).then_some(dd.name.span);
     }
     if let Some(d) = h.downcast::<rut_ast::LetStmtNode>() {
         let dd = d.get(ast);
-        if on_name(dd.name_span, pos) {
-            return Some(dd.name_span);
+        if on_name(dd.name.span, pos) {
+            return Some(dd.name.span);
         }
         if let Some(ns) = &dd.destructure {
-            for (_, sp) in ns {
-                if on_name(*sp, pos) {
-                    return Some(*sp);
+            for n in ns {
+                if on_name(n.span, pos) {
+                    return Some(n.span);
                 }
             }
         }
@@ -454,11 +454,11 @@ fn decl_site_span(ast: &rut_ast::Ast, h: rut_ast::AnyHandle, pos: u32) -> Option
     }
     if let Some(d) = h.downcast::<rut_ast::ForOfNode>() {
         let dd = d.get(ast);
-        return on_name(dd.name_span, pos).then_some(dd.name_span);
+        return on_name(dd.var.span, pos).then_some(dd.var.span);
     }
     if let Some(d) = h.downcast::<rut_ast::ForCNode>() {
         let dd = d.get(ast);
-        return on_name(dd.name_span, pos).then_some(dd.name_span);
+        return on_name(dd.var.span, pos).then_some(dd.var.span);
     }
     None
 }
@@ -473,25 +473,25 @@ pub(crate) fn node_name(
 ) -> Option<(rut_core::IdentId, Span)> {
     if let Some(p) = h.downcast::<rut_ast::PathNode>() {
         for s in &p.get(ast).segs {
-            if on_name(s.name_span, pos) {
-                return Some((s.name, s.name_span));
+            if on_name(s.name.span, pos) {
+                return Some((s.name.ident, s.name.span));
             }
         }
         return None;
     }
     if let Some(p) = h.downcast::<rut_ast::ParamNode>() {
         let d = p.get(ast);
-        return on_name(d.name_span, pos).then_some((d.name, d.name_span));
+        return on_name(d.name.span, pos).then_some((d.name.ident, d.name.span));
     }
     if let Some(l) = h.downcast::<rut_ast::LetStmtNode>() {
         let d = l.get(ast);
-        if on_name(d.name_span, pos) {
-            return Some((d.name, d.name_span));
+        if on_name(d.name.span, pos) {
+            return Some((d.name.ident, d.name.span));
         }
         if let Some(ns) = &d.destructure {
-            for (n, sp) in ns {
-                if on_name(*sp, pos) {
-                    return Some((*n, *sp));
+            for n in ns {
+                if on_name(n.span, pos) {
+                    return Some((n.ident, n.span));
                 }
             }
         }
@@ -499,18 +499,18 @@ pub(crate) fn node_name(
     }
     if let Some(f) = h.downcast::<rut_ast::ForOfNode>() {
         let d = f.get(ast);
-        return on_name(d.name_span, pos).then_some((d.var, d.name_span));
+        return on_name(d.var.span, pos).then_some((d.var.ident, d.var.span));
     }
     if let Some(f) = h.downcast::<rut_ast::ForCNode>() {
         let d = f.get(ast);
-        return on_name(d.name_span, pos).then_some((d.var, d.name_span));
+        return on_name(d.var.span, pos).then_some((d.var.ident, d.var.span));
     }
     // struct-literal field labels are name positions (the FieldInit
     // rides the literal as data — no node of its own)
     if let Some(sl) = h.downcast::<rut_ast::StructLitNode>() {
         for fi in &sl.get(ast).fields {
-            if on_name(fi.name_span, pos) {
-                return Some((fi.name, fi.name_span));
+            if on_name(fi.name.span, pos) {
+                return Some((fi.name.ident, fi.name.span));
             }
         }
         return None;
@@ -519,8 +519,8 @@ pub(crate) fn node_name(
     // own path node)
     if let Some(t) = h.downcast::<rut_ast::TyPathNode>() {
         for seg in &t.get(ast).segs {
-            if on_name(seg.name_span, pos) {
-                return Some((seg.name, seg.name_span));
+            if on_name(seg.name.span, pos) {
+                return Some((seg.name.ident, seg.name.span));
             }
         }
         return None;
@@ -535,7 +535,7 @@ pub(crate) fn node_name(
         ($t:ty) => {
             if let Some(d) = h.downcast::<$t>() {
                 let dd = d.get(ast);
-                return on_name(dd.name_span, pos).then_some((dd.name, dd.name_span));
+                return on_name(dd.name.span, pos).then_some((dd.name.ident, dd.name.span));
             }
         };
     }
@@ -547,7 +547,7 @@ pub(crate) fn node_name(
         ($t:ty) => {
             if let Some(d) = h.downcast::<$t>() {
                 let dd = d.get(ast);
-                return on_name(dd.name_span, pos).then_some((dd.name, dd.name_span));
+                return on_name(dd.name.span, pos).then_some((dd.name.ident, dd.name.span));
             }
         };
     }
@@ -572,19 +572,19 @@ fn member_name_span(ast: &rut_ast::Ast, h: rut_ast::AnyHandle, pos: u32) -> Opti
     if let Some(m) = h.downcast::<rut_ast::MethodNode>() {
         let d = m.get(ast);
         return d
-            .member()
-            .and_then(|(_, nsp)| on_name(nsp, pos).then_some(nsp));
+            .member
+            .and_then(|n| on_name(n.span, pos).then_some(n.span));
     }
     if let Some(f) = h.downcast::<rut_ast::FieldNode>() {
         let d = f.get(ast);
-        return on_name(d.name_span, pos).then_some(d.name_span);
+        return on_name(d.name.span, pos).then_some(d.name.span);
     }
     if let Some(p) = h.downcast::<rut_ast::PathNode>() {
         let segs = &p.get(ast).segs;
         if segs.len() >= 2 {
-            if let Some(i) = segs.iter().position(|s| on_name(s.name_span, pos)) {
+            if let Some(i) = segs.iter().position(|s| on_name(s.name.span, pos)) {
                 if i + 1 == segs.len() {
-                    return Some(segs[i].name_span);
+                    return Some(segs[i].name.span);
                 }
             }
         }
@@ -711,14 +711,14 @@ fn use_site_targets(ctx: &Ctx, h: rut_ast::AnyHandle, pos: u32) -> Option<Vec<De
     let segs: Vec<String> = u_node
         .path
         .iter()
-        .map(|id| ast.name(*id).to_string())
+        .map(|n| ast.name(n.ident).to_string())
         .collect();
     // the leaf name
-    for (k, nsp) in u_node.name_spans.iter().enumerate() {
-        if !on_name(*nsp, pos) {
+    for n in &u_node.names {
+        if !on_name(n.span, pos) {
             continue;
         }
-        let name = ast.name(u_node.names[k]);
+        let name = ast.name(n.ident);
         let pkg = segs[0].clone();
         // the OWN lane — the walk is the intra-package one (any
         // declared edge; the doc's own rows read for its own scope)
@@ -749,8 +749,8 @@ fn use_site_targets(ctx: &Ctx, h: rut_ast::AnyHandle, pos: u32) -> Option<Vec<De
     // a path segment — the pkg head included: `k == 0` opens the
     // pkg's ROOT file at the file top (`Span::new(0, 0)`, the
     // convention a pkg-root row uses)
-    for (k, sp) in u_node.path_spans.iter().enumerate() {
-        if !on_name(*sp, pos) {
+    for (k, seg) in u_node.path.iter().enumerate() {
+        if !on_name(seg.span, pos) {
             continue;
         }
         let pkg = segs[0].clone();
@@ -790,7 +790,7 @@ fn use_site_targets(ctx: &Ctx, h: rut_ast::AnyHandle, pos: u32) -> Option<Vec<De
             Some(&pkg),
             crate::world::mods::parent_of(&walked),
         )?;
-        let edge_name = ast.name(u_node.path[k]);
+        let edge_name = ast.name(u_node.path[k].ident);
         let edge = parent.mods().into_iter().find(|m| m.name() == edge_name)?;
         return Some(vec![loc_at(
             ctx.doc_uri,
@@ -876,8 +876,8 @@ fn mod_edge_target(ctx: &Ctx, h: rut_ast::AnyHandle, pos: u32) -> Option<DefLoca
     let doc = ctx.doc_file();
     let ast = doc.doc.ast();
     let m = mh.get(ast);
-    on_name(m.name_span, pos).then_some(())?;
-    let name = ast.name(m.name);
+    on_name(m.name.span, pos).then_some(())?;
+    let name = ast.name(m.name.ident);
     let from = ctx.doc_mods.mod_path.as_deref()?;
     let child = crate::world::mods::child_path(from, name);
     let mounted = crate::world::mods::find_mod(ctx.chain, ctx.doc_mods.pkg.as_deref(), &child)?;

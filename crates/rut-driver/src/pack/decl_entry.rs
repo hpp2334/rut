@@ -389,7 +389,7 @@ fn ty_ast_text(ast: &Ast, t: TyRef) -> String {
             let segs = &h.get(ast).segs;
             let mut s = segs
                 .iter()
-                .map(|sg| ast.name(sg.name).to_string())
+                .map(|sg| ast.name(sg.name.ident).to_string())
                 .collect::<Vec<_>>()
                 .join("::");
             if let Some(last) = segs.last() {
@@ -461,7 +461,7 @@ fn facts_of_items(ast: &Ast, items: &[ItemRef], facts: &mut std::collections::BT
                 let c = h.get(ast);
                 class_facts(
                     ast,
-                    c.name,
+                    c.name.ident,
                     &c.generics,
                     c.newtype,
                     &c.fields,
@@ -473,7 +473,7 @@ fn facts_of_items(ast: &Ast, items: &[ItemRef], facts: &mut std::collections::BT
                 let c = h.get(ast);
                 class_facts(
                     ast,
-                    c.name,
+                    c.name.ident,
                     &c.generics,
                     false,
                     &c.fields,
@@ -511,14 +511,14 @@ fn facts_of_items(ast: &Ast, items: &[ItemRef], facts: &mut std::collections::BT
                     format!(
                         "{}fn {}({}) -> {}",
                         if d.is_async() { "async " } else { "" },
-                        ast.name(d.name),
+                        ast.name(d.name.ident),
                         ps.join(";"),
                         ret
                     )
                 } else {
                     format!(
                         "genfn {}<{}>({}) -> {}",
-                        ast.name(d.name),
+                        ast.name(d.name.ident),
                         gens.join(","),
                         ps.join(";"),
                         ret
@@ -527,7 +527,7 @@ fn facts_of_items(ast: &Ast, items: &[ItemRef], facts: &mut std::collections::BT
                 facts.insert(fact);
             }
             ItemRef::ModuleLet(h) => {
-                facts.insert(format!("const {}", ast.name(h.get(ast).name)));
+                facts.insert(format!("const {}", ast.name(h.get(ast).name.ident)));
             }
             _ => {}
         }
@@ -555,7 +555,11 @@ fn class_facts(
         .filter_map(|&f| match f {
             FieldRef::Field(fh) => {
                 let d = fh.get(ast);
-                Some(format!("{}:{}", ast.name(d.name), ty_ast_text(ast, d.ty)))
+                Some(format!(
+                    "{}:{}",
+                    ast.name(d.name.ident),
+                    ty_ast_text(ast, d.ty)
+                ))
             }
             FieldRef::Error(_) => None,
         })
@@ -593,7 +597,7 @@ fn class_facts(
         facts.insert(format!(
             "method {}.{}<{}>({}{}) -> {}",
             ast.name(name),
-            ast.name(d.name),
+            ast.name(d.name.ident),
             mgens.join(","),
             if has_self { "self;" } else { "" },
             ps.join(";"),

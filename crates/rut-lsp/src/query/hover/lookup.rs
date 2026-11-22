@@ -193,33 +193,36 @@ fn name_at(ast: &rut_ast::Ast, h: AnyHandle, pos: u32) -> Option<(rut_ast::Ident
     // the int token's own span)
     if let Some(m) = h.downcast::<MethodNode>() {
         let d = m.get(ast);
-        return d.member().filter(|(_, nsp)| nsp.lo <= pos && pos <= nsp.hi);
+        return d
+            .member
+            .filter(|n| n.span.lo <= pos && pos <= n.span.hi)
+            .map(|n| (n.ident, n.span));
     }
     if let Some(f) = h.downcast::<FieldNode>() {
         let d = f.get(ast);
-        return on_name(d.name_span, pos).then_some((d.name, d.name_span));
+        return on_name(d.name.span, pos).then_some((d.name.ident, d.name.span));
     }
     if let Some(p) = h.downcast::<PathNode>() {
         for s in &p.get(ast).segs {
-            if on_name(s.name_span, pos) {
-                return Some((s.name, s.name_span));
+            if on_name(s.name.span, pos) {
+                return Some((s.name.ident, s.name.span));
             }
         }
         return None;
     }
     if let Some(p) = h.downcast::<ParamNode>() {
         let d = p.get(ast);
-        return on_name(d.name_span, pos).then_some((d.name, d.name_span));
+        return on_name(d.name.span, pos).then_some((d.name.ident, d.name.span));
     }
     if let Some(l) = h.downcast::<rut_ast::LetStmtNode>() {
         let d = l.get(ast);
-        if on_name(d.name_span, pos) {
-            return Some((d.name, d.name_span));
+        if on_name(d.name.span, pos) {
+            return Some((d.name.ident, d.name.span));
         }
         if let Some(ns) = &d.destructure {
-            for (n, sp) in ns {
-                if on_name(*sp, pos) {
-                    return Some((*n, *sp));
+            for n in ns {
+                if on_name(n.span, pos) {
+                    return Some((n.ident, n.span));
                 }
             }
         }
@@ -227,18 +230,18 @@ fn name_at(ast: &rut_ast::Ast, h: AnyHandle, pos: u32) -> Option<(rut_ast::Ident
     }
     if let Some(f) = h.downcast::<rut_ast::ForOfNode>() {
         let d = f.get(ast);
-        return on_name(d.name_span, pos).then_some((d.var, d.name_span));
+        return on_name(d.var.span, pos).then_some((d.var.ident, d.var.span));
     }
     if let Some(f) = h.downcast::<rut_ast::ForCNode>() {
         let d = f.get(ast);
-        return on_name(d.name_span, pos).then_some((d.var, d.name_span));
+        return on_name(d.var.span, pos).then_some((d.var.ident, d.var.span));
     }
     // struct-literal field labels are name positions (the FieldInit
     // rides the literal as data — no node of its own)
     if let Some(sl) = h.downcast::<rut_ast::StructLitNode>() {
         for fi in &sl.get(ast).fields {
-            if on_name(fi.name_span, pos) {
-                return Some((fi.name, fi.name_span));
+            if on_name(fi.name.span, pos) {
+                return Some((fi.name.ident, fi.name.span));
             }
         }
         return None;
@@ -247,9 +250,9 @@ fn name_at(ast: &rut_ast::Ast, h: AnyHandle, pos: u32) -> Option<(rut_ast::Ident
     // resolves through the chain like any use site)
     if let Some(u) = h.downcast::<UseNode>() {
         let d = u.get(ast);
-        for (i, sp) in d.name_spans.iter().enumerate() {
-            if on_name(*sp, pos) {
-                return d.names.get(i).copied().map(|n| (n, *sp));
+        for n in &d.names {
+            if on_name(n.span, pos) {
+                return Some((n.ident, n.span));
             }
         }
         return None;
@@ -258,8 +261,8 @@ fn name_at(ast: &rut_ast::Ast, h: AnyHandle, pos: u32) -> Option<(rut_ast::Ident
     // own path node)
     if let Some(t) = h.downcast::<rut_ast::TyPathNode>() {
         for seg in &t.get(ast).segs {
-            if on_name(seg.name_span, pos) {
-                return Some((seg.name, seg.name_span));
+            if on_name(seg.name.span, pos) {
+                return Some((seg.name.ident, seg.name.span));
             }
         }
         return None;
@@ -270,7 +273,7 @@ fn name_at(ast: &rut_ast::Ast, h: AnyHandle, pos: u32) -> Option<(rut_ast::Ident
         ($t:ty) => {
             if let Some(d) = h.downcast::<$t>() {
                 let dd = d.get(ast);
-                return on_name(dd.name_span, pos).then_some((dd.name, dd.name_span));
+                return on_name(dd.name.span, pos).then_some((dd.name.ident, dd.name.span));
             }
         };
     }
@@ -300,19 +303,19 @@ fn member_position(ast: &rut_ast::Ast, h: AnyHandle, pos: u32) -> bool {
     if let Some(m) = h.downcast::<rut_ast::MethodNode>() {
         let d = m.get(ast);
         return d
-            .member()
-            .is_some_and(|(_, nsp)| nsp.lo <= pos && pos <= nsp.hi);
+            .member
+            .is_some_and(|n| n.span.lo <= pos && pos <= n.span.hi);
     }
     if let Some(f) = h.downcast::<rut_ast::FieldNode>() {
         let d = f.get(ast);
-        return d.name_span.lo <= pos && pos <= d.name_span.hi;
+        return d.name.span.lo <= pos && pos <= d.name.span.hi;
     }
     if let Some(p) = h.downcast::<PathNode>() {
         let segs = &p.get(ast).segs;
         if segs.len() >= 2 {
             if let Some(i) = segs
                 .iter()
-                .position(|s| s.name_span.lo <= pos && pos <= s.name_span.hi)
+                .position(|s| s.name.span.lo <= pos && pos <= s.name.span.hi)
             {
                 return i + 1 == segs.len();
             }
@@ -350,7 +353,7 @@ fn decl_site_hover(chain: &Chain<'_>, h: AnyHandle, pos: u32) -> Option<(String,
     let ast = d.doc.ast();
     if let Some(fh) = h.downcast::<FieldDeclNode>() {
         let fd = fh.get(ast);
-        if on_name(fd.name_span, pos) {
+        if on_name(fd.name.span, pos) {
             // the owning type: the decl's parent — a type body node
             let parent = ast.parent(h)?;
             let t = TyView { file: d, h: parent };
@@ -361,35 +364,35 @@ fn decl_site_hover(chain: &Chain<'_>, h: AnyHandle, pos: u32) -> Option<(String,
                     None,
                 ),
             };
-            return Some((md, fd.name_span));
+            return Some((md, fd.name.span));
         }
         return None;
     }
     if let Some(eh) = h.downcast::<EnumMemberNode>() {
         let ed = eh.get(ast);
-        if on_name(ed.name_span, pos) {
+        if on_name(ed.name.span, pos) {
             // `Color::Red`'s decl shows the enum, matching the use site
             let parent = ast.parent(h)?;
             let t = TyView { file: d, h: parent };
-            return Some((render_ty(&t), ed.name_span));
+            return Some((render_ty(&t), ed.name.span));
         }
         return None;
     }
     if let Some(lh) = h.downcast::<ModuleLetNode>() {
         let ld = lh.get(ast);
-        if on_name(ld.name_span, pos) {
+        if on_name(ld.name.span, pos) {
             let l = crate::world::collection::LetView { file: d, h };
-            return Some((render_let(&l), ld.name_span));
+            return Some((render_let(&l), ld.name.span));
         }
         return None;
     }
     if let Some(mh) = h.downcast::<ModDeclNode>() {
         let md_node = mh.get(ast);
-        if on_name(md_node.name_span, pos) {
+        if on_name(md_node.name.span, pos) {
             let m = ModView { file: d, h };
             let child = crate::world::mods::child_path(
                 crate::world::mods::mod_path_of(d),
-                ast.name(md_node.name),
+                ast.name(md_node.name.ident),
             );
             let mounted = mounted_child(chain, d, &child);
             return Some((
@@ -399,7 +402,7 @@ fn decl_site_hover(chain: &Chain<'_>, h: AnyHandle, pos: u32) -> Option<(String,
                     &crate::world::mods::display_of(chain, d.mount.module.as_deref(), &child),
                     mounted.map(|c| c.mods().len()),
                 ),
-                md_node.name_span,
+                md_node.name.span,
             ));
         }
     }
@@ -425,7 +428,7 @@ fn mounted_child<'a>(
 }
 
 /// a use-path SEGMENT hover: the cursor rides one of the use node's own
-/// path spans (the node's recorded `path_spans` — no sweep) — the
+/// path segs (the node's recorded `path` spans — no sweep) — the
 /// resolved module (walked through the pub edges; the pkg head answers
 /// the root module) renders kind + mounted file + child count.
 ///
@@ -446,10 +449,10 @@ fn use_segment_hover(
     let segs: Vec<String> = u_node
         .path
         .iter()
-        .map(|id| ast.name(*id).to_string())
+        .map(|n| ast.name(n.ident).to_string())
         .collect();
-    for (k, sp) in u_node.path_spans.iter().enumerate() {
-        if !on_name(*sp, pos) {
+    for (k, seg) in u_node.path.iter().enumerate() {
+        if !on_name(seg.span, pos) {
             continue;
         }
         let pkg = segs[0].clone();
@@ -472,7 +475,7 @@ fn use_segment_hover(
             } else {
                 crate::world::mods::find_mod(chain, doc.pkg.as_deref(), &path)?
             };
-            return Some((render_module_target(target, &path), *sp));
+            return Some((render_module_target(target, &path), seg.span));
         }
         let walked = if k == 0 {
             Some(String::new())
@@ -481,7 +484,7 @@ fn use_segment_hover(
         };
         let path = walked?;
         let target = crate::world::mods::find_mod(chain, Some(&pkg), &path)?;
-        return Some((render_module_target(target, &path), *sp));
+        return Some((render_module_target(target, &path), seg.span));
     }
     None
 }

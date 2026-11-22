@@ -78,7 +78,7 @@ fn param_names(ast: &Ast, params: &[ParamRef]) -> Vec<String> {
     params
         .iter()
         .filter_map(|p| match p {
-            ParamRef::Param(d) => Some(ast.name(d.get(ast).name).to_string()),
+            ParamRef::Param(d) => Some(ast.name(d.get(ast).name.ident).to_string()),
             _ => None, // `self` / `mut self`
         })
         .collect()

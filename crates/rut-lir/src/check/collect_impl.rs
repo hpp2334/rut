@@ -31,7 +31,7 @@ impl<'a> Ctx<'a> {
         let (target_ty, target_data, spell) = match target {
             TyRef::Path(h) if h.get(self.ast).segs.len() == 1 => {
                 let seg = &h.get(self.ast).segs[0];
-                let name = seg.name;
+                let name = seg.name.ident;
                 let generics = seg.generics.clone();
                 match self.ty_path_impl_target(sp, declared, name, generics) {
                     Some(arm) => arm,
@@ -51,7 +51,7 @@ impl<'a> Ctx<'a> {
             let MethodRef::Method(mh) = *m else {
                 continue;
             };
-            mths.push((mh.get(self.ast).name, mh));
+            mths.push((mh.get(self.ast).name.ident, mh));
         }
         // the placement law (phase 3): an inherent impl lives in the
         // type's module — literally, by path now. A flat package has
@@ -647,7 +647,7 @@ impl<'a> Ctx<'a> {
                 TyRef::Path(h) => {
                     let segs = &h.get(self.ast).segs;
                     if segs.len() == 1 && segs[0].generics.is_empty() {
-                        out.push(segs[0].name);
+                        out.push(segs[0].name.ident);
                     } else {
                         return None;
                     }

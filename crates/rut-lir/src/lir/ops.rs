@@ -319,7 +319,7 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                 // `p.x = 4`: the head must be a local; build the GetF chain,
                 // assign the last field
                 if segs[0].generics.is_empty() {
-                    if let Some(l) = self.lookup(segs[0].name).cloned() {
+                    if let Some(l) = self.lookup(segs[0].name.ident).cloned() {
                         // the chain head: a promoted binding loads its
                         // shared cell's value first (the capture law's
                         // accessor); an ordinary one chains off its
@@ -350,19 +350,20 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                                 self.ctx.err(sp, "field assignment through a non-record");
                                 return Err(());
                             };
-                            let Some(fidx) = fields.iter().position(|f| f.name == seg.name) else {
+                            let Some(fidx) = fields.iter().position(|f| f.name == seg.name.ident)
+                            else {
                                 self.ctx.err(
                                     sp,
                                     format!(
                                         "`{}` has no field `{}`",
                                         self.ctx.type_name(cur_ty),
-                                        self.ctx.name(seg.name)
+                                        self.ctx.name(seg.name.ident)
                                     ),
                                 );
                                 return Err(());
                             };
                             // the visibility law rides each GetF hop too
-                            if let Some(msg) = self.ctx.field_vis_err(cur_ty, seg.name) {
+                            if let Some(msg) = self.ctx.field_vis_err(cur_ty, seg.name.ident) {
                                 self.ctx.err(sp, msg);
                                 return Err(());
                             }
@@ -385,13 +386,14 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                             self.ctx.err(sp, "field assignment through a non-record");
                             return Err(());
                         };
-                        let Some(fidx) = fields.iter().position(|f| f.name == last.name) else {
+                        let Some(fidx) = fields.iter().position(|f| f.name == last.name.ident)
+                        else {
                             self.ctx.err(
                                 sp,
                                 format!(
                                     "`{}` has no field `{}`",
                                     self.ctx.type_name(cur_ty),
-                                    self.ctx.name(last.name)
+                                    self.ctx.name(last.name.ident)
                                 ),
                             );
                             return Err(());
@@ -399,7 +401,7 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                         // the final SetF target takes the dial: the WRITE
                         // is the visibility's test (the const law is the
                         // binding's own reassignment only)
-                        if let Some(msg) = self.ctx.field_vis_err(cur_ty, last.name) {
+                        if let Some(msg) = self.ctx.field_vis_err(cur_ty, last.name.ident) {
                             self.ctx.err(sp, msg);
                             return Err(());
                         }
@@ -459,7 +461,7 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                 self.ctx.err(sp, "invalid assignment target");
                 Err(())
             } else if segs.len() == 1 {
-                let name = segs[0].name;
+                let name = segs[0].name.ident;
                 let Some(l) = self.lookup(name).cloned() else {
                     if self.ctx.poisoned(name) {
                         return Err(()); // the failed `let` is already diagnosed
@@ -565,7 +567,7 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
         } else if let ExprRef::Field(fh) = target {
             let (recv, name) = {
                 let f = fh.get(self.ctx.ast);
-                (f.recv, f.name)
+                (f.recv, f.name.ident)
             };
             let rt = self.compile_expr(recv, None)?;
             let rreg = self.last_reg;

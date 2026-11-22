@@ -305,7 +305,7 @@ impl<'a> Ctx<'a> {
                     return self.resolve_qualified_ty(&segs, sp, env);
                 }
                 let seg = &segs[0];
-                let name = seg.name;
+                let name = seg.name.ident;
                 // generic param?
                 if seg.generics.is_empty() {
                     if let Some((_, t)) = env.iter().find(|(p, _)| *p == name) {
@@ -444,8 +444,7 @@ impl<'a> Ctx<'a> {
                     // the crossing predicate included)
                     if let Some(target) = self.own_use_target(name) {
                         let leaf = PathSeg {
-                            name,
-                            name_span: seg.name_span,
+                            name: seg.name,
                             generics: seg.generics.clone(),
                         };
                         let from = self.cur_mod.clone();
@@ -651,7 +650,7 @@ impl<'a> Ctx<'a> {
         sp: Span,
         env: &[(IdentId, TypeId)],
     ) -> TypeId {
-        let head = segs[0].name;
+        let head = segs[0].name.ident;
         if segs[..segs.len() - 1]
             .iter()
             .any(|s| !s.generics.is_empty())
@@ -688,10 +687,10 @@ impl<'a> Ctx<'a> {
         if self.used_pkgs.contains(self.name(head)) {
             let mut fix = String::new();
             for s in &segs[..segs.len() - 1] {
-                fix.push_str(self.name(s.name));
+                fix.push_str(self.name(s.name.ident));
                 fix.push_str("::");
             }
-            let leaf = self.name(segs.last().expect("path has segments").name);
+            let leaf = self.name(segs.last().expect("path has segments").name.ident);
             self.err(
                 sp,
                 format!(
@@ -719,7 +718,7 @@ impl<'a> Ctx<'a> {
         sp: Span,
         env: &[(IdentId, TypeId)],
     ) -> TypeId {
-        let name = leaf.name;
+        let name = leaf.name.ident;
         let generics = &leaf.generics;
         // the decl must live in `m` — else the leaf-not-found error
         // naming the module (and where the name does live, if anywhere)

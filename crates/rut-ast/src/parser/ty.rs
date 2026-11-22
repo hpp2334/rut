@@ -157,8 +157,10 @@ impl TypeFrame {
             }
             if let TyStage::Path { segs, .. } = &mut self.stage {
                 segs.push(PathSeg {
-                    name: name.id,
-                    name_span: name.span,
+                    name: crate::Name {
+                        ident: name.id,
+                        span: name.span,
+                    },
                     generics: Vec::new(),
                 });
             }
@@ -237,8 +239,10 @@ impl TypeFrame {
         self.stage = TyStage::Path { segs };
         if let TyStage::Path { segs, .. } = &mut self.stage {
             segs.push(PathSeg {
-                name: seg_name.id,
-                name_span: seg_name.span,
+                name: crate::Name {
+                    ident: seg_name.id,
+                    span: seg_name.span,
+                },
                 generics: args,
             });
         }
@@ -267,8 +271,7 @@ impl TypeFrame {
         TyPathNode {
             span,
             segs: vec![PathSeg {
-                name: nil,
-                name_span: span,
+                name: crate::Name { ident: nil, span },
                 generics: Vec::new(),
             }],
         }

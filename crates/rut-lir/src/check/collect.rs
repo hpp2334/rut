@@ -33,18 +33,18 @@ impl<'a> Ctx<'a> {
             let sp = it.span(self.ast);
             let head = path
                 .first()
-                .map(|&h| self.name(h).to_string())
+                .map(|h| self.name(h.ident).to_string())
                 .unwrap_or_default();
             for n in &names {
-                let key = (self.cur_mod.clone(), *n);
+                let key = (self.cur_mod.clone(), n.ident);
                 if let Some((prev_head, _)) = self.use_first_spell.get(&key) {
                     self.err(
                         sp,
                         format!(
                             "duplicate name `{}` — `use {}::{{ {} }}` ({}) already binds it in this file",
-                            self.name(*n),
+                            self.name(n.ident),
                             prev_head,
-                            self.name(*n),
+                            self.name(n.ident),
                             ModInputs::display(&self.cur_mod),
                         ),
                     );
@@ -58,8 +58,8 @@ impl<'a> Ctx<'a> {
             // (a flat package records one module, `""`, and gates
             // exactly as before).
             for n in &names {
-                self.used.insert(*n);
-                let sites = self.use_sites.entry(*n).or_default();
+                self.used.insert(n.ident);
+                let sites = self.use_sites.entry(n.ident).or_default();
                 if !sites.contains(&self.cur_mod) {
                     sites.push(self.cur_mod.clone());
                 }
@@ -73,7 +73,7 @@ impl<'a> Ctx<'a> {
                         sp,
                         format!(
                             "module loading is not available in this build — cannot use `{}`",
-                            self.name(*n)
+                            self.name(n.ident)
                         ),
                     );
                 }
@@ -93,11 +93,11 @@ impl<'a> Ctx<'a> {
                         .members
                         .iter()
                         .filter_map(|m| match m {
-                            MemberRef::Member(mh) => Some(mh.get(self.ast).name),
+                            MemberRef::Member(mh) => Some(mh.get(self.ast).name.ident),
                             MemberRef::Error(_) => None,
                         })
                         .collect();
-                    self.collect_enum(*it, d.vis(), d.name, &members)
+                    self.collect_enum(*it, d.vis(), d.name.ident, &members)
                 }
                 ItemRef::Struct(h) => {
                     let d = h.get(self.ast).clone();
@@ -105,7 +105,7 @@ impl<'a> Ctx<'a> {
                         *it,
                         DataKind::Struct,
                         d.vis(),
-                        d.name,
+                        d.name.ident,
                         &d.generics,
                         &[],
                         &d.methods,
@@ -117,7 +117,7 @@ impl<'a> Ctx<'a> {
                         *it,
                         DataKind::Class,
                         d.vis(),
-                        d.name,
+                        d.name.ident,
                         &d.generics,
                         &d.requires,
                         &d.methods,
@@ -125,7 +125,7 @@ impl<'a> Ctx<'a> {
                 }
                 ItemRef::Interface(h) => {
                     let d = h.get(self.ast).clone();
-                    self.declare_iface(*it, d.vis(), d.name, &d.generics, &d.methods)
+                    self.declare_iface(*it, d.vis(), d.name.ident, &d.generics, &d.methods)
                 }
                 ItemRef::Alias(h) => self.declare_alias(*it, h.get(self.ast)),
                 _ => {}
@@ -139,7 +139,7 @@ impl<'a> Ctx<'a> {
         for it in &items {
             if let ItemRef::Alias(h) = *it {
                 self.cur_mod = self.mod_of(it.span(self.ast)).to_string();
-                self.validate_alias(h.get(self.ast).name);
+                self.validate_alias(h.get(self.ast).name.ident);
             }
         }
         for it in &items {
@@ -147,11 +147,11 @@ impl<'a> Ctx<'a> {
             let data_decl: Option<(IdentId, Vec<FieldRef>)> = match *it {
                 ItemRef::Struct(h) => {
                     let d = h.get(self.ast);
-                    Some((d.name, d.fields.clone()))
+                    Some((d.name.ident, d.fields.clone()))
                 }
                 ItemRef::Class(h) => {
                     let d = h.get(self.ast);
-                    Some((d.name, d.fields.clone()))
+                    Some((d.name.ident, d.fields.clone()))
                 }
                 _ => None,
             };
@@ -174,7 +174,7 @@ impl<'a> Ctx<'a> {
             if let ItemRef::Interface(h) = *it {
                 let (name, methods) = {
                     let d = h.get(self.ast);
-                    (d.name, d.methods.clone())
+                    (d.name.ident, d.methods.clone())
                 };
                 self.resolve_iface_sigs(*it, name, &methods)
             }
@@ -194,36 +194,36 @@ impl<'a> Ctx<'a> {
                 ItemRef::Fn(fh) => {
                     let f = fh.get(self.ast).clone();
                     let is_pub = f.vis() == Vis::Pub;
-                    if self.fn_index.contains(&f.name) {
-                        let msg = match self.fn_nodes.iter().find(|(n, _)| *n == f.name) {
+                    if self.fn_index.contains(&f.name.ident) {
+                        let msg = match self.fn_nodes.iter().find(|(n, _)| *n == f.name.ident) {
                             Some((_, node)) if self.mod_of(node.span(self.ast)) != self.cur_mod => {
                                 let home = self.mod_of(node.span(self.ast)).to_string();
                                 format!(
                                     "duplicate fn `{}` — already declared in module `{}` ({})",
-                                    self.name(f.name),
+                                    self.name(f.name.ident),
                                     home,
                                     ModInputs::display(&home)
                                 )
                             }
-                            _ => format!("duplicate fn `{}`", self.name(f.name)),
+                            _ => format!("duplicate fn `{}`", self.name(f.name.ident)),
                         };
                         self.err(it.span(self.ast), msg);
                     }
-                    self.fn_index.push(f.name);
-                    self.fn_nodes.push((f.name, fh));
+                    self.fn_index.push(f.name.ident);
+                    self.fn_nodes.push((f.name.ident, fh));
                     // `entry fn` — the host-callable surface;
                     // signature checked against the crossing rule below
                     if f.entry() {
-                        self.entries.push(f.name);
+                        self.entries.push(f.name.ident);
                     }
                     if is_pub {
                         // name recorded; the func id binds at finalize
-                        self.exports.push((f.name, u32::MAX));
+                        self.exports.push((f.name.ident, u32::MAX));
                     }
                 }
                 ItemRef::ModuleLet(h) => {
                     let d = h.get(self.ast);
-                    self.lets.push((d.name, d.ty, d.init, d.vis()));
+                    self.lets.push((d.name.ident, d.ty, d.init, d.vis()));
                 }
                 _ => {}
             }
@@ -313,7 +313,7 @@ impl<'a> Ctx<'a> {
             let MethodRef::Method(mh) = *m else {
                 continue;
             };
-            mths.push((mh.get(self.ast).name, mh));
+            mths.push((mh.get(self.ast).name.ident, mh));
         }
         self.datas.push((
             name,
@@ -356,7 +356,7 @@ impl<'a> Ctx<'a> {
             let fd = fh.get(self.ast);
             let fty = self.resolve_type(fd.ty, &env);
             resolved.push(FieldInfo {
-                name: fd.name,
+                name: fd.name.ident,
                 ty: fty,
             });
         }
@@ -385,7 +385,7 @@ impl<'a> Ctx<'a> {
             }
             let fty = self.resolve_type(fd.ty, &[]);
             resolved.push(FieldInfo {
-                name: fd.name,
+                name: fd.name.ident,
                 ty: fty,
             });
         }
@@ -405,10 +405,10 @@ impl<'a> Ctx<'a> {
             let fd = fh.get(self.ast);
             let fty = resolved
                 .iter()
-                .find(|x| x.name == fd.name)
+                .find(|x| x.name == fd.name.ident)
                 .map(|x| x.ty)
                 .unwrap_or(TY_I32);
-            flds.push((fd.name, fty, fd.init, fd.vis()));
+            flds.push((fd.name.ident, fty, fd.init, fd.vis()));
         }
         self.datas[idx].1.fields = flds;
     }
@@ -423,16 +423,16 @@ impl<'a> Ctx<'a> {
     pub(crate) fn declare_alias(&mut self, node: ItemRef, h: &AliasNode) {
         let d = h;
         let sp = node.span(self.ast);
-        if self.find_alias(d.name).is_some()
-            || self.find_data(d.name).is_some()
-            || self.find_enum(d.name).is_some()
-            || self.find_iface(d.name).is_some()
+        if self.find_alias(d.name.ident).is_some()
+            || self.find_data(d.name.ident).is_some()
+            || self.find_enum(d.name.ident).is_some()
+            || self.find_iface(d.name.ident).is_some()
         {
-            self.err(sp, self.dup_type_msg(d.name));
+            self.err(sp, self.dup_type_msg(d.name.ident));
             return;
         }
         self.aliases.push(AliasDecl {
-            name: d.name,
+            name: d.name.ident,
             node,
             target: d.target,
             resolved: None,
@@ -520,7 +520,7 @@ impl<'a> Ctx<'a> {
                 }
             }
             let rty = md.ret.map(|r| self.resolve_iface_sig_ty(r, id, &[]));
-            tms.push((md.name, ptys, rty));
+            tms.push((md.name.ident, ptys, rty));
         }
         // trait methods take `self` — except engine-contract
         // members, which may spell plain parameters only (`fn yield(cx: ..)`).
@@ -623,7 +623,7 @@ impl<'a> Ctx<'a> {
             }
             let rty = md.ret.map(|r| self.resolve_iface_sig_ty(r, id, &subst));
             desc.methods.push(rut_core::binary::IfaceMethod {
-                name: md.name,
+                name: md.name.ident,
                 params: ptys,
                 ret: rty.unwrap_or(TY_NIL),
             });
@@ -737,7 +737,7 @@ impl<'a> Ctx<'a> {
             }
             let fty = self.resolve_type(fd.ty, &env);
             resolved.push(FieldInfo {
-                name: fd.name,
+                name: fd.name.ident,
                 ty: fty,
             });
         }

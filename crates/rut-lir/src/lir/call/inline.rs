@@ -41,7 +41,7 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
             None => vec![],
         };
         let md = mnode.get(self.ctx.ast).clone();
-        let (params, ret, mname) = (md.params, md.ret, md.name);
+        let (params, ret, mname) = (md.params, md.ret, md.name.ident);
         // the method's own generics: explicit site arguments first
         let decl_generics: Vec<IdentId> = md.generics.clone();
         if generics.len() > decl_generics.len() {
@@ -389,7 +389,7 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
             };
             let (pname, ty) = {
                 let n = ph.get(self.ctx.ast);
-                (n.name, n.ty)
+                (n.name.ident, n.ty)
             };
             self.locals.push(Local {
                 name: pname,

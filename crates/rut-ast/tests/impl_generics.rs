@@ -30,7 +30,7 @@ impl<T> Vec2<T> {
     let TyRef::Path(t) = d.target else {
         panic!("expected a path target, got {:?}", d.target);
     };
-    assert_eq!(ast.name(t.get(ast).segs[0].name), "Vec2");
+    assert_eq!(ast.name(t.get(ast).segs[0].name.ident), "Vec2");
 }
 
 #[test]

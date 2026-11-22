@@ -31,7 +31,7 @@ impl<'a> MemberView<'a> {
         macro_rules! nm {
             ($t:ty) => {
                 if let Some(d) = self.h.downcast::<$t>() {
-                    return ast.name(d.get(ast).name);
+                    return ast.name(d.get(ast).name.ident);
                 }
             };
         }
@@ -94,8 +94,8 @@ impl<'a> MemberView<'a> {
         let ast = self.ast();
         if let Some(d) = self.h.downcast::<FieldDeclNode>() {
             let d = d.get(ast);
-            return Some(if d.name_span.hi > d.name_span.lo {
-                d.name_span
+            return Some(if d.name.span.hi > d.name.span.lo {
+                d.name.span
             } else {
                 d.span
             });
@@ -103,7 +103,7 @@ impl<'a> MemberView<'a> {
         macro_rules! ns {
             ($t:ty) => {
                 if let Some(d) = self.h.downcast::<$t>() {
-                    return Some(d.get(ast).name_span);
+                    return Some(d.get(ast).name.span);
                 }
             };
         }

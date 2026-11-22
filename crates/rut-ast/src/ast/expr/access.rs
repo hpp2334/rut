@@ -8,7 +8,7 @@
 
 use crate::ast::expr::ExprRef;
 use crate::slot_alloc;
-use rut_core::IdentId;
+use crate::Name;
 use rut_lexer::span::Span;
 
 #[derive(Clone, Debug)]
@@ -21,21 +21,13 @@ pub struct CallNode {
     pub rparen: Option<Span>,
 }
 
-/// one member ident — the name and its own token span (`.`name`, or
-/// the tuple-index token spelled `.0`)
-#[derive(Clone, Copy, Debug)]
-pub struct MemberIdent {
-    pub name: IdentId,
-    pub name_span: Span,
-}
-
 #[derive(Clone, Debug)]
 pub struct MethodNode {
     pub span: Span,
     pub recv: ExprRef,
     /// the member — `None` for the incomplete shape (`recv.` at the
     /// typing edge: the member is being typed)
-    pub member: Option<MemberIdent>,
+    pub member: Option<Name>,
     pub generics: Vec<crate::ast::ty::TyRef>,
     pub args: Vec<ExprRef>,
     /// the `)`'s own span — `None` while the call stays unclosed (the
@@ -43,21 +35,13 @@ pub struct MethodNode {
     pub rparen: Option<Span>,
 }
 
-impl MethodNode {
-    /// the member's name + its own span, when present
-    pub fn member(&self) -> Option<(IdentId, Span)> {
-        self.member.as_ref().map(|m| (m.name, m.name_span))
-    }
-}
-
 #[derive(Clone, Debug)]
 pub struct FieldNode {
     pub span: Span,
     pub recv: ExprRef,
-    pub name: IdentId,
-    /// the member ident token's span (`.name` — or the tuple-index
-    /// token's, spelled `.0`)
-    pub name_span: Span,
+    /// the member ident (`.name` — or the tuple-index token, spelled
+    /// `.0`) and its own span
+    pub name: Name,
 }
 
 #[derive(Clone, Debug)]

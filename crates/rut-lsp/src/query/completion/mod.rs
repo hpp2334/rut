@@ -197,7 +197,7 @@ pub fn complete(
             if let ExprRef::Path(ph) = recv {
                 let segs = &ph.get(ast).segs;
                 if segs.len() == 1 {
-                    let name = ast.name(segs[0].name).to_string();
+                    let name = ast.name(segs[0].name.ident).to_string();
                     if let Some(out) =
                         position_path_completions(chain, doc, std::slice::from_ref(&name))
                     {
@@ -274,7 +274,7 @@ fn ty_slot_prefix(
     if segs.len() != 1 {
         return None; // multi-seg: the qualified lane answers
     }
-    let sp = segs[0].name_span;
+    let sp = segs[0].name.span;
     on_name(sp, pos).then(|| partial_text(head, sp, pos))
 }
 
@@ -292,11 +292,11 @@ fn ty_slot_dot(head: &crate::world::collection::MountedFile, t: TyRef, pos: u32)
     let ast = head.doc.ast();
     let segs = &h.get(ast).segs;
     let last = segs.last()?;
-    if last.name_span.hi >= pos {
+    if last.name.span.hi >= pos {
         return None; // the cursor rides the slot itself — not a `.` run
     }
     let end = (pos as usize).min(head.doc.src().len());
-    let gap = head.doc.src()[last.name_span.hi as usize..end].trim_end();
+    let gap = head.doc.src()[last.name.span.hi as usize..end].trim_end();
     // the `::` spelling rides the same tier (the plan's letter)
     let after = if let Some(stripped) = gap.strip_suffix("::") {
         if !stripped.is_empty() {
@@ -312,8 +312,11 @@ fn ty_slot_dot(head: &crate::world::collection::MountedFile, t: TyRef, pos: u32)
         after
     };
     Some(Edge::TypeDot {
-        head: segs.iter().map(|s| ast.name(s.name).to_string()).collect(),
-        tail: last.name,
+        head: segs
+            .iter()
+            .map(|s| ast.name(s.name.ident).to_string())
+            .collect(),
+        tail: last.name.ident,
         prefix: after.to_string(),
     })
 }
@@ -353,28 +356,28 @@ fn bare_prefix_walk(
     let ast = head.doc.ast();
     if let Some(p) = p0.downcast::<PathNode>() {
         for s in &p.get(ast).segs {
-            if on_name(s.name_span, pos) {
-                return partial_text(head, s.name_span, pos);
+            if on_name(s.name.span, pos) {
+                return partial_text(head, s.name.span, pos);
             }
         }
     }
     if let Some(l) = p0.downcast::<rut_ast::LetStmtNode>() {
         let d = l.get(ast);
-        if on_name(d.name_span, pos) {
-            return partial_text(head, d.name_span, pos);
+        if on_name(d.name.span, pos) {
+            return partial_text(head, d.name.span, pos);
         }
         if let Some(ns) = &d.destructure {
-            for (_, sp) in ns {
-                if on_name(*sp, pos) {
-                    return partial_text(head, *sp, pos);
+            for n in ns {
+                if on_name(n.span, pos) {
+                    return partial_text(head, n.span, pos);
                 }
             }
         }
     }
     if let Some(p) = p0.downcast::<rut_ast::ParamNode>() {
         let d = p.get(ast);
-        if on_name(d.name_span, pos) {
-            return partial_text(head, d.name_span, pos);
+        if on_name(d.name.span, pos) {
+            return partial_text(head, d.name.span, pos);
         }
     }
     // the fence residue: the word under the byte before the cursor

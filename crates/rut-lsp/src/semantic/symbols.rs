@@ -87,9 +87,9 @@ fn item_symbol(ast: &Ast, item: ItemRef) -> Option<Symbol> {
         ItemRef::Fn(h) => {
             let d = h.get(ast);
             Some(sym(
-                ast.name(d.name),
+                ast.name(d.name.ident),
                 SymKind::Function,
-                Some(d.name_span),
+                Some(d.name.span),
                 vec![],
             ))
         }
@@ -102,7 +102,7 @@ fn item_symbol(ast: &Ast, item: ItemRef) -> Option<Symbol> {
         ItemRef::Use(h) => {
             let d = h.get(ast);
             Some(sym(
-                ast.name(d.path[0]),
+                ast.name(d.path[0].ident),
                 SymKind::Module,
                 Some(d.name_span),
                 vec![],
@@ -114,27 +114,27 @@ fn item_symbol(ast: &Ast, item: ItemRef) -> Option<Symbol> {
         ItemRef::ModDecl(h) => {
             let d = h.get(ast);
             Some(sym(
-                ast.name(d.name),
+                ast.name(d.name.ident),
                 SymKind::Module,
-                Some(d.name_span),
+                Some(d.name.span),
                 vec![],
             ))
         }
         ItemRef::Alias(h) => {
             let d = h.get(ast);
             Some(sym(
-                ast.name(d.name),
+                ast.name(d.name.ident),
                 SymKind::Class,
-                Some(d.name_span),
+                Some(d.name.span),
                 vec![],
             ))
         }
         ItemRef::ModuleLet(h) => {
             let d = h.get(ast);
             Some(sym(
-                ast.name(d.name),
+                ast.name(d.name.ident),
                 SymKind::Variable,
-                Some(d.name_span),
+                Some(d.name.span),
                 vec![],
             ))
         }
@@ -146,9 +146,9 @@ fn item_symbol(ast: &Ast, item: ItemRef) -> Option<Symbol> {
                 .filter_map(|m| member_symbol(ast, span, m))
                 .collect();
             Some(sym(
-                ast.name(d.name),
+                ast.name(d.name.ident),
                 SymKind::Enum,
-                Some(d.name_span),
+                Some(d.name.span),
                 children,
             ))
         }
@@ -156,9 +156,9 @@ fn item_symbol(ast: &Ast, item: ItemRef) -> Option<Symbol> {
             let d = h.get(ast);
             let children = member_symbols(ast, &d.fields, &d.methods);
             Some(sym(
-                ast.name(d.name),
+                ast.name(d.name.ident),
                 SymKind::Class,
-                Some(d.name_span),
+                Some(d.name.span),
                 children,
             ))
         }
@@ -166,9 +166,9 @@ fn item_symbol(ast: &Ast, item: ItemRef) -> Option<Symbol> {
             let d = h.get(ast);
             let children = member_symbols(ast, &d.fields, &d.methods);
             Some(sym(
-                ast.name(d.name),
+                ast.name(d.name.ident),
                 SymKind::Class,
-                Some(d.name_span),
+                Some(d.name.span),
                 children,
             ))
         }
@@ -176,9 +176,9 @@ fn item_symbol(ast: &Ast, item: ItemRef) -> Option<Symbol> {
             let d = h.get(ast);
             let children = method_symbols(ast, &d.methods);
             Some(sym(
-                ast.name(d.name),
+                ast.name(d.name.ident),
                 SymKind::Interface,
-                Some(d.name_span),
+                Some(d.name.span),
                 children,
             ))
         }
@@ -202,9 +202,9 @@ fn item_symbol(ast: &Ast, item: ItemRef) -> Option<Symbol> {
         ItemRef::SurfaceFn(h) => {
             let d = h.get(ast);
             Some(sym(
-                ast.name(d.name),
+                ast.name(d.name.ident),
                 SymKind::Function,
-                Some(d.name_span),
+                Some(d.name.span),
                 vec![],
             ))
         }
@@ -212,9 +212,9 @@ fn item_symbol(ast: &Ast, item: ItemRef) -> Option<Symbol> {
             let d = h.get(ast);
             let children = method_symbols(ast, &d.members);
             Some(sym(
-                ast.name(d.name),
+                ast.name(d.name.ident),
                 SymKind::Class,
-                Some(d.name_span),
+                Some(d.name.span),
                 children,
             ))
         }
@@ -222,9 +222,9 @@ fn item_symbol(ast: &Ast, item: ItemRef) -> Option<Symbol> {
             let d = h.get(ast);
             let children = method_symbols(ast, &d.members);
             Some(sym(
-                ast.name(d.name),
+                ast.name(d.name.ident),
                 SymKind::Class,
-                Some(d.name_span),
+                Some(d.name.span),
                 children,
             ))
         }
@@ -234,9 +234,9 @@ fn item_symbol(ast: &Ast, item: ItemRef) -> Option<Symbol> {
             let d = h.get(ast);
             let children = method_symbols(ast, &d.methods);
             Some(sym(
-                ast.name(d.prim),
+                ast.name(d.prim.ident),
                 SymKind::Class,
-                Some(d.name_span),
+                Some(d.prim.span),
                 children,
             ))
         }
@@ -244,9 +244,9 @@ fn item_symbol(ast: &Ast, item: ItemRef) -> Option<Symbol> {
             let d = h.get(ast);
             let children = field_symbols(ast, &d.fields);
             Some(sym(
-                ast.name(d.name),
+                ast.name(d.name.ident),
                 SymKind::Class,
-                Some(d.name_span),
+                Some(d.name.span),
                 children,
             ))
         }
@@ -267,10 +267,10 @@ fn member_symbol(ast: &Ast, enum_span: Span, m: &rut_ast::MemberRef) -> Option<S
         rut_ast::MemberRef::Error(_) => return None,
     };
     Some(Symbol::new(
-        ast.name(d.name).to_string(),
+        ast.name(d.name.ident).to_string(),
         SymKind::EnumMember,
         enum_span,
-        d.name_span,
+        d.name.span,
         vec![],
     ))
 }
@@ -292,13 +292,13 @@ fn field_symbols(ast: &Ast, fields: &[FieldRef]) -> Vec<Symbol> {
         // the recorded name ident is the honest selection — the
         // synthesized newtype's `inner` has no token (its recorded
         // span degenerates empty), the field's own extent stands in
-        let selection = if d.name_span.hi > d.name_span.lo {
-            d.name_span
+        let selection = if d.name.span.hi > d.name.span.lo {
+            d.name.span
         } else {
             d.span
         };
         out.push(Symbol::new(
-            ast.name(d.name).to_string(),
+            ast.name(d.name.ident).to_string(),
             SymKind::Field,
             d.span,
             selection,
@@ -316,10 +316,10 @@ fn method_symbols(ast: &Ast, methods: &[MethodRef]) -> Vec<Symbol> {
         };
         let d: &MethodDeclNode = h.get(ast);
         out.push(Symbol::new(
-            ast.name(d.name).to_string(),
+            ast.name(d.name.ident).to_string(),
             SymKind::Method,
             d.span,
-            d.name_span,
+            d.name.span,
             vec![],
         ));
     }
@@ -331,7 +331,7 @@ fn ty_text(ast: &Ast, t: TyRef) -> String {
     match t {
         TyRef::Path(h) => {
             let d = h.get(ast);
-            let names: Vec<&str> = d.segs.iter().map(|s| ast.name(s.name)).collect();
+            let names: Vec<&str> = d.segs.iter().map(|s| ast.name(s.name.ident)).collect();
             names.join(".")
         }
         TyRef::Self_(_) => "Self".to_string(),

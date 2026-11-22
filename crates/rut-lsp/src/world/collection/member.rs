@@ -131,19 +131,19 @@ impl<'a> Chain<'a> {
             // boundary convention: a name ends its own position) — or
             // the shape is the TYPING EDGE (absent member, `recv.`):
             // a member position with nothing resolved yet
-            return match d.member() {
+            return match d.member {
                 None => Some((None, RecvNode::Expr(d.recv))),
-                Some((name, nsp)) => {
-                    let on_member = nsp.lo <= pos && pos <= nsp.hi;
-                    on_member.then_some((Some(name), RecvNode::Expr(d.recv)))
+                Some(n) => {
+                    let on_member = n.span.lo <= pos && pos <= n.span.hi;
+                    on_member.then_some((Some(n.ident), RecvNode::Expr(d.recv)))
                 }
             };
         }
         if let Some(f) = node.downcast::<FieldNode>() {
             let d = f.get(ast);
-            let on_member = d.name_span.lo <= pos && pos <= d.name_span.hi;
+            let on_member = d.name.span.lo <= pos && pos <= d.name.span.hi;
             return if on_member {
-                Some((Some(d.name), RecvNode::Expr(d.recv)))
+                Some((Some(d.name.ident), RecvNode::Expr(d.recv)))
             } else {
                 None
             };
@@ -153,11 +153,14 @@ impl<'a> Chain<'a> {
             if segs.len() >= 2 {
                 if let Some(i) = segs
                     .iter()
-                    .position(|s| s.name_span.lo <= pos && pos <= s.name_span.hi)
+                    .position(|s| s.name.span.lo <= pos && pos <= s.name.span.hi)
                 {
                     if i + 1 == segs.len() {
                         // the tail segment IS the member lane
-                        return Some((Some(segs[i].name), RecvNode::Seg(segs[i - 1].name)));
+                        return Some((
+                            Some(segs[i].name.ident),
+                            RecvNode::Seg(segs[i - 1].name.ident),
+                        ));
                     }
                 }
             }
@@ -182,7 +185,7 @@ impl<'a> Chain<'a> {
                     if segs.len() != 1 {
                         return None;
                     }
-                    self.named_recv(pos, segs[0].name)
+                    self.named_recv(pos, segs[0].name.ident)
                 }
                 ExprRef::Lit(h) => match h.get(ast).lit {
                     // every string-literal form is a `str` receiver
@@ -366,7 +369,7 @@ pub(crate) fn used_ifaces(doc_head: &MountedFile) -> HashSet<String> {
             continue;
         };
         let d = u.get(ast);
-        out.extend(d.names.iter().map(|n| ast.name(*n).to_string()));
+        out.extend(d.names.iter().map(|n| ast.name(n.ident).to_string()));
     }
     out
 }

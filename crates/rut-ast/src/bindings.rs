@@ -198,8 +198,8 @@ impl Cx<'_> {
             let d = h.get(ast);
             let ty_span = d.ty.map(|t| t.span(ast));
             self.push(
-                d.name,
-                d.name_span,
+                d.name.ident,
+                d.name.span,
                 scope,
                 BindKind::Param,
                 false,
@@ -245,9 +245,9 @@ impl Cx<'_> {
                 let d = h.get(ast);
                 let body_span = self.scope_of(d.body.span(ast));
                 self.push(
-                    d.var,
-                    d.name_span,
-                    Span::new(d.name_span.lo, body_span.hi),
+                    d.var.ident,
+                    d.var.span,
+                    Span::new(d.var.span.lo, body_span.hi),
                     BindKind::IterVar,
                     d.is_const,
                     None,
@@ -264,9 +264,9 @@ impl Cx<'_> {
                 // through an end-of-buffer truncation, `scope_of`)
                 let scope = self.scope_of(d.span);
                 self.push(
-                    d.var,
-                    d.name_span,
-                    Span::new(d.name_span.lo, scope.hi),
+                    d.var.ident,
+                    d.var.span,
+                    Span::new(d.var.span.lo, scope.hi),
                     BindKind::IterVar,
                     false,
                     None,
@@ -326,15 +326,15 @@ impl Cx<'_> {
             (_, Some(t)) => vec![Some(t.span(ast)); n_names],
             _ => vec![None; n_names],
         };
-        let names: &[(IdentId, Span)] = match &d.destructure {
+        let names: &[crate::Name] = match &d.destructure {
             Some(ns) => ns,
-            None => &[(d.name, d.name_span)],
+            None => &[d.name],
         };
-        for (i, (n, decl)) in names.iter().enumerate() {
+        for (i, decl) in names.iter().enumerate() {
             self.push(
-                *n,
-                *decl,
-                Span::new(decl.lo, block.hi),
+                decl.ident,
+                decl.span,
+                Span::new(decl.span.lo, block.hi),
                 BindKind::Let,
                 d.is_const,
                 anns.get(i).copied().flatten(),

@@ -88,7 +88,7 @@ pub fn signature_help(ctx: &Ctx, pos: u32) -> Option<SignatureHelp> {
     let (fndef, params, fndef_doc, args, is_method) = if let Some(m) = call.downcast::<MethodNode>()
     {
         let md = m.get(ast);
-        let (name, _) = md.member()?;
+        let name = md.member?.ident;
         // the receiver must be ONE plain identifier (`c`, `Circle`) —
         // a chained receiver (`c.grown(2).grown(`) or a complex one is
         // an honest miss (the known-receiver law the tests pin); `self`
@@ -96,7 +96,7 @@ pub fn signature_help(ctx: &Ctx, pos: u32) -> Option<SignatureHelp> {
         let recv_id = match md.recv {
             ExprRef::Path(ph) => {
                 let segs = &ph.get(ast).segs;
-                (segs.len() == 1).then(|| segs[0].name)
+                (segs.len() == 1).then(|| segs[0].name.ident)
             }
             _ => None,
         }?;
@@ -116,7 +116,7 @@ pub fn signature_help(ctx: &Ctx, pos: u32) -> Option<SignatureHelp> {
         let callee_id = match cd.callee {
             ExprRef::Path(ph) => {
                 let segs = &ph.get(ast).segs;
-                (segs.len() == 1).then(|| segs[0].name)
+                (segs.len() == 1).then(|| segs[0].name.ident)
             }
             _ => None,
         }?;
@@ -205,10 +205,10 @@ fn signature_help_at_decl(ctx: &Ctx, probe: rut_ast::AnyHandle, pos: u32) -> Opt
         // comes from the chain
         let (name, nsp, param_spans, is_method) = if let Some(f) = a.downcast::<rut_ast::FnNode>() {
             let fd = f.get(ast);
-            (fd.name, fd.name_span, fd.params.clone(), false)
+            (fd.name.ident, fd.name.span, fd.params.clone(), false)
         } else if let Some(m) = a.downcast::<rut_ast::MethodDeclNode>() {
             let md = m.get(ast);
-            (md.name, md.name_span, md.params.clone(), true)
+            (md.name.ident, md.name.span, md.params.clone(), true)
         } else {
             continue;
         };
@@ -232,7 +232,7 @@ fn signature_help_at_decl(ctx: &Ctx, probe: rut_ast::AnyHandle, pos: u32) -> Opt
                     ));
                 }
                 p.downcast::<rut_ast::InterfaceNode>()
-                    .map(|t| ast.name(t.get(ast).name).to_string())
+                    .map(|t| ast.name(t.get(ast).name.ident).to_string())
             })?;
             (ctx.chain.impl_method_fn(&owner, name_text)?, true)
         } else {
@@ -294,13 +294,13 @@ fn is_call_at(h: &rut_ast::AnyHandle, ast: &rut_ast::Ast, pos: u32) -> bool {
                 .get(ast)
                 .segs
                 .iter()
-                .any(|s| s.name_span.lo <= pos && pos <= s.name_span.hi),
+                .any(|s| s.name.span.lo <= pos && pos <= s.name.span.hi),
             _ => false,
         }
     } else if let Some(m) = h.downcast::<MethodNode>() {
         m.get(ast)
-            .member()
-            .is_some_and(|(_, nsp)| nsp.lo <= pos && pos <= nsp.hi)
+            .member
+            .is_some_and(|n| n.span.lo <= pos && pos <= n.span.hi)
     } else {
         return false;
     };

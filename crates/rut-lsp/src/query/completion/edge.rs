@@ -72,8 +72,8 @@ pub(super) fn typing_edge(chain: &Chain, pos: u32, src: &str) -> Edge {
     if let Some(m) = p0.downcast::<MethodNode>() {
         let d = m.get(ast);
         let prefix = d
-            .member()
-            .map(|(_, nsp)| partial_text(head, nsp, pos))
+            .member
+            .map(|n| partial_text(head, n.span, pos))
             .unwrap_or_default();
         return Edge::Member {
             node: p0,
@@ -86,7 +86,7 @@ pub(super) fn typing_edge(chain: &Chain, pos: u32, src: &str) -> Edge {
         return Edge::Member {
             node: p0,
             recv: d.recv,
-            prefix: partial_text(head, d.name_span, pos),
+            prefix: partial_text(head, d.name.span, pos),
         };
     }
     // the qualified lane — a `::` path whose TAIL segment the cursor
@@ -95,14 +95,14 @@ pub(super) fn typing_edge(chain: &Chain, pos: u32, src: &str) -> Edge {
     if let Some(p) = p0.downcast::<PathNode>() {
         let segs = &p.get(ast).segs;
         if segs.len() >= 2 {
-            if let Some(i) = segs.iter().position(|s| on_name(s.name_span, pos)) {
+            if let Some(i) = segs.iter().position(|s| on_name(s.name.span, pos)) {
                 if i + 1 == segs.len() {
                     return Edge::Qualified {
                         segs: segs[..i]
                             .iter()
-                            .map(|s| ast.name(s.name).to_string())
+                            .map(|s| ast.name(s.name.ident).to_string())
                             .collect(),
-                        prefix: partial_text(head, segs[i].name_span, pos),
+                        prefix: partial_text(head, segs[i].name.span, pos),
                     };
                 }
             }
@@ -112,9 +112,12 @@ pub(super) fn typing_edge(chain: &Chain, pos: u32, src: &str) -> Edge {
         // prefix empty. (A cursor ON the name's end is the bare
         // typing edge, not a `::` request.)
         if let Some(last) = segs.last() {
-            if last.name_span.hi < pos {
+            if last.name.span.hi < pos {
                 return Edge::Qualified {
-                    segs: segs.iter().map(|s| ast.name(s.name).to_string()).collect(),
+                    segs: segs
+                        .iter()
+                        .map(|s| ast.name(s.name.ident).to_string())
+                        .collect(),
                     prefix: String::new(),
                 };
             }
@@ -137,7 +140,7 @@ pub(super) fn typing_edge(chain: &Chain, pos: u32, src: &str) -> Edge {
                 if let Some(e) = ty_slot_dot(head, t, pos) {
                     return e;
                 }
-            } else if gap_spells(head, d.name_span.hi, pos, ':') {
+            } else if gap_spells(head, d.name.span.hi, pos, ':') {
                 return Edge::Annotation {
                     prefix: String::new(),
                 };
@@ -149,10 +152,10 @@ pub(super) fn typing_edge(chain: &Chain, pos: u32, src: &str) -> Edge {
         let slots = [
             a.downcast::<rut_ast::ParamNode>().map(|h| {
                 let d = h.get(ast);
-                (d.name_span, d.ty)
+                (d.name.span, d.ty)
             }),
             a.downcast::<rut_ast::FieldDeclNode>()
-                .map(|h| (h.get(ast).name_span, Some(h.get(ast).ty))),
+                .map(|h| (h.get(ast).name.span, Some(h.get(ast).ty))),
         ];
         for (name_span, ty) in slots.into_iter().flatten() {
             if let Some(t) = ty {
@@ -183,13 +186,13 @@ pub(super) fn typing_edge(chain: &Chain, pos: u32, src: &str) -> Edge {
                 d.params
                     .last()
                     .map(|p| p.span(ast).hi)
-                    .unwrap_or(d.name_span.hi)
+                    .unwrap_or(d.name.span.hi)
             } else {
                 let d = fh.downcast::<rut_ast::SurfaceFnNode>()?.get(ast);
                 d.params
                     .last()
                     .map(|p| p.span(ast).hi)
-                    .unwrap_or(d.name_span.hi)
+                    .unwrap_or(d.name.span.hi)
             };
             if let Some(t) = ret {
                 if let Some(prefix) = ty_slot_prefix(head, t, pos) {
@@ -241,37 +244,27 @@ fn use_edge(
     // leave later tokens in the path — the statement's recovery — and
     // they are not the walk)
     let ridden = u
-        .path_spans
+        .path
         .iter()
-        .position(|sp| sp.lo <= pos && pos <= sp.hi);
+        .position(|n| n.span.lo <= pos && pos <= n.span.hi);
     let before: Vec<String> = match ridden {
         Some(k) => u.path[..k]
             .iter()
-            .map(|id| ast.name(*id).to_string())
+            .map(|n| ast.name(n.ident).to_string())
             .collect(),
         None => u
             .path
             .iter()
-            .zip(&u.path_spans)
-            .filter(|(_, sp)| sp.hi <= pos)
-            .map(|(id, _)| ast.name(*id).to_string())
+            .filter(|n| n.span.hi <= pos)
+            .map(|n| ast.name(n.ident).to_string())
             .collect(),
     };
-    for sp in &u.path_spans {
-        if on_name(*sp, pos) {
+    for n in u.path.iter().chain(&u.names) {
+        if on_name(n.span, pos) {
             return Edge::Use {
                 node,
                 segs: before,
-                prefix: partial_text(head, *sp, pos),
-            };
-        }
-    }
-    for sp in &u.name_spans {
-        if on_name(*sp, pos) {
-            return Edge::Use {
-                node,
-                segs: before,
-                prefix: partial_text(head, *sp, pos),
+                prefix: partial_text(head, n.span, pos),
             };
         }
     }

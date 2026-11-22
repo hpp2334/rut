@@ -114,8 +114,8 @@ enum PrintVal {
 fn segs_dump(a: &Ast, segs: &[PathSeg], next: &mut u32) -> Vec<PrintSeg> {
     segs.iter()
         .map(|s| PrintSeg {
-            name: a.name(s.name).to_string(),
-            span: (s.name_span.lo, s.name_span.hi),
+            name: a.name(s.name.ident).to_string(),
+            span: (s.name.span.lo, s.name.span.hi),
             generics: s.generics.iter().map(|&g| ty_dump(a, g, next)).collect(),
         })
         .collect()
@@ -169,7 +169,10 @@ fn item_dump(a: &Ast, r: ItemRef, next: &mut u32) -> PrintNode {
         ItemRef::ModDecl(h) => {
             let d = h.get(a);
             fields.push(field("vis", PrintVal::Vis(d.vis())));
-            fields.push(field("name", PrintVal::Str(a.name(d.name).to_string())));
+            fields.push(field(
+                "name",
+                PrintVal::Str(a.name(d.name.ident).to_string()),
+            ));
             <ModDeclNode as NodeKind>::NAME
         }
         ItemRef::Use(h) => {
@@ -177,18 +180,26 @@ fn item_dump(a: &Ast, r: ItemRef, next: &mut u32) -> PrintNode {
             fields.push(field("vis", PrintVal::Vis(d.vis())));
             fields.push(field(
                 "path",
-                PrintVal::Idents(d.path.iter().map(|&x| a.name(x).to_string()).collect()),
+                PrintVal::Idents(d.path.iter().map(|n| a.name(n.ident).to_string()).collect()),
             ));
             fields.push(field(
                 "names",
-                PrintVal::Idents(d.names.iter().map(|&x| a.name(x).to_string()).collect()),
+                PrintVal::Idents(
+                    d.names
+                        .iter()
+                        .map(|n| a.name(n.ident).to_string())
+                        .collect(),
+                ),
             ));
             <UseNode as NodeKind>::NAME
         }
         ItemRef::Alias(h) => {
             let d: &AliasNode = h.get(a);
             fields.push(field("vis", PrintVal::Vis(d.vis())));
-            fields.push(field("name", PrintVal::Str(a.name(d.name).to_string())));
+            fields.push(field(
+                "name",
+                PrintVal::Str(a.name(d.name.ident).to_string()),
+            ));
             fields.push(field(
                 "target",
                 PrintVal::Node(Box::new(ty_dump(a, d.target, next))),
@@ -198,7 +209,10 @@ fn item_dump(a: &Ast, r: ItemRef, next: &mut u32) -> PrintNode {
         ItemRef::ModuleLet(h) => {
             let d: &ModuleLetNode = h.get(a);
             fields.push(field("vis", PrintVal::Vis(d.vis())));
-            fields.push(field("name", PrintVal::Str(a.name(d.name).to_string())));
+            fields.push(field(
+                "name",
+                PrintVal::Str(a.name(d.name.ident).to_string()),
+            ));
             if let Some(t) = d.ty {
                 fields.push(field("ty", PrintVal::Node(Box::new(ty_dump(a, t, next)))));
             }
@@ -211,7 +225,10 @@ fn item_dump(a: &Ast, r: ItemRef, next: &mut u32) -> PrintNode {
         ItemRef::Enum(h) => {
             let d: &EnumNode = h.get(a);
             fields.push(field("vis", PrintVal::Vis(d.vis())));
-            fields.push(field("name", PrintVal::Str(a.name(d.name).to_string())));
+            fields.push(field(
+                "name",
+                PrintVal::Str(a.name(d.name.ident).to_string()),
+            ));
             fields.push(field(
                 "body",
                 PrintVal::Span(d.body_span.lo, d.body_span.hi),
@@ -223,7 +240,7 @@ fn item_dump(a: &Ast, r: ItemRef, next: &mut u32) -> PrintNode {
                         .iter()
                         .map(|m| match m {
                             MemberRef::Member(mh) => PrintMember {
-                                ident: a.name(mh.get(a).name).to_string(),
+                                ident: a.name(mh.get(a).name.ident).to_string(),
                             },
                             MemberRef::Error(_) => PrintMember {
                                 ident: "<error>".to_string(),
@@ -241,7 +258,7 @@ fn item_dump(a: &Ast, r: ItemRef, next: &mut u32) -> PrintNode {
                 &mut fields,
                 (d.body_span.lo, d.body_span.hi),
                 d.vis(),
-                d.name,
+                d.name.ident,
                 &d.generics,
                 &d.fields,
                 &d.methods,
@@ -256,7 +273,7 @@ fn item_dump(a: &Ast, r: ItemRef, next: &mut u32) -> PrintNode {
                 &mut fields,
                 (d.body_span.lo, d.body_span.hi),
                 d.vis(),
-                d.name,
+                d.name.ident,
                 &d.generics,
                 &d.fields,
                 &d.methods,
@@ -273,7 +290,10 @@ fn item_dump(a: &Ast, r: ItemRef, next: &mut u32) -> PrintNode {
         ItemRef::Interface(h) => {
             let d: &InterfaceNode = h.get(a);
             fields.push(field("vis", PrintVal::Vis(d.vis())));
-            fields.push(field("name", PrintVal::Str(a.name(d.name).to_string())));
+            fields.push(field(
+                "name",
+                PrintVal::Str(a.name(d.name.ident).to_string()),
+            ));
             fields.push(field(
                 "body",
                 PrintVal::Span(d.body_span.lo, d.body_span.hi),
@@ -314,7 +334,10 @@ fn item_dump(a: &Ast, r: ItemRef, next: &mut u32) -> PrintNode {
             if f.is_async() {
                 fields.push(field("async", PrintVal::Flag(true)));
             }
-            fields.push(field("name", PrintVal::Str(a.name(f.name).to_string())));
+            fields.push(field(
+                "name",
+                PrintVal::Str(a.name(f.name.ident).to_string()),
+            ));
             if !f.generics.is_empty() {
                 fields.push(field(
                     "generics",
@@ -353,7 +376,10 @@ fn item_dump(a: &Ast, r: ItemRef, next: &mut u32) -> PrintNode {
             if d.is_async() {
                 fields.push(field("is_async", PrintVal::Flag(true)));
             }
-            fields.push(field("name", PrintVal::Str(a.name(d.name).to_string())));
+            fields.push(field(
+                "name",
+                PrintVal::Str(a.name(d.name.ident).to_string()),
+            ));
             if !d.generics.is_empty() {
                 fields.push(field(
                     "generics",
@@ -372,7 +398,10 @@ fn item_dump(a: &Ast, r: ItemRef, next: &mut u32) -> PrintNode {
         ItemRef::SurfaceStruct(h) => {
             let d: &SurfaceStructNode = h.get(a);
             fields.push(field("vis", PrintVal::Vis(d.vis())));
-            fields.push(field("name", PrintVal::Str(a.name(d.name).to_string())));
+            fields.push(field(
+                "name",
+                PrintVal::Str(a.name(d.name.ident).to_string()),
+            ));
             fields.push(field(
                 "body",
                 PrintVal::Span(d.body_span.lo, d.body_span.hi),
@@ -397,7 +426,10 @@ fn item_dump(a: &Ast, r: ItemRef, next: &mut u32) -> PrintNode {
                     .to_string(),
                 ),
             ));
-            fields.push(field("name", PrintVal::Str(a.name(d.name).to_string())));
+            fields.push(field(
+                "name",
+                PrintVal::Str(a.name(d.name.ident).to_string()),
+            ));
             fields.push(field(
                 "body",
                 PrintVal::Span(d.body_span.lo, d.body_span.hi),
@@ -427,7 +459,10 @@ fn item_dump(a: &Ast, r: ItemRef, next: &mut u32) -> PrintNode {
                     .to_string(),
                 ),
             ));
-            fields.push(field("name", PrintVal::Str(a.name(d.name).to_string())));
+            fields.push(field(
+                "name",
+                PrintVal::Str(a.name(d.name.ident).to_string()),
+            ));
             fields.push(field(
                 "body",
                 PrintVal::Span(d.body_span.lo, d.body_span.hi),
@@ -440,7 +475,10 @@ fn item_dump(a: &Ast, r: ItemRef, next: &mut u32) -> PrintNode {
         }
         ItemRef::BuiltinImpl(h) => {
             let d: &BuiltinImplNode = h.get(a);
-            fields.push(field("prim", PrintVal::Str(a.name(d.prim).to_string())));
+            fields.push(field(
+                "prim",
+                PrintVal::Str(a.name(d.prim.ident).to_string()),
+            ));
             fields.push(field(
                 "methods",
                 PrintVal::Nodes(d.methods.iter().map(|m| method_dump(a, *m, next)).collect()),
@@ -511,7 +549,10 @@ fn field_decl_dump(a: &Ast, h: Handle<FieldDeclNode>, next: &mut u32) -> PrintNo
     if d.is_static() {
         fields.push(field("static", PrintVal::Flag(true)));
     }
-    fields.push(field("name", PrintVal::Str(a.name(d.name).to_string())));
+    fields.push(field(
+        "name",
+        PrintVal::Str(a.name(d.name.ident).to_string()),
+    ));
     fields.push(field(
         "ty",
         PrintVal::Node(Box::new(ty_dump(a, d.ty, next))),
@@ -549,7 +590,10 @@ fn method_decl_dump(a: &Ast, h: Handle<MethodDeclNode>, next: &mut u32) -> Print
     if let Some(m) = d.marker() {
         fields.push(field("marker", PrintVal::Str(a.name(m).to_string())));
     }
-    fields.push(field("name", PrintVal::Str(a.name(d.name).to_string())));
+    fields.push(field(
+        "name",
+        PrintVal::Str(a.name(d.name.ident).to_string()),
+    ));
     if !d.generics.is_empty() {
         fields.push(field(
             "generics",
@@ -585,7 +629,10 @@ fn param_dump(a: &Ast, r: ParamRef, next: &mut u32) -> PrintNode {
         ParamRef::Param(h) => {
             let d: &ParamNode = h.get(a);
             let mut fields = Vec::new();
-            fields.push(field("name", PrintVal::Str(a.name(d.name).to_string())));
+            fields.push(field(
+                "name",
+                PrintVal::Str(a.name(d.name.ident).to_string()),
+            ));
             if let Some(t) = d.ty {
                 fields.push(field("ty", PrintVal::Node(Box::new(ty_dump(a, t, next)))));
             }
@@ -641,14 +688,17 @@ fn stmt_dump(a: &Ast, r: StmtRef, next: &mut u32) -> PrintNode {
             if d.is_const {
                 fields.push(field("const", PrintVal::Flag(true)));
             }
-            fields.push(field("name", PrintVal::Str(a.name(d.name).to_string())));
+            fields.push(field(
+                "name",
+                PrintVal::Str(a.name(d.name.ident).to_string()),
+            ));
             if let Some(names) = &d.destructure {
                 fields.push(field(
                     "destructure",
                     PrintVal::Str(
                         names
                             .iter()
-                            .map(|(n, _)| a.name(*n).to_string())
+                            .map(|n| a.name(n.ident).to_string())
                             .collect::<Vec<_>>()
                             .join(", "),
                     ),
@@ -698,7 +748,7 @@ fn stmt_dump(a: &Ast, r: StmtRef, next: &mut u32) -> PrintNode {
             if d.is_const {
                 fields.push(field("const", PrintVal::Flag(true)));
             }
-            fields.push(field("var", PrintVal::Str(a.name(d.var).to_string())));
+            fields.push(field("var", PrintVal::Str(a.name(d.var.ident).to_string())));
             fields.push(field(
                 "iter",
                 PrintVal::Node(Box::new(expr_dump(a, d.iter, next))),
@@ -711,7 +761,7 @@ fn stmt_dump(a: &Ast, r: StmtRef, next: &mut u32) -> PrintNode {
         }
         StmtRef::ForC(h) => {
             let d: &ForCNode = h.get(a);
-            fields.push(field("var", PrintVal::Str(a.name(d.var).to_string())));
+            fields.push(field("var", PrintVal::Str(a.name(d.var.ident).to_string())));
             fields.push(field(
                 "init",
                 PrintVal::Node(Box::new(expr_dump(a, d.init, next))),
@@ -938,8 +988,8 @@ fn expr_dump(a: &Ast, r: ExprRef, next: &mut u32) -> PrintNode {
                 "recv",
                 PrintVal::Node(Box::new(expr_dump(a, d.recv, next))),
             ));
-            if let Some((name, _)) = d.member() {
-                fields.push(field("name", PrintVal::Str(a.name(name).to_string())));
+            if let Some(m) = d.member {
+                fields.push(field("name", PrintVal::Str(a.name(m.ident).to_string())));
             }
             if !d.generics.is_empty() {
                 fields.push(field(
@@ -959,7 +1009,10 @@ fn expr_dump(a: &Ast, r: ExprRef, next: &mut u32) -> PrintNode {
                 "recv",
                 PrintVal::Node(Box::new(expr_dump(a, d.recv, next))),
             ));
-            fields.push(field("name", PrintVal::Str(a.name(d.name).to_string())));
+            fields.push(field(
+                "name",
+                PrintVal::Str(a.name(d.name.ident).to_string()),
+            ));
             <FieldNode as NodeKind>::NAME
         }
         ExprRef::Index(h) => {
@@ -1054,8 +1107,8 @@ fn expr_dump(a: &Ast, r: ExprRef, next: &mut u32) -> PrintNode {
                     d.fields
                         .iter()
                         .map(|fi| PrintStructField {
-                            ident: a.name(fi.name).to_string(),
-                            span: (fi.name_span.lo, fi.name_span.hi),
+                            ident: a.name(fi.name.ident).to_string(),
+                            span: (fi.name.span.lo, fi.name.span.hi),
                             node: expr_dump(a, fi.value, next),
                         })
                         .collect(),
@@ -1572,7 +1625,10 @@ fn dead_node(next: &mut u32) -> PrintNode {
 /// ident strings inside `Enum`. Reachable only through `subtree`.
 fn enum_member_print(a: &Ast, h: Handle<EnumMemberNode>, next: &mut u32) -> PrintNode {
     let d = h.get(a);
-    let fields = vec![field("name", PrintVal::Str(a.name(d.name).to_string()))];
+    let fields = vec![field(
+        "name",
+        PrintVal::Str(a.name(d.name.ident).to_string()),
+    )];
     PrintNode {
         id: take_id(next),
         kind: <EnumMemberNode as NodeKind>::NAME,

@@ -11,6 +11,7 @@ use crate::ast::item::class::{item_is_async, item_vis, ModKind, ModifierNode};
 use crate::ast::item::{ItemRef, Vis};
 use crate::ast::ty::TyRef;
 use crate::slot_alloc;
+use crate::Name;
 use rut_core::IdentId;
 use rut_lexer::span::Span;
 
@@ -23,8 +24,7 @@ pub struct FnNode {
     /// the modifier chain in source order — `vis()`/`is_async()`/
     /// `entry()` derive from it
     pub modifiers: Vec<ModifierNode>,
-    pub name: IdentId,
-    pub name_span: Span,
+    pub name: Name,
     pub generics: Vec<IdentId>,
     /// inline admission-only bounds (`fn f<T requires A | B>(..)`)
     pub bounds: Vec<(IdentId, TyRef)>,
@@ -56,8 +56,7 @@ impl FnNode {
 #[derive(Clone, Debug)]
 pub struct ParamNode {
     pub span: Span,
-    pub name: IdentId,
-    pub name_span: Span,
+    pub name: Name,
     pub ty: Option<TyRef>,
 }
 

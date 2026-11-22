@@ -101,10 +101,10 @@ fn ty_text(ast: &Ast, t: TyRef) -> String {
         TyRef::Path(h) => {
             let segs = &h.get(ast).segs;
             if segs.len() == 1 && segs[0].generics.is_empty() {
-                ast.name(segs[0].name).to_string()
+                ast.name(segs[0].name.ident).to_string()
             } else {
                 segs.iter()
-                    .map(|s| ast.name(s.name))
+                    .map(|s| ast.name(s.name.ident))
                     .collect::<Vec<_>>()
                     .join("::")
             }
@@ -221,7 +221,7 @@ fn lower_const_rows(
             continue;
         };
         let ml = h.get(ast);
-        let name = ast.name(ml.name).to_string();
+        let name = ast.name(ml.name.ident).to_string();
         if let Some(t) = ml.ty {
             let tyname = ty_text(ast, t);
             if tyname != "f64" {
@@ -267,7 +267,7 @@ fn lower_rows_in(
         if !matches!(sf.linkage(), Linkage::Host) {
             continue;
         }
-        let fname = ast.name(sf.name).to_string();
+        let fname = ast.name(sf.name.ident).to_string();
         let mut ptys = Vec::new();
         for &p in &sf.params {
             let ParamRef::Param(pd) = p else {
@@ -338,7 +338,7 @@ fn lower_module(
         match it {
             ItemRef::ModDecl(h) => {
                 let d = h.get(ast);
-                let name = ast.name(d.name).to_string();
+                let name = ast.name(d.name.ident).to_string();
                 let child_path = join_path(path, &name);
                 let Some(child) = children.get(&child_path) else {
                     return Err(format!(

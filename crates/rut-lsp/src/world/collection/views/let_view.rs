@@ -25,7 +25,8 @@ impl<'a> LetView<'a> {
                 .downcast::<ModuleLetNode>()
                 .expect("a let view")
                 .get(self.ast())
-                .name,
+                .name
+                .ident,
         )
     }
 
@@ -35,7 +36,8 @@ impl<'a> LetView<'a> {
                 .downcast::<ModuleLetNode>()
                 .expect("a let view")
                 .get(self.ast())
-                .name_span,
+                .name
+                .span,
         )
     }
 

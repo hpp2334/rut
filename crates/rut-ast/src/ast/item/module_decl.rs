@@ -5,7 +5,7 @@ use crate::ast::doc::DocData;
 use crate::ast::item::class::{item_vis, ModifierNode};
 use crate::ast::item::{ItemRef, Vis};
 use crate::slot_alloc;
-use rut_core::IdentId;
+use crate::Name;
 use rut_lexer::span::Span;
 
 /// the root module — the tree's door (`ast.root()`). No name, no doc:
@@ -25,8 +25,7 @@ pub struct ModDeclNode {
     pub span: Span,
     /// the modifier chain in source order — `vis()` derives from it
     pub modifiers: Vec<ModifierNode>,
-    pub name: IdentId,
-    pub name_span: Span,
+    pub name: Name,
     pub doc: DocData,
 }
 

@@ -6,7 +6,7 @@ use crate::ast::item::class::{item_vis, ModifierNode};
 use crate::ast::item::ItemRef;
 use crate::ast::ty::TyRef;
 use crate::slot_alloc;
-use rut_core::IdentId;
+use crate::Name;
 use rut_lexer::span::Span;
 
 /// `type X = A;` / `type X = A | B;` — `target` may be a plain type or
@@ -18,8 +18,7 @@ pub struct AliasNode {
     pub span: Span,
     /// the modifier chain in source order — `vis()` derives from it
     pub modifiers: Vec<ModifierNode>,
-    pub name: IdentId,
-    pub name_span: Span,
+    pub name: Name,
     pub target: TyRef,
     pub doc: DocData,
 }

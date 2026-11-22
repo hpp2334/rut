@@ -195,9 +195,9 @@ fn a_member_call_keeps_its_member_when_only_the_args_fail() {
                     panic!("partial method expected: {:?}", l.get(ast).init)
                 };
                 let d = m.get(ast);
-                let (name, nsp) = d.member().expect("the member parsed");
-                assert_eq!(ast.name(name), "m");
-                assert_eq!(doc.text(nsp), "m");
+                let member = d.member.expect("the member parsed");
+                assert_eq!(ast.name(member.ident), "m");
+                assert_eq!(doc.text(member.span), "m");
                 assert!(d.rparen.is_none());
                 assert!(ast.is_incomplete(m.any()));
                 return;
@@ -219,7 +219,7 @@ fn an_unclosed_use_group_is_a_partial_use_node() {
         panic!("partial use expected, items: {items:?}")
     };
     let d = u.get(ast);
-    assert_eq!(ast.name(d.path[0]), "p");
+    assert_eq!(ast.name(d.path[0].ident), "p");
     assert!(d.names.is_empty());
     assert!(d.group.is_none());
     assert!(ast.is_incomplete(u.any()));

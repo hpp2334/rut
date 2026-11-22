@@ -42,7 +42,9 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                 if ph.get(self.ctx.ast).segs.len() == 1
                     && ph.get(self.ctx.ast).segs[0].generics.is_empty() =>
             {
-                let l = self.lookup(ph.get(self.ctx.ast).segs[0].name).cloned();
+                let l = self
+                    .lookup(ph.get(self.ctx.ast).segs[0].name.ident)
+                    .cloned();
                 l.map(|l| {
                     let reg = if l.cell.is_some() {
                         self.read_local(&l, sp.lo)
@@ -883,7 +885,7 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                 if let ExprRef::Path(ph) = recv {
                     let segs = &ph.get(self.ctx.ast).segs;
                     if segs.len() == 1 {
-                        let origins = self.origins_of(segs[0].name);
+                        let origins = self.origins_of(segs[0].name.ident);
                         if origins.len() == 1 {
                             let origin = origins[0];
                             if let Some(member) = self.ctx.find_inherent_member(origin, name) {
@@ -1028,7 +1030,7 @@ fn recv_name(ctx: &crate::check::Ctx, recv: ExprRef) -> String {
             .get(ctx.ast)
             .segs
             .iter()
-            .map(|s| ctx.name(s.name).to_string())
+            .map(|s| ctx.name(s.name.ident).to_string())
             .collect::<Vec<_>>()
             .join("::"),
         _ => "expr".to_string(),

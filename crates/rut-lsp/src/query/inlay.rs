@@ -266,10 +266,10 @@ impl CallCx<'_> {
             ExprRef::Method(h) => {
                 let (member, recv, args) = {
                     let d = h.get(ast);
-                    (d.member(), d.recv, d.args.clone())
+                    (d.member, d.recv, d.args.clone())
                 };
-                if let Some((name, _)) = member {
-                    self.method_call(e, recv, name, &args);
+                if let Some(n) = member {
+                    self.method_call(e, recv, n.ident, &args);
                 }
                 self.walk_expr(recv);
                 for a in args {
@@ -300,7 +300,7 @@ impl CallCx<'_> {
         if segs.len() != 1 {
             return;
         }
-        let name = self.ast().name(segs[0].name);
+        let name = self.ast().name(segs[0].name.ident);
         let hits: Vec<_> = self
             .ctx
             .chain
@@ -329,7 +329,7 @@ impl CallCx<'_> {
         let pos = call.span(ast).lo;
         let head = match recv {
             ExprRef::Path(ph) if ph.get(ast).segs.len() == 1 => {
-                let id = ph.get(ast).segs[0].name;
+                let id = ph.get(ast).segs[0].name.ident;
                 self.ctx.chain.named_recv(pos, id)
             }
             _ => self

@@ -22,7 +22,7 @@ fn positional_decl_desugars_to_one_inner_field() {
         panic!("expected a class, got {:?}", items[0]);
     };
     let c = ch.get(ast);
-    assert_eq!(ast.name(c.name), "JsonI64");
+    assert_eq!(ast.name(c.name.ident), "JsonI64");
     assert!(c.newtype, "the positional spelling arms the flag");
     assert!(c.generics.is_empty() && c.requires.is_empty() && c.methods.is_empty());
     assert_eq!(c.fields.len(), 1, "exactly the wrapped field");
@@ -30,7 +30,7 @@ fn positional_decl_desugars_to_one_inner_field() {
         panic!("the inner field, got {:?}", c.fields[0]);
     };
     let fd = fh.get(ast);
-    assert_eq!(ast.name(fd.name), "inner");
+    assert_eq!(ast.name(fd.name.ident), "inner");
     assert_eq!(fd.vis(), None, "the field rides the module-private default");
     assert!(!fd.is_static() && fd.init.is_none());
     // the wrapped type is the field's type node — the same span as the
@@ -40,7 +40,7 @@ fn positional_decl_desugars_to_one_inner_field() {
     };
     let segs = &t.get(ast).segs;
     assert_eq!(segs.len(), 1);
-    assert_eq!(ast.name(segs[0].name), "i64");
+    assert_eq!(ast.name(segs[0].name.ident), "i64");
 }
 
 #[test]

@@ -98,7 +98,7 @@ pub(crate) fn ty_head(ast: &Ast, t: TyRef) -> String {
             .get(ast)
             .segs
             .first()
-            .map(|s| ast.name(s.name).to_string())
+            .map(|s| ast.name(s.name.ident).to_string())
             .unwrap_or_default(),
         // `?Circle` binds like `Circle` for member lookup —
         // without this arm a nullable let-binding infers "" and its
@@ -129,7 +129,7 @@ pub(crate) fn ty_src(ast: &Ast, t: TyRef) -> String {
             let mut s = d
                 .segs
                 .iter()
-                .map(|sg| ast.name(sg.name).to_string())
+                .map(|sg| ast.name(sg.name.ident).to_string())
                 .collect::<Vec<_>>()
                 .join("::");
             if let Some(last) = d.segs.last() {

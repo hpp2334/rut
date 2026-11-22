@@ -808,7 +808,7 @@ pub(crate) fn dep_use_heads(
             continue;
         };
         let u = uh.get(ast);
-        let head = ast.name(u.path[0]).to_string();
+        let head = ast.name(u.path[0].ident).to_string();
         let from = layout.file_of(it.span(ast).lo).to_string();
         if session.resolve_use(spec, &head, root).is_err()
             && session.own_use_head(spec, &head, &from).is_some()
@@ -944,7 +944,7 @@ impl GraphCompiler<'_> {
             };
             let un = uh.get(ast);
             let (path, names) = (&un.path, &un.names);
-            let head_text = ast.name(path[0]).to_string();
+            let head_text = ast.name(path[0].ident).to_string();
             let span = it.span(ast);
             // the importing file's mod path — the own walk starts here
             let from = layout.file_of(span.lo).to_string();
@@ -993,8 +993,8 @@ impl GraphCompiler<'_> {
                 // semantics — edges are intra-package namespaces; the
                 // LEAF visibility-gates)
                 let mut walked = true;
-                for &seg in &path[1..] {
-                    let seg_text = ast.name(seg);
+                for seg in &path[1..] {
+                    let seg_text = ast.name(seg.ident);
                     match layout
                         .scopes
                         .get(&at)
@@ -1045,8 +1045,8 @@ impl GraphCompiler<'_> {
                         continue;
                     };
                     let Some(rows) = table.get(&at) else { continue };
-                    for &n in names {
-                        let text = ast.name(n);
+                    for n in names {
+                        let text = ast.name(n.ident);
                         match rows.iter().find(|d| d.name == text) {
                             None => {
                                 // the name may still live in a sibling
@@ -1071,8 +1071,8 @@ impl GraphCompiler<'_> {
                             }
                             Some(d) if d.kind == crate::mods::DeclKind::Mod => {
                                 let mut fix = String::new();
-                                for &seg in path {
-                                    fix.push_str(ast.name(seg));
+                                for seg in path {
+                                    fix.push_str(ast.name(seg.ident));
                                     fix.push_str("::");
                                 }
                                 bad.push(Diag::new(
@@ -1137,8 +1137,8 @@ impl GraphCompiler<'_> {
                     let Some(rows) = table.get("") else { continue };
                     names
                         .iter()
-                        .filter_map(|&n| {
-                            let text = ast.name(n);
+                        .filter_map(|n| {
+                            let text = ast.name(n.ident);
                             match rows.iter().find(|d| d.name == text) {
                                 None => Some(Diag::new(
                                     span,
@@ -1179,8 +1179,8 @@ impl GraphCompiler<'_> {
             // walk the mod path, one `pub mod` edge per segment
             let mut at = String::new();
             let mut walked = true;
-            for &seg in &path[1..] {
-                let seg_text = ast.name(seg);
+            for seg in &path[1..] {
+                let seg_text = ast.name(seg.ident);
                 let child = if at.is_empty() {
                     seg_text.to_string()
                 } else {
@@ -1242,8 +1242,8 @@ impl GraphCompiler<'_> {
                 }
                 names
                     .iter()
-                    .map(|&n| {
-                        let text = ast.name(n);
+                    .map(|n| {
+                        let text = ast.name(n.ident);
                         match rows.iter().find(|d| d.name == text) {
                             None => Some(format!(
                                 "`{text}` is not declared in `{dep_name}`'s module `{at}` ({})",

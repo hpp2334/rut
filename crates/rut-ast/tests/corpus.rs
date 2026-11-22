@@ -541,7 +541,7 @@ pub(super) mod internal;
     let decl = |i: usize| match items[i] {
         ItemRef::ModDecl(h) => {
             let d = h.get(ast);
-            (d.vis(), ast.name(d.name).to_string())
+            (d.vis(), ast.name(d.name.ident).to_string())
         }
         k => panic!("expected a mod decl at {i}, got {k:?}"),
     };
@@ -562,8 +562,8 @@ fn use_paths_split_path_and_names() {
     match items[0] {
         ItemRef::Use(h) => {
             let u = h.get(ast);
-            let segs: Vec<&str> = u.path.iter().map(|&s| ast.name(s)).collect();
-            let nms: Vec<&str> = u.names.iter().map(|&n| ast.name(n)).collect();
+            let segs: Vec<&str> = u.path.iter().map(|s| ast.name(s.ident)).collect();
+            let nms: Vec<&str> = u.names.iter().map(|n| ast.name(n.ident)).collect();
             assert_eq!(segs, vec!["pkg", "A", "B"], "the mod path");
             assert_eq!(nms, vec!["C", "D"], "the leaf names");
         }
@@ -577,10 +577,10 @@ fn use_paths_split_path_and_names() {
     match items[0] {
         ItemRef::Use(h) => {
             let u = h.get(ast);
-            let segs: Vec<&str> = u.path.iter().map(|&s| ast.name(s)).collect();
+            let segs: Vec<&str> = u.path.iter().map(|s| ast.name(s.ident)).collect();
             assert_eq!(segs, vec!["pkg", "A", "B"]);
             assert_eq!(u.names.len(), 1);
-            assert_eq!(ast.name(u.names[0]), "C");
+            assert_eq!(ast.name(u.names[0].ident), "C");
         }
         k => panic!("expected a use item, got {k:?}"),
     }
@@ -602,8 +602,8 @@ fn flat_uses_degenerate_to_the_package_path() {
             ItemRef::Use(h) => {
                 let u = h.get(ast);
                 assert_eq!(u.path.len(), 1, "{src}: the degenerate path");
-                assert_eq!(ast.name(u.path[0]), "pkg");
-                let nms: Vec<&str> = u.names.iter().map(|&n| ast.name(n)).collect();
+                assert_eq!(ast.name(u.path[0].ident), "pkg");
+                let nms: Vec<&str> = u.names.iter().map(|n| ast.name(n.ident)).collect();
                 assert_eq!(nms, want_names, "{src}");
             }
             k => panic!("{src}: expected a use item, got {k:?}"),
@@ -627,7 +627,7 @@ fn use_with_an_empty_leaf_diagnoses() {
     match items[0] {
         ItemRef::Use(h) => {
             let u = h.get(ast);
-            let segs: Vec<&str> = u.path.iter().map(|&s| ast.name(s)).collect();
+            let segs: Vec<&str> = u.path.iter().map(|s| ast.name(s.ident)).collect();
             assert_eq!(segs, vec!["pkg", "A", "B"], "the spelled path survives");
             assert!(u.names.is_empty(), "nothing was imported");
         }
@@ -823,7 +823,7 @@ fn inf_is_the_infinity_float_literal() {
     assert!(diags.is_empty(), "{diags:?}");
     let body = common::first_fn_body(ast);
     match body.get(ast).stmts[0] {
-        StmtRef::Let(h) => assert_eq!(ast.name(h.get(ast).name), "inf"),
+        StmtRef::Let(h) => assert_eq!(ast.name(h.get(ast).name.ident), "inf"),
         s => panic!("expected a let named `inf`, got {s:?}"),
     }
 }

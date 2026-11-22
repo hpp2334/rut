@@ -34,7 +34,7 @@ fn for_of_takes_const() {
     };
     let d = fh.get(ast);
     assert!(d.is_const, "`const` must set the flag");
-    assert_eq!(ast.name(d.var), "t");
+    assert_eq!(ast.name(d.var.ident), "t");
     // the span covers the whole statement
     assert_eq!(
         d.span.text(src),
@@ -54,7 +54,7 @@ fn for_of_without_const_is_the_default() {
     };
     let d = fh.get(ast);
     assert!(!d.is_const, "no `const`, no flag");
-    assert_eq!(ast.name(d.var), "t");
+    assert_eq!(ast.name(d.var.ident), "t");
 }
 
 #[test]
@@ -80,7 +80,7 @@ fn for_c_plain_header_is_unchanged() {
         panic!("expected a for-c, got {s:?}");
     };
     let d = fh.get(ast);
-    assert_eq!(ast.name(d.var), "i");
+    assert_eq!(ast.name(d.var.ident), "i");
     // exact spans: the statement ends at its own `}`
     assert_eq!(
         d.span.text(src),

@@ -186,7 +186,7 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                 } else {
                     let origins = match args[i] {
                         ExprRef::Path(ph) if ph.get(self.ctx.ast).segs.len() == 1 => {
-                            self.origins_of(ph.get(self.ctx.ast).segs[0].name)
+                            self.origins_of(ph.get(self.ctx.ast).segs[0].name.ident)
                         }
                         _ => Vec::new(),
                     };
@@ -257,7 +257,7 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
             None => vec![],
         };
         let md = mnode.get(self.ctx.ast).clone();
-        let (params, ret, mname) = (md.params, md.ret, md.name);
+        let (params, ret, mname) = (md.params, md.ret, md.name.ident);
         // no-self first param (or no params at all) = class method
         if params.first().is_some_and(|p| self.ctx.is_self_param(*p)) {
             self.ctx
@@ -323,7 +323,7 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                 } else {
                     let origins = match args[i] {
                         ExprRef::Path(ph) if ph.get(self.ctx.ast).segs.len() == 1 => {
-                            self.origins_of(ph.get(self.ctx.ast).segs[0].name)
+                            self.origins_of(ph.get(self.ctx.ast).segs[0].name.ident)
                         }
                         _ => Vec::new(),
                     };

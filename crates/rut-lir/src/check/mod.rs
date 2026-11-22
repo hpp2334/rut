@@ -813,7 +813,7 @@ pub(crate) fn bound_ty_str(ctx: &Ctx, node: TyRef) -> String {
             let segs = &h.get(ctx.ast).segs;
             let mut s = segs
                 .iter()
-                .map(|sg| ctx.name(sg.name).to_string())
+                .map(|sg| ctx.name(sg.name.ident).to_string())
                 .collect::<Vec<_>>()
                 .join("::");
             let last = segs.last().expect("path has a segment");
@@ -1021,11 +1021,11 @@ impl<'a> Ctx<'a> {
         let mut cur = start.to_string();
         for seg in segs {
             let Some(scope) = self.mods.scopes.get(&cur) else {
-                return Err((seg.name, cur.clone()));
+                return Err((seg.name.ident, cur.clone()));
             };
-            match scope.children.get(self.name(seg.name)) {
+            match scope.children.get(self.name(seg.name.ident)) {
                 Some((path, _vis)) => cur = path.clone(),
-                None => return Err((seg.name, cur.clone())),
+                None => return Err((seg.name.ident, cur.clone())),
             }
         }
         Ok(cur)
@@ -1339,7 +1339,7 @@ impl<'a> Ctx<'a> {
                     return None;
                 };
                 let fd = fh.get(self.ast);
-                (fd.name == name).then_some(fd.vis())
+                (fd.name.ident == name).then_some(fd.vis())
             })
             .flatten();
         self.member_vis_err(dname, d.node.span(self.ast), name, fvis)
@@ -1505,7 +1505,7 @@ impl<'a> Ctx<'a> {
                         p.span(self.ast),
                         format!(
                             "`entry fn {fname}`: parameter `{}` is `{}` — only primitives, `str`, `nil`, `bytes`, `?T` over those, anonymous tuples of crossable types, and `opaque` cross the host boundary",
-                            self.name(pd.get(self.ast).name),
+                            self.name(pd.get(self.ast).name.ident),
                             self.type_name(ty)
                         ),
                     );
@@ -2025,7 +2025,7 @@ impl<'a> Ctx<'a> {
         self_ty: Option<TypeId>,
     ) -> TypeId {
         let is_self = |segs: &[rut_ast::PathSeg]| {
-            segs.len() == 1 && segs[0].generics.is_empty() && segs[0].name == sym::SELF_TY
+            segs.len() == 1 && segs[0].generics.is_empty() && segs[0].name.ident == sym::SELF_TY
         };
         match node {
             TyRef::Self_(_) => {
@@ -2181,7 +2181,7 @@ pub type NodeId2 = IdentId;
 
 pub(crate) fn seg_str(ctx: &Ctx, segs: &[PathSeg]) -> String {
     segs.iter()
-        .map(|s| ctx.name(s.name).to_string())
+        .map(|s| ctx.name(s.name.ident).to_string())
         .collect::<Vec<_>>()
         .join("::")
 }

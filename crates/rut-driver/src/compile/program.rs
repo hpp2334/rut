@@ -373,8 +373,8 @@ fn compile_program_inner(
     // grammar refuses; the diagnostic names the use fix
     for it in ast.root().items(ast) {
         if let rut_ast::ItemRef::Use(uh) = it {
-            if let Some(&head) = uh.get(ast).path.first() {
-                ctx.used_pkgs.insert(ast.name(head).to_string());
+            if let Some(head) = uh.get(ast).path.first() {
+                ctx.used_pkgs.insert(ast.name(head.ident).to_string());
             }
         }
     }
@@ -413,30 +413,30 @@ fn compile_program_inner(
         if let rut_ast::ItemRef::Use(uh) = it {
             let u = uh.get(ast);
             let (path, names) = (&u.path, &u.names);
-            let head = ast.name(path[0]).to_string();
+            let head = ast.name(path[0].ident).to_string();
             let file = ctx.mods.file_of(it.span(ast).lo).to_string();
             let span = it.span(ast);
             let prefix = path[1..]
                 .iter()
-                .map(|&s| ast.name(s).to_string())
+                .map(|s| ast.name(s.ident).to_string())
                 .collect::<Vec<_>>()
                 .join("::");
-            for &n in names {
+            for n in names {
                 // the intra-package lane: the graph validation
                 // recorded these leaves in `own_uses` — they bind
                 // through the target module, never through a dep head
-                if own_claims.contains(&(file.clone(), n)) {
+                if own_claims.contains(&(file.clone(), n.ident)) {
                     continue;
                 }
                 let (qualified, composed) = if path.len() >= 2 {
-                    (true, format!("{prefix}::{}", ast.name(n)))
+                    (true, format!("{prefix}::{}", ast.name(n.ident)))
                 } else {
                     (false, String::new())
                 };
                 use_bindings.push(UseBinding {
                     file: file.clone(),
                     head: head.clone(),
-                    leaf: n,
+                    leaf: n.ident,
                     qualified,
                     composed,
                     pub_use: u.vis() != rut_ast::Vis::Self_,
@@ -502,7 +502,7 @@ fn compile_program_inner(
     // — read off the AST before any binding runs
     for it in ast.root().items(ast) {
         if let rut_ast::ItemRef::Use(uh) = it {
-            ctx.used.extend(uh.get(ast).names.iter().copied());
+            ctx.used.extend(uh.get(ast).names.iter().map(|n| n.ident));
         }
     }
     // trait names resolve across ALL uses (an impl may live in a

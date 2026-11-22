@@ -495,16 +495,16 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
         let (name, destructure) = match s {
             StmtRef::Let(h) => {
                 let n = h.get(self.ctx.ast);
-                (n.name, n.destructure.clone())
+                (n.name.ident, n.destructure.clone())
             }
             _ => return,
         };
         if destructure.is_none() && self.ctx.poisoned.insert(name) {
             out.push(name);
         }
-        for (n, _) in destructure.into_iter().flatten() {
-            if self.ctx.poisoned.insert(n) {
-                out.push(n);
+        for n in destructure.into_iter().flatten() {
+            if self.ctx.poisoned.insert(n.ident) {
+                out.push(n.ident);
             }
         }
     }
@@ -593,6 +593,7 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                     init,
                     ..
                 } = h.get(self.ctx.ast).clone();
+                let name = name.ident;
                 let ty_node = ty; // the annotation node (shadowed below)
                 let expected = ty.map(|t| self.resolve_type_now(t));
                 let t = self.compile_expr(init, expected)?;
@@ -627,7 +628,7 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                         } else if let ExprRef::Path(ph) = init {
                             let segs = &ph.get(self.ctx.ast).segs;
                             if segs.len() == 1 {
-                                self.origins_of(segs[0].name)
+                                self.origins_of(segs[0].name.ident)
                             } else {
                                 Vec::new()
                             }
@@ -651,7 +652,7 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                             let copied = match init {
                                 ExprRef::Path(ph) if ph.get(self.ctx.ast).segs.len() == 1 => self
                                     .union_syms
-                                    .get(&ph.get(self.ctx.ast).segs[0].name)
+                                    .get(&ph.get(self.ctx.ast).segs[0].name.ident)
                                     .copied(),
                                 _ => self.union_provenance(init).map(|(g, _)| g),
                             };
@@ -702,10 +703,10 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                                 },
                                 sp.lo,
                             );
-                            self.bind_local(n.0, reg, fty, is_const, Vec::new(), sp.lo);
+                            self.bind_local(n.ident, reg, fty, is_const, Vec::new(), sp.lo);
                             // a fresh binding from a tuple field carries no
                             // union provenance
-                            self.union_syms.remove(&n.0);
+                            self.union_syms.remove(&n.ident);
                         }
                     }
                 }
@@ -809,6 +810,7 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                     body,
                     ..
                 } = h.get(self.ctx.ast).clone();
+                let var = var.ident;
                 // loops never terminate (see `While`)
                 let saved = self.terminated;
                 self.terminated = false;
@@ -825,6 +827,7 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                     body,
                     ..
                 } = h.get(self.ctx.ast).clone();
+                let var = var.ident;
                 // loops never terminate (see `While`)
                 let saved = self.terminated;
                 self.terminated = false;
@@ -1885,7 +1888,7 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                         .get(self.ctx.ast)
                         .segs
                         .iter()
-                        .map(|s| self.ctx.name(s.name).to_string())
+                        .map(|s| self.ctx.name(s.name.ident).to_string())
                         .collect::<Vec<_>>()
                         .join("::"),
                     PatRef::Wild(_) => "_".to_string(),
@@ -1989,8 +1992,8 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                 let segs = &ph.get(self.ctx.ast).segs;
                 // enum member
                 if segs.len() == 2 {
-                    let ename = segs[0].name;
-                    let mname = segs[1].name;
+                    let ename = segs[0].name.ident;
+                    let mname = segs[1].name.ident;
                     // a LOCAL enum's decl or a USED enum's binding — the
                     // same members the member-path expression reads; the
                     // local half resolves in the CURRENT module (phase 3),
@@ -2084,7 +2087,7 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                 if segs.len() == 1 {
                     // bare member of the scrutinee's own enum
                     if let TyKind::Enum { members } = self.ctx.types.kind(scrut_ty).clone() {
-                        let mname = segs[0].name;
+                        let mname = segs[0].name.ident;
                         if let Some(i) = members.iter().position(|(m, _)| *m == mname) {
                             let mreg = self.new_reg(scrut_ty);
                             self.emit(

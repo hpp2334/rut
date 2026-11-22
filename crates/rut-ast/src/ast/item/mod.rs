@@ -1,6 +1,6 @@
-//! Items and the item slot. One struct per kind; data (span,
-//! name_span, doc) directly inside (D1); `ItemRef` is the small
-//! tagged-handle walk surface with its `Error` variant (D2).
+//! Items and the item slot. One struct per kind; data (span, name,
+//! doc) directly inside (D1); `ItemRef` is the small tagged-handle
+//! walk surface with its `Error` variant (D2).
 
 mod class;
 mod enum_decl;

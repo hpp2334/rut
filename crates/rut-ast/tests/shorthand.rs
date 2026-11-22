@@ -42,7 +42,7 @@ fn shorthand_desugars_to_a_single_seg_path() {
     assert_eq!(fs.len(), 3);
     // the shorthand: `id` carries a single-segment path value whose
     // span is exactly the field-name token
-    assert_eq!(ast.name(fs[0].name), "id");
+    assert_eq!(ast.name(fs[0].name.ident), "id");
     let ExprRef::Path(ph) = fs[0].value else {
         panic!(
             "the shorthand must desugar to a path, got {:?}",
@@ -51,7 +51,7 @@ fn shorthand_desugars_to_a_single_seg_path() {
     };
     let segs = &ph.get(ast).segs;
     assert_eq!(segs.len(), 1);
-    assert_eq!(ast.name(segs[0].name), "id");
+    assert_eq!(ast.name(segs[0].name.ident), "id");
     assert!(segs[0].generics.is_empty());
     assert_eq!(
         ph.span(ast).text(src),
@@ -59,17 +59,17 @@ fn shorthand_desugars_to_a_single_seg_path() {
         "the value's span is the name token"
     );
     assert_eq!(
-        segs[0].name_span.text(src),
+        segs[0].name.span.text(src),
         "id",
         "the recorded seg span is the name token"
     );
     // the spelled fields are untouched
-    assert_eq!(ast.name(fs[1].name), "title");
+    assert_eq!(ast.name(fs[1].name.ident), "title");
     let ExprRef::Lit(lh) = fs[1].value else {
         panic!("a str lit, got {:?}", fs[1].value);
     };
     assert!(matches!(lh.get(ast).lit, Lit::Str(_)));
-    assert_eq!(ast.name(fs[2].name), "completed");
+    assert_eq!(ast.name(fs[2].name.ident), "completed");
     let ExprRef::Lit(bh) = fs[2].value else {
         panic!("a bool lit, got {:?}", fs[2].value);
     };
@@ -95,7 +95,7 @@ fn self_literal_takes_shorthand() {
         panic!("expected a let, got {:?}", body.get(ast).stmts[0]);
     };
     let fs = fields(ast, lh.get(ast).init);
-    assert_eq!(ast.name(fs[0].name), "x");
+    assert_eq!(ast.name(fs[0].name.ident), "x");
     let ExprRef::Path(ph) = fs[0].value else {
         panic!(
             "the shorthand must desugar to a path, got {:?}",
@@ -104,7 +104,7 @@ fn self_literal_takes_shorthand() {
     };
     let segs = &ph.get(ast).segs;
     assert_eq!(segs.len(), 1);
-    assert_eq!(ast.name(segs[0].name), "x");
+    assert_eq!(ast.name(segs[0].name.ident), "x");
 }
 
 #[test]
@@ -114,7 +114,7 @@ fn generic_literal_takes_shorthand() {
     let (doc, init) = let_init(src);
     let ast = doc.ast();
     let fs = fields(ast, init);
-    assert_eq!(ast.name(fs[0].name), "v");
+    assert_eq!(ast.name(fs[0].name.ident), "v");
     let ExprRef::Path(ph) = fs[0].value else {
         panic!(
             "the shorthand must desugar to a path, got {:?}",
@@ -122,7 +122,7 @@ fn generic_literal_takes_shorthand() {
         );
     };
     assert_eq!(ph.get(ast).segs.len(), 1);
-    assert_eq!(ast.name(ph.get(ast).segs[0].name), "v");
+    assert_eq!(ast.name(ph.get(ast).segs[0].name.ident), "v");
     // the literal head keeps its generic arguments
     let ExprRef::Struct(sh) = init else {
         unreachable!()
@@ -131,7 +131,7 @@ fn generic_literal_takes_shorthand() {
         panic!("expected a path head, got {:?}", sh.get(ast).ty);
     };
     let segs = &t.get(ast).segs;
-    assert_eq!(ast.name(segs[0].name), "P");
+    assert_eq!(ast.name(segs[0].name.ident), "P");
     assert_eq!(segs[0].generics.len(), 1);
 }
 

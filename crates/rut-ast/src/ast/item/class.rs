@@ -9,6 +9,7 @@ use crate::ast::handle::{AnyHandle, Handle};
 use crate::ast::item::{ItemRef, Vis};
 use crate::ast::ty::TyRef;
 use crate::slot_alloc;
+use crate::Name;
 use rut_core::IdentId;
 use rut_lexer::span::Span;
 
@@ -21,8 +22,7 @@ pub struct StructNode {
     pub body_span: Span,
     /// the modifier chain in source order — `vis()` derives from it
     pub modifiers: Vec<ModifierNode>,
-    pub name: IdentId,
-    pub name_span: Span,
+    pub name: Name,
     pub generics: Vec<IdentId>,
     pub fields: Vec<FieldRef>,
     pub methods: Vec<MethodRef>,
@@ -47,8 +47,7 @@ pub struct ClassNode {
     pub body_span: Span,
     /// the modifier chain in source order — `vis()` derives from it
     pub modifiers: Vec<ModifierNode>,
-    pub name: IdentId,
-    pub name_span: Span,
+    pub name: Name,
     pub generics: Vec<IdentId>,
     /// admission-only bounds on the class's own generics
     /// (`class HashMap<K requires Hashable, V>`)
@@ -77,8 +76,7 @@ pub struct InterfaceNode {
     pub body_span: Span,
     /// the modifier chain in source order — `vis()` derives from it
     pub modifiers: Vec<ModifierNode>,
-    pub name: IdentId,
-    pub name_span: Span,
+    pub name: Name,
     pub generics: Vec<IdentId>,
     pub methods: Vec<MethodRef>,
     pub doc: DocData,
@@ -153,8 +151,7 @@ pub struct FieldDeclNode {
     /// the modifier chain in source order — `vis()`/`is_static()`
     /// derive from it
     pub modifiers: Vec<ModifierNode>,
-    pub name: IdentId,
-    pub name_span: Span,
+    pub name: Name,
     pub ty: TyRef,
     pub init: Option<ExprRef>,
     pub doc: DocData,
@@ -185,8 +182,7 @@ pub struct MethodDeclNode {
     /// the modifier chain in source order — `vis()`/`is_async()`/
     /// `marker()` derive from it
     pub modifiers: Vec<ModifierNode>,
-    pub name: IdentId,
-    pub name_span: Span,
+    pub name: Name,
     pub generics: Vec<IdentId>,
     /// inline admission-only bounds on the method's own generics
     pub bounds: Vec<(IdentId, TyRef)>,

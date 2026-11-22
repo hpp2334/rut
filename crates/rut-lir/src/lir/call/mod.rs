@@ -38,7 +38,7 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
         // fn-typed local call: `f(x)` where f is a param/local of fn type
         if let ExprRef::Path(cph) = callee {
             let segs = cph.get(self.ctx.ast).segs.clone();
-            if segs.len() == 1 && self.lookup(segs[0].name).is_some() {
+            if segs.len() == 1 && self.lookup(segs[0].name.ident).is_some() {
                 let ft = self.compile_expr(callee, None)?;
                 // the callee derefs: `let f =
                 // opaque.downcast<fn(..)>(..)` lands `?fn` — the erased
@@ -148,7 +148,7 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
             // (`Type::member(..)`) — the type/enum/namespace lane.
             if let Some(r) = self.compile_qualified_call(
                 &segs[..1],
-                segs[1].name,
+                segs[1].name.ident,
                 &segs[1].generics,
                 &args,
                 expected,
@@ -156,12 +156,12 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
             ) {
                 return r;
             }
-            let base = segs[0].name;
-            let member = segs[1].name;
+            let base = segs[0].name.ident;
+            let member = segs[1].name.ident;
             // a used package's name as the head: uses are the only
             // cross-package door — the diagnostic names the use fix
             if self.ctx.used_pkgs.contains(self.ctx.name(base)) {
-                self.package_head_error(&segs[..1], segs[1].name, sp);
+                self.package_head_error(&segs[..1], segs[1].name.ident, sp);
                 return Err(());
             }
             // the static head is a bare type name: it resolves in the
@@ -221,7 +221,7 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
             // leaf or the static form on the walked module's type
             if let Some(r) = self.compile_qualified_call(
                 &segs[..segs.len() - 1],
-                segs[segs.len() - 1].name,
+                segs[segs.len() - 1].name.ident,
                 &segs[segs.len() - 1].generics,
                 &args,
                 expected,
@@ -229,20 +229,28 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
             ) {
                 return r;
             }
-            if self.ctx.used_pkgs.contains(self.ctx.name(segs[0].name)) {
-                self.package_head_error(&segs[..segs.len() - 1], segs[segs.len() - 1].name, sp);
+            if self
+                .ctx
+                .used_pkgs
+                .contains(self.ctx.name(segs[0].name.ident))
+            {
+                self.package_head_error(
+                    &segs[..segs.len() - 1],
+                    segs[segs.len() - 1].name.ident,
+                    sp,
+                );
                 return Err(());
             }
             self.ctx.err(
                 sp,
                 format!(
                     "unknown call path `{}` — calls go through a module (`mod::fn(..)`) or a type (`Type::member(..)`)",
-                    segs.iter().map(|s| self.ctx.name(s.name).to_string()).collect::<Vec<_>>().join("::")
+                    segs.iter().map(|s| self.ctx.name(s.name.ident).to_string()).collect::<Vec<_>>().join("::")
                 ),
             );
             return Err(());
         }
-        let name = segs[0].name;
+        let name = segs[0].name.ident;
         let generics = segs[0].generics.clone();
         // core prelude functions: compiler-lowered, visible
         // only when the name was used from the core surface — the
@@ -761,14 +769,14 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
     ) {
         let mut fix = String::new();
         for s in segs {
-            fix.push_str(self.ctx.name(s.name));
+            fix.push_str(self.ctx.name(s.name.ident));
             fix.push_str("::");
         }
         self.ctx.err(
             sp,
             format!(
                 "`{}` is a package, not a module — uses are the only cross-package door: `use {}{{ {} }}` first",
-                self.ctx.name(segs[0].name),
+                self.ctx.name(segs[0].name.ident),
                 fix,
                 self.ctx.name(leaf)
             ),
@@ -798,7 +806,7 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
             return None; // generics on a non-module segment: not a mod path
         }
         let from = self.ctx.cur_mod.clone();
-        let Some(mut m) = self.ctx.resolve_mod_head(&from, segs[0].name) else {
+        let Some(mut m) = self.ctx.resolve_mod_head(&from, segs[0].name.ident) else {
             // the dep-module lane: a module a `use` bound (`use
             // calc::{ math }`) or a declared dep's pkg-name root —
             // `math::sqrt(x)` / `calc::math::sqrt(x)`
@@ -811,7 +819,7 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                 .mods
                 .scopes
                 .get(&m)
-                .and_then(|s| s.children.get(self.ctx.name(seg.name)))
+                .and_then(|s| s.children.get(self.ctx.name(seg.name.ident)))
             {
                 m = path.clone();
                 continue;
@@ -824,22 +832,22 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                     sp,
                     format!(
                         "`{}` is not a module under `{}` — only `mod` children extend a qualified path",
-                        self.ctx.name(seg.name),
+                        self.ctx.name(seg.name.ident),
                         m
                     ),
                 );
                 return Some(Err(()));
             }
-            let vis = if let Some(d) = self.ctx.data_in(&m, seg.name) {
+            let vis = if let Some(d) = self.ctx.data_in(&m, seg.name.ident) {
                 d.vis
-            } else if let Some(e) = self.ctx.enum_in(&m, seg.name) {
+            } else if let Some(e) = self.ctx.enum_in(&m, seg.name.ident) {
                 e.vis
             } else {
                 self.ctx.err(
                     sp,
                     format!(
                         "`{}` is not declared in module `{m}` ({})",
-                        self.ctx.name(seg.name),
+                        self.ctx.name(seg.name.ident),
                         crate::check::ModInputs::display(&m),
                     ),
                 );
@@ -850,14 +858,14 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                     sp,
                     format!(
                         "`{m}.{}(..)` — {}",
-                        self.ctx.name(seg.name),
-                        self.ctx.vis_hint(seg.name, &from, &m, vis)
+                        self.ctx.name(seg.name.ident),
+                        self.ctx.vis_hint(seg.name.ident, &from, &m, vis)
                     ),
                 );
                 return Some(Err(()));
             }
             return Some(self.compile_static_call(
-                seg.name,
+                seg.name.ident,
                 seg.generics.clone(),
                 name,
                 generics.to_vec(),
@@ -993,23 +1001,23 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
         expected: Option<TypeId>,
         sp: rut_lexer::span::Span,
     ) -> Option<TcResult<TypeId>> {
-        let mut m = self.ctx.extern_mod(segs[0].name)?;
+        let mut m = self.ctx.extern_mod(segs[0].name.ident)?;
         let walked = |up_to: usize| -> String {
             segs[..up_to]
                 .iter()
-                .map(|s| self.ctx.name(s.name).to_string())
+                .map(|s| self.ctx.name(s.name.ident).to_string())
                 .collect::<Vec<_>>()
                 .join("::")
         };
         for (i, seg) in segs.iter().enumerate().skip(1) {
-            match m.children.get(&seg.name).cloned() {
+            match m.children.get(&seg.name.ident).cloned() {
                 Some(child) => m = child,
                 None => {
                     self.ctx.err(
                         sp,
                         format!(
                             "`{}` is not a module of `{}` — only `pub mod` children extend a dep module path",
-                            self.ctx.name(seg.name),
+                            self.ctx.name(seg.name.ident),
                             walked(i)
                         ),
                     );
@@ -1279,7 +1287,7 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
     fn origins_of_expr(&self, node: ExprRef) -> Vec<TypeId> {
         match node {
             ExprRef::Path(ph) if ph.get(self.ctx.ast).segs.len() == 1 => {
-                self.origins_of(ph.get(self.ctx.ast).segs[0].name)
+                self.origins_of(ph.get(self.ctx.ast).segs[0].name.ident)
             }
             _ => Vec::new(),
         }

@@ -4,7 +4,7 @@ use crate::ast::doc::DocData;
 use crate::ast::item::class::{item_vis, ModifierNode};
 use crate::ast::item::ItemRef;
 use crate::slot_alloc;
-use rut_core::IdentId;
+use crate::Name;
 use rut_lexer::span::Span;
 
 /// `pub? use pkg::A::B::{C, D};` / `use pkg::A::B::C;` — `path[0]` is
@@ -13,9 +13,8 @@ use rut_lexer::span::Span;
 /// degenerate to `path = [pkg]`. `vis()` is the re-export edge: a `pub
 /// use`'s imported names join the module's public surface (a private
 /// `use` imports only). `name_span` is the PACKAGE ident's span (the
-/// head — definition targets key on it); `path_spans` are the path
-/// idents' spans, parallel to `path`; `name_spans` are the leaf
-/// idents' spans, parallel to `names`.
+/// head — definition targets key on it); `path` and `names` carry each
+/// ident's own span (the [`Name`] pairing).
 #[derive(Clone, Debug)]
 pub struct UseNode {
     /// starts at the item's FIRST token — the leading modifier when
@@ -23,11 +22,9 @@ pub struct UseNode {
     pub span: Span,
     /// the modifier chain in source order — `vis()` derives from it
     pub modifiers: Vec<ModifierNode>,
-    pub path: Vec<IdentId>,
-    pub path_spans: Vec<Span>,
+    pub path: Vec<Name>,
     pub name_span: Span,
-    pub names: Vec<IdentId>,
-    pub name_spans: Vec<Span>,
+    pub names: Vec<Name>,
     /// the `{..}` group's span, braces included — `None` for the flat
     /// leaf (`use pkg::A;`) and for the incomplete shape (`use pkg::`
     /// at the typing edge: the group is being typed)

@@ -30,11 +30,11 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
             TyRef::Path(h) => {
                 let segs = h.get(self.ctx.ast).segs.clone();
                 for seg in &segs {
-                    if decl_generics.contains(&seg.name)
-                        && !subst.iter().any(|(n, _)| *n == seg.name)
-                        && !out.contains(&seg.name)
+                    if decl_generics.contains(&seg.name.ident)
+                        && !subst.iter().any(|(n, _)| *n == seg.name.ident)
+                        && !out.contains(&seg.name.ident)
                     {
-                        out.push(seg.name);
+                        out.push(seg.name.ident);
                     }
                     for g in &seg.generics {
                         self.collect_free(*g, decl_generics, subst, out);
@@ -129,7 +129,7 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                     .is_some_and(|s| s.len() == 1 && s[0].generics.is_empty()) =>
             {
                 let segs = path_segs.expect("guard checked");
-                let name = segs[0].name;
+                let name = segs[0].name.ident;
                 if decl_generics.contains(&name) {
                     if let Some(&(_, prev)) = subst.iter().find(|(n, _)| *n == name) {
                         if prev != arg_ty {
@@ -188,7 +188,9 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
             }
             TyRef::Path(_)
                 if path_segs.as_ref().is_some_and(|s| {
-                    s.len() == 1 && !s[0].generics.is_empty() && s[0].name == rut_core::sym::FUTURE
+                    s.len() == 1
+                        && !s[0].generics.is_empty()
+                        && s[0].name.ident == rut_core::sym::FUTURE
                 }) && !self
                     .free_generics(param_node, decl_generics, subst)
                     .is_empty() =>
@@ -216,7 +218,7 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                         sp,
                         format!(
                             "`{}` takes {} type argument(s), {} given",
-                            self.ctx.name(segs[0].name),
+                            self.ctx.name(segs[0].name.ident),
                             concrete.len(),
                             arg_nodes.len()
                         ),
@@ -234,7 +236,7 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                         && !s[0].generics.is_empty()
                         && self
                             .ctx
-                            .find_iface(s[0].name)
+                            .find_iface(s[0].name.ident)
                             .map(|t| !t.generics.is_empty())
                             .unwrap_or(false)
                 }) && !self
@@ -251,7 +253,7 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                 // param's argument slots unify against them element-wise,
                 // binding `T := str`. A trait-object argument unifies
                 // through its own instantiation's args.
-                let tname = segs[0].name;
+                let tname = segs[0].name.ident;
                 let arg_nodes = segs[0].generics.clone();
                 let concrete: Vec<TypeId> = match self.ctx.types.kind(arg_ty).clone() {
                     TyKind::IfaceObj { iface_id } => {

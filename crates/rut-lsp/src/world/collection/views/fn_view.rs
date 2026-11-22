@@ -29,7 +29,7 @@ impl<'a> FnView<'a> {
         macro_rules! nm {
             ($t:ty) => {
                 if let Some(d) = self.h.downcast::<$t>() {
-                    return ast.name(d.get(ast).name);
+                    return ast.name(d.get(ast).name.ident);
                 }
             };
         }
@@ -45,7 +45,7 @@ impl<'a> FnView<'a> {
         macro_rules! ns {
             ($t:ty) => {
                 if let Some(d) = self.h.downcast::<$t>() {
-                    return Some(d.get(ast).name_span);
+                    return Some(d.get(ast).name.span);
                 }
             };
         }

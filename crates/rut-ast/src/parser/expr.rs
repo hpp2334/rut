@@ -11,8 +11,8 @@
 use crate::{
     ArrayLitNode, ArrayRepeatNode, AssignNode, AsyncBlockNode, AwaitNode, BinOp, BinaryNode,
     CallNode, CastNode, ExprRef, FPartAst, FStrNode, FieldInit, FieldNode, IfExprNode, IndexNode,
-    IsNode, LambdaNode, Lit, LitNode, MemberIdent, MethodNode, ParamNode, ParamRef, PathNode,
-    PathSeg, SelfNode, StructLitNode, TupleNode, UnOp, UnaryNode, WhenExprNode,
+    IsNode, LambdaNode, Lit, LitNode, MethodNode, ParamNode, ParamRef, PathNode, PathSeg, SelfNode,
+    StructLitNode, TupleNode, UnOp, UnaryNode, WhenExprNode,
 };
 use rut_lexer::span::Span;
 use rut_lexer::token::{FPart, FStrTok, FloatSuffix, Tok, Token};
@@ -123,8 +123,10 @@ impl ExprFrame {
                     let id = p.ast.intern(&name);
                     let param = ParamNode {
                         span: sp,
-                        name: id,
-                        name_span: sp,
+                        name: crate::Name {
+                            ident: id,
+                            span: sp,
+                        },
                         ty: None,
                     }
                     .allocate(&mut p.ast);
@@ -458,12 +460,12 @@ enum AtomStage {
     },
     PostDotGen {
         recv: ExprRef,
-        name: MemberIdent,
+        name: crate::Name,
         args: Vec<crate::TyRef>,
     },
     PostDotCall {
         recv: ExprRef,
-        name: MemberIdent,
+        name: crate::Name,
         generics: Vec<crate::TyRef>,
         args: Vec<ExprRef>,
         rparen: Option<Span>,
@@ -623,7 +625,13 @@ impl AtomFrame {
                 if matches!(p.peek(1).tok, Tok::LBrace) && !is_reserved_kw(&name) {
                     let ty_name = p.ast.intern(&name);
                     p.bump(); // the type ident
-                    return self.struct_enter(p, ty_name, sp);
+                    return self.struct_enter(
+                        p,
+                        crate::Name {
+                            ident: ty_name,
+                            span: sp,
+                        },
+                    );
                 }
                 // `async { .. }` — the async block primitive
                 if name == "async" && matches!(p.peek(1).tok, Tok::LBrace) {
@@ -634,8 +642,10 @@ impl AtomFrame {
                 }
                 p.bump();
                 let first = PathSeg {
-                    name: p.ast.intern(&name),
-                    name_span: sp,
+                    name: crate::Name {
+                        ident: p.ast.intern(&name),
+                        span: sp,
+                    },
                     generics: Vec::new(),
                 };
                 let segs = vec![first];
@@ -684,9 +694,9 @@ impl AtomFrame {
                     let member = match p.tok().clone() {
                         Tok::Int(v, None) => {
                             let sp = p.bump().span;
-                            MemberIdent {
-                                name: p.ast.intern(&v.to_string()),
-                                name_span: sp,
+                            crate::Name {
+                                ident: p.ast.intern(&v.to_string()),
+                                span: sp,
                             }
                         }
                         _ => {
@@ -708,9 +718,9 @@ impl AtomFrame {
                                 e = node;
                                 continue;
                             };
-                            MemberIdent {
-                                name: n.id,
-                                name_span: n.span,
+                            crate::Name {
+                                ident: n.id,
+                                span: n.span,
                             }
                         }
                     };
@@ -737,8 +747,7 @@ impl AtomFrame {
                     e = FieldNode {
                         span: Span::new(self.lo.lo, p.prev_end.max(self.lo.lo)),
                         recv: e,
-                        name: member.name,
-                        name_span: member.name_span,
+                        name: member,
                     }
                     .allocate(&mut p.ast);
                 }
@@ -836,8 +845,8 @@ impl AtomFrame {
 
     // -- struct literal: `Name { field: expr, .. }` / `Name<Ty> { .. }` --
 
-    fn struct_enter(&mut self, p: &mut Parser, ty_name: crate::IdentId, name_span: Span) -> Step {
-        self.struct_enter_gen(p, ty_name, Vec::new(), name_span)
+    fn struct_enter(&mut self, p: &mut Parser, head: crate::Name) -> Step {
+        self.struct_enter_gen(p, head, Vec::new())
     }
 
     /// `Self { .. }` — the literal's head is the `Self` TYPE node, not
@@ -855,19 +864,17 @@ impl AtomFrame {
     fn struct_enter_gen(
         &mut self,
         p: &mut Parser,
-        ty_name: crate::IdentId,
+        head: crate::Name,
         generics: Vec<crate::TyRef>,
-        name_span: Span,
     ) -> Step {
         // the type ident is consumed at every call site; its OWN token
-        // span rides in as `name_span` — the literal's head type node
-        // spans the operand's own first token
+        // span rides in as the head's `Name` — the literal's head type
+        // node spans the operand's own first token
         p.bump(); // {
         let ty = crate::TyPathNode {
             span: self.lo,
             segs: vec![PathSeg {
-                name: ty_name,
-                name_span,
+                name: head,
                 generics,
             }],
         }
@@ -895,8 +902,10 @@ impl AtomFrame {
             let e = PathNode {
                 span: id_sp,
                 segs: vec![PathSeg {
-                    name: f.id,
-                    name_span: f.span,
+                    name: crate::Name {
+                        ident: f.id,
+                        span: f.span,
+                    },
                     generics: Vec::new(),
                 }],
             }
@@ -911,8 +920,10 @@ impl AtomFrame {
     fn struct_field_done(&mut self, p: &mut Parser, f: Name, e: ExprRef) -> Step {
         match &mut self.stage {
             AtomStage::Struct { fields, .. } => fields.push(FieldInit {
-                name: f.id,
-                name_span: f.span,
+                name: crate::Name {
+                    ident: f.id,
+                    span: f.span,
+                },
                 value: e,
             }),
             _ => unreachable!("struct field at the wrong stage"),
@@ -985,8 +996,10 @@ impl AtomFrame {
             }
             if let AtomStage::PathColons { segs } = &mut self.stage {
                 segs.push(PathSeg {
-                    name: name.id,
-                    name_span: name.span,
+                    name: crate::Name {
+                        ident: name.id,
+                        span: name.span,
+                    },
                     generics: Vec::new(),
                 });
             }
@@ -1018,10 +1031,9 @@ impl AtomFrame {
                 segs[0].generics = args;
                 // `Name<Ty> { .. }` — the generic record literal
                 if segs.len() == 1 && matches!(p.tok(), Tok::LBrace) {
-                    let name = segs[0].name;
-                    let name_span = segs[0].name_span;
+                    let head = segs[0].name;
                     let generics = std::mem::take(&mut segs[0].generics);
-                    return self.struct_enter_gen(p, name, generics, name_span);
+                    return self.struct_enter_gen(p, head, generics);
                 }
                 self.stage = AtomStage::PathColons { segs };
                 self.pathcolons_top(p)
@@ -1031,8 +1043,10 @@ impl AtomFrame {
                 let name = *name;
                 let mut segs = std::mem::take(segs);
                 segs.push(PathSeg {
-                    name: name.id,
-                    name_span: name.span,
+                    name: crate::Name {
+                        ident: name.id,
+                        span: name.span,
+                    },
                     generics: args,
                 });
                 self.stage = AtomStage::PathColons { segs };
@@ -1056,8 +1070,7 @@ impl AtomFrame {
                     let node = FieldNode {
                         span: Span::new(self.lo.lo, p.prev_end.max(self.lo.lo)),
                         recv,
-                        name: name.name,
-                        name_span: name.name_span,
+                        name,
                     }
                     .allocate(&mut p.ast);
                     self.stage = AtomStage::Postfix { e: node };

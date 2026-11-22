@@ -135,20 +135,19 @@ impl<'a> Chain<'a> {
         // segment that closed at-or-before the cursor (`use
         // gadgets::layout::⏐` walks both)
         let before: Vec<String> = match d
-            .path_spans
+            .path
             .iter()
-            .position(|sp| sp.lo <= pos && pos <= sp.hi)
+            .position(|n| n.span.lo <= pos && pos <= n.span.hi)
         {
             Some(k) => d.path[..k]
                 .iter()
-                .map(|id| ast.name(*id).to_string())
+                .map(|n| ast.name(n.ident).to_string())
                 .collect(),
             None => d
                 .path
                 .iter()
-                .zip(&d.path_spans)
-                .filter(|(_, sp)| sp.hi <= pos)
-                .map(|(id, _)| ast.name(*id).to_string())
+                .filter(|n| n.span.hi <= pos)
+                .map(|n| ast.name(n.ident).to_string())
                 .collect(),
         };
         let Some(pkg) = before.first() else {

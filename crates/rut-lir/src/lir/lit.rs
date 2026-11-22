@@ -119,7 +119,7 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
             return Ok(false);
         };
         let segs = ph0.get(self.ctx.ast).segs.clone();
-        if segs.len() != 1 || segs[0].name != name || !segs[0].generics.is_empty() {
+        if segs.len() != 1 || segs[0].name.ident != name || !segs[0].generics.is_empty() {
             return Ok(false);
         }
         for p in &parts[1..] {
@@ -803,19 +803,19 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                 if seg.generics.is_empty() {
                     let arity = self
                         .ctx
-                        .find_data(seg.name)
+                        .find_data(seg.name.ident)
                         .map(|d| d.generics.len())
                         .or_else(|| {
                             self.ctx
                                 .extern_generics
-                                .get(&seg.name)
+                                .get(&seg.name.ident)
                                 .map(|g| g.params.len())
                         });
                     match (arity, expected) {
                         (Some(n), Some(e))
                             if n > 0
                                 && self.ctx.inst_data.get(&e).map(|(d, _)| *d)
-                                    == Some(seg.name) =>
+                                    == Some(seg.name.ident) =>
                         {
                             e
                         }
@@ -863,7 +863,7 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                         };
                         let fd = fh.get(self.ctx.ast);
                         let fty = self.resolve_type_now(fd.ty);
-                        list.push((fd.name, fty, fd.init));
+                        list.push((fd.name.ident, fty, fd.init));
                     }
                     self.ctx.cur_mod = saved_mod;
                     self.subst = saved_subst;
@@ -913,7 +913,7 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
         let mut val_regs: Vec<Option<u16>> = vec![None; field_list.len()];
         let mut set: Vec<bool> = vec![false; field_list.len()];
         for fi in &fields {
-            let (fname, v) = (&fi.name, &fi.value);
+            let (fname, v) = (&fi.name.ident, &fi.value);
             let Some(fidx) = field_list.iter().position(|(n, _, _)| n == fname) else {
                 self.ctx.err(
                     v.span(self.ctx.ast),
@@ -1061,7 +1061,7 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
         let n = desc.len();
         let mut val_regs: Vec<Option<u16>> = vec![None; n];
         for fi in &fields {
-            let (fname, v) = (&fi.name, &fi.value);
+            let (fname, v) = (&fi.name.ident, &fi.value);
             let Some(fidx) = desc.iter().position(|f| f.name == *fname) else {
                 self.ctx.err(
                     v.span(self.ctx.ast),
@@ -1317,7 +1317,7 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
         let lambda_param_names: Vec<IdentId> = params
             .iter()
             .filter_map(|p| match p {
-                ParamRef::Param(ph) => Some(ph.get(self.ctx.ast).name),
+                ParamRef::Param(ph) => Some(ph.get(self.ctx.ast).name.ident),
                 _ => None,
             })
             .collect();
@@ -1476,8 +1476,8 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                 // multi-seg chain (`acc.total`) names its head local just
                 // like a bare path does; lookup filters non-locals
                 let segs = &ph.get(self.ctx.ast).segs;
-                if !segs.is_empty() && out.len() < 4096 && !out.contains(&segs[0].name) {
-                    out.push(segs[0].name);
+                if !segs.is_empty() && out.len() < 4096 && !out.contains(&segs[0].name.ident) {
+                    out.push(segs[0].name.ident);
                 }
             }
             ExprRef::Self_(h) => {
@@ -1660,7 +1660,7 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                 // the loop var is ONE variable reassigned per iteration
                 // (the sugar law) — the element store counts as an
                 // assignment in BOTH frames
-                assigned.insert(n.var);
+                assigned.insert(n.var.ident);
                 self.walk_capture_law_expr(n.iter, inside, assigned, captured);
                 self.walk_capture_law_block(n.body, true, assigned, captured);
             }
@@ -1711,7 +1711,7 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
             ExprRef::Path(ph) => {
                 let segs = &ph.get(self.ctx.ast).segs;
                 if inside && !segs.is_empty() {
-                    captured.insert(segs[0].name);
+                    captured.insert(segs[0].name.ident);
                 }
             }
             ExprRef::Self_(h) => {
@@ -1764,7 +1764,7 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                 // crosses).
                 if let ExprRef::Path(ph) = n.target {
                     if ph.get(self.ctx.ast).segs.len() == 1 {
-                        assigned.insert(ph.get(self.ctx.ast).segs[0].name);
+                        assigned.insert(ph.get(self.ctx.ast).segs[0].name.ident);
                     }
                 }
                 self.walk_capture_law_expr(n.target, inside, assigned, captured);

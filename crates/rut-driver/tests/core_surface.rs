@@ -96,11 +96,11 @@ fn declared_names() -> DeclSurfaces {
                     "crossing signatures are concrete"
                 );
                 let ambient = matches!(d.linkage(), Linkage::Builtin { ambient: true });
-                builtin_fns.push((ast.name(d.name).to_string(), ambient));
+                builtin_fns.push((ast.name(d.name.ident).to_string(), ambient));
             }
             ItemRef::BuiltinTy(h) => {
                 let d = h.get(ast);
-                let n = ast.name(d.name).to_string();
+                let n = ast.name(d.name.ident).to_string();
                 // `str`/`bytes` are language primitives — their
                 // member contracts are doc surface, not registered natives
                 if !rut_ast::parser::is_primitive_ty(&n) {
@@ -109,7 +109,7 @@ fn declared_names() -> DeclSurfaces {
             }
             ItemRef::BuiltinPrimitive(h) => {
                 let d = h.get(ast);
-                let n = ast.name(d.name).to_string();
+                let n = ast.name(d.name.ident).to_string();
                 // `str`/`bytes` are language primitives — their
                 // member contracts are doc surface, not registered natives
                 if rut_ast::parser::is_primitive_ty(&n) {
@@ -118,7 +118,7 @@ fn declared_names() -> DeclSurfaces {
                 builtin_types.push((n, d.ambient()));
             }
             ItemRef::Interface(h) => {
-                plain_ifaces.push(ast.name(h.get(ast).name).to_string());
+                plain_ifaces.push(ast.name(h.get(ast).name.ident).to_string());
             }
             ItemRef::BuiltinImpl(h) => {
                 let d = h.get(ast);
@@ -126,11 +126,11 @@ fn declared_names() -> DeclSurfaces {
                     .methods
                     .iter()
                     .filter_map(|&m| match m {
-                        MethodRef::Method(mh) => Some(ast.name(mh.get(ast).name).to_string()),
+                        MethodRef::Method(mh) => Some(ast.name(mh.get(ast).name.ident).to_string()),
                         MethodRef::Error(_) => None,
                     })
                     .collect();
-                builtin_impls.push((ast.name(d.prim).to_string(), names));
+                builtin_impls.push((ast.name(d.prim.ident).to_string(), names));
             }
             // `host fn`/`host struct` are the embedder's surface — a
             // toolchain decl file may not spell them

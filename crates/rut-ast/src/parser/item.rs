@@ -169,10 +169,8 @@ pub(crate) fn classify_pub(p: &mut Parser, mods: Vec<ModifierNode>) -> Option<Fr
 pub(crate) struct UseFrame {
     modifiers: Vec<ModifierNode>,
     lo: u32,
-    path: Vec<IdentId>,
-    path_spans: Vec<Span>,
-    names: Vec<IdentId>,
-    name_spans: Vec<Span>,
+    path: Vec<crate::Name>,
+    names: Vec<crate::Name>,
     /// the `{..}` group's span (braces included) — stamped only when
     /// the group's closing brace landed
     group: Option<Span>,
@@ -184,20 +182,22 @@ impl UseFrame {
             modifiers,
             lo: 0,
             path: Vec::new(),
-            path_spans: Vec::new(),
             names: Vec::new(),
-            name_spans: Vec::new(),
             group: None,
         }
     }
 
     fn push_seg(&mut self, n: Name) {
-        self.path.push(n.id);
-        self.path_spans.push(n.span);
+        self.path.push(crate::Name {
+            ident: n.id,
+            span: n.span,
+        });
     }
     fn push_name(&mut self, n: Name) {
-        self.names.push(n.id);
-        self.name_spans.push(n.span);
+        self.names.push(crate::Name {
+            ident: n.id,
+            span: n.span,
+        });
     }
 
     pub(crate) fn step(&mut self, p: &mut Parser) -> Step {
@@ -265,26 +265,22 @@ impl UseFrame {
                     "`use pkg::A::B;` imports nothing — spell a name at the leaf (`::{ C }` or `::C`)",
                 ),
                 _ => {
-                    let id = self.path.pop().expect("path depth checked above");
-                    let sp = self.path_spans.pop().expect("spans parallel the ids");
-                    self.names.push(id);
-                    self.name_spans.push(sp);
+                    let seg = self.path.pop().expect("path depth checked above");
+                    self.names.push(seg);
                 }
             }
         }
         p.expect(Tok::Semi);
         // the head's span BEFORE the take — name_span keys on it
-        let name_span = self.path_spans.first().copied().unwrap_or(Span::new(0, 0));
+        let name_span = self.path.first().map(|n| n.span).unwrap_or(Span::new(0, 0));
         let node = with_doc!(
             p,
             UseNode {
                 span: p.span_from(self.lo),
                 modifiers: std::mem::take(&mut self.modifiers),
                 path: std::mem::take(&mut self.path),
-                path_spans: std::mem::take(&mut self.path_spans),
                 name_span,
                 names: std::mem::take(&mut self.names),
-                name_spans: std::mem::take(&mut self.name_spans),
                 group: self.group.take(),
                 doc: DocData::default(),
             }
@@ -298,7 +294,7 @@ impl UseFrame {
     /// sync point — the region the typing continues in) so the
     /// cursor's walk lands on a real node, and the diag rows stay
     fn partial(&mut self, p: &mut Parser) -> Step {
-        let name_span = self.path_spans.first().copied().unwrap_or(Span::new(0, 0));
+        let name_span = self.path.first().map(|n| n.span).unwrap_or(Span::new(0, 0));
         let end = p.span().lo.max(self.lo);
         let node = with_doc!(
             p,
@@ -306,10 +302,8 @@ impl UseFrame {
                 span: Span::new(self.lo, end),
                 modifiers: std::mem::take(&mut self.modifiers),
                 path: std::mem::take(&mut self.path),
-                path_spans: std::mem::take(&mut self.path_spans),
                 name_span,
                 names: std::mem::take(&mut self.names),
-                name_spans: std::mem::take(&mut self.name_spans),
                 group: None,
                 doc: DocData::default(),
             }
@@ -379,8 +373,10 @@ impl ModDeclFrame {
             ModDeclNode {
                 span: p.span_from(self.lo),
                 modifiers: std::mem::take(&mut self.modifiers),
-                name: self.name.id,
-                name_span: self.name.span,
+                name: crate::Name {
+                    ident: self.name.id,
+                    span: self.name.span,
+                },
                 doc: DocData::default(),
             }
         );
@@ -435,8 +431,10 @@ impl TypeAliasFrame {
                     AliasNode {
                         span: p.span_from(self.lo),
                         modifiers: std::mem::take(&mut self.modifiers),
-                        name: self.name.id,
-                        name_span: self.name.span,
+                        name: crate::Name {
+                            ident: self.name.id,
+                            span: self.name.span,
+                        },
                         target: ty,
                         doc: DocData::default(),
                     }
@@ -511,8 +509,10 @@ impl ModuleLetFrame {
                     ModuleLetNode {
                         span: p.span_from(self.lo),
                         modifiers: std::mem::take(&mut self.modifiers),
-                        name: self.name.id,
-                        name_span: self.name.span,
+                        name: crate::Name {
+                            ident: self.name.id,
+                            span: self.name.span,
+                        },
                         ty: self.ty.take(),
                         init,
                         doc: DocData::default(),
@@ -578,8 +578,10 @@ impl EnumFrame {
                         p,
                         crate::EnumMemberNode {
                             span: m.span,
-                            name: m.id,
-                            name_span: m.span,
+                            name: crate::Name {
+                                ident: m.id,
+                                span: m.span,
+                            },
                             doc: DocData::default(),
                         }
                     );
@@ -623,8 +625,10 @@ impl EnumFrame {
                 // consumed (a missing brace degenerates to the cut)
                 body_span: p.span_from(self.body_lo),
                 modifiers: std::mem::take(&mut self.modifiers),
-                name: self.name.id,
-                name_span: self.name.span,
+                name: crate::Name {
+                    ident: self.name.id,
+                    span: self.name.span,
+                },
                 members: std::mem::take(&mut self.members),
                 doc: DocData::default(),
             }
@@ -811,8 +815,10 @@ impl TyDeclFrame {
                 let field = FieldDeclNode {
                     span: ty_span,
                     modifiers: Vec::new(),
-                    name: inner,
-                    name_span: Span::new(ty_span.lo, ty_span.lo),
+                    name: crate::Name {
+                        ident: inner,
+                        span: Span::new(ty_span.lo, ty_span.lo),
+                    },
                     ty: t,
                     init: None,
                     doc: DocData::default(),
@@ -826,8 +832,10 @@ impl TyDeclFrame {
                         // boundary degenerates to the terminator cut
                         body_span: p.span_from(self.lo),
                         modifiers: std::mem::take(&mut self.modifiers),
-                        name: self.name.id,
-                        name_span: self.name.span,
+                        name: crate::Name {
+                            ident: self.name.id,
+                            span: self.name.span,
+                        },
                         generics: std::mem::take(&mut self.generics),
                         requires: std::mem::take(&mut self.requires),
                         newtype: true,
@@ -847,8 +855,10 @@ impl TyDeclFrame {
                             span: p.span_from(self.lo),
                             body_span,
                             modifiers: std::mem::take(&mut self.modifiers),
-                            name: self.name.id,
-                            name_span: self.name.span,
+                            name: crate::Name {
+                                ident: self.name.id,
+                                span: self.name.span,
+                            },
                             generics: std::mem::take(&mut self.generics),
                             requires: std::mem::take(&mut self.requires),
                             newtype: false,
@@ -865,8 +875,10 @@ impl TyDeclFrame {
                             span: p.span_from(self.lo),
                             body_span,
                             modifiers: std::mem::take(&mut self.modifiers),
-                            name: self.name.id,
-                            name_span: self.name.span,
+                            name: crate::Name {
+                                ident: self.name.id,
+                                span: self.name.span,
+                            },
                             generics: std::mem::take(&mut self.generics),
                             fields,
                             methods,
@@ -929,8 +941,10 @@ impl InterfaceFrame {
                         span: p.span_from(self.lo),
                         body_span,
                         modifiers: std::mem::take(&mut self.modifiers),
-                        name: self.name.id,
-                        name_span: self.name.span,
+                        name: crate::Name {
+                            ident: self.name.id,
+                            span: self.name.span,
+                        },
                         generics: std::mem::take(&mut self.generics),
                         methods,
                         doc: DocData::default(),
@@ -1120,7 +1134,7 @@ impl TypeBodyFrame {
     /// modifiers — any contextual ident; the CHECKER validates the
     /// closed marker set. The modifier's SPAN (brackets included)
     /// rides along — it is a ModifierNode's own span.
-    fn parse_member_marker(p: &mut Parser) -> Option<(IdentId, Span)> {
+    fn parse_member_marker(p: &mut Parser) -> Option<crate::Name> {
         if !matches!(p.tok(), Tok::LBracket) {
             return None;
         }
@@ -1137,7 +1151,10 @@ impl TypeBodyFrame {
                 "unterminated marker — `[disposal]` / `[iterable]` / `[constructor]`",
             );
         }
-        Some((word, Span::new(lo, p.prev_end.max(lo))))
+        Some(crate::Name {
+            ident: word,
+            span: Span::new(lo, p.prev_end.max(lo)),
+        })
     }
 
     fn members_top(&mut self, p: &mut Parser) -> Step {
@@ -1308,10 +1325,10 @@ impl TypeBodyFrame {
                             _ => break,
                         }
                     }
-                    if let Some((word, _)) = marker {
+                    if let Some(word) = marker {
                         p.err(lo, format!(
                             "`[{}]` marks an inherent impl member — engine contracts are declared on `impl Type {{ .. }}` blocks, never an interface",
-                            p.ast.name(word)
+                            p.ast.name(word.ident)
                         ));
                     }
                     if p.at_kw("fn") {
@@ -1332,10 +1349,10 @@ impl TypeBodyFrame {
                     // marker FIRST, then `pub`/`async`
                     let lo = p.span();
                     let mut mods: Vec<ModifierNode> = Vec::new();
-                    if let Some((word, sp)) = Self::parse_member_marker(p) {
+                    if let Some(word) = Self::parse_member_marker(p) {
                         mods.push(ModifierNode {
-                            span: sp,
-                            kind: ModKind::Marker(word),
+                            span: word.span,
+                            kind: ModKind::Marker(word.ident),
                         });
                     }
                     while let Tok::Ident(m) = p.tok().clone() {
@@ -1438,8 +1455,10 @@ impl TypeBodyFrame {
             FieldDeclNode {
                 span: Span::new(self.f_lo.lo, p.prev_end.max(self.f_lo.lo)),
                 modifiers: std::mem::take(&mut self.f_mods),
-                name: self.f_name.id,
-                name_span: self.f_name.span,
+                name: crate::Name {
+                    ident: self.f_name.id,
+                    span: self.f_name.span,
+                },
                 ty: self.f_ty.take().expect("field without a type"),
                 init,
                 doc: DocData::default(),
@@ -1552,8 +1571,10 @@ impl MethodFrame {
             MethodDeclNode {
                 span: p.span_from(self.lo),
                 modifiers: std::mem::take(&mut self.modifiers),
-                name: self.name.id,
-                name_span: self.name.span,
+                name: crate::Name {
+                    ident: self.name.id,
+                    span: self.name.span,
+                },
                 generics: std::mem::take(&mut self.generics),
                 bounds: std::mem::take(&mut self.bounds),
                 params: self.params.take().expect("method without params"),
@@ -1712,8 +1733,10 @@ impl FnFrame {
             FnNode {
                 span: p.span_from(self.lo),
                 modifiers: std::mem::take(&mut self.modifiers),
-                name: self.name.id,
-                name_span: self.name.span,
+                name: crate::Name {
+                    ident: self.name.id,
+                    span: self.name.span,
+                },
                 generics: std::mem::take(&mut self.generics),
                 params: self.params.take().expect("fn without params"),
                 ret: self.ret.take(),
@@ -1758,8 +1781,10 @@ impl FnFrame {
                     FnNode {
                         span: p.span_from(self.lo),
                         modifiers: std::mem::take(&mut self.modifiers),
-                        name: self.name.id,
-                        name_span: self.name.span,
+                        name: crate::Name {
+                            ident: self.name.id,
+                            span: self.name.span,
+                        },
                         generics: std::mem::take(&mut self.generics),
                         params: self.params.take().expect("fn without params"),
                         ret: self.ret.take(),
@@ -2026,8 +2051,10 @@ impl SurfaceFrame {
                     BuiltinImplNode {
                         span: p.span_from(self.lo),
                         modifiers: std::mem::take(&mut self.modifiers),
-                        prim: self.name.id,
-                        name_span: self.name.span,
+                        prim: crate::Name {
+                            ident: self.name.id,
+                            span: self.name.span,
+                        },
                         methods: std::mem::take(&mut self.methods),
                     }
                     .allocate(&mut p.ast)
@@ -2038,8 +2065,10 @@ impl SurfaceFrame {
                             span: p.span_from(self.lo),
                             body_span: body,
                             modifiers: std::mem::take(&mut self.modifiers),
-                            name: self.name.id,
-                            name_span: self.name.span,
+                            name: crate::Name {
+                                ident: self.name.id,
+                                span: self.name.span,
+                            },
                             members: std::mem::take(&mut self.methods),
                             doc: DocData::default(),
                         }
@@ -2052,8 +2081,10 @@ impl SurfaceFrame {
                             span: p.span_from(self.lo),
                             body_span: body,
                             modifiers: std::mem::take(&mut self.modifiers),
-                            name: self.name.id,
-                            name_span: self.name.span,
+                            name: crate::Name {
+                                ident: self.name.id,
+                                span: self.name.span,
+                            },
                             generics: std::mem::take(&mut self.generics),
                             members: std::mem::take(&mut self.methods),
                             doc: DocData::default(),
@@ -2116,8 +2147,10 @@ impl SurfaceFrame {
                         span: p.span_from(self.lo),
                         body_span,
                         modifiers: std::mem::take(&mut self.modifiers),
-                        name: self.name.id,
-                        name_span: self.name.span,
+                        name: crate::Name {
+                            ident: self.name.id,
+                            span: self.name.span,
+                        },
                         fields,
                         doc: DocData::default(),
                     }
@@ -2141,8 +2174,10 @@ impl SurfaceFrame {
             SurfaceFnNode {
                 span: p.span_from(self.lo),
                 modifiers: std::mem::take(&mut self.modifiers),
-                name: self.name.id,
-                name_span: self.name.span,
+                name: crate::Name {
+                    ident: self.name.id,
+                    span: self.name.span,
+                },
                 generics: std::mem::take(&mut self.generics),
                 params: self.params.take().expect("surface fn without params"),
                 ret: self.ret.take(),
@@ -2242,8 +2277,10 @@ impl ParamsFrame {
             }
             let node = ParamNode {
                 span: Span::new(lo.lo, p.prev_end.max(lo.lo)),
-                name: name.id,
-                name_span: name.span,
+                name: crate::Name {
+                    ident: name.id,
+                    span: name.span,
+                },
                 ty: None,
             }
             .allocate(&mut p.ast);
@@ -2263,8 +2300,10 @@ impl ParamsFrame {
                 let (lo, name) = (self.p_lo, self.p_name);
                 let node = ParamNode {
                     span: Span::new(lo.lo, p.prev_end.max(lo.lo)),
-                    name: name.id,
-                    name_span: name.span,
+                    name: crate::Name {
+                        ident: name.id,
+                        span: name.span,
+                    },
                     ty: Some(t),
                 }
                 .allocate(&mut p.ast);

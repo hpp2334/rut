@@ -728,7 +728,7 @@ impl<'a> P<'a> {
                     self.sp();
                 }
                 self.text("mod ");
-                self.text(self.a.name(d.name));
+                self.text(self.a.name(d.name.ident));
                 self.text(";");
             }
             ItemRef::Use(h) => {
@@ -745,7 +745,7 @@ impl<'a> P<'a> {
                     if i > 0 {
                         self.text("::");
                     }
-                    self.text(self.a.name(*seg));
+                    self.text(self.a.name(seg.ident));
                 }
                 if d.names.is_empty() {
                     self.text(";");
@@ -755,7 +755,7 @@ impl<'a> P<'a> {
                     let nm: Vec<String> = d
                         .names
                         .iter()
-                        .map(|&n| self.a.name(n).to_string())
+                        .map(|n| self.a.name(n.ident).to_string())
                         .collect();
                     let dummies: Vec<Span> = std::iter::repeat_n(span, nm.len()).collect();
                     self.ident_list(&nm, &dummies, span);
@@ -770,7 +770,7 @@ impl<'a> P<'a> {
                     self.sp();
                 }
                 self.text("type ");
-                self.text(self.a.name(d.name));
+                self.text(self.a.name(d.name.ident));
                 self.text(" = ");
                 self.ty(d.target);
                 self.text(";");
@@ -782,7 +782,7 @@ impl<'a> P<'a> {
                     self.sp();
                 }
                 self.text("let ");
-                self.text(self.a.name(d.name));
+                self.text(self.a.name(d.name.ident));
                 if let Some(t) = d.ty {
                     self.text(": ");
                     self.ty(t);
@@ -797,13 +797,13 @@ impl<'a> P<'a> {
                     self.sp();
                 }
                 self.text("enum ");
-                self.text(self.a.name(d.name));
+                self.text(self.a.name(d.name.ident));
                 self.text(" {");
                 let names: Vec<String> = d
                     .members
                     .iter()
                     .filter_map(|m| m.as_member())
-                    .map(|mh| self.a.name(mh.get(self.a).name).to_string())
+                    .map(|mh| self.a.name(mh.get(self.a).name.ident).to_string())
                     .collect();
                 if !names.is_empty() {
                     self.sp();
@@ -820,7 +820,7 @@ impl<'a> P<'a> {
                     self.sp();
                 }
                 self.text("struct ");
-                self.ty_decl(d.name, &d.generics, &[]);
+                self.ty_decl(d.name.ident, &d.generics, &[]);
                 self.body_of_fields_methods(&d.fields, &d.methods, Some(span));
             }
             ItemRef::Class(h) => {
@@ -830,7 +830,7 @@ impl<'a> P<'a> {
                     self.sp();
                 }
                 self.text("class ");
-                self.ty_decl(d.name, &d.generics, &d.requires);
+                self.ty_decl(d.name.ident, &d.generics, &d.requires);
                 // the positional one-field decl prints back in its
                 // spelling — never as the desugared braced body
                 if d.newtype {
@@ -851,7 +851,7 @@ impl<'a> P<'a> {
                     self.sp();
                 }
                 self.text("interface ");
-                self.text(self.a.name(d.name));
+                self.text(self.a.name(d.name.ident));
                 if !d.generics.is_empty() {
                     self.text("<");
                     let gnames = d
@@ -895,7 +895,7 @@ impl<'a> P<'a> {
                     self.text("async ");
                 }
                 self.text("fn ");
-                self.text(self.a.name(d.name));
+                self.text(self.a.name(d.name.ident));
                 self.gen_only(&d.generics);
                 self.params_list(&d.params, span);
                 if let Some(r) = d.ret {
@@ -911,7 +911,7 @@ impl<'a> P<'a> {
                     self.sp();
                 }
                 self.text("host struct ");
-                self.text(self.a.name(d.name));
+                self.text(self.a.name(d.name.ident));
                 self.fields_body(&d.fields, Some(span));
             }
             ItemRef::BuiltinTy(h) => {
@@ -924,7 +924,7 @@ impl<'a> P<'a> {
                 } else {
                     "pub builtin class "
                 });
-                self.text(self.a.name(d.name));
+                self.text(self.a.name(d.name.ident));
                 self.gen_only(&d.generics);
                 self.iface_body(&d.members, span);
             }
@@ -935,13 +935,13 @@ impl<'a> P<'a> {
                 } else {
                     "pub builtin primitive "
                 });
-                self.text(self.a.name(d.name));
+                self.text(self.a.name(d.name.ident));
                 self.iface_body(&d.members, span);
             }
             ItemRef::BuiltinImpl(h) => {
                 let d = h.get(self.a);
                 self.text("prelude builtin impl ");
-                self.text(self.a.name(d.prim));
+                self.text(self.a.name(d.prim.ident));
                 self.iface_body(&d.methods, span);
             }
             // the refusal gate (`is_clean`) means no Error slot can
@@ -1074,7 +1074,7 @@ impl<'a> P<'a> {
             if d.is_static() {
                 self.text("static ");
             }
-            self.text(self.a.name(d.name));
+            self.text(self.a.name(d.name.ident));
             self.text(": ");
             self.ty(d.ty);
             if let Some(i) = d.init {
@@ -1118,7 +1118,7 @@ impl<'a> P<'a> {
                     if i > 0 {
                         self.text("::");
                     }
-                    self.text(self.a.name(seg.name));
+                    self.text(self.a.name(seg.name.ident));
                     if !seg.generics.is_empty() {
                         self.text("<");
                         for (j, g) in seg.generics.iter().enumerate() {
@@ -1190,7 +1190,7 @@ impl<'a> P<'a> {
             }
             ParamRef::Param(h) => {
                 let d = h.get(self.a);
-                self.text(self.a.name(d.name));
+                self.text(self.a.name(d.name.ident));
                 if let Some(t) = d.ty {
                     self.text(": ");
                     self.ty(t);
@@ -1246,7 +1246,7 @@ impl<'a> P<'a> {
             self.text("entry ");
         }
         self.text("fn ");
-        self.text(self.a.name(f.name));
+        self.text(self.a.name(f.name.ident));
         self.gen_bounds(&f.generics, &f.bounds);
         self.text("(");
         let spans: Vec<Span> = f.params.iter().map(|&p| p.span(self.a)).collect();
@@ -1275,7 +1275,7 @@ impl<'a> P<'a> {
             self.text("async ");
         }
         self.text("fn ");
-        self.text(self.a.name(d.name));
+        self.text(self.a.name(d.name.ident));
         self.gen_bounds(&d.generics, &d.bounds);
         self.text("(");
         let spans: Vec<Span> = d.params.iter().map(|&p| p.span(self.a)).collect();
@@ -1400,13 +1400,13 @@ impl<'a> P<'a> {
                             if i > 0 {
                                 self.text(", ");
                             }
-                            self.text(self.a.name(n.0));
+                            self.text(self.a.name(n.ident));
                         }
                         self.text(")");
                     }
                     None => {
                         self.sp();
-                        self.text(self.a.name(d.name));
+                        self.text(self.a.name(d.name.ident));
                     }
                 }
                 if let Some(t) = d.ty {
@@ -1435,7 +1435,7 @@ impl<'a> P<'a> {
                 } else {
                     self.text("for (let ");
                 }
-                self.text(self.a.name(d.var));
+                self.text(self.a.name(d.var.ident));
                 self.text(" of ");
                 self.expr(d.iter);
                 self.text(")");
@@ -1445,7 +1445,7 @@ impl<'a> P<'a> {
             StmtRef::ForC(h) => {
                 let d = h.get(self.a);
                 self.text("for (let ");
-                self.text(self.a.name(d.var));
+                self.text(self.a.name(d.var.ident));
                 self.text(" = ");
                 self.expr(d.init);
                 self.text("; ");
@@ -1672,7 +1672,7 @@ impl<'a> P<'a> {
             if i > 0 {
                 self.text("::");
             }
-            self.text(self.a.name(seg.name));
+            self.text(self.a.name(seg.name.ident));
             if !seg.generics.is_empty() {
                 self.text("<");
                 for (j, g) in seg.generics.iter().enumerate() {
@@ -1811,8 +1811,8 @@ impl<'a> P<'a> {
                 let d = h.get(self.a);
                 self.operand(d.recv, L_POSTFIX, false);
                 self.text(".");
-                if let Some((name, _)) = d.member() {
-                    self.text(self.a.name(name));
+                if let Some(m) = d.member {
+                    self.text(self.a.name(m.ident));
                 }
                 if !d.generics.is_empty() {
                     self.text("<");
@@ -1834,7 +1834,7 @@ impl<'a> P<'a> {
                 let d = h.get(self.a);
                 self.operand(d.recv, L_POSTFIX, false);
                 self.text(".");
-                self.text(self.a.name(d.name));
+                self.text(self.a.name(d.name.ident));
             }
             ExprRef::Index(h) => {
                 let d = h.get(self.a);
@@ -1937,7 +1937,7 @@ impl<'a> P<'a> {
                     if i > 0 {
                         self.text(", ");
                     }
-                    self.text(self.a.name(fi.name));
+                    self.text(self.a.name(fi.name.ident));
                     self.text(": ");
                     self.expr(fi.value);
                 }
@@ -1946,7 +1946,7 @@ impl<'a> P<'a> {
                     self.rollback(m);
                     self.nl_band();
                     for fi in d.fields.iter() {
-                        self.text(self.a.name(fi.name));
+                        self.text(self.a.name(fi.name.ident));
                         self.text(": ");
                         self.expr(fi.value);
                         self.text(",");
@@ -2033,7 +2033,7 @@ impl<'a> P<'a> {
             if let ParamRef::Param(ph) = params[0] {
                 let d = ph.get(self.a);
                 if d.ty.is_none() {
-                    self.text(self.a.name(d.name));
+                    self.text(self.a.name(d.name.ident));
                     self.sp();
                     self.text("=>");
                     self.sp();

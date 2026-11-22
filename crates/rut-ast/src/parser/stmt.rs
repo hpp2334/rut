@@ -148,13 +148,13 @@ enum StmtStage {
     LetTy {
         is_const: bool,
         name: Name,
-        destructure: Option<Vec<(crate::IdentId, Span)>>,
+        destructure: Option<Vec<crate::Name>>,
     },
     /// `let`/`const` — waiting for the initializer
     LetInit {
         is_const: bool,
         name: Name,
-        destructure: Option<Vec<(crate::IdentId, Span)>>,
+        destructure: Option<Vec<crate::Name>>,
         ty: Option<TyRef>,
     },
     WhileCond,
@@ -220,7 +220,7 @@ impl StmtFrame {
                     let mut destructure_first: Option<Name> = None;
                     let destructure = if matches!(p.tok(), Tok::LParen) {
                         p.bump();
-                        let mut names: Vec<(rut_core::IdentId, Span)> = Vec::new();
+                        let mut names: Vec<crate::Name> = Vec::new();
                         loop {
                             let Some(n) = binding_name(p) else {
                                 return Step::Pop(Done::Failed);
@@ -228,7 +228,10 @@ impl StmtFrame {
                             if destructure_first.is_none() {
                                 destructure_first = Some(n);
                             }
-                            names.push((n.id, n.span));
+                            names.push(crate::Name {
+                                ident: n.id,
+                                span: n.span,
+                            });
                             if !p.eat_punct(Tok::Comma) {
                                 break;
                             }
@@ -323,7 +326,7 @@ impl StmtFrame {
         p: &mut Parser,
         is_const: bool,
         name: Name,
-        destructure: Option<Vec<(crate::IdentId, Span)>>,
+        destructure: Option<Vec<crate::Name>>,
         ty: Option<TyRef>,
     ) -> Step {
         p.expect(Tok::Eq);
@@ -342,7 +345,7 @@ impl StmtFrame {
         p: &mut Parser,
         is_const: bool,
         name: Name,
-        destructure: Option<Vec<(crate::IdentId, Span)>>,
+        destructure: Option<Vec<crate::Name>>,
         ty: Option<TyRef>,
         init: ExprRef,
     ) -> Step {
@@ -350,8 +353,10 @@ impl StmtFrame {
         let node = crate::LetStmtNode {
             span: Span::new(self.lo.lo, p.prev_end.max(self.lo.lo)),
             is_const,
-            name: name.id,
-            name_span: name.span,
+            name: crate::Name {
+                ident: name.id,
+                span: name.span,
+            },
             destructure,
             ty,
             init,
@@ -365,7 +370,7 @@ impl StmtFrame {
         p: &mut Parser,
         is_const: bool,
         name: Name,
-        destructure: Option<Vec<(crate::IdentId, Span)>>,
+        destructure: Option<Vec<crate::Name>>,
         ty: Option<TyRef>,
     ) -> Step {
         // the ladder's part tier: the init failed — the LET survives
@@ -508,8 +513,10 @@ impl StmtFrame {
             ) => Step::Pop(Done::Stmt(
                 ForOfNode {
                     span: Span::new(self.lo.lo, p.prev_end.max(self.lo.lo)),
-                    var: var.id,
-                    name_span: var.span,
+                    var: crate::Name {
+                        ident: var.id,
+                        span: var.span,
+                    },
                     is_const,
                     iter,
                     body,
@@ -527,8 +534,10 @@ impl StmtFrame {
             ) => Step::Pop(Done::Stmt(
                 ForCNode {
                     span: Span::new(self.lo.lo, p.prev_end.max(self.lo.lo)),
-                    var: var.id,
-                    name_span: var.span,
+                    var: crate::Name {
+                        ident: var.id,
+                        span: var.span,
+                    },
                     init,
                     cond,
                     update,
@@ -884,8 +893,10 @@ impl PatternFrame {
                 return self.genargs_top(p);
             }
             self.segs.push(PathSeg {
-                name: name.id,
-                name_span: name.span,
+                name: crate::Name {
+                    ident: name.id,
+                    span: name.span,
+                },
                 generics: Vec::new(),
             });
             if !p.eat_punct(Tok::Colon2) {
@@ -928,8 +939,10 @@ impl PatternFrame {
         let generics = std::mem::take(&mut self.genargs);
         self.stage = PatStage::Path;
         self.segs.push(PathSeg {
-            name: seg_name.id,
-            name_span: seg_name.span,
+            name: crate::Name {
+                ident: seg_name.id,
+                span: seg_name.span,
+            },
             generics,
         });
         self.path_resume(p)
