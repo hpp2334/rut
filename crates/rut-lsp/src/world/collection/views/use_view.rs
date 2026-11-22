@@ -46,3 +46,19 @@ impl<'a> UseView<'a> {
             .collect()
     }
 }
+
+/// one glob leaf — `use pkg::*` (the brace star rides beside the
+/// names too: `use pkg::{ A, * }` fans the named rows above AND this
+/// row). A glob fans out NO name rows in [`MountedFile::uses`] — the
+/// star is never offered — so the glob lanes (the import expansion in
+/// `import_map`, the re-export arm in the use tier) read these rows.
+#[derive(Clone)]
+pub(crate) struct GlobUse<'a> {
+    /// the walked path's head — the pkg the use spells
+    pub(crate) pkg: &'a str,
+    /// the interior segments between the head and the star
+    /// (`use pkg::a::b::*` → `["a", "b"]`)
+    pub(crate) interior: Vec<String>,
+    /// the declared visibility — a `pub use` glob re-exports
+    pub(crate) vis: Vis,
+}

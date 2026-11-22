@@ -13,6 +13,34 @@ use super::{
     UseView,
 };
 
+impl<'a> ExportRow<'a> {
+    /// the row's exported name — `None` for a `mod` edge (a walkable
+    /// child is a namespace segment, never a bound name): the glob
+    /// expansion's name listing reads this
+    pub(crate) fn name(&self) -> Option<&'a str> {
+        match self {
+            ExportRow::Mod(..) => None,
+            ExportRow::Ty(t) => Some(t.name()),
+            ExportRow::Fn(f) => Some(f.name()),
+            ExportRow::Let(l) => Some(l.name()),
+            ExportRow::ReExport(u) => Some(u.name()),
+        }
+    }
+
+    /// the file the row declares in — the glob expansion keys its
+    /// (name, pkg) rows on it (a chained re-export's rows answer from
+    /// the deeper pkg, where the name actually resolves)
+    pub(crate) fn file(&self) -> &'a MountedFile {
+        match self {
+            ExportRow::Mod(m, _) => m.file,
+            ExportRow::Ty(t) => t.file,
+            ExportRow::Fn(f) => f.file,
+            ExportRow::Let(l) => l.file,
+            ExportRow::ReExport(u) => u.file,
+        }
+    }
+}
+
 /// one member-tier row — the view the door found it from
 #[derive(Clone, Copy)]
 pub(crate) enum MemberRow<'a> {
@@ -160,6 +188,64 @@ impl<'a> Chain<'a> {
                     .collect(),
             ));
         };
+        let (path, rows) = self.walked_surface(pkg, &before[1..]);
+        Some(UseExports::Exports {
+            pkg: pkg.clone(),
+            path,
+            rows,
+        })
+    }
+
+    /// the walked (pkg, interior mod path)'s export rows beside the
+    /// resolved path — the ONE surface enumeration: the use tier
+    /// offers it and the glob expansion rides it (`import_map`'s name
+    /// listing; the `pub use pkg::*` re-export arm). The pub gates and
+    /// the walk live inside; the path is `""` when the walk answers
+    /// nothing (the callers render an empty tier, never a wrong one).
+    pub(crate) fn walked_surface(
+        &self,
+        pkg: &str,
+        interior: &[String],
+    ) -> (String, Vec<ExportRow<'a>>) {
+        let mut seen = HashSet::new();
+        self.walked_surface_in(pkg, interior, &mut seen)
+    }
+
+    /// the walked surface's exported names beside the pkg each name
+    /// declares in — the DECLARING file's module stamp when one rides
+    /// (a chained re-export's rows answer from the deeper pkg, where
+    /// the name actually resolves), else the spelled head (the flat
+    /// stem laws answer for it). `import_map`'s glob expansion reads
+    /// this projection of [`Chain::walked_surface`]; a `mod` child is
+    /// a walkable segment, never a bound name.
+    pub(crate) fn surface_names(
+        &self,
+        pkg: &'a str,
+        interior: &[String],
+    ) -> Vec<(&'a str, &'a str)> {
+        let mut out = Vec::new();
+        for r in self.walked_surface(pkg, interior).1 {
+            let Some(name) = r.name() else {
+                continue;
+            };
+            let owner = r.file().mount.module.as_deref().unwrap_or(pkg);
+            out.push((name, owner));
+        }
+        out
+    }
+
+    /// the seen-set threaded form — the recursion's spine. A `pub use
+    /// pkg::*;` edge met mid-walk expands the walked head's surface
+    /// through the chain behind the seen-set on walked heads: chained
+    /// glob re-exports (`a` pub-globs `b`, the consumer globs `a`)
+    /// terminate, so a hand-built host world can never loop the
+    /// editor.
+    fn walked_surface_in(
+        &self,
+        pkg: &str,
+        interior: &[String],
+        seen: &mut HashSet<String>,
+    ) -> (String, Vec<ExportRow<'a>>) {
         // the import is the gate-opener, so the `pub builtin` gate
         // does not bind here (this IS the use that names them)
         let scoped: Vec<&MountedFile> = self
@@ -167,11 +253,7 @@ impl<'a> Chain<'a> {
             .filter(|f| crate::world::pkg::matches_pkg(f, pkg))
             .collect();
         if scoped.is_empty() {
-            return Some(UseExports::Exports {
-                pkg: pkg.clone(),
-                path: String::new(),
-                rows: Vec::new(),
-            });
+            return (String::new(), Vec::new());
         }
         // resolve the walked module: the flat spelling answers the
         // root — for a mod-carrying package that is the ROOT file only
@@ -180,18 +262,13 @@ impl<'a> Chain<'a> {
         // trailing PARTIAL ident is not a walk segment — `use
         // pkg::layout::Co⏐` walks `layout` only)
         let carrying = scoped.iter().any(|f| f.mount.mod_path.is_some());
-        let interior: &[String] = &before[1..];
         let walked = if interior.is_empty() {
             Some(String::new())
         } else {
             crate::world::mods::walk_use_mods(self, pkg, interior)
         };
         let Some(path) = walked else {
-            return Some(UseExports::Exports {
-                pkg: pkg.clone(),
-                path: String::new(),
-                rows: Vec::new(),
-            });
+            return (String::new(), Vec::new());
         };
         let scope: Vec<&MountedFile> = if carrying {
             scoped
@@ -239,12 +316,29 @@ impl<'a> Chain<'a> {
                     rows.push(ExportRow::ReExport(u));
                 }
             }
+            // the glob re-export arm: `pub use json::*;` — the walked
+            // head's whole pub surface joins this module's own, NAMES
+            // only (a `mod` child is a walkable segment, never a
+            // re-exported name; the star itself is never offered).
+            // The expansion rides this same walk; the seen-set on
+            // walked heads keeps chained re-exports from looping
+            for g in f.glob_uses() {
+                if g.vis != Vis::Pub {
+                    continue;
+                }
+                let key = format!("{}::{}", g.pkg, g.interior.join("::"));
+                if !seen.insert(key) {
+                    continue;
+                }
+                for r in self.walked_surface_in(g.pkg, &g.interior, seen).1 {
+                    if matches!(r, ExportRow::Mod(..)) {
+                        continue;
+                    }
+                    rows.push(r);
+                }
+            }
         }
-        Some(UseExports::Exports {
-            pkg: pkg.clone(),
-            path,
-            rows,
-        })
+        (path, rows)
     }
 
     /// completion's BARE tier — the visible decls under the compiler's
@@ -258,7 +352,7 @@ impl<'a> Chain<'a> {
     /// only; methods are reached through a receiver, not named bare.
     pub(crate) fn bare(&self) -> Bare<'a> {
         let doc = self.head();
-        let imported = crate::world::pkg::import_map(doc);
+        let imported = crate::world::pkg::import_map(self, doc);
         let mut out = Bare {
             types: Vec::new(),
             fns: Vec::new(),

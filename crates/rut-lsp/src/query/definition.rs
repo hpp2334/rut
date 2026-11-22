@@ -213,7 +213,7 @@ fn get_definition_targets(ctx: &Ctx, pos: u32) -> Vec<DefLocation> {
     if h.is::<rut_ast::SelfNode>() || h.is::<rut_ast::SelfTyNode>() {
         return Vec::new();
     }
-    let imported = import_map(doc);
+    let imported = import_map(ctx.chain, doc);
 
     // 1. decl sites — the cursor rides a decl node's OWN name span
     //    (field / enum member / module let / fn decl / `mod` edge —
@@ -342,7 +342,7 @@ fn get_type_definition_targets(ctx: &Ctx, pos: u32) -> Vec<DefLocation> {
     {
         return Vec::new();
     }
-    let imported = import_map(doc);
+    let imported = import_map(ctx.chain, doc);
 
     // member position: the member's DECLARED type — `w.item` (a
     // `?Circle` field) jumps to the `Circle` decl; a resolved receiver

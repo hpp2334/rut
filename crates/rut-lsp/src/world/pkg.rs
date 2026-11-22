@@ -5,7 +5,7 @@
 
 use std::collections::HashMap;
 
-use crate::world::collection::MountedFile;
+use crate::world::collection::{Chain, MountedFile};
 
 /// does this file speak for `pkg`? — the explicit manifest module
 /// name FIRST (`Mount::module`, the dep/prelude file's `Some`); on
@@ -27,10 +27,25 @@ pub fn matches_pkg(f: &MountedFile, pkg: &str) -> bool {
 /// the document's import map: imported name -> its `use` pkg — the
 /// (name, pkg) set shape the completion tiers match foreign names
 /// against (the bare tier's imported gate and the auto-import tier's
-/// dedup)
-pub(crate) fn import_map(doc: &MountedFile) -> HashMap<&str, &str> {
-    doc.uses()
+/// dedup). The explicit leaves answer exactly as before (leaf →
+/// head); a glob leaf (`use pkg::*`) binds every pub name the walked
+/// path exports — enumerated through the chain (the same surface walk
+/// the use tier offers), keyed to the pkg each name declares in (the
+/// head itself on the direct shape), inserted ONLY when the key is
+/// absent (explicit wins; stable first-occurrence merge).
+pub(crate) fn import_map<'a>(
+    chain: &'a Chain<'a>,
+    doc: &'a MountedFile,
+) -> HashMap<&'a str, &'a str> {
+    let mut out: HashMap<&'a str, &'a str> = doc
+        .uses()
         .into_iter()
         .map(|u| (u.name(), u.pkg()))
-        .collect()
+        .collect();
+    for g in doc.glob_uses() {
+        for (name, pkg) in chain.surface_names(g.pkg, &g.interior) {
+            out.entry(name).or_insert(pkg);
+        }
+    }
+    out
 }

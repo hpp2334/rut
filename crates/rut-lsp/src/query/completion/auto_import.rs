@@ -51,11 +51,11 @@ pub(super) fn auto_import_completions(
                 .as_deref()
                 .is_some_and(|m| direct_deps.contains(m))
     };
-    let imported: HashSet<(&str, &str)> = chain
-        .head()
-        .uses()
+    // the (name, pkg) set the glob-aware import map spells — a name a
+    // glob leaf already bound is imported, exactly like an explicit
+    // leaf: never re-offered with an insert edit
+    let imported: HashSet<(&str, &str)> = crate::world::pkg::import_map(chain, chain.head())
         .into_iter()
-        .map(|u| (u.name(), u.pkg()))
         .collect();
     let gated: HashSet<String> = chain.iter().flat_map(|f| f.pub_gated()).collect();
     let insert = import_insert(src, ast);

@@ -32,7 +32,7 @@ pub(super) fn type_tier_completions(chain: &Chain) -> Vec<CompletionOut> {
         );
     }
     let doc = chain.head();
-    let imported = crate::world::pkg::import_map(doc);
+    let imported = crate::world::pkg::import_map(chain, doc);
     for f in chain.iter() {
         let own = std::ptr::eq(f, doc);
         let used_from: HashSet<&str> = imported

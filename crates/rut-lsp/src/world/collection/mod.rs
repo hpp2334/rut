@@ -23,7 +23,7 @@ mod views;
 
 pub(crate) use member::{enclosing_type, used_ifaces, MemberHit, MemberTarget, RecvNode};
 pub(crate) use tiers::{ExportRow, MemberRow, UseExports};
-pub(crate) use views::{FnView, LetView, MemberView, ModView, TyView, UseView};
+pub(crate) use views::{FnView, GlobUse, LetView, MemberView, ModView, TyView, UseView};
 
 use rut_ast::{
     AnyHandle, BuiltinPrimitiveNode, BuiltinTyNode, ItemRef, MethodRef, SurfaceFnNode, UseNode,
@@ -158,7 +158,8 @@ impl MountedFile {
     }
 
     /// use views — one per imported name (a brace list fans out, the
-    /// names in order)
+    /// names in order; a glob leaf fans out none — the star is never
+    /// offered)
     pub(crate) fn uses(&self) -> Vec<UseView<'_>> {
         let mut out = Vec::new();
         for &h in &self.decls.uses {
@@ -168,6 +169,35 @@ impl MountedFile {
             for i in 0..u.get(self.doc.ast()).names.len() {
                 out.push(UseView { file: self, h, i });
             }
+        }
+        out
+    }
+
+    /// the glob leaves — the `use pkg::*` edges, in source order (they
+    /// fan out no name rows above, so the glob lanes read the nodes
+    /// directly)
+    pub(crate) fn glob_uses(&self) -> Vec<GlobUse<'_>> {
+        let ast = self.doc.ast();
+        let mut out = Vec::new();
+        for &h in &self.decls.uses {
+            let Some(u) = h.downcast::<UseNode>() else {
+                continue;
+            };
+            let d = u.get(ast);
+            if d.glob.is_none() {
+                continue;
+            }
+            let Some(head) = d.path.first() else {
+                continue;
+            };
+            out.push(GlobUse {
+                pkg: ast.name(head.ident),
+                interior: d.path[1..]
+                    .iter()
+                    .map(|n| ast.name(n.ident).to_string())
+                    .collect(),
+                vis: d.vis(),
+            });
         }
         out
     }
