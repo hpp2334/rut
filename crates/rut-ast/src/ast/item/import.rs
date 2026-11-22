@@ -29,6 +29,12 @@ pub struct UseNode {
     /// leaf (`use pkg::A;`) and for the incomplete shape (`use pkg::`
     /// at the typing edge: the group is being typed)
     pub group: Option<Span>,
+    /// the glob leaf — the `*`'s own span when the use spells `pkg::*`
+    /// (flat) or its brace list carries a star (`{ A, * }`). `None` for
+    /// ordinary uses. A glob binds the walked path's pub surface (the
+    /// expansion lives in the compile/editor lanes, not the tree); a
+    /// glob leaf is a COMPLETE leaf.
+    pub glob: Option<Span>,
     pub doc: DocData,
 }
 

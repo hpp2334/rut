@@ -259,6 +259,19 @@ fn the_flat_and_braced_use_leaves_are_complete() {
             assert_eq!(d.text(g), "{A, B}");
         }
     }
+    // the glob leaf is a COMPLETE leaf too — the star is the leaf, in
+    // both spellings (`use p::*;` flat, `use p::{ * }` braced)
+    for src in ["use p::*;\n", "use p::{*};\n", "use p::{ A, * };\n"] {
+        let d = parse_clean(src);
+        let ast = d.ast();
+        for i in ast.root().items(ast) {
+            if let ItemRef::Use(u) = *i {
+                let ud = u.get(ast);
+                assert!(!ast.is_incomplete(u.any()), "{src} is incomplete");
+                assert!(ud.glob.is_some(), "{src}: the star's span rides the node");
+            }
+        }
+    }
 }
 
 #[test]

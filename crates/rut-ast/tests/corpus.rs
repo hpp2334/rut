@@ -636,6 +636,84 @@ fn use_with_an_empty_leaf_diagnoses() {
 }
 
 #[test]
+fn glob_use_leaves_parse_clean_and_complete() {
+    // the glob leaf — the star terminates the walk and IS the leaf:
+    // `glob` carries the star's span, `names` stay empty, the walked
+    // path survives, and the leaf is COMPLETE (the incomplete rung's
+    // absence rule names the glob)
+    let flat = |src: &str, want_path: &[&str]| {
+        let (doc, diags) = parse(src, Mode::Impl);
+        let ast = doc.ast();
+        assert!(diags.is_empty(), "{src}: {diags:?}");
+        let items = ast.root().items(ast);
+        match items[0] {
+            ItemRef::Use(h) => {
+                let u = h.get(ast);
+                let segs: Vec<&str> = u.path.iter().map(|s| ast.name(s.ident)).collect();
+                assert_eq!(segs, want_path, "{src}: the walked path survives");
+                assert!(u.names.is_empty(), "{src}: the glob leaf imports no name");
+                let Some(star) = u.glob else {
+                    panic!("{src}: the star's span");
+                };
+                assert_eq!(doc.text(star), "*", "{src}: the glob is the star itself");
+                assert!(
+                    !ast.is_incomplete(h.any()),
+                    "{src}: a glob leaf is a COMPLETE leaf"
+                );
+            }
+            k => panic!("{src}: expected a use item, got {k:?}"),
+        }
+    };
+    flat("use pkg::*;\n", &["pkg"]);
+    // the nested walk — the star at any depth, nothing pops
+    flat("use pkg::a::*;\n", &["pkg", "a"]);
+    flat("use pkg::a::b::*;\n", &["pkg", "a", "b"]);
+    // the brace star rides BESIDE the names, in either spelled slot
+    for (src, want_names) in [
+        ("use pkg::{ A, * };\n", vec!["A"]),
+        ("use pkg::{ *, A };\n", vec!["A"]),
+        ("use pkg::{*};\n", Vec::<&str>::new()),
+    ] {
+        let (doc, diags) = parse(src, Mode::Impl);
+        let ast = doc.ast();
+        assert!(diags.is_empty(), "{src}: {diags:?}");
+        let items = ast.root().items(ast);
+        match items[0] {
+            ItemRef::Use(h) => {
+                let u = h.get(ast);
+                assert_eq!(u.path.len(), 1, "{src}: the degenerate path");
+                assert!(u.group.is_some(), "{src}: the brace group is stamped");
+                let Some(star) = u.glob else {
+                    panic!("{src}: the brace star");
+                };
+                assert_eq!(doc.text(star), "*", "{src}: the glob is the star itself");
+                let nms: Vec<&str> = u.names.iter().map(|n| ast.name(n.ident)).collect();
+                assert_eq!(nms, want_names, "{src}: the names beside the star");
+                assert!(
+                    !ast.is_incomplete(h.any()),
+                    "{src}: a glob leaf is a COMPLETE leaf"
+                );
+            }
+            k => panic!("{src}: expected a use item, got {k:?}"),
+        }
+    }
+    // the negative law: `use pkg::A::B::*;` is LEGAL — the glob leaf
+    // never runs the nothing-pops diagnosis (`use pkg::A::B;` still does)
+    let (doc, diags) = parse("use pkg::A::B::*;\n", Mode::Impl);
+    let ast = doc.ast();
+    assert!(diags.is_empty(), "the deep glob is legal: {diags:?}");
+    match ast.root().items(ast)[0] {
+        ItemRef::Use(h) => {
+            let u = h.get(ast);
+            let segs: Vec<&str> = u.path.iter().map(|s| ast.name(s.ident)).collect();
+            assert_eq!(segs, vec!["pkg", "A", "B"], "the walked path survives");
+            assert!(u.names.is_empty() && u.glob.is_some(), "the glob leaf");
+        }
+        k => panic!("expected a use item, got {k:?}"),
+    }
+}
+
+#[test]
 fn pub_use_parses_with_the_reexport_vis() {
     // `pub use` — the re-export tool: the use grammar is unchanged
     // beneath the modifier (brace lists, paths, the single-name leaf),
