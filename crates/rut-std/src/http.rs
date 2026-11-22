@@ -50,12 +50,23 @@
 //! - Transport failure at send: status 0 + `http_err` text (the kept
 //!   law); the failure response's chunk source is born dead, so
 //!   body/stream degrade to empty / immediate EOF.
+//! - THE STREAM BUDGET: the queue is BOUNDED — once the queued bytes
+//!   sit at the budget ([`HttpBodyWriter::DEFAULT_STREAM_BUDGET_BYTES`],
+//!   64 × 16 KiB ≈ 1 MiB) the producer PARKS on the source's condvar
+//!   until readers drain below it: real TCP flow control (the pump
+//!   stalls, the socket fills, the server feels it), every
+//!   [`pkg_over`] backend inherits it. One poll per `await next()` is
+//!   the consumer pacing — nothing reads ahead. The one-shot body
+//!   drain is EXEMPT (its answer IS the whole body — gating buys
+//!   nothing): taking the body lane stands the gate down.
 //!
 //! THREAD LAW: the VM stays single-threaded. Worker threads touch only
 //! the Completers (atomics + a Mutex slot) and the chunk source (one
-//! `Mutex<Inner>`); the response/stream rut cells are minted by the
-//! rows ON the VM thread. `std::thread` appears only in the reqwest
-//! lane's closures.
+//! `Mutex<Inner>` + the sibling condvar the pump parks on at the
+//! budget — waiters complete and the budget notify fires OUTSIDE the
+//! lock; the slot Mutex and this Mutex never nest). The response and
+//! stream rut cells are minted by the rows ON the VM thread.
+//! `std::thread` appears only in the reqwest lane's closures.
 //!
 //! THE SWAPPABLE-BACKEND SEAM: the lane-independent core above is the
 //! public embedder API. [`HttpRequest`] carries the crossing parts,
@@ -80,7 +91,7 @@
 //! wasm embedder brings its own backend instead.
 
 use std::collections::VecDeque;
-use std::sync::{Arc, Mutex};
+use std::sync::{Arc, Condvar, Mutex};
 
 use rut_core::types::{TypeId, TY_OPAQUE};
 use rut_vm::interp::Ret;
@@ -89,15 +100,19 @@ use rut_vm::{HostPayload, Opaque, OpaqueRef, Slot, Trap, TrapKind};
 
 // ----------------------------------------------------- the payload ----
 
-/// The chunk source shared between the response, its minted reader and
-/// the worker thread: the queue the worker pushes into, the sticky
+/// The chunk source's state, shared between the response, its minted
+/// reader and the worker thread: the queue the worker pushes into, its
+/// byte weight (`queued` — what the budget gate reads), the sticky
 /// mid-read failure, the EOF flag, and the two one-shot lanes' pending
 /// completer slots (one per read — the sequenced-Completer sibling the
 /// plan spells). One Mutex; workers complete parked Completers from
 /// OUTSIDE the lock (the thread law: the slot Mutex and this Mutex
 /// never nest).
 pub(crate) struct Inner {
+    /// the arrived chunks — `queued` is their byte weight, kept in
+    /// step at every push / pop / drain (the budget gate's number)
     chunks: VecDeque<Vec<u8>>,
+    queued: usize,
     eof: bool,
     /// the sticky mid-read failure — nil until one fails, then non-nil
     /// forever (`http_read_err` reads it; `next`'s nil means EOF *or*
@@ -111,12 +126,41 @@ pub(crate) struct Inner {
 }
 
 type CompleterOf<T> = rut_vm::Completer<T>;
-pub(crate) type Shared = Arc<Mutex<Inner>>;
+/// The chunk source's cells: the state mutex and the SIBLING condvar
+/// the pump lane parks on while the queue sits at the budget (the
+/// wait releases the mutex; the notify fires after it — the thread
+/// law). The alias is the shared handle everything holds.
+pub(crate) struct Source {
+    g: Mutex<Inner>,
+    room: Condvar,
+}
+
+pub(crate) type Shared = Arc<Source>;
+
+impl Source {
+    fn fresh() -> Shared {
+        Arc::new(Source {
+            g: Mutex::new(Inner::fresh()),
+            room: Condvar::new(),
+        })
+    }
+    fn dead() -> Shared {
+        Arc::new(Source {
+            g: Mutex::new(Inner::dead()),
+            room: Condvar::new(),
+        })
+    }
+    /// the one lock (the expect is the house panic text)
+    fn lock(&self) -> std::sync::MutexGuard<'_, Inner> {
+        self.g.lock().expect("http read state")
+    }
+}
 
 impl Inner {
     fn fresh() -> Inner {
         Inner {
             chunks: VecDeque::new(),
+            queued: 0,
             eof: false,
             failed: None,
             body_waiter: None,
@@ -131,6 +175,12 @@ impl Inner {
         let mut i = Inner::fresh();
         i.eof = true;
         i
+    }
+    /// the budget gate's predicate: the queue sits at/over the budget
+    /// (the gate bounds PUSHES, not chunk sizes — one push may take the
+    /// queue one chunk past; the next parks until readers drain below)
+    fn over_budget(&self) -> bool {
+        self.queued >= HttpBodyWriter::DEFAULT_STREAM_BUDGET_BYTES
     }
 }
 
@@ -156,7 +206,7 @@ impl HttpResponse {
     /// (from any thread). The body stays UNREAD until a taker comes —
     /// the one-shot law starts here.
     pub fn streaming(status: u16) -> (HttpResponse, HttpBodyWriter) {
-        let src: Shared = Arc::new(Mutex::new(Inner::fresh()));
+        let src: Shared = Source::fresh();
         (
             HttpResponse {
                 status,
@@ -174,7 +224,7 @@ impl HttpResponse {
         HttpResponse {
             status: 0,
             err: Some(msg),
-            read: Arc::new(Mutex::new(Inner::dead())),
+            read: Source::dead(),
         }
     }
 }
@@ -236,13 +286,40 @@ pub struct HttpRequest {
 /// nested with a Completer slot (the thread law). The terminal flags
 /// are sticky — the read side answers EOF/failed from the first
 /// terminal on.
+///
+/// THE BOUNDED LANE: `push_chunk` is the budget gate's home — past
+/// [`HttpBodyWriter::DEFAULT_STREAM_BUDGET_BYTES`] queued it PARKS the
+/// calling thread on the source's condvar until readers drain below
+/// the budget (real TCP flow control: the pump stalls, the socket
+/// fills, the server feels it). MAY BLOCK — the worker thread only
+/// (the backend contract's never-block-the-VM law). The one-shot body
+/// drain stands the gate down (its answer IS the whole body).
 pub struct HttpBodyWriter {
     src: Shared,
 }
 
 impl HttpBodyWriter {
-    /// one more chunk arrived
+    /// the stream budget: the queue bound the pump gate enforces —
+    /// 64 × 16 KiB chunks ≈ 1 MiB. Past it [`HttpBodyWriter::push_chunk`]
+    /// parks the producer until readers drain below; the one-shot body
+    /// lane is exempt.
+    pub const DEFAULT_STREAM_BUDGET_BYTES: usize = 64 * 16 * 1024;
+
+    /// one more chunk arrived — BOUNDED: while the queue sits at the
+    /// budget and the one-shot body lane hasn't taken over (its answer
+    /// IS the whole body — gating buys nothing there), the caller
+    /// parks on the source's condvar until readers drain below it. A
+    /// terminal seen under the lock (a watchdog `end`/`fail` from
+    /// another thread) releases the park. Consumer pacing propagates
+    /// end to end: one poll per `await next()` pops one chunk, the pop
+    /// notifies, the pump re-checks.
     pub fn push_chunk(&self, chunk: Vec<u8>) {
+        {
+            let mut g = self.src.lock();
+            while g.over_budget() && !g.body_taken && !g.eof && g.failed.is_none() {
+                g = self.src.room.wait(g).expect("http read state");
+            }
+        }
         push_chunk(&self.src, chunk);
     }
 
@@ -285,15 +362,26 @@ pub trait HttpBackend: Send + Sync + 'static {
 // (a worker) and the fixture settle (the test loop) land here alike.
 
 /// one more chunk arrived — a parked stream read takes the queue's
-/// front (FIFO), a parked body read keeps waiting (it drains at EOF)
+/// front (FIFO), a parked body read keeps waiting (it drains at EOF).
+/// UNGATED on purpose: the fixture's virtual-clock lane rides this
+/// path ON the VM thread (a park here would deadlock the driving
+/// loop); the BUDGET gate lives on [`HttpBodyWriter::push_chunk`] —
+/// every real backend's lane.
 fn push_chunk(src: &Shared, chunk: Vec<u8>) {
     let wake = {
-        let mut g = src.lock().expect("http read state");
+        let mut g = src.lock();
+        let n = chunk.len();
         g.chunks.push_back(chunk);
-        g.stream_waiter.take().map(|w| (w, g.chunks.pop_front()))
+        g.queued += n;
+        g.stream_waiter.take().and_then(|w| {
+            g.chunks.pop_front().map(|front| {
+                g.queued -= front.len();
+                (w, front)
+            })
+        })
     };
     if let Some((w, front)) = wake {
-        w.complete(front); // the queue is non-empty — always a chunk
+        w.complete(Some(front)); // the queue is non-empty — always a chunk
     }
 }
 
@@ -301,7 +389,7 @@ fn push_chunk(src: &Shared, chunk: Vec<u8>) {
 /// gets nil, the body lane the short drain (never a trap)
 fn fail_source(src: &Shared, msg: String) {
     let wake = {
-        let mut g = src.lock().expect("http read state");
+        let mut g = src.lock();
         g.failed = Some(msg);
         // the drain is a COPY — the queued chunks stay for the stream
         // lane's later reads (they did arrive; next serves them before
@@ -310,6 +398,9 @@ fn fail_source(src: &Shared, msg: String) {
         (g.stream_waiter.take(), g.body_waiter.take(), drain)
     };
     let (sw, bw, drain) = wake;
+    // release a pump parked at the budget (a terminal stands the gate
+    // down — it re-checks under the lock and moves on)
+    src.room.notify_all();
     if let Some(w) = sw {
         w.complete(None);
     }
@@ -322,7 +413,7 @@ fn fail_source(src: &Shared, msg: String) {
 /// its full drain
 fn end_source(src: &Shared) {
     let wake = {
-        let mut g = src.lock().expect("http read state");
+        let mut g = src.lock();
         g.eof = true;
         // a copy, same law: queued chunks stay readable by the stream
         // lane after the EOF flag; the body lane's drain copies them
@@ -330,6 +421,8 @@ fn end_source(src: &Shared) {
         (g.stream_waiter.take(), g.body_waiter.take(), drain)
     };
     let (sw, bw, drain) = wake;
+    // release a pump parked at the budget (same law as the failure)
+    src.room.notify_all();
     if let Some(w) = sw {
         w.complete(None);
     }
@@ -354,24 +447,44 @@ fn install_read_rows(pkg: &mut HostPkg) {
         move |r: Opaque<HttpResponse>| -> CompleterOf<Vec<u8>> {
             let comp = CompleterOf::new();
             let mut immediate: Option<Vec<u8>> = None;
+            // did this call TAKE the body lane (vs degrade)? only a
+            // take stands the budget gate down
+            let mut took = false;
+            let mut src: Option<Shared> = None;
             r.with(|resp| {
-                let mut g = resp.read.lock().expect("http read state");
+                let mut g = resp.read.lock();
+                src = Some(Arc::clone(&resp.read));
                 if resp.err.is_some() || g.body_taken || g.stream_minted {
                     immediate = Some(Vec::new());
                     return;
                 }
                 g.body_taken = true;
+                took = true;
                 if g.failed.is_some() {
-                    immediate = Some(g.chunks.drain(..).flatten().collect::<Vec<u8>>()); // the short drain
+                    let short: Vec<u8> = g.chunks.drain(..).flatten().collect();
+                    g.queued -= short.len();
+                    immediate = Some(short); // the short drain
                     return;
                 }
                 if g.eof {
-                    immediate = Some(g.chunks.drain(..).flatten().collect());
+                    let rest: Vec<u8> = g.chunks.drain(..).flatten().collect();
+                    g.queued -= rest.len();
+                    immediate = Some(rest);
                     return;
                 }
                 g.body_waiter = Some(comp.clone());
             })
             .expect("http_body: the response handle is live");
+            if took {
+                // the body lane took over: STAND THE GATE DOWN (its
+                // answer IS the whole body — gating buys nothing) and
+                // release a pump parked at the budget — the drain
+                // waits for EOF, and the parked pump is the only one
+                // who can reach it
+                if let Some(s) = src.as_ref() {
+                    s.room.notify_all();
+                }
+            }
             if let Some(bytes) = immediate {
                 comp.complete(bytes);
             }
@@ -381,6 +494,8 @@ fn install_read_rows(pkg: &mut HostPkg) {
     // the stream read: one chunk per future; nil = EOF-or-failed (the
     // sticky read err names which). A degraded mint answers an
     // immediate EOF. A failed completer is NOT the mid-read path.
+    // ONE POLL PER AWAIT: exactly one pop here — the consumer's pace
+    // is the pump's pace (the pop notifies the parked pump).
     rut_vm::pkg_async_fn!(
         pkg,
         "stream::http_stream_next",
@@ -388,13 +503,18 @@ fn install_read_rows(pkg: &mut HostPkg) {
         move |s: Opaque<HttpStream>| -> CompleterOf<Option<Vec<u8>>> {
             let comp = CompleterOf::new();
             let mut immediate: Option<Option<Vec<u8>>> = None;
+            let mut popped = false;
+            let mut src: Option<Shared> = None;
             s.with(|st| {
                 if st.dead {
                     immediate = Some(None);
                     return;
                 }
-                let mut g = st.src.lock().expect("http read state");
+                src = Some(Arc::clone(&st.src));
+                let mut g = st.src.lock();
                 if let Some(chunk) = g.chunks.pop_front() {
+                    g.queued -= chunk.len();
+                    popped = true;
                     immediate = Some(Some(chunk));
                     return;
                 }
@@ -409,6 +529,14 @@ fn install_read_rows(pkg: &mut HostPkg) {
                 g.stream_waiter = Some(comp.clone());
             })
             .expect("http_stream_next: the stream handle is live");
+            if popped {
+                // a chunk left the queue — the parked pump re-checks
+                // the budget (real flow control: one read, one push's
+                // worth of room)
+                if let Some(s) = src.as_ref() {
+                    s.room.notify_all();
+                }
+            }
             if let Some(ans) = immediate {
                 comp.complete(ans);
             }
@@ -437,7 +565,7 @@ fn install_read_rows(pkg: &mut HostPkg) {
         "net::http_read_err",
         (Opaque<HttpResponse>,) -> Option<String>,
         |_vm: &mut Vm, r: Opaque<HttpResponse>| -> Result<Option<String>, Trap> {
-            r.with(|resp| resp.read.lock().expect("http read state").failed.clone())
+            r.with(|resp| resp.read.lock().failed.clone())
         },
     );
     // the reader mint: instant, sync. The FIRST mint takes the stream
@@ -449,7 +577,7 @@ fn install_read_rows(pkg: &mut HostPkg) {
         (Opaque<HttpResponse>,) -> OpaqueRef,
         |vm: &mut Vm, r: Opaque<HttpResponse>| -> Result<OpaqueRef, Trap> {
             let (src, dead) = r.with(|resp| {
-                let mut g = resp.read.lock().expect("http read state");
+                let mut g = resp.read.lock();
                 if g.body_taken || g.stream_minted {
                     (Arc::clone(&resp.read), true)
                 } else {
@@ -644,7 +772,7 @@ impl HttpFixture {
     /// completer — the seam's `send` contract), chunk i at i+1, the
     /// terminal one tick after the last released chunk
     fn arm(&self, reply: Result<FixtureReply, String>, comp: CompleterOf<HttpResponse>) {
-        let src: Shared = Arc::new(Mutex::new(Inner::fresh()));
+        let src: Shared = Source::fresh();
         let mut dues = self.0.dues.borrow_mut();
         // the body schedule is built from a borrow; the send due moves
         // `reply` and lands first, so the tick-0 send still fires
@@ -796,7 +924,9 @@ fn send_once(
     w.complete(answer);
     // the pump: this thread keeps reading the wire into the writer. A
     // fixed 16 KiB buffer — bounded memory end to end, and each read
-    // lands as one stream chunk.
+    // lands as one stream chunk. The writer's BUDGET gate backs the
+    // pressure all the way out: at the budget the park stalls this
+    // loop, the socket fills, the server feels it (real flow control).
     let mut buf = [0u8; 16 * 1024];
     loop {
         match resp.read(&mut buf) {

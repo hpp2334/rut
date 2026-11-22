@@ -3,11 +3,13 @@
 //! `tests/` (the same shelf the fixture suite lives on, no
 //! `#[cfg(test)]` tree) — drives the seven `http_host` rows through
 //! the rut face: headers-then-chunks pumped from a real worker
-//! thread, the immediate transport failure (status 0), and the
+//! thread, the immediate transport failure (status 0), the
 //! one-completion law pinned EXACTLY as the `Completer` contract
 //! already behaves (a double complete is LAST-WRITE-WINS — the second
 //! answer overwrites the slot, the first is silently lost; never a
-//! trap, never an error state).
+//! trap, never an error state), and the BUDGET: a flood backend whose
+//! queue plateaus at the budget while nobody reads (real flow
+//! control) and whose drain resumes when the consumer catches up.
 //!
 //! NO feature gate, unlike `http.rs`: the seam is feature-free (no
 //! reqwest — that's the point), so every plain `cargo nextest run`
@@ -17,10 +19,11 @@
 //! untouched by the seam).
 
 use rut_driver::Mounted;
-use rut_std::http::{pkg_over, HttpBackend, HttpRequest, HttpResponse};
+use rut_std::http::{pkg_over, HttpBackend, HttpBodyWriter, HttpRequest, HttpResponse};
 use rut_std::{async_host, logger, strbuild};
 use rut_vm::interp::Vm;
 use std::rc::Rc;
+use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::{Arc, Mutex};
 
 /// this test's host pkgs — the mounted decl surface the bodies must
@@ -33,6 +36,7 @@ const PKG_DIR: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/../../rut");
 const SRC: &str = r#"
 use http::HttpClient;
 use futures::launch_future;
+use futures::sleep;
 use ink_host::{ create_logger, logger_log };
 
 async fn probe(log: opaque, url: str) -> nil {
@@ -86,6 +90,44 @@ entry fn boot_stream(url: str) -> nil {
     let log = create_logger("t");
     launch_future(streamed(log, url));
 }
+
+// the flood probes: sleep FIRST so the test — not the flood race —
+// decides when the reads begin (the VM clock is virtual; the test
+// fires the sleep after observing the producer's plateau)
+async fn flooded(log: opaque, url: str) -> nil {
+    let client = HttpClient::new();
+    let resp = await client.get(url).build().send();
+    await sleep(300);
+    let s = resp.byte_stream();
+    let total: i32 = 0;
+    while (true) {
+        let c = await s.next();
+        if (c == nil) {
+            break;
+        }
+        let chunk: bytes = c;
+        total += chunk.len();
+    }
+    logger_log(log, 2, f"stream-total={total}");
+}
+
+async fn drained(log: opaque, url: str) -> nil {
+    let client = HttpClient::new();
+    let resp = await client.get(url).build().send();
+    await sleep(300);
+    let b = await resp.body();
+    logger_log(log, 2, f"body={b.len()}");
+}
+
+entry fn boot_flood(url: str) -> nil {
+    let log = create_logger("t");
+    launch_future(flooded(log, url));
+}
+
+entry fn boot_drain(url: str) -> nil {
+    let log = create_logger("t");
+    launch_future(drained(log, url));
+}
 "#;
 
 /// the fake backend's script — what `send` answers, and how the body
@@ -97,6 +139,10 @@ enum Script {
         status: u16,
         chunks: Vec<&'static str>,
     },
+    /// answer at HEADERS, then FLOOD from a worker thread: `chunks`
+    /// pushes of `chunk_bytes` each, as fast as the writer accepts —
+    /// the BUDGET is the only pacing
+    Flood { chunk_bytes: usize, chunks: usize },
     /// answer the transport failure NOW (status 0, born-dead body)
     Dead(String),
     /// answer TWICE — the violating backend the one-completion pin
@@ -110,6 +156,9 @@ enum Script {
 struct FakeBackend {
     script: Script,
     seen: Mutex<Vec<String>>,
+    /// the flood lane's completed-push counter — a push parked on the
+    /// budget hasn't landed, so the plateau/drain pins read it
+    pushed: Arc<AtomicUsize>,
 }
 
 impl HttpBackend for FakeBackend {
@@ -135,6 +184,24 @@ impl HttpBackend for FakeBackend {
                     w.end();
                 });
             }
+            Script::Flood {
+                chunk_bytes,
+                chunks,
+            } => {
+                // HEADERS, then the flood: push as fast as the writer
+                // accepts — past the budget the gate paces the pump
+                let (resp, w) = HttpResponse::streaming(200);
+                out.complete(resp);
+                let pushed = Arc::clone(&self.pushed);
+                let (chunk_bytes, chunks) = (*chunk_bytes, *chunks);
+                std::thread::spawn(move || {
+                    for _ in 0..chunks {
+                        w.push_chunk(vec![0u8; chunk_bytes]);
+                        pushed.fetch_add(1, Ordering::SeqCst);
+                    }
+                    w.end();
+                });
+            }
             Script::Dead(msg) => {
                 out.complete(HttpResponse::failed(msg.clone()));
             }
@@ -155,6 +222,7 @@ fn boot(script: Script) -> (Vm, Rc<std::cell::RefCell<Vec<String>>>, Arc<FakeBac
     let backend = Arc::new(FakeBackend {
         script,
         seen: Mutex::new(Vec::new()),
+        pushed: Arc::new(AtomicUsize::new(0)),
     });
     let mut world = rut_native::dir_pkgs(
         &std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../rut/futures"),
@@ -243,6 +311,118 @@ fn pump(vm: &mut Vm) {
     panic!(
         "the seam pump stalled: {} task(s) pending",
         vm.pending_tasks()
+    );
+}
+
+/// the flood script: 4× the budget in 16 KiB pump chunks — far past
+/// the bound, still well under the VM heap limit when drained whole
+fn flood_script() -> Script {
+    let chunk_bytes = 16 * 1024;
+    let chunks = 4 * (HttpBodyWriter::DEFAULT_STREAM_BUDGET_BYTES / chunk_bytes);
+    Script::Flood {
+        chunk_bytes,
+        chunks,
+    }
+}
+
+/// run_ready turns until the probe's `sleep` has armed its deadline,
+/// so the test — not the flood race — decides when the reads begin
+/// (the VM clock is virtual; nothing fires until `set_now`)
+fn wait_sleep_armed(vm: &mut Vm) {
+    for _ in 0..500 {
+        vm.run_ready().expect("run_ready");
+        if vm.next_deadline().is_some() {
+            return;
+        }
+        std::thread::sleep(std::time::Duration::from_millis(2));
+    }
+    panic!("the probe never armed its sleep");
+}
+
+/// the plateau proof: wait until `pushed` reaches `expect` and STAYS
+/// put across a beat — nobody is reading, so a past-budget push
+/// cannot land (it is parked inside `push_chunk`); growth past the
+/// plateau means the budget gate leaked
+fn wait_plateau(pushed: &AtomicUsize, expect: usize) {
+    let deadline = std::time::Instant::now() + std::time::Duration::from_secs(5);
+    loop {
+        assert!(
+            std::time::Instant::now() < deadline,
+            "the flood never plateaued at {expect} (pushed={})",
+            pushed.load(Ordering::SeqCst)
+        );
+        if pushed.load(Ordering::SeqCst) == expect {
+            std::thread::sleep(std::time::Duration::from_millis(150));
+            assert_eq!(
+                pushed.load(Ordering::SeqCst),
+                expect,
+                "queued bytes kept growing past the budget while nobody read"
+            );
+            return;
+        }
+        std::thread::sleep(std::time::Duration::from_millis(5));
+    }
+}
+
+#[test]
+fn the_budget_bounds_the_flood_and_the_drain_recovers() {
+    let (mut vm, sink, backend) = boot(flood_script());
+    vm.call::<_, ()>("boot_flood", ("seam://flood",)).unwrap();
+    wait_sleep_armed(&mut vm);
+    // the plateau: the producer stops at exactly the budget while
+    // nobody reads — bounded queue, not an unbounded VecDeque
+    let chunk_bytes = 16 * 1024;
+    let plateau = HttpBodyWriter::DEFAULT_STREAM_BUDGET_BYTES / chunk_bytes;
+    wait_plateau(&backend.pushed, plateau);
+    // resume: the consumer catches up, every parked push releases,
+    // every byte arrives
+    let due = vm.next_deadline().expect("the sleep is armed");
+    vm.set_now(due);
+    // next_deadline is the expiry mechanism — run_ready never walks
+    // the timer map, so the due sleep moves to the ready queue here
+    let _ = vm.next_deadline();
+    pump(&mut vm);
+    let chunks = 4 * plateau;
+    assert_eq!(
+        *sink.borrow(),
+        vec![format!("stream-total={}", chunks * chunk_bytes)],
+        "the drain walked every chunk to EOF after the plateau"
+    );
+    assert_eq!(
+        backend.pushed.load(Ordering::SeqCst),
+        chunks,
+        "the gate released every parked push once the consumer drained"
+    );
+}
+
+#[test]
+fn the_body_drain_is_exempt_the_whole_body_lands_in_one_future() {
+    let (mut vm, sink, backend) = boot(flood_script());
+    vm.call::<_, ()>("boot_drain", ("seam://drain",)).unwrap();
+    wait_sleep_armed(&mut vm);
+    // park the pump FIRST: the flood sits parked at the budget when
+    // the one-shot body lane takes over. Its stand-down notify must
+    // release the pump — the drain waits for EOF, and the parked pump
+    // is the only one who can reach it. Lose the notify (or the
+    // body_taken exemption) and this test deadlocks into the pump's
+    // stall panic.
+    let chunk_bytes = 16 * 1024;
+    let plateau = HttpBodyWriter::DEFAULT_STREAM_BUDGET_BYTES / chunk_bytes;
+    wait_plateau(&backend.pushed, plateau);
+    let due = vm.next_deadline().expect("the sleep is armed");
+    vm.set_now(due);
+    let _ = vm.next_deadline();
+    pump(&mut vm);
+    let chunks = 4 * plateau;
+    assert_eq!(
+        *sink.borrow(),
+        vec![format!("body={}", chunks * chunk_bytes)],
+        "the whole 4× budget arrived in ONE future — the drain lane is exempt from the gate"
+    );
+    assert_eq!(
+        backend.pushed.load(Ordering::SeqCst),
+        chunks,
+        "the exempted pump pushed everything once the body lane took over"
     );
 }
 
