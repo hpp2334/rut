@@ -57,17 +57,29 @@
 //! rows ON the VM thread. `std::thread` appears only in the reqwest
 //! lane's closures.
 //!
-//! Two lanes build these bodies: [`pkg_with`] rides an
-//! injectable fixture closure keyed on method+URL(+headers/body) and
-//! walks its chunk schedule on the VIRTUAL clock (the settle handle is
-//! the returned [`HttpFixture`] — the test's driving loop advances the
-//! clock and settles the dues); [`pkg`] is the reqwest
-//! lane (one shared blocking client, one worker thread per request).
-//! The `http` cargo feature is DEFAULT-OFF — reqwest-blocking does not
-//! build on wasm32-unknown-unknown, so only native embedders opt in.
+//! THE SWAPPABLE-BACKEND SEAM: the lane-independent core above is the
+//! public embedder API. [`HttpRequest`] carries the crossing parts,
+//! [`HttpResponse::streaming`] mints the response + its
+//! [`HttpBodyWriter`] at headers time, [`HttpResponse::failed`] mints
+//! a transport-dead one, and [`HttpBackend`] is the ONE method an
+//! embedder implements to bring their own transport (async-native on
+//! THEIR runtime — rut-std stays tokio-free; Gap 5 is answered by the
+//! seam, not shipped). [`pkg_over`] binds all seven `http_host` rows
+//! over any backend.
+//!
+//! Three doors build these bodies, ALL over the one seam:
+//! [`pkg_over`] rides YOUR backend; [`pkg_with`] rides an injectable
+//! fixture closure keyed on method+URL(+headers/body) and walks its
+//! chunk schedule on the VIRTUAL clock (the settle handle is the
+//! returned [`HttpFixture`] — the test's driving loop advances the
+//! clock and settles the dues); [`pkg`] is the reqwest lane (one
+//! shared blocking client, one worker thread per request) — the
+//! reference [`HttpBackend`]. The `http` cargo feature gates ONLY the
+//! reqwest lane and is DEFAULT-OFF (reqwest-blocking does not build
+//! on wasm32-unknown-unknown); the seam itself is feature-free — a
+//! wasm embedder brings its own backend instead.
 
 use std::collections::VecDeque;
-use std::io::Read as _;
 use std::sync::{Arc, Mutex};
 
 use rut_core::types::{TypeId, TY_OPAQUE};
@@ -138,7 +150,27 @@ pub struct HttpResponse {
 impl HostPayload for HttpResponse {}
 
 impl HttpResponse {
-    fn failed(msg: String) -> HttpResponse {
+    /// Mint a response at HEADERS time plus the writer that drives
+    /// its body: a backend completes the send completer with the
+    /// response half, then pumps the body through the writer half
+    /// (from any thread). The body stays UNREAD until a taker comes —
+    /// the one-shot law starts here.
+    pub fn streaming(status: u16) -> (HttpResponse, HttpBodyWriter) {
+        let src: Shared = Arc::new(Mutex::new(Inner::fresh()));
+        (
+            HttpResponse {
+                status,
+                err: None,
+                read: Arc::clone(&src),
+            },
+            HttpBodyWriter { src },
+        )
+    }
+
+    /// Mint a transport-failed response: status 0 + the message (the
+    /// kept law); the chunk source is born dead, so the body/stream
+    /// lanes degrade to empty / immediate EOF.
+    pub fn failed(msg: String) -> HttpResponse {
         HttpResponse {
             status: 0,
             err: Some(msg),
@@ -176,6 +208,75 @@ pub struct HttpStream {
 }
 
 impl HostPayload for HttpStream {}
+
+// -------------------------------------------------------- the seam ---
+//
+// The embedder's own-backend API: the crossing parts, the body
+// writer, the ONE-method transport trait, and the pkg door that binds
+// all seven rows over any backend. Feature-free by law — a wasm
+// embedder brings its own transport instead of reqwest.
+
+/// The crossing parts of a request — exactly what the VM lane hands a
+/// backend. `headers` is the builder's `"\n"`-joined `Name: value`
+/// block (empty = none); `body` is the raw bytes (empty = none — the
+/// disclosed empty-vs-none merge).
+#[derive(Clone)]
+pub struct HttpRequest {
+    pub method: String,
+    pub url: String,
+    pub headers: String,
+    pub body: Vec<u8>,
+}
+
+/// The body driver a backend keeps after answering at headers:
+/// `push_chunk` feeds one chunk (a parked stream read takes the
+/// queue's front immediately, FIFO), `end` is the clean EOF, `fail`
+/// the sticky mid-read death (the queued chunks stay readable — they
+/// did arrive). Callable from ANY thread; one Mutex inside, never
+/// nested with a Completer slot (the thread law). The terminal flags
+/// are sticky — the read side answers EOF/failed from the first
+/// terminal on.
+pub struct HttpBodyWriter {
+    src: Shared,
+}
+
+impl HttpBodyWriter {
+    /// one more chunk arrived
+    pub fn push_chunk(&self, chunk: Vec<u8>) {
+        push_chunk(&self.src, chunk);
+    }
+
+    /// clean EOF — the body lane drains, the stream lane sees nil
+    pub fn end(&self) {
+        end_source(&self.src);
+    }
+
+    /// the wire died mid-read — the sticky failure lands (data,
+    /// never a trap)
+    pub fn fail(&self, msg: String) {
+        fail_source(&self.src, msg);
+    }
+}
+
+/// The embedder's transport: the ONE method a custom backend
+/// implements. The contract:
+///
+/// - answer `out` EXACTLY ONCE — at HEADERS, completing with
+///   [`HttpResponse::streaming`]'s response half, or with
+///   [`HttpResponse::failed`] on transport trouble;
+/// - then drive the minted [`HttpBodyWriter`] from any thread;
+/// - NEVER block the VM thread: do the wire work on your own
+///   threads/tasks — the completer and the writer (atomics + Mutex
+///   slots) are the only shared state (the thread law).
+///
+/// A double complete is NOT loud — the `Completer`'s disclosed
+/// contract is LAST-WRITE-WINS (the second answer overwrites the
+/// slot, the first is silently lost; a late answer after a take is
+/// never taken). The seam suite pins exactly that; "exactly once"
+/// above is the discipline, not an enforced invariant.
+pub trait HttpBackend: Send + Sync + 'static {
+    fn send(&self, req: &HttpRequest, out: rut_vm::Completer<HttpResponse>);
+}
 
 // ------------------------------------------------ the chunk wakeups ---
 //
@@ -362,6 +463,54 @@ fn install_read_rows(pkg: &mut HostPkg) {
     );
 }
 
+// ------------------------------------------------- the one installer —
+
+/// The send row over ANY answering closure — the ONE installer every
+/// door rides ([`pkg_over`], [`pkg_with`], [`pkg`]). `send` receives
+/// the crossing parts and the completer; it answers exactly once and
+/// then drives the writer. The decl-row arity (the opaque cx + the
+/// four crossing values) lives HERE once — no lane re-spells it.
+fn pkg_send<S>(send: S) -> HostPkg
+where
+    S: Fn(&HttpRequest, rut_vm::Completer<HttpResponse>) + 'static,
+{
+    let mut pkg = HostPkg::new("http_host");
+    rut_vm::pkg_async_fn!(
+        pkg,
+        "net::http_send",
+        (OpaqueRef, String, String, String, Vec<u8>) -> HttpResponse,
+        move |c: OpaqueRef, method: String, url: String, headers: String, body: Vec<u8>|
+              -> CompleterOf<HttpResponse> {
+            let _ = c;
+            let comp = CompleterOf::new();
+            send(
+                &HttpRequest {
+                    method,
+                    url,
+                    headers,
+                    body,
+                },
+                comp.clone(),
+            );
+            comp
+        },
+    );
+    install_read_rows(&mut pkg);
+    pkg.build()
+}
+
+/// Bind ALL seven `http_host` rows over any backend: `http_send`
+/// marshals the crossing parts into an [`HttpRequest`], hands the
+/// backend the send future's completer, and answers cold — the
+/// backend's own thread/task completes it at headers (via
+/// [`HttpResponse::streaming`]) or with [`HttpResponse::failed`], then
+/// drives the writer; the five sync readbacks and the two body lanes
+/// are the shared rows. The decl↔body join is pinned in
+/// `tests/http.rs` (`the_decl_rows_join_both_lanes`).
+pub fn pkg_over(backend: Arc<dyn HttpBackend>) -> HostPkg {
+    pkg_send(move |req, out| backend.send(req, out))
+}
+
 // ------------------------------------------------------ the fixture ---
 //
 // The fixture lane: the request answers on the virtual clock. The
@@ -491,21 +640,16 @@ impl HttpFixture {
     pub fn has_pending(&self) -> bool {
         self.next_due().is_some()
     }
-    /// arm a request's schedule: the send at 0, chunk i at i+1, the
+    /// arm a request's schedule: the send at 0 (answering the GIVEN
+    /// completer — the seam's `send` contract), chunk i at i+1, the
     /// terminal one tick after the last released chunk
-    fn arm(&self, reply: Result<FixtureReply, String>) -> CompleterOf<HttpResponse> {
-        let comp = CompleterOf::new();
+    fn arm(&self, reply: Result<FixtureReply, String>, comp: CompleterOf<HttpResponse>) {
         let src: Shared = Arc::new(Mutex::new(Inner::fresh()));
         let mut dues = self.0.dues.borrow_mut();
-        let send_reply = reply.clone();
-        dues.push((
-            0,
-            Due::Send {
-                reply: send_reply,
-                comp: comp.clone(),
-                src: Arc::clone(&src),
-            },
-        ));
+        // the body schedule is built from a borrow; the send due moves
+        // `reply` and lands first, so the tick-0 send still fires
+        // before its tick-i chunks when a settle covers both
+        let mut later: Vec<(u64, Due)> = Vec::new();
         if let Ok(r) = &reply {
             let mut t = 0u64;
             for (i, chunk) in r.chunks.iter().enumerate() {
@@ -513,7 +657,7 @@ impl HttpFixture {
                     break; // the wire died before this chunk
                 }
                 t += 1;
-                dues.push((
+                later.push((
                     t,
                     Due::Chunk {
                         src: Arc::clone(&src),
@@ -523,14 +667,14 @@ impl HttpFixture {
             }
             t += 1;
             match r.fail_after {
-                Some(after) if after <= r.chunks.len() => dues.push((
+                Some(after) if after <= r.chunks.len() => later.push((
                     t,
                     Due::Fail {
                         src: Arc::clone(&src),
                         msg: r.fail_msg.clone(),
                     },
                 )),
-                _ => dues.push((
+                _ => later.push((
                     t,
                     Due::Terminal {
                         src: Arc::clone(&src),
@@ -538,7 +682,8 @@ impl HttpFixture {
                 )),
             }
         }
-        comp
+        dues.push((0, Due::Send { reply, comp, src }));
+        dues.extend(later);
     }
 }
 
@@ -548,34 +693,50 @@ impl HttpFixture {
 /// with the message in `http_err` and a born-dead body. The fixture
 /// map's keys ARE the assertions: an unknown URL is a LOUD transport
 /// failure, never a pass-through. Returns the settle handle the test's
-/// driving loop walks.
+/// driving loop walks. Rides the ONE seam installer: the closure
+/// answers ON the VM thread (the virtual-clock lane spawns no
+/// workers); the schedule fires through [`HttpFixture::settle`].
 pub fn pkg_with<F>(f: F) -> (HostPkg, HttpFixture)
 where
     F: Fn(&str, &str, &str, &[u8]) -> Result<FixtureReply, String> + 'static,
 {
     let fixture = HttpFixture::default();
     let fx = fixture.clone();
-    let mut pkg = HostPkg::new("http_host");
-    rut_vm::pkg_async_fn!(
-        pkg,
-        "net::http_send",
-        (OpaqueRef, String, String, String, Vec<u8>) -> HttpResponse,
-        move |c: OpaqueRef, method: String, url: String, headers: String, body: Vec<u8>|
-              -> CompleterOf<HttpResponse> {
-            let _ = (c, &headers, &body); // the lanes own their client state
-            let reply = f(&method, &url, &headers, &body);
-            fx.arm(reply)
-        },
-    );
-    install_read_rows(&mut pkg);
-    (pkg.build(), fixture)
+    let pkg = pkg_send(move |req: &HttpRequest, out: CompleterOf<HttpResponse>| {
+        let reply = f(&req.method, &req.url, &req.headers, &req.body);
+        fx.arm(reply, out);
+    });
+    (pkg, fixture)
 }
 
 // ----------------------------------------------------- the reqwest ----
 
-/// Install the reqwest lane: one shared blocking client (this UA,
-/// redirects on — the default policy's ten hops; gzip/brotli arrive
-/// with the cargo features), one worker thread PER REQUEST.
+/// The reqwest reference backend (the `http` cargo feature): one
+/// shared blocking client, one worker thread PER REQUEST — send,
+/// complete at HEADERS, keep pumping the body into the chunk source
+/// on the same thread.
+#[cfg(feature = "http")]
+struct ReqwestBackend {
+    client: Arc<reqwest::blocking::Client>,
+}
+
+#[cfg(feature = "http")]
+impl HttpBackend for ReqwestBackend {
+    fn send(&self, req: &HttpRequest, out: rut_vm::Completer<HttpResponse>) {
+        let client = Arc::clone(&self.client);
+        let req = req.clone();
+        // the worker owns the request end to end: send, complete at
+        // HEADERS, then pump the body into the chunk source. The
+        // cancel arm is the disclosed no-op — the thread runs to its
+        // blocking completion and the late result is simply never
+        // taken.
+        std::thread::spawn(move || send_once(&client, &req, &out));
+    }
+}
+
+/// Install the reqwest lane: the reference [`HttpBackend`] over one
+/// shared blocking client (this UA, redirects on — the default
+/// policy's ten hops; gzip/brotli arrive with the cargo features).
 /// `http_send` resolves at HEADERS — the worker completes the send
 /// completer the moment the status is known, then keeps reading the
 /// (still unread) response body into the chunk source on the same
@@ -583,7 +744,6 @@ where
 /// law). Requires the `http` cargo feature.
 #[cfg(feature = "http")]
 pub fn pkg() -> HostPkg {
-    let mut pkg = HostPkg::new("http_host");
     let client = Arc::new(
         reqwest::blocking::Client::builder()
             .user_agent("rgh/0.1 (+https://github.com/rut)")
@@ -591,61 +751,38 @@ pub fn pkg() -> HostPkg {
             .build()
             .expect("the std http client builds"),
     );
-    rut_vm::pkg_async_fn!(
-        pkg,
-        "net::http_send",
-        (OpaqueRef, String, String, String, Vec<u8>) -> HttpResponse,
-        move |c: OpaqueRef, method: String, url: String, headers: String, body: Vec<u8>|
-              -> CompleterOf<HttpResponse> {
-            let _ = c;
-            let comp = CompleterOf::new();
-            let w = comp.clone();
-            let client = Arc::clone(&client);
-            // the worker owns the request end to end: send, complete at
-            // HEADERS, then pump the body into the chunk source. The
-            // cancel arm is the disclosed no-op — the thread runs to its
-            // blocking completion and the late result is simply never
-            // taken.
-            std::thread::spawn(move || {
-                send_once(&client, &method, &url, &headers, &body, &w);
-            });
-            comp
-        },
-    );
-    install_read_rows(&mut pkg);
-    pkg.build()
+    pkg_over(Arc::new(ReqwestBackend { client }))
 }
 
 /// The reqwest worker: build the request (canonical method, the
 /// "\n"-joined `Name: value` header block, bytes with empty = none —
 /// the disclosed empty-vs-none merge), execute, complete the send at
-/// HEADERS, then pump the body until EOF or wire death.
+/// HEADERS via [`HttpResponse::streaming`], then pump the writer
+/// until EOF or wire death.
 #[cfg(feature = "http")]
 fn send_once(
     client: &reqwest::blocking::Client,
-    method: &str,
-    url: &str,
-    headers: &str,
-    body: &[u8],
-    w: &CompleterOf<HttpResponse>,
+    req: &HttpRequest,
+    w: &rut_vm::Completer<HttpResponse>,
 ) {
+    use std::io::Read as _;
     let send = (|| -> Result<reqwest::blocking::Response, String> {
-        let m = reqwest::Method::from_bytes(method.as_bytes())
-            .map_err(|e| format!("bad method `{method}`: {e}"))?;
-        let mut req = client.request(m, url);
-        for line in headers.split('\n') {
+        let m = reqwest::Method::from_bytes(req.method.as_bytes())
+            .map_err(|e| format!("bad method `{}`: {e}", req.method))?;
+        let mut rq = client.request(m, &req.url);
+        for line in req.headers.split('\n') {
             if line.trim().is_empty() {
                 continue;
             }
             let (name, value) = line
                 .split_once(':')
                 .ok_or_else(|| format!("bad header line `{line}` (want `Name: value`)"))?;
-            req = req.header(name.trim(), value.trim());
+            rq = rq.header(name.trim(), value.trim());
         }
-        if !body.is_empty() {
-            req = req.body(body.to_vec());
+        if !req.body.is_empty() {
+            rq = rq.body(req.body.clone());
         }
-        req.send().map_err(|e| e.to_string())
+        rq.send().map_err(|e| e.to_string())
     })();
     let mut resp = match send {
         Err(msg) => {
@@ -654,27 +791,22 @@ fn send_once(
         }
         Ok(resp) => resp,
     };
-    let status = resp.status().as_u16();
-    let src: Shared = Arc::new(Mutex::new(Inner::fresh()));
     // HEADERS — the send resolves here; the body stays unread
-    w.complete(HttpResponse {
-        status,
-        err: None,
-        read: Arc::clone(&src),
-    });
-    // the pump: this thread keeps reading the wire into the chunk
-    // source. A fixed 16 KiB buffer — bounded memory end to end, and
-    // each read lands as one stream chunk.
+    let (answer, body) = HttpResponse::streaming(resp.status().as_u16());
+    w.complete(answer);
+    // the pump: this thread keeps reading the wire into the writer. A
+    // fixed 16 KiB buffer — bounded memory end to end, and each read
+    // lands as one stream chunk.
     let mut buf = [0u8; 16 * 1024];
     loop {
         match resp.read(&mut buf) {
             Ok(0) => {
-                end_source(&src);
+                body.end();
                 return;
             }
-            Ok(n) => push_chunk(&src, buf[..n].to_vec()),
+            Ok(n) => body.push_chunk(buf[..n].to_vec()),
             Err(e) => {
-                fail_source(&src, e.to_string());
+                body.fail(e.to_string());
                 return;
             }
         }

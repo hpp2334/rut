@@ -4,7 +4,6 @@
 
 pub mod async_host;
 pub mod bench_cross;
-#[cfg(feature = "http")]
 pub mod http;
 pub mod logger;
 pub mod math;
