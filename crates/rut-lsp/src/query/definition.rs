@@ -251,7 +251,7 @@ fn get_definition_targets(ctx: &Ctx, pos: u32) -> Vec<DefLocation> {
     //    falls through (the use-gate law hover established), an
     //    unknown one keeps the bare-name fallback
     if member_name_span(ast, h, pos).is_some() {
-        match chain.member(pos, h) {
+        match chain.member(pos, h, ctx.doc_mods) {
             MemberHit::Found(target) => {
                 return member_locations(ctx, &target);
             }
@@ -349,7 +349,7 @@ fn get_type_definition_targets(ctx: &Ctx, pos: u32) -> Vec<DefLocation> {
     // is final (the use-gate law)
     if let Some(name_span) = member_name_span(ast, h, pos) {
         let _ = name_span;
-        match chain.member(pos, h) {
+        match chain.member(pos, h, ctx.doc_mods) {
             MemberHit::Found(target) => {
                 let ty_text = match &target {
                     MemberTarget::Member(_, m, _)

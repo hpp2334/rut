@@ -12,6 +12,8 @@ use super::{
     used_ifaces, Chain, FnView, LetView, MemberView, ModView, MountedFile, RecvNode, TyView,
     UseView,
 };
+use crate::world::mods::DocMods;
+use crate::world::types::TyForm;
 
 impl<'a> ExportRow<'a> {
     /// the row's exported name — `None` for a `mod` edge (a walkable
@@ -92,20 +94,33 @@ impl<'a> Chain<'a> {
     /// resolver family — the bindings read internally, never a
     /// caller-run pass), and the gates live here (the interface lane
     /// with the use-both rule; the enum-member lane; the inherent impl
-    /// fns by owner). `None` = not a member position; an unresolved
+    /// fns by owner; the member-vis dial against `doc` — the site
+    /// context). `None` = not a member position; an unresolved
     /// receiver is an EMPTY tier, never a wrong one. The typing edge's
     /// absent member (`recv.` mid-typing) enumerates the FULL list.
-    pub(crate) fn members(&self, pos: u32, node: AnyHandle) -> Option<Vec<MemberRow<'a>>> {
+    pub(crate) fn members(
+        &self,
+        pos: u32,
+        node: AnyHandle,
+        doc: &DocMods,
+    ) -> Option<Vec<MemberRow<'a>>> {
         let (_, recv) = self.member_at(pos, node)?;
-        self.members_for(pos, recv)
+        self.members_for(pos, recv, doc)
     }
 
     /// the member tier keyed on an already-derived receiver (the type
     /// slot's `.`/`::` spelling: the head is the slot's own segments,
     /// node-less data on the ty path). The member node's OWN name never
     /// restricts the list — the typed prefix (the call site's filter)
-    /// is the only narrowing.
-    pub(crate) fn members_for(&self, pos: u32, recv: RecvNode) -> Option<Vec<MemberRow<'a>>> {
+    /// is the only narrowing. `doc` is the site context the member-vis
+    /// dial reads (the established [`DocMods`] carrier — the chain
+    /// head's own mount is unstamped).
+    pub(crate) fn members_for(
+        &self,
+        pos: u32,
+        recv: RecvNode,
+        doc: &DocMods,
+    ) -> Option<Vec<MemberRow<'a>>> {
         let ty_name = self.recv_ty_name(pos, recv).or_else(|| match recv {
             RecvNode::Expr(e) => self
                 .expr_ty(self.head(), e)
@@ -132,21 +147,37 @@ impl<'a> Chain<'a> {
             return Some(rows);
         }
         let ty = self.type_decl(&ty_name)?;
+        // the member-vis gate (the compiler's law mirrored): CLASS
+        // fields + own-surface methods gate, impl fns by owner gate;
+        // struct + host-struct fields carry no dial, enum variants are
+        // the enum lane's rows, and the builtin/primitive surfaces are
+        // compiler-lowered (core's plain-`fn` rows keep completing)
+        let class = ty.form() == TyForm::Class;
         let mut rows: Vec<MemberRow<'a>> = Vec::new();
         for m in ty.fields() {
+            if class && !self.member_dial_allows(doc, m.file, m.vis()) {
+                continue;
+            }
             rows.push(MemberRow::Field(m));
         }
         for m in ty.methods() {
+            if class && !self.member_dial_allows(doc, m.file, m.vis()) {
+                continue;
+            }
             rows.push(MemberRow::Method(m));
         }
         // inherent impl-block methods — where methods live since type
         // bodies went fields-only; the owner string IS the target
-        // type's name
+        // type's name. Gated rows (the compiler dials them like a
+        // class's own members)
         for i in self.iter() {
             for f in i.fns() {
-                if f.owner().as_deref() == Some(ty_name.as_str()) {
-                    rows.push(MemberRow::ImplFn(f));
+                if f.owner().as_deref() != Some(ty_name.as_str())
+                    || !self.member_dial_allows(doc, f.file, f.vis())
+                {
+                    continue;
                 }
+                rows.push(MemberRow::ImplFn(f));
             }
         }
         Some(rows)

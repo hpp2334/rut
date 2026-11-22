@@ -56,10 +56,12 @@ pub fn hover(chain: &Chain, doc: &DocMods, pos: u32) -> Option<HoverOut> {
         return None;
     }
 
-    // the receiver/type spellings — the tree's own kinds
+    // the receiver/type spellings — the tree's own kinds (the
+    // enclosing-type walk is HOME-scoped: the only file whose spans
+    // index the cursor's offsets)
     if let Some(t) = h.downcast::<SelfTyNode>() {
         let sd = t.get(ast);
-        let ty = enclosing_type(chain.iter(), sd.span.lo)?;
+        let ty = enclosing_type(std::iter::once(d), sd.span.lo)?;
         return Some(HoverOut {
             markdown: render_ty(&ty),
             span: sd.span,
@@ -70,7 +72,7 @@ pub fn hover(chain: &Chain, doc: &DocMods, pos: u32) -> Option<HoverOut> {
         if sd.is_ty {
             return None; // the `Self` value spelling names no value
         }
-        let ty = enclosing_type(chain.iter(), sd.span.lo)?;
+        let ty = enclosing_type(std::iter::once(d), sd.span.lo)?;
         return Some(HoverOut {
             markdown: render_ty(&ty),
             span: sd.span,
@@ -105,7 +107,7 @@ pub fn hover(chain: &Chain, doc: &DocMods, pos: u32) -> Option<HoverOut> {
     // name search: a miss there is a use-gated interface member or a
     // genuine miss — either way the member answer is final.
     if member_position(ast, h, pos) {
-        match chain.member(pos, h) {
+        match chain.member(pos, h, doc) {
             MemberHit::Found(target) => {
                 return Some(HoverOut {
                     markdown: render_target(target),

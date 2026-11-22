@@ -31,13 +31,14 @@ pub(crate) fn expr_ty(home: &MountedFile, idxs: &[&MountedFile], e: ExprRef) -> 
         },
         ExprRef::FStr(_) => Some("str".to_string()),
         // `self` — the receiver: the enclosing type (the walk's own
-        // law); the `Self` type spelling has no value type
+        // law), HOME-scoped — the only file whose spans index the
+        // token's offsets; the `Self` type spelling has no value type
         ExprRef::Self_(h) => {
             let d: &SelfNode = h.get(ast);
             if d.is_ty {
                 return None;
             }
-            super::collection::enclosing_type(idxs.iter().copied(), d.span.lo)
+            super::collection::enclosing_type(std::iter::once(home), d.span.lo)
                 .map(|t| t.name().to_string())
         }
         ExprRef::Path(h) => {

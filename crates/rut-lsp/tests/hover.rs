@@ -1016,3 +1016,34 @@ fn member_hovers_decorate_the_member_token() {
     let want = byte_of(src, "+ c.r", 1) + 4;
     assert_eq!(span_of(src, &h), (want as usize, want as usize + 1), "{h}");
 }
+
+#[test]
+fn member_hover_gates_the_foreign_privates() {
+    // the member-vis law on hover: a foreign class's private field is
+    // a MISS (the compile refuses it — Act 1), the pub impl method
+    // still renders, and the doc's own private field still hovers
+    let mut s = S::boot();
+    s.index_mod_at(
+        "file:///deps/http/mod.rut",
+        "http",
+        "",
+        "pub class RequestBuilder {\nheaders: str;\n}\n\
+         impl RequestBuilder {\npub fn build(self) -> i32 { return 0; }\n}\n\
+         pub fn builder() -> RequestBuilder { return nil; }\n",
+    );
+    let src = "use http::{ builder };\nfn go() -> nil {\n    let b = builder();\n    b.headers;\n    b.build();\n}\n";
+    let h = s.hover_in("file:///t/main.rut", src, "b.headers", 1, 2);
+    assert!(
+        no_hover(&h),
+        "a private foreign field hovers nothing: {h:?}"
+    );
+    let md = markdown(s.hover_in("file:///t/main.rut", src, "b.build", 1, 2));
+    assert!(md.contains("pub fn build(self) -> i32"), "{md}");
+
+    // the doc's own private field: the declaring file IS the site —
+    // the dial passes and the member hover answers
+    let own =
+        "class C {\nhidden: i32;\n}\nimpl C {\nfn read(self) -> i32 { return self.hidden; }\n}\n";
+    let md = markdown(s.hover_in("file:///t/own.rut", own, "self.hidden", 1, 5));
+    assert!(md.contains("hidden"), "own privates still hover: {md}");
+}

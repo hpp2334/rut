@@ -70,11 +70,17 @@ pub(super) fn type_tier_completions(chain: &Chain) -> Vec<CompletionOut> {
 /// other type head its statics and associated fns (the inherent
 /// `impl T { fn .. }` rows — the owner string IS the type's name). An
 /// interface head offers nothing: its signatures ride receivers,
-/// never `::`. `None` = the head resolves to no indexed type (the
-/// caller falls through); a resolved head is FINAL — the filtered
-/// list is the answer even when empty (the known-head law, like the
-/// module tier's).
-pub(super) fn type_head_completions(chain: &Chain, segs: &[String]) -> Option<Vec<CompletionOut>> {
+/// never `::`. The member-vis gate rides the site context `doc` (the
+/// same dial the receiver tier applies — enum variants exempt, class
+/// statics + associated fns gate). `None` = the head resolves to no
+/// indexed type (the caller falls through); a resolved head is FINAL
+/// — the filtered list is the answer even when empty (the known-head
+/// law, like the module tier's).
+pub(super) fn type_head_completions(
+    chain: &Chain,
+    doc: &DocMods,
+    segs: &[String],
+) -> Option<Vec<CompletionOut>> {
     let (head, rest) = segs.split_first()?;
     let ty = chain.type_decl(head)?;
     let mut out: Vec<CompletionOut> = Vec::new();
@@ -82,7 +88,8 @@ pub(super) fn type_head_completions(chain: &Chain, segs: &[String]) -> Option<Ve
     // namespaces (`Color::Red::` answers empty, final)
     if rest.is_empty() {
         match ty.form() {
-            // `Color::⏐` — the declared members
+            // `Color::⏐` — the declared members (the enum lane's rows
+            // — the variants never gate)
             TyForm::Enum => {
                 for m in ty.fields() {
                     push_item(
@@ -98,13 +105,20 @@ pub(super) fn type_head_completions(chain: &Chain, segs: &[String]) -> Option<Ve
             }
             // `Greeter::⏐` — interface members ride receivers
             TyForm::Interface => {}
-            // `Counter::⏐` — statics first, then the associated fns
+            // `Counter::⏐` — statics first, then the associated fns,
+            // each row through the member-vis dial (class statics
+            // gate; struct + host-struct fields have no dial, and the
+            // builtin/primitive surfaces are compiler-lowered)
             _ => {
+                let class = ty.form() == TyForm::Class;
                 for m in ty.fields() {
                     // a declared static — the verdict rides the node's
                     // own modifier chain, never a string match on the
                     // rendered slice
                     if m.is_static() {
+                        if class && !chain.member_dial_allows(doc, m.file, m.vis()) {
+                            continue;
+                        }
                         push_item(
                             &mut out,
                             CompletionOut::plain(
@@ -118,17 +132,20 @@ pub(super) fn type_head_completions(chain: &Chain, segs: &[String]) -> Option<Ve
                 }
                 for f in chain.iter() {
                     for fv in f.fns() {
-                        if fv.owner().as_deref() == Some(head.as_str()) {
-                            push_item(
-                                &mut out,
-                                CompletionOut::plain(
-                                    fv.name().to_string(),
-                                    fv.src(),
-                                    fv.doc_lines(),
-                                    CompletionKind::Fn,
-                                ),
-                            );
+                        if fv.owner().as_deref() != Some(head.as_str())
+                            || !chain.member_dial_allows(doc, fv.file, fv.vis())
+                        {
+                            continue;
                         }
+                        push_item(
+                            &mut out,
+                            CompletionOut::plain(
+                                fv.name().to_string(),
+                                fv.src(),
+                                fv.doc_lines(),
+                                CompletionKind::Fn,
+                            ),
+                        );
                     }
                 }
             }

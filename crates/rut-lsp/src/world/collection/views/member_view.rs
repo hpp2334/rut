@@ -1,7 +1,7 @@
 //! [`MemberView`] — a field, a method, or an enum member of a
 //! [`TyView`]'s body.
 
-use rut_ast::{AnyHandle, Ast, EnumMemberNode, FieldDeclNode, MethodDeclNode};
+use rut_ast::{AnyHandle, Ast, EnumMemberNode, FieldDeclNode, MethodDeclNode, Vis};
 
 use super::{decl_src, doc_lines, sig_src, TyView};
 use crate::world::collection::MountedFile;
@@ -85,6 +85,22 @@ impl<'a> MemberView<'a> {
             return d.ret.map(|r| ty_src(ast, r));
         }
         None
+    }
+
+    /// the declared visibility — the member-vis gate's dial (the
+    /// member tier and the hover/definition door read it). Fields and
+    /// methods read their modifier chain; enum members carry none.
+    /// Unannotated → `Vis::Self_` — the compiler's module-private
+    /// member default
+    pub(crate) fn vis(&self) -> Vis {
+        let ast = self.ast();
+        if let Some(d) = self.h.downcast::<FieldDeclNode>() {
+            return d.get(ast).vis().unwrap_or(Vis::Self_);
+        }
+        if let Some(d) = self.h.downcast::<MethodDeclNode>() {
+            return d.get(ast).vis().unwrap_or(Vis::Self_);
+        }
+        Vis::Self_
     }
 
     /// the `static` verdict, derived from the field's modifier nodes —

@@ -131,9 +131,9 @@ impl<'a> FnView<'a> {
         unreachable!("a fn view addresses a fn node")
     }
 
-    /// the declared visibility — the position-path completion's tier
-    /// gate reads it (impl methods carry their member vis, `pub` when
-    /// unannotated — inherent impls own their methods)
+    /// the declared visibility — the member-vis gate reads it (impl
+    /// methods carry their member vis, module-private when unannotated
+    /// — the compiler's member default)
     pub(crate) fn vis(&self) -> Vis {
         let ast = self.ast();
         if let Some(d) = self.h.downcast::<FnNode>() {
@@ -143,7 +143,7 @@ impl<'a> FnView<'a> {
             return d.get(ast).vis();
         }
         if let Some(d) = self.h.downcast::<MethodDeclNode>() {
-            return d.get(ast).vis().unwrap_or(Vis::Pub);
+            return d.get(ast).vis().unwrap_or(Vis::Self_);
         }
         unreachable!("a fn view addresses a fn node")
     }

@@ -177,8 +177,9 @@ pub fn complete(
             }
             // the head did not resolve to a module — the `::` law's
             // other member lists ride the same trigger: enum members,
-            // namespace statics, a type head's associated fns
-            if let Some(out) = type_head_completions(chain, &segs) {
+            // namespace statics, a type head's associated fns (the
+            // member-vis dial rides the site context too)
+            if let Some(out) = type_head_completions(chain, doc, &segs) {
                 return filtered(out, &prefix);
             }
             // the head resolved to nothing known — `::` in an unknown
@@ -204,7 +205,7 @@ pub fn complete(
             }
             member_tier_out(
                 chain
-                    .members_for(pos, crate::world::collection::RecvNode::Seg(tail))
+                    .members_for(pos, crate::world::collection::RecvNode::Seg(tail), doc)
                     .unwrap_or_default(),
                 &prefix,
             )
@@ -229,8 +230,9 @@ pub fn complete(
             }
             // member completion shares hover's receiver inference (the
             // door types the receiver INSIDE — field reads, chained
-            // calls, loop variables)
-            member_tier_out(chain.members(pos, node).unwrap_or_default(), &prefix)
+            // calls, loop variables); the member-vis dial reads the
+            // site context
+            member_tier_out(chain.members(pos, node, doc).unwrap_or_default(), &prefix)
         }
         // FINAL: the mod-name slot answers module candidates only — a
         // miss is an empty list, never the bare keyword dump (the use

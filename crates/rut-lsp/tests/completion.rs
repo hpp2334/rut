@@ -243,6 +243,210 @@ fn member_completion_gates_foreign_interface_members() {
 }
 
 #[test]
+fn member_completion_gates_a_foreign_class_privates() {
+    // the repro's shape: a foreign class with module-private fields
+    // and pub impl methods — the compile refuses the fields (Act 1's
+    // FieldVis law), so the editor never offers them; the pub rungs
+    // stay
+    let mut s = S::boot();
+    s.index_mod_at(
+        "file:///deps/http/mod.rut",
+        "http",
+        "",
+        "pub class RequestBuilder {\nc: opaque;\nm: str;\nurl: str;\nheaders: str;\nbody: bytes;\n}\n\
+         impl RequestBuilder {\npub fn method(self, m: str) -> Self { return self; }\n\
+         pub fn header(self, n: str) -> Self { return self; }\n\
+         pub fn build(self) -> i32 { return 0; }\n}\n\
+         pub fn builder() -> RequestBuilder { return nil; }\n",
+    );
+    let src = "use http::{ builder };\nfn go() -> nil {\n    let b = builder();\n    b.\n}\n";
+    let items = s.complete_at("file:///t/main.rut", src, "b.", 1);
+    let ls = labels(&items);
+    for want in ["method", "header", "build"] {
+        assert!(ls.contains(&want), "pub `{want}` completes: {ls:?}");
+    }
+    for hidden in ["headers", "body", "m", "url", "c"] {
+        assert!(
+            !ls.contains(&hidden),
+            "private `{hidden}` never completes: {ls:?}"
+        );
+    }
+}
+
+#[test]
+fn member_completion_keeps_a_foreign_struct_fields() {
+    // the struct exemption (the TyForm key — the field law has no dial
+    // for structs): a foreign struct's unannotated fields still offer
+    let mut s = S::boot();
+    s.index_mod_at(
+        "file:///deps/boxes/mod.rut",
+        "boxes",
+        "",
+        "pub struct Slot {\nx: i32;\n}\npub fn slot() -> Slot { return Slot { x: 1 }; }\n",
+    );
+    let src = "use boxes::{ slot };\nfn go() -> nil {\n    let sl = slot();\n    sl.\n}\n";
+    let items = s.complete_at("file:///t/main.rut", src, "sl.", 1);
+    assert!(
+        offers(&items, "x"),
+        "a struct's fields never gate: {:?}",
+        labels(&items)
+    );
+}
+
+#[test]
+fn member_completion_keeps_the_doc_own_class_privates() {
+    // the doc's own class: module-private members stay offered — the
+    // declaring file IS the site, so the dial passes
+    let mut s = S::boot();
+    let src =
+        "class C {\nhidden: i32;\n}\nimpl C {\nfn tap(self) -> i32 { return self.hidden; }\n}\n\
+               fn mk() -> C { return nil; }\nfn go() -> nil {\n    let c = mk();\n    c.\n}\n";
+    let items = s.complete_at("file:///t/main.rut", src, "c.", 1);
+    let ls = labels(&items);
+    assert!(ls.contains(&"hidden"), "own private field stays: {ls:?}");
+    assert!(ls.contains(&"tap"), "own private method stays: {ls:?}");
+}
+
+/// the labels of one probe — owned (the answer array is a temporary)
+fn probe_token_from(s: &mut S, uri: &str, path: &str, src: &str) -> Vec<String> {
+    s.index_mod_at(uri, "proj", path, src);
+    let items = s.complete_at(uri, src, "t.", 1);
+    labels(&items).into_iter().map(String::from).collect()
+}
+
+fn has(ls: &[String], name: &str) -> bool {
+    ls.iter().any(|l| l == name)
+}
+
+#[test]
+fn member_completion_gates_by_the_same_package_dial() {
+    // the position-path predicate on member rows: private reaches the
+    // declaring module + descendants, pub(super) the parent's subtree,
+    // pub(pkg) the package, pub everywhere
+    let mut s = S::boot();
+    s.index_mod_at("file:///ws/proj/mod.rut", "proj", "", "pub mod imp;\n");
+    s.index_mod_at(
+        "file:///ws/proj/imp/mod.rut",
+        "proj",
+        "imp",
+        "pub mod deep;\npub mod api;\n",
+    );
+    s.index_mod_at(
+        "file:///ws/proj/imp/deep/mod.rut",
+        "proj",
+        "imp/deep",
+        "pub mod leaf;\npub class Token {\nsecret: i32;\npub pkg_wide: i32;\npub(super) tree: i32;\npub open: i32;\n}\n\
+         pub fn mk() -> Token { return nil; }\n\
+         impl Token {\npub fn tap(self) -> i32 { return 0; }\nfn quiet(self) -> i32 { return 1; }\n}\n",
+    );
+    let leaf = "entry fn main() -> nil {\n}\n";
+
+    // the root (outside `imp`'s subtree): the private and pub(super)
+    // rows hide, pub + pub(pkg) pass
+    let ls = probe_token_from(
+        &mut s,
+        "file:///ws/proj/root.rut",
+        "",
+        "use proj::imp::deep::{ mk };\nfn go() -> nil {\n    let t = mk();\n    t.\n}\n",
+    );
+    assert!(has(&ls, "open") && has(&ls, "pkg_wide"), "{ls:?}");
+    assert!(has(&ls, "tap"), "a pub impl fn passes: {ls:?}");
+    assert!(!has(&ls, "secret"), "a private hides at the root: {ls:?}");
+    assert!(
+        !has(&ls, "tree"),
+        "pub(super) hides outside the parent's subtree: {ls:?}"
+    );
+    assert!(!has(&ls, "quiet"), "{ls:?}");
+
+    // the cousin module `imp/api` (inside `imp`'s subtree): pub(super)
+    // passes now, the private still hides
+    let ls = probe_token_from(
+        &mut s,
+        "file:///ws/proj/imp/api/mod.rut",
+        "imp/api",
+        "use proj::imp::deep::{ mk };\nfn go() -> nil {\n    let t = mk();\n    t.\n}\n",
+    );
+    assert!(
+        has(&ls, "tree"),
+        "pub(super) reaches the parent's subtree: {ls:?}"
+    );
+    assert!(!has(&ls, "secret"), "a private hides from a cousin: {ls:?}");
+    assert!(!has(&ls, "quiet"), "{ls:?}");
+
+    // the declaring module itself + its child: the private rows pass
+    let doc = "use proj::imp::deep::{ mk };\nfn go() -> nil {\n    let t = mk();\n    t.\n}\n";
+    let ls = probe_token_from(&mut s, "file:///ws/proj/imp/deep/here.rut", "imp/deep", doc);
+    for want in ["secret", "tree", "pkg_wide", "open", "tap", "quiet"] {
+        assert!(has(&ls, want), "the declaring module sees `{want}`: {ls:?}");
+    }
+    let ls = probe_token_from(
+        &mut s,
+        "file:///ws/proj/imp/deep/leaf/mod.rut",
+        "imp/deep/leaf",
+        &format!("use proj::imp::deep::{{ mk }};\n{leaf}fn go() -> nil {{\n    let t = mk();\n    t.\n}}\n"),
+    );
+    for want in ["secret", "tree"] {
+        assert!(has(&ls, want), "a descendant sees `{want}`: {ls:?}");
+    }
+}
+
+#[test]
+fn type_head_completion_gates_foreign_statics_and_assoc_fns() {
+    // `Registry::⏐` — the `::` lane's statics + associated fns gate by
+    // the same law: a private static and a private associated fn never
+    // complete cross-package; the pub rows stay
+    let mut s = S::boot();
+    s.index_mod_at(
+        "file:///deps/reg/mod.rut",
+        "reg",
+        "",
+        "pub class Registry {\npub static count: i32;\nstatic secret: i32;\n}\n\
+         impl Registry {\npub fn make() -> Registry { return nil; }\nstatic fn buried() -> Registry { return nil; }\n}\n",
+    );
+    let src = "use reg::{ Registry };\nfn go() -> nil {\n    let r = Registry::\n}\n";
+    let items = s.complete_at("file:///t/main.rut", src, "Registry::", 1);
+    let ls = labels(&items);
+    assert!(ls.contains(&"count"), "a pub static completes: {ls:?}");
+    assert!(
+        ls.contains(&"make"),
+        "a pub associated fn completes: {ls:?}"
+    );
+    assert!(
+        !ls.contains(&"secret"),
+        "a private static never completes: {ls:?}"
+    );
+    assert!(
+        !ls.contains(&"buried"),
+        "a private associated fn never completes: {ls:?}"
+    );
+}
+
+#[test]
+fn type_head_completion_keeps_enum_variants_and_own_statics() {
+    // the exemptions on the `::` lane: a foreign enum's variants still
+    // offer (the enum lane's rows never gate) and the doc's own
+    // private static stays — one probe per stamp
+    let mut s = S::boot();
+    s.index_mod_at(
+        "file:///deps/paint/mod.rut",
+        "paint",
+        "",
+        "pub enum Hue { Red, Blue }\n",
+    );
+    let src = "use paint::{ Hue };\nentry fn main() -> nil {\n    let h = Hue::\n}\n";
+    let items = s.complete_at("file:///t/main.rut", src, "Hue::", 1);
+    let ls = labels(&items);
+    assert!(ls.contains(&"Red") && ls.contains(&"Blue"), "{ls:?}");
+    let src = "class K {\nstatic inner: i32;\n}\nentry fn main() -> nil {\n    let k = K::\n}\n";
+    let items = s.complete_at("file:///t/main.rut", src, "K::", 1);
+    assert!(
+        offers(&items, "inner"),
+        "the doc's own static stays: {:?}",
+        labels(&items)
+    );
+}
+
+#[test]
 fn bare_completion_has_the_keyword_table_and_decls() {
     let mut s = S::boot();
     let src = "interface Shape {\nfn area(self) -> f64;\n}\nentry fn main() -> nil { }\n";

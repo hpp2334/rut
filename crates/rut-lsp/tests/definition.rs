@@ -657,3 +657,33 @@ fn misses_stay_misses() {
     let hits = s.def_at("file:///t/main.rut", src, "mystery", 1);
     assert!(hits.is_empty(), "{hits:?}");
 }
+
+#[test]
+fn member_definition_gates_the_foreign_privates() {
+    // the member-vis law on goto-def: a foreign class's private field
+    // is no jump (the compile refuses it — Act 1), the pub impl
+    // method still jumps, and the doc's own private field still does
+    let mut s = S::boot();
+    s.index_mod_at(
+        "file:///deps/http/mod.rut",
+        "http",
+        "",
+        "pub class RequestBuilder {\nheaders: str;\n}\n\
+         impl RequestBuilder {\npub fn build(self) -> i32 { return 0; }\n}\n\
+         pub fn builder() -> RequestBuilder { return nil; }\n",
+    );
+    let src = "use http::{ builder };\nfn go() -> nil {\n    let b = builder();\n    b.headers;\n    b.build();\n}\n";
+    let hits = s.def_in("file:///t/main.rut", src, "b.headers", 1, 2);
+    assert!(
+        hits.is_empty(),
+        "a private foreign field is no jump: {hits:?}"
+    );
+    let hits = s.def_in("file:///t/main.rut", src, "b.build", 1, 2);
+    assert_eq!(hits.len(), 1, "{hits:?}");
+    assert_eq!(hits[0]["uri"], "file:///deps/http/mod.rut", "{hits:?}");
+
+    let own =
+        "class C {\nhidden: i32;\n}\nimpl C {\nfn read(self) -> i32 { return self.hidden; }\n}\n";
+    let hits = s.def_in("file:///t/own.rut", own, "self.hidden", 1, 5);
+    assert_eq!(hits.len(), 1, "own privates still jump: {hits:?}");
+}

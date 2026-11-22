@@ -7,11 +7,12 @@
 
 use std::collections::HashSet;
 
-use rut_ast::{AnyHandle, ExprRef, FieldNode, IdentId, Lit, MethodNode, PathNode, UseNode};
+use rut_ast::{AnyHandle, ExprRef, FieldNode, IdentId, Lit, MethodNode, PathNode, UseNode, Vis};
 
 use super::{Chain, FnView, MemberView, MountedFile, TyView};
 use crate::semantic::Span;
 use crate::world::bindings::{BindKind, Binding};
+use crate::world::mods::{self, DocMods};
 use crate::world::types::TyForm;
 
 /// a member door's receiver — the node-derived spelling: the receiver
@@ -25,17 +26,32 @@ pub(crate) enum RecvNode {
 
 impl<'a> Chain<'a> {
     /// THE MEMBER DOOR — where a member of the receiver actually
-    /// declares. Doors consume NODES, not derived facts: the caller
-    /// hands the node the cursor's walk found (a method call, a field
-    /// access, or a `::` path's tail segment); the member + receiver
-    /// derive INSIDE, the receiver's type resolves INSIDE (self → the
-    /// enclosing type, literals → primitives, paths → the bindings —
-    /// read internally, never a caller-run pass — then module lets),
-    /// and the member law (own surface → enum members → inherent impl
-    /// methods → interface signatures) with every gate (the use-both
-    /// rule) lives here. One rule for every host — hover, definition,
-    /// and completion share it.
-    pub(crate) fn member(&self, pos: u32, node: AnyHandle) -> MemberHit<'a> {
+    /// declares, gated by the member-vis law. Doors consume NODES, not
+    /// derived facts: the caller hands the node the cursor's walk found
+    /// (a method call, a field access, or a `::` path's tail segment);
+    /// the member + receiver derive INSIDE, the receiver's type
+    /// resolves INSIDE (self → the enclosing type, literals →
+    /// primitives, paths → the bindings — read internally, never a
+    /// caller-run pass — then module lets), and the member law (own
+    /// surface → enum members → inherent impl methods → interface
+    /// signatures) with every gate (the use-both rule, then the
+    /// member-vis dial against `doc` — the site context, the
+    /// established [`DocMods`] carrier) lives here. One rule for every
+    /// host — hover, definition, and completion share it. The
+    /// signature-help lane rides [`Chain::impl_method_fn`] UNGATED: a
+    /// call site spelling a refused member is already a panel error.
+    pub(crate) fn member(&self, pos: u32, node: AnyHandle, doc: &DocMods) -> MemberHit<'a> {
+        match self.member_hit(pos, node) {
+            // the member-vis gate: a resolved target the site cannot
+            // see is a MISS — hover/definition agree with the compile
+            MemberHit::Found(target) if !self.target_visible(&target, doc) => MemberHit::None,
+            hit => hit,
+        }
+    }
+
+    /// the ungated resolve — the member law's walk (the gated
+    /// [`Chain::member`] wraps this)
+    fn member_hit(&self, pos: u32, node: AnyHandle) -> MemberHit<'a> {
         let ast = self.head().doc.ast();
         // the member + the receiver, from the node itself — the
         // cursor's own segment decides for a path (the head segment is
@@ -116,6 +132,51 @@ impl<'a> Chain<'a> {
         }
     }
 
+    /// the resolved target's half of the member-vis gate — the same
+    /// law the completion tier applies per row: enum variants are the
+    /// enum lane's rows (the compiler never dials them) and interface
+    /// signatures already answered behind the use-both gate; struct +
+    /// host-struct fields and the builtin/primitive surfaces carry no
+    /// dial (the compiler's field law has no struct dial; the surfaces
+    /// are compiler-lowered). Class members and impl fns gate.
+    fn target_visible(&self, target: &MemberTarget<'a>, doc: &DocMods) -> bool {
+        match target {
+            MemberTarget::EnumMember(..) | MemberTarget::IfaceMember(..) => true,
+            MemberTarget::Member(ty, m, _) => match ty.form() {
+                TyForm::Class => self.member_dial_allows(doc, m.file, m.vis()),
+                _ => true,
+            },
+            MemberTarget::ImplFn(f) => self.member_dial_allows(doc, f.file, f.vis()),
+        }
+    }
+
+    /// the member dial — may the OPEN document see a member declared
+    /// in `decl_file` with visibility `vis`? The site context rides
+    /// the established [`DocMods`] carrier (the chain head's own mount
+    /// is unstamped; `state.rs doc_mods_of` reads the stamped twin):
+    /// cross-package — the decl file names a package the site is not
+    /// in, and a `None` site pkg is foreign to every named pkg — only
+    /// `pub` passes, the compiler's carried-row strictness; same
+    /// package (the unnamed files included) the `vis_crosses`
+    /// predicate verbatim, already the position-path tier's gate.
+    pub(crate) fn member_dial_allows(
+        &self,
+        doc: &DocMods,
+        decl_file: &MountedFile,
+        vis: Vis,
+    ) -> bool {
+        if let Some(p) = decl_file.mount.module.as_deref() {
+            if doc.pkg.as_deref() != Some(p) {
+                return vis == Vis::Pub;
+            }
+        }
+        mods::vis_allows(
+            doc.mod_path.as_deref().unwrap_or(""),
+            mods::mod_path_of(decl_file),
+            vis,
+        )
+    }
+
     /// the (member, receiver) pair a member-position node carries —
     /// `None` when the node is not a member position or the cursor is
     /// not on its member segment (a path's head is a name position)
@@ -178,7 +239,12 @@ impl<'a> Chain<'a> {
         match recv {
             RecvNode::Expr(e) => match e {
                 ExprRef::Self_(h) if !h.get(ast).is_ty => {
-                    enclosing_type(self.iter(), pos).map(|t| t.name().to_string())
+                    // the enclosing type lives in the HOME file — the
+                    // only file whose spans index the cursor's
+                    // offsets (a foreign chain file's byte spans are
+                    // its own text's coordinates and would steal the
+                    // answer whenever they overlap)
+                    enclosing_type(std::iter::once(self.head()), pos).map(|t| t.name().to_string())
                 }
                 ExprRef::Path(ph) => {
                     let segs = &ph.get(ast).segs;
