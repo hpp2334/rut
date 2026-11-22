@@ -179,6 +179,47 @@ fn the_glob_conflict_diag_surfaces_through_analyze() {
     );
 }
 
+// ---- references: the glob-aware reverse edge ----
+
+#[test]
+fn references_reach_every_glob_importing_file() {
+    // two files both `use json::*;` and both call `parse` — references
+    // from one finds the use in the OTHER file too, the same reverse
+    // edge explicit importers ride (the glob-aware import map; a
+    // glob leaf fans no name rows, so the named-leaf read alone made
+    // a glob import second-class). A non-importing file contributes
+    // nothing.
+    let mut s = S::boot();
+    s.index_mod_at(
+        "file:///deps/json/mod.rut",
+        "json",
+        "",
+        "pub fn parse(src: str) -> i32 { return 1; }\n",
+    );
+    let one = "use json::*;\nfn main() -> nil {\n    let n = parse(\"{}\");\n}\n";
+    let two = "use json::*;\nfn go() -> i32 {\n    return parse(\"x\");\n}\n";
+    let three = "fn unrelated() -> i32 {\n    return 0;\n}\n";
+    s.index_file("file:///t/one.rut", one);
+    s.index_file("file:///t/two.rut", two);
+    s.index_file("file:///t/three.rut", three);
+    // the query rides the asking doc's call site (include_declaration
+    // off — the decl ident rides only that flag)
+    let hits = s.refs_in("file:///t/one.rut", one, "parse(", 1, 1, false);
+    let mut uris: Vec<&str> = hits
+        .iter()
+        .map(|l| l["uri"].as_str().expect("every hit names a uri"))
+        .collect();
+    uris.sort_unstable();
+    uris.dedup();
+    assert_eq!(
+        uris,
+        vec!["file:///t/one.rut", "file:///t/two.rut"],
+        "both glob importers found, the non-importer absent: {hits:?}"
+    );
+    // one call site per importer
+    assert_eq!(hits.len(), 2, "{hits:?}");
+}
+
 // ---- the glob re-export feeds downstream ----
 
 #[test]
@@ -199,11 +240,19 @@ fn chained_glob_reexports_terminate() {
         "pub use a::*;\npub fn bfn() -> i32 { return 2; }\n",
     );
     let uri = "file:///t/main.rut";
-    // the tier lists both surfaces once and returns
+    // the tier lists both surfaces ONCE and returns — the cycle back
+    // to the start head re-lists nothing
     let items = s.complete_pos(uri, "use a::{", 0, 8);
     let ls = labels(&items);
     assert!(ls.contains(&"afn"), "{ls:?}");
     assert!(ls.contains(&"bfn"), "{ls:?}");
+    for want in ["afn", "bfn"] {
+        assert_eq!(
+            ls.iter().filter(|l| **l == want).count(),
+            1,
+            "one `{want}` item in a cyclic world: {ls:?}"
+        );
+    }
     // and the glob binds without hanging (bfn keyed on b, where it
     // actually resolves)
     let src = "use a::*;\nfn main() -> nil {\n    let x = bf\n}\n";

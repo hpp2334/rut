@@ -94,8 +94,11 @@ pub fn references(ctx: &Ctx, pos: u32, include_decl: bool) -> Vec<DefLocation> {
 
     // 2. the files worth scanning — the asking document, each target's
     //    own file, and (module-level names only) the reverse use-graph
-    //    edges: which mounted files `use` the name from the declaring
-    //    pkg. The live doc speaks for its URI.
+    //    edges: which mounted files import the name from the declaring
+    //    pkg. The edge reads the file's GLOB-AWARE import map — a glob
+    //    leaf fans no name rows, so a named-leaf read alone would make
+    //    a glob import second-class (every OTHER glob-importing file
+    //    silently missed). The live doc speaks for its URI.
     let mut cand: Vec<&MountedFile> = vec![ctx.doc_file()];
     for tg in &targets {
         match tg.kind {
@@ -104,10 +107,9 @@ pub fn references(ctx: &Ctx, pos: u32, include_decl: bool) -> Vec<DefLocation> {
             Kind::ModuleLet | Kind::Type | Kind::Fn => {
                 cand.push(tg.file);
                 for x in ctx.chain.iter() {
-                    let reverse_edge = x
-                        .uses()
+                    let reverse_edge = crate::world::pkg::import_map(ctx.chain, x)
                         .iter()
-                        .any(|u| u.name() == name && matches_pkg(tg.file, u.pkg()));
+                        .any(|(&n, &pkg)| n == name && matches_pkg(tg.file, pkg));
                     if reverse_edge {
                         cand.push(x);
                     }

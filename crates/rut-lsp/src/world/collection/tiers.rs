@@ -41,6 +41,12 @@ impl<'a> ExportRow<'a> {
     }
 }
 
+/// the seen-set key for a walked head — `pkg::interior` (one spelling,
+/// both insert sites)
+fn seen_key(pkg: &str, interior: &[String]) -> String {
+    format!("{}::{}", pkg, interior.join("::"))
+}
+
 /// one member-tier row — the view the door found it from
 #[derive(Clone, Copy)]
 pub(crate) enum MemberRow<'a> {
@@ -208,6 +214,10 @@ impl<'a> Chain<'a> {
         interior: &[String],
     ) -> (String, Vec<ExportRow<'a>>) {
         let mut seen = HashSet::new();
+        // the walked head itself is seen before the walk: a self-glob
+        // or a cycle that returns to the start re-lists nothing (the
+        // initial pkg's rows stay single)
+        seen.insert(seen_key(pkg, interior));
         self.walked_surface_in(pkg, interior, &mut seen)
     }
 
@@ -326,7 +336,7 @@ impl<'a> Chain<'a> {
                 if g.vis != Vis::Pub {
                     continue;
                 }
-                let key = format!("{}::{}", g.pkg, g.interior.join("::"));
+                let key = seen_key(g.pkg, &g.interior);
                 if !seen.insert(key) {
                     continue;
                 }
