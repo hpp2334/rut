@@ -20,9 +20,12 @@
 //! name and params as written, the hover render's source). The
 //! never-wrong guard is phase 3's: ambiguity, unknown receiver,
 //! own-surface finality, or MORE arguments than the signature has
-//! parameters — no help, never wrong help. A call still being typed
-//! (fewer args than parameters) is the help's whole point and shows the
-//! signature with the arg under the cursor highlighted.
+//! parameters — no help, never wrong help. The LIFECYCLE: a call still
+//! being typed (fewer args than parameters) is the help's whole point
+//! and shows the signature with the arg under the cursor highlighted —
+//! through the closer's END too (the just-typed or type-overed `)`
+//! reads the same hint), and the next keystroke past the closer is out
+//! of the call.
 
 use ls_types::{
     Documentation, MarkupContent, MarkupKind, ParameterInformation, ParameterLabel, SignatureHelp,
@@ -62,12 +65,14 @@ pub fn signature_help(ctx: &Ctx, pos: u32) -> Option<SignatureHelp> {
     let call = ast.ancestors(probe).find(|h| is_call_at(h, ast, pos));
     let call = match call {
         Some(c) => {
-            // a closed call answers only while the cursor is still
-            // inside — past the closer the request is out of the call
+            // a closed call answers while the cursor still rides it —
+            // through the closer's END (the just-typed / type-overed
+            // `)` reads the same hint) — and the NEXT keystroke past
+            // it is out of the call
             let inside = if let Some(m) = c.downcast::<MethodNode>() {
-                m.get(ast).rparen.is_none_or(|rp| pos <= rp.lo)
+                m.get(ast).rparen.is_none_or(|rp| pos <= rp.hi)
             } else if let Some(cc) = c.downcast::<CallNode>() {
-                cc.get(ast).rparen.is_none_or(|rp| pos <= rp.lo)
+                cc.get(ast).rparen.is_none_or(|rp| pos <= rp.hi)
             } else {
                 unreachable!("the ancestor probe found a call kind")
             };

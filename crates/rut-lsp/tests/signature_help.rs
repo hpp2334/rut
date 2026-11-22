@@ -2,7 +2,9 @@
 //! signature, the comma/paren depth's active parameter, the receiver
 //! rule (self never surfaces), the never-wrong guards (arity
 //! mismatch, ambiguity, chained receivers, f-string commas, struct
-//! literals, control parens), and the doc lines riding along.
+//! literals, control parens), the after-closer window (the hint lives
+//! through the just-typed `)` and dies on the next keystroke), and the
+//! doc lines riding along.
 
 mod common;
 
@@ -80,6 +82,82 @@ fn nested_calls_answer_at_their_own_depth() {
     let (lbl, slot, _) = slot_of(&s.sig_at(uri, src, "inner(1)", 1));
     assert_eq!(lbl, "fn outer(b: i32, c: i32) -> i32");
     assert_eq!(slot, Some(0));
+}
+
+// ---- the after-closer window: the hint lives through the just-typed `)` ----
+// every query below sits at the END of the in-flight buffer — the
+// cursor right after what the user just typed — which is the position
+// an editor sends on each keystroke
+
+#[test]
+fn one_param_call_answers_right_after_its_closer() {
+    let mut s = S::boot();
+    let src = "fn g(c: str) -> i32 {\n    return 1;\n}\nentry fn main() -> i32 {\n    let x = g()";
+    let uri = "file:///t/main.rut";
+    // `g()|`: the cursor right after the just-typed `)` still rides the
+    // call — the verbatim signature with the first slot active (zero
+    // args in, the call is being filled)
+    let (lbl, slot, pieces) = slot_of(&s.sig_in(uri, src, "g()", 1, 3));
+    assert_eq!(lbl, "fn g(c: str) -> i32");
+    assert_eq!(slot, Some(0));
+    assert_eq!(pieces, ["c: str"]);
+}
+
+#[test]
+fn zero_param_call_answers_right_after_its_closer() {
+    let mut s = S::boot();
+    let src = "fn mk() -> i32 {\n    return 1;\n}\nentry fn main() -> i32 {\n    let v = mk()";
+    // `mk()|`: the empty call answers through its closer — the
+    // signature, no active slot (no parameter to ride)
+    let (lbl, slot, pieces) = slot_of(&s.sig_in("file:///t/main.rut", src, "mk()", 2, 4));
+    assert_eq!(lbl, "fn mk() -> i32");
+    assert_eq!(slot, None);
+    assert!(pieces.is_empty());
+}
+
+#[test]
+fn method_call_answers_right_after_its_closer() {
+    let mut s = S::boot();
+    let src = "class Circle {\n    r: f64;\n}\nimpl Circle {\n    fn grown(self, k: f64) -> Circle { return self; }\n}\nfn go() -> Circle {\n    let c = Circle::new(1.0);\n    c.grown()";
+    let uri = "file:///t/main.rut";
+    // `c.grown()|`: the method's hint survives its closer — `self`
+    // never surfaces, the recorded params put the cursor on `k`
+    let (lbl, slot, pieces) = slot_of(&s.sig_in(uri, src, "c.grown()", 1, 9));
+    assert_eq!(lbl, "fn grown(self, k: f64) -> Circle");
+    assert_eq!(slot, Some(0), "self never surfaces as a slot");
+    assert_eq!(pieces, ["k: f64"]);
+}
+
+#[test]
+fn the_next_keystroke_past_the_closer_dismisses() {
+    let mut s = S::boot();
+    let uri = "file:///t/main.rut";
+    // `g();|`: the `;` typed after the closer is out of the call
+    let src = "fn g(c: str) -> i32 {\n    return 1;\n}\nentry fn main() -> i32 {\n    let x = g();";
+    let h = s.sig_in(uri, src, "g();", 1, 4);
+    assert!(h.is_null(), "{h}");
+    // `f() |`: so is the space
+    let src = "fn f(a: i32, b: i32) -> i32 {\n    return a;\n}\nentry fn main() -> i32 {\n    f() ";
+    let h = s.sig_in(uri, src, "f() ", 1, 4);
+    assert!(h.is_null(), "{h}");
+    // `f(a, b)|`: a COMPLETE call past its closer is silent too — two
+    // args for two params leaves no slot (never wrong, never clamped)
+    let src = "fn f(a: i32, b: i32) -> i32 {\n    return a;\n}\nentry fn main() -> i32 {\n    let x = f(1, 2)";
+    let h = s.sig_in(uri, src, "f(1, 2)", 1, 7);
+    assert!(h.is_null(), "{h}");
+}
+
+#[test]
+fn nested_call_answers_the_outer_right_after_its_closer() {
+    let mut s = S::boot();
+    let src = "fn inner(a: i32) -> i32 {\n    return a;\n}\nfn outer(b: i32, c: i32) -> i32 {\n    return b + c;\n}\nentry fn main() -> i32 {\n    let r = outer(inner(1))";
+    let uri = "file:///t/main.rut";
+    // `outer(inner(1))|`: the cursor right after the OUTER closer — the
+    // outer call answers (one arg in, still being typed) with the slot
+    // past its last arg; the inner call does not leak through
+    let (lbl, slot, _) = slot_of(&s.sig_in(uri, src, "outer(inner(1))", 1, 15));
+    assert_eq!(lbl, "fn outer(b: i32, c: i32) -> i32");
+    assert_eq!(slot, Some(1));
 }
 
 // ---- method calls: the receiver rule ----
