@@ -602,6 +602,17 @@ mod host_pkg_tests {
         }
     }
 
+    // `Completer::id` — the identity primitive (the Arc's address):
+    // clones share it, distinct cells never collide
+    #[test]
+    fn the_completer_id_is_clone_shared_and_cell_distinct() {
+        let a = crate::Completer::<i64>::new();
+        let a2 = a.clone();
+        let b = crate::Completer::<i64>::new();
+        assert_eq!(a.id(), a2.id(), "a clone is the same cell");
+        assert_ne!(a.id(), b.id(), "two cells are two identities");
+    }
+
     #[test]
     fn the_async_abort_form_forwards_too() {
         // the two-closure spelling (start + abort) rides the same emitter

@@ -80,6 +80,16 @@ impl<T> Completer<T> {
             }),
         }
     }
+
+    /// The cell's identity: the `Arc`'s address. Every clone answers the
+    /// same number; two live cells never collide. IDENTITY ONLY — the
+    /// value names nothing else, must never be dereferenced or
+    /// persisted, and means nothing once the cell is gone (the std
+    /// http lane's cancel registry keys its id → source map by it;
+    /// entries die with the futures they park).
+    pub fn id(&self) -> usize {
+        Arc::as_ptr(&self.inner) as usize
+    }
 }
 
 impl<T: Ret> Completer<T> {

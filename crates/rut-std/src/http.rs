@@ -59,6 +59,18 @@
 //!   the consumer pacing — nothing reads ahead. The one-shot body
 //!   drain is EXEMPT (its answer IS the whole body — gating buys
 //!   nothing): taking the body lane stands the gate down.
+//! - CANCEL IS THE WIRE-ABORT: a PARKED read/drain/send registers its
+//!   completer's identity ([`rut_vm::Completer::id`], the Arc address)
+//!   in the per-pkg [`CancelReg`]; the row family's `__cancel` arm
+//!   takes the slot and marks the source with the sticky read failure
+//!   `"cancelled"` — remaining readers degrade to nil +
+//!   `read_error() == "cancelled"` (the data-not-a-trap lane), a
+//!   budget-parked pump releases at the gate, and a pump that checks
+//!   [`HttpBodyWriter::cancelled`] between chunks (the reqwest lane
+//!   does) DROPS ITS RESPONSE — the connection closes. Disclosed:
+//!   a blocking read already in flight still completes (cancel is
+//!   between-chunk), and a pre-headers cancel of `http_send` finds no
+//!   slot — best-effort, the late completion is simply never taken.
 //!
 //! THREAD LAW: the VM stays single-threaded. Worker threads touch only
 //! the Completers (atomics + a Mutex slot) and the chunk source (one
@@ -90,13 +102,78 @@
 //! on wasm32-unknown-unknown); the seam itself is feature-free — a
 //! wasm embedder brings its own backend instead.
 
-use std::collections::VecDeque;
-use std::sync::{Arc, Condvar, Mutex};
+use std::collections::{HashMap, VecDeque};
+use std::sync::{Arc, Condvar, Mutex, OnceLock, Weak};
 
 use rut_core::types::{TypeId, TY_OPAQUE};
 use rut_vm::interp::Ret;
 use rut_vm::interp::{HostPkg, Vm};
 use rut_vm::{HostPayload, Opaque, OpaqueRef, Slot, Trap, TrapKind};
+
+// ------------------------------------------------------- the cancel ---
+//
+// The `__cancel` arms' lane (the wire-abort): a PARKED host future
+// (`http_send` at its headers, `http_body`/`http_stream_next` at their
+// waiters) registers its completer's identity under the chunk source
+// its cancel arm must stop. The completer id ([`rut_vm::Completer::id`],
+// the Arc address) is the key; the mark is the sticky read failure
+// `"cancelled"` — the same data-not-a-trap lane as any mid-read death,
+// so remaining readers degrade to nil + `read_error() == "cancelled"`
+// and a budget-parked pump releases at the gate.
+
+/// the sticky failure text a cancel lands — `read_error()` names it
+const CANCELLED: &str = "cancelled";
+
+/// the registry entry's map type — the Weak back-link on the source
+/// spells it too (the resolve sites' cleanup bridge)
+type RegMap = HashMap<usize, Shared>;
+
+/// The per-pkg cancel registry: completer id → the source whose pump
+/// must stop when that future's frame is cancelled. One per built pkg
+/// (`pkg_send_with_reg` mints it; the rows' closures and the lane that
+/// completes the send share the clone). Entries live ONLY while the
+/// future is parked: inserted at the park, removed at the cancel arm —
+/// or at the natural resolve, through the source's [`Source::forget`]
+/// back-link (a resolved future's frame retires at its take, so its
+/// cancel arm can never fire again).
+#[derive(Clone, Default)]
+pub(crate) struct CancelReg(Arc<Mutex<RegMap>>);
+
+impl CancelReg {
+    /// register a parked future's source. Stamps the source's back-link
+    /// (first insert wins) so the resolve sites can retire the entry.
+    fn insert(&self, id: usize, src: &Shared) {
+        let _ = src.back.set(Arc::downgrade(&self.0));
+        self.0
+            .lock()
+            .expect("http cancel registry")
+            .insert(id, Arc::clone(src));
+    }
+    /// the cancel arm: take the slot and mark what it names. A miss is
+    /// the disclosed best-effort law (the future was never parked, or
+    /// already resolved — pre-headers cancel of `http_send`).
+    fn take(&self, id: usize) -> Option<Shared> {
+        self.0.lock().expect("http cancel registry").remove(&id)
+    }
+    /// retire the slot without marking (the reqwest pump's own end —
+    /// it holds the registry, unlike the fixture's virtual-clock pump,
+    /// whose send slots linger with the test pkg: bounded, per request).
+    #[cfg(feature = "http")]
+    fn remove(&self, id: usize) {
+        self.0.lock().expect("http cancel registry").remove(&id);
+    }
+}
+
+/// the three async rows' shared `__cancel` arm: the registry slot for
+/// the cancelled future's completer names the source — the sticky
+/// `cancelled` failure lands (readers degrade, the gate releases), the
+/// reqwest pump drops its response at its next between-chunk check.
+/// A miss is the disclosed best-effort law: never a trap.
+fn abort_parked(reg: &CancelReg, id: usize) {
+    if let Some(src) = reg.take(id) {
+        fail_source(&src, CANCELLED.to_string());
+    }
+}
 
 // ----------------------------------------------------- the payload ----
 
@@ -129,10 +206,15 @@ type CompleterOf<T> = rut_vm::Completer<T>;
 /// The chunk source's cells: the state mutex and the SIBLING condvar
 /// the pump lane parks on while the queue sits at the budget (the
 /// wait releases the mutex; the notify fires after it — the thread
-/// law). The alias is the shared handle everything holds.
+/// law). The alias is the shared handle everything holds. `back` is
+/// the cancel registry this source was first registered under (the
+/// read lanes' resolve sites retire their entries through it; Weak —
+/// the registry dies with its pkg's bindings, a dead one skips the
+/// cleanup).
 pub(crate) struct Source {
     g: Mutex<Inner>,
     room: Condvar,
+    back: OnceLock<Weak<Mutex<RegMap>>>,
 }
 
 pub(crate) type Shared = Arc<Source>;
@@ -142,17 +224,28 @@ impl Source {
         Arc::new(Source {
             g: Mutex::new(Inner::fresh()),
             room: Condvar::new(),
+            back: OnceLock::new(),
         })
     }
     fn dead() -> Shared {
         Arc::new(Source {
             g: Mutex::new(Inner::dead()),
             room: Condvar::new(),
+            back: OnceLock::new(),
         })
     }
     /// the one lock (the expect is the house panic text)
     fn lock(&self) -> std::sync::MutexGuard<'_, Inner> {
         self.g.lock().expect("http read state")
+    }
+    /// retire the registry slot of a completer that resolved the
+    /// NATURAL way (a parked read this source just woke): its frame
+    /// takes the answer and retires, so the cancel arm can never fire
+    /// again — the slot goes with it.
+    fn forget(&self, id: usize) {
+        if let Some(reg) = self.back.get().and_then(|w| w.upgrade()) {
+            reg.lock().expect("http cancel registry").remove(&id);
+        }
     }
 }
 
@@ -333,6 +426,16 @@ impl HttpBodyWriter {
     pub fn fail(&self, msg: String) {
         fail_source(&self.src, msg);
     }
+
+    /// the wire-abort probe a pump lane checks BETWEEN chunks: true
+    /// once a cancel marked this source (the `__cancel` arm's sticky
+    /// failure). The reqwest pump drops its response on true — the
+    /// connection closes with the cancelled frame. A blocking read
+    /// already in flight still completes first (cancel is
+    /// between-chunk — the disclosed law).
+    pub fn cancelled(&self) -> bool {
+        self.src.lock().failed.as_deref() == Some(CANCELLED)
+    }
 }
 
 /// The embedder's transport: the ONE method a custom backend
@@ -381,6 +484,9 @@ fn push_chunk(src: &Shared, chunk: Vec<u8>) {
         })
     };
     if let Some((w, front)) = wake {
+        // the parked read resolves — its cancel slot retires with it
+        // (the frame takes this chunk and retires; the arm can't fire)
+        src.forget(w.id());
         w.complete(Some(front)); // the queue is non-empty — always a chunk
     }
 }
@@ -402,9 +508,11 @@ fn fail_source(src: &Shared, msg: String) {
     // down — it re-checks under the lock and moves on)
     src.room.notify_all();
     if let Some(w) = sw {
+        src.forget(w.id());
         w.complete(None);
     }
     if let Some(w) = bw {
+        src.forget(w.id());
         w.complete(drain);
     }
 }
@@ -424,9 +532,11 @@ fn end_source(src: &Shared) {
     // release a pump parked at the budget (same law as the failure)
     src.room.notify_all();
     if let Some(w) = sw {
+        src.forget(w.id());
         w.complete(None);
     }
     if let Some(w) = bw {
+        src.forget(w.id());
         w.complete(drain);
     }
 }
@@ -435,113 +545,149 @@ fn end_source(src: &Shared) {
 
 /// The lane-independent rows: the body drain, the stream read, and the
 /// five sync readbacks. Both lanes register these — only `http_send`
-/// differs (a worker thread vs the virtual clock).
-fn install_read_rows(pkg: &mut HostPkg) {
+/// differs (a worker thread vs the virtual clock). `reg` is the pkg's
+/// cancel registry: a PARKED read registers its completer under it and
+/// its row rides the 5-arg abort form — the `__cancel` arm marks the
+/// source (readers degrade to nil + the named error, the gate
+/// releases, the pump stops between chunks).
+fn install_read_rows(pkg: &mut HostPkg, reg: &CancelReg) {
     // the one-shot drain: the WHOLE remaining body in one future. A
     // transport-failed response, a second taker (body twice, or body
     // after a stream mint) degrade to EMPTY — the disclosed law.
+    let reg_start = reg.clone();
+    let start_body = move |r: Opaque<HttpResponse>| -> CompleterOf<Vec<u8>> {
+        let reg = reg_start.clone();
+        let comp = CompleterOf::new();
+        let mut immediate: Option<Vec<u8>> = None;
+        // did this call TAKE the body lane (vs degrade)? only a
+        // take stands the budget gate down
+        let mut took = false;
+        // did the drain PARK (the EOF/failure is still on the wire)?
+        // a parked drain is the one that registers its cancel slot
+        let mut parked = false;
+        let mut src: Option<Shared> = None;
+        r.with(|resp| {
+            let mut g = resp.read.lock();
+            src = Some(Arc::clone(&resp.read));
+            if resp.err.is_some() || g.body_taken || g.stream_minted {
+                immediate = Some(Vec::new());
+                return;
+            }
+            g.body_taken = true;
+            took = true;
+            if g.failed.is_some() {
+                let short: Vec<u8> = g.chunks.drain(..).flatten().collect();
+                g.queued -= short.len();
+                immediate = Some(short); // the short drain
+                return;
+            }
+            if g.eof {
+                let rest: Vec<u8> = g.chunks.drain(..).flatten().collect();
+                g.queued -= rest.len();
+                immediate = Some(rest);
+                return;
+            }
+            g.body_waiter = Some(comp.clone());
+            parked = true;
+        })
+        .expect("http_body: the response handle is live");
+        if took {
+            // the body lane took over: STAND THE GATE DOWN (its
+            // answer IS the whole body — gating buys nothing) and
+            // release a pump parked at the budget — the drain
+            // waits for EOF, and the parked pump is the only one
+            // who can reach it
+            if let Some(s) = src.as_ref() {
+                s.room.notify_all();
+            }
+        }
+        if parked {
+            if let Some(s) = src.as_ref() {
+                reg.insert(comp.id(), s);
+            }
+        }
+        if let Some(bytes) = immediate {
+            comp.complete(bytes);
+        }
+        comp
+    };
+    let abort_body = {
+        let reg = reg.clone();
+        move |c: CompleterOf<Vec<u8>>| abort_parked(&reg, c.id())
+    };
     rut_vm::pkg_async_fn!(
         pkg,
         "stream::http_body",
         (Opaque<HttpResponse>,) -> Vec<u8>,
-        move |r: Opaque<HttpResponse>| -> CompleterOf<Vec<u8>> {
-            let comp = CompleterOf::new();
-            let mut immediate: Option<Vec<u8>> = None;
-            // did this call TAKE the body lane (vs degrade)? only a
-            // take stands the budget gate down
-            let mut took = false;
-            let mut src: Option<Shared> = None;
-            r.with(|resp| {
-                let mut g = resp.read.lock();
-                src = Some(Arc::clone(&resp.read));
-                if resp.err.is_some() || g.body_taken || g.stream_minted {
-                    immediate = Some(Vec::new());
-                    return;
-                }
-                g.body_taken = true;
-                took = true;
-                if g.failed.is_some() {
-                    let short: Vec<u8> = g.chunks.drain(..).flatten().collect();
-                    g.queued -= short.len();
-                    immediate = Some(short); // the short drain
-                    return;
-                }
-                if g.eof {
-                    let rest: Vec<u8> = g.chunks.drain(..).flatten().collect();
-                    g.queued -= rest.len();
-                    immediate = Some(rest);
-                    return;
-                }
-                g.body_waiter = Some(comp.clone());
-            })
-            .expect("http_body: the response handle is live");
-            if took {
-                // the body lane took over: STAND THE GATE DOWN (its
-                // answer IS the whole body — gating buys nothing) and
-                // release a pump parked at the budget — the drain
-                // waits for EOF, and the parked pump is the only one
-                // who can reach it
-                if let Some(s) = src.as_ref() {
-                    s.room.notify_all();
-                }
-            }
-            if let Some(bytes) = immediate {
-                comp.complete(bytes);
-            }
-            comp
-        },
+        start_body,
+        abort_body,
     );
     // the stream read: one chunk per future; nil = EOF-or-failed (the
     // sticky read err names which). A degraded mint answers an
     // immediate EOF. A failed completer is NOT the mid-read path.
     // ONE POLL PER AWAIT: exactly one pop here — the consumer's pace
     // is the pump's pace (the pop notifies the parked pump).
+    let reg_start = reg.clone();
+    let start_next = move |s: Opaque<HttpStream>| -> CompleterOf<Option<Vec<u8>>> {
+        let reg = reg_start.clone();
+        let comp = CompleterOf::new();
+        let mut immediate: Option<Option<Vec<u8>>> = None;
+        let mut popped = false;
+        let mut parked = false;
+        let mut src: Option<Shared> = None;
+        s.with(|st| {
+            if st.dead {
+                immediate = Some(None);
+                return;
+            }
+            src = Some(Arc::clone(&st.src));
+            let mut g = st.src.lock();
+            if let Some(chunk) = g.chunks.pop_front() {
+                g.queued -= chunk.len();
+                popped = true;
+                immediate = Some(Some(chunk));
+                return;
+            }
+            if g.failed.is_some() {
+                immediate = Some(None);
+                return;
+            }
+            if g.eof {
+                immediate = Some(None);
+                return;
+            }
+            g.stream_waiter = Some(comp.clone());
+            parked = true;
+        })
+        .expect("http_stream_next: the stream handle is live");
+        if popped {
+            // a chunk left the queue — the parked pump re-checks
+            // the budget (real flow control: one read, one push's
+            // worth of room)
+            if let Some(s) = src.as_ref() {
+                s.room.notify_all();
+            }
+        }
+        if parked {
+            if let Some(s) = src.as_ref() {
+                reg.insert(comp.id(), s);
+            }
+        }
+        if let Some(ans) = immediate {
+            comp.complete(ans);
+        }
+        comp
+    };
+    let abort_next = {
+        let reg = reg.clone();
+        move |c: CompleterOf<Option<Vec<u8>>>| abort_parked(&reg, c.id())
+    };
     rut_vm::pkg_async_fn!(
         pkg,
         "stream::http_stream_next",
         (Opaque<HttpStream>,) -> Option<Vec<u8>>,
-        move |s: Opaque<HttpStream>| -> CompleterOf<Option<Vec<u8>>> {
-            let comp = CompleterOf::new();
-            let mut immediate: Option<Option<Vec<u8>>> = None;
-            let mut popped = false;
-            let mut src: Option<Shared> = None;
-            s.with(|st| {
-                if st.dead {
-                    immediate = Some(None);
-                    return;
-                }
-                src = Some(Arc::clone(&st.src));
-                let mut g = st.src.lock();
-                if let Some(chunk) = g.chunks.pop_front() {
-                    g.queued -= chunk.len();
-                    popped = true;
-                    immediate = Some(Some(chunk));
-                    return;
-                }
-                if g.failed.is_some() {
-                    immediate = Some(None);
-                    return;
-                }
-                if g.eof {
-                    immediate = Some(None);
-                    return;
-                }
-                g.stream_waiter = Some(comp.clone());
-            })
-            .expect("http_stream_next: the stream handle is live");
-            if popped {
-                // a chunk left the queue — the parked pump re-checks
-                // the budget (real flow control: one read, one push's
-                // worth of room)
-                if let Some(s) = src.as_ref() {
-                    s.room.notify_all();
-                }
-            }
-            if let Some(ans) = immediate {
-                comp.complete(ans);
-            }
-            comp
-        },
+        start_next,
+        abort_next,
     );
     // the sync readbacks (the kept law: 0 is the transport verdict)
     rut_vm::pkg_fn!(
@@ -598,11 +744,20 @@ fn install_read_rows(pkg: &mut HostPkg) {
 /// the crossing parts and the completer; it answers exactly once and
 /// then drives the writer. The decl-row arity (the opaque cx + the
 /// four crossing values) lives HERE once — no lane re-spells it.
-fn pkg_send<S>(send: S) -> HostPkg
+/// `reg` is the pkg's cancel registry, captured by every row's abort
+/// arm; the send lane's own slot is registered by whoever completes
+/// the send completer (the reqwest pump at headers; the fixture's
+/// settle on the VM thread) — a custom [`HttpBackend`] that never
+/// registers keeps the disclosed best-effort law for its lane.
+fn pkg_send_with_reg<S>(send: S, reg: CancelReg) -> HostPkg
 where
     S: Fn(&HttpRequest, rut_vm::Completer<HttpResponse>) + 'static,
 {
     let mut pkg = HostPkg::new("http_host");
+    let abort_send = {
+        let reg = reg.clone();
+        move |c: CompleterOf<HttpResponse>| abort_parked(&reg, c.id())
+    };
     rut_vm::pkg_async_fn!(
         pkg,
         "net::http_send",
@@ -622,8 +777,9 @@ where
             );
             comp
         },
+        abort_send,
     );
-    install_read_rows(&mut pkg);
+    install_read_rows(&mut pkg, &reg);
     pkg.build()
 }
 
@@ -636,7 +792,7 @@ where
 /// are the shared rows. The decl↔body join is pinned in
 /// `tests/http.rs` (`the_decl_rows_join_both_lanes`).
 pub fn pkg_over(backend: Arc<dyn HttpBackend>) -> HostPkg {
-    pkg_send(move |req, out| backend.send(req, out))
+    pkg_send_with_reg(move |req, out| backend.send(req, out), CancelReg::default())
 }
 
 // ------------------------------------------------------ the fixture ---
@@ -723,6 +879,10 @@ enum Due {
 #[derive(Default)]
 struct FixtureState {
     dues: std::cell::RefCell<Vec<(u64, Due)>>,
+    /// the pkg's cancel registry — the send settle registers the send
+    /// future's slot under it (the read lanes share the same registry
+    /// through their rows' closures)
+    reg: CancelReg,
 }
 
 /// The fixture lane's settle handle: the test loop's side of the
@@ -731,6 +891,14 @@ struct FixtureState {
 pub struct HttpFixture(std::rc::Rc<FixtureState>);
 
 impl HttpFixture {
+    /// the settle handle over the pkg's cancel registry — the Send
+    /// settle registers the send future's slot under it
+    fn with_reg(reg: CancelReg) -> HttpFixture {
+        HttpFixture(std::rc::Rc::new(FixtureState {
+            dues: std::cell::RefCell::new(Vec::new()),
+            reg,
+        }))
+    }
     /// fire every due at or before `now_ms`; true when anything fired
     /// (the loop spins the poll without advancing, the async_host_fns
     /// shape)
@@ -744,11 +912,17 @@ impl HttpFixture {
                 match due {
                     Due::Send { reply, comp, src } => match reply {
                         Err(msg) => comp.complete(HttpResponse::failed(msg)),
-                        Ok(r) => comp.complete(HttpResponse {
-                            status: r.status,
-                            err: None,
-                            read: Arc::clone(&src),
-                        }),
+                        Ok(r) => {
+                            // the send future's cancel slot, registered
+                            // BEFORE the completion (a loser-cancel in
+                            // the resolve window must find it)
+                            self.0.reg.insert(comp.id(), &src);
+                            comp.complete(HttpResponse {
+                                status: r.status,
+                                err: None,
+                                read: Arc::clone(&src),
+                            });
+                        }
                     },
                     Due::Chunk { src, chunk } => push_chunk(&src, chunk),
                     Due::Terminal { src } => end_source(&src),
@@ -828,12 +1002,16 @@ pub fn pkg_with<F>(f: F) -> (HostPkg, HttpFixture)
 where
     F: Fn(&str, &str, &str, &[u8]) -> Result<FixtureReply, String> + 'static,
 {
-    let fixture = HttpFixture::default();
+    let reg = CancelReg::default();
+    let fixture = HttpFixture::with_reg(reg.clone());
     let fx = fixture.clone();
-    let pkg = pkg_send(move |req: &HttpRequest, out: CompleterOf<HttpResponse>| {
-        let reply = f(&req.method, &req.url, &req.headers, &req.body);
-        fx.arm(reply, out);
-    });
+    let pkg = pkg_send_with_reg(
+        move |req: &HttpRequest, out: CompleterOf<HttpResponse>| {
+            let reply = f(&req.method, &req.url, &req.headers, &req.body);
+            fx.arm(reply, out);
+        },
+        reg,
+    );
     (pkg, fixture)
 }
 
@@ -846,6 +1024,10 @@ where
 #[cfg(feature = "http")]
 struct ReqwestBackend {
     client: Arc<reqwest::blocking::Client>,
+    /// the pkg's cancel registry — the pump registers the send
+    /// future's slot at headers (the wire-abort mark's target) and
+    /// retires it at the pump's own end
+    reg: CancelReg,
 }
 
 #[cfg(feature = "http")]
@@ -853,12 +1035,16 @@ impl HttpBackend for ReqwestBackend {
     fn send(&self, req: &HttpRequest, out: rut_vm::Completer<HttpResponse>) {
         let client = Arc::clone(&self.client);
         let req = req.clone();
+        let reg = self.reg.clone();
         // the worker owns the request end to end: send, complete at
         // HEADERS, then pump the body into the chunk source. The
-        // cancel arm is the disclosed no-op — the thread runs to its
-        // blocking completion and the late result is simply never
-        // taken.
-        std::thread::spawn(move || send_once(&client, &req, &out));
+        // cancel arm marks the source through the registry — the pump
+        // checks it between chunks and drops the response (the
+        // connection closes: wire-abort). A cancel before the headers
+        // finds no slot: the disclosed best-effort law — the thread
+        // runs to its blocking completion and the late result is
+        // simply never taken.
+        std::thread::spawn(move || send_once(&client, &req, &out, &reg));
     }
 }
 
@@ -879,19 +1065,30 @@ pub fn pkg() -> HostPkg {
             .build()
             .expect("the std http client builds"),
     );
-    pkg_over(Arc::new(ReqwestBackend { client }))
+    let reg = CancelReg::default();
+    let backend = Arc::new(ReqwestBackend {
+        client,
+        reg: reg.clone(),
+    });
+    pkg_send_with_reg(move |req, out| backend.send(req, out), reg)
 }
 
 /// The reqwest worker: build the request (canonical method, the
 /// "\n"-joined `Name: value` header block, bytes with empty = none —
 /// the disclosed empty-vs-none merge), execute, complete the send at
 /// HEADERS via [`HttpResponse::streaming`], then pump the writer
-/// until EOF or wire death.
+/// until EOF or wire death. `reg` carries the pkg's cancel registry:
+/// the send future's slot registers at headers (before the completion
+/// — a loser-cancel in the resolve window must find it) and retires
+/// at the pump's end; a mark from the cancel arm stops the pump at
+/// its next between-chunk check — the response drops, the connection
+/// closes (wire-abort).
 #[cfg(feature = "http")]
 fn send_once(
     client: &reqwest::blocking::Client,
     req: &HttpRequest,
     w: &rut_vm::Completer<HttpResponse>,
+    reg: &CancelReg,
 ) {
     use std::io::Read as _;
     let send = (|| -> Result<reqwest::blocking::Response, String> {
@@ -921,21 +1118,30 @@ fn send_once(
     };
     // HEADERS — the send resolves here; the body stays unread
     let (answer, body) = HttpResponse::streaming(resp.status().as_u16());
+    reg.insert(w.id(), &body.src);
     w.complete(answer);
     // the pump: this thread keeps reading the wire into the writer. A
     // fixed 16 KiB buffer — bounded memory end to end, and each read
     // lands as one stream chunk. The writer's BUDGET gate backs the
     // pressure all the way out: at the budget the park stalls this
     // loop, the socket fills, the server feels it (real flow control).
+    // Between chunks the CANCEL probe runs: a marked source ends the
+    // pump here — `resp` drops, the connection closes (wire-abort).
     let mut buf = [0u8; 16 * 1024];
     loop {
+        if body.cancelled() {
+            reg.remove(w.id());
+            return;
+        }
         match resp.read(&mut buf) {
             Ok(0) => {
+                reg.remove(w.id());
                 body.end();
                 return;
             }
             Ok(n) => body.push_chunk(buf[..n].to_vec()),
             Err(e) => {
+                reg.remove(w.id());
                 body.fail(e.to_string());
                 return;
             }

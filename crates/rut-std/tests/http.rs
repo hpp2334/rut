@@ -819,3 +819,194 @@ entry fn boot_stream(url: str) -> nil {
         "the send resolved at headers; the pump walked the whole body"
     );
 }
+
+#[test]
+fn a_cancelled_stream_read_aborts_the_wire() {
+    // THE WIRE-ABORT over a real socket: headers + a first chunk land,
+    // the server then trickles; the second read parks, the probe
+    // aborts it, and the row's `__cancel` arm marks the source. The
+    // reqwest pump — blocked in its socket read — wakes on the next
+    // chunk, sees the mark at its between-chunk check, and DROPS THE
+    // RESPONSE: the connection closes (the server observes the EOF).
+    use std::io::{Read, Write};
+    let listener = std::net::TcpListener::bind("127.0.0.1:0").expect("bind");
+    let addr = listener.local_addr().expect("addr");
+    let server = std::thread::spawn(move || {
+        let (mut sock, _) = listener.accept().expect("accept");
+        let mut buf = [0u8; 4096];
+        let _ = sock.read(&mut buf); // the request head (small)
+        sock.write_all(b"HTTP/1.1 200 OK\r\nContent-Length: 9999\r\n\r\nabc")
+            .unwrap();
+        sock.flush().unwrap();
+        // trickle: one small chunk per beat; watch for the client
+        // hanging up (the wire-abort). The first beats must outlive
+        // the test's clock advance (the abort lands inside one).
+        sock.set_nonblocking(true).expect("nonblocking");
+        let mut closed = false;
+        for i in 0..25 {
+            std::thread::sleep(std::time::Duration::from_millis(200));
+            match sock.read(&mut buf) {
+                Ok(0) => {
+                    closed = true; // the client dropped the connection
+                    break;
+                }
+                Ok(_) => {}
+                Err(e) if e.kind() == std::io::ErrorKind::WouldBlock => {}
+                Err(_) => {
+                    closed = true; // reset: the client dropped
+                    break;
+                }
+            }
+            let chunk = format!("chunk{i}");
+            if sock.write_all(chunk.as_bytes()).is_err() {
+                closed = true; // broken pipe: the client dropped
+                break;
+            }
+            let _ = sock.flush();
+        }
+        closed
+    });
+    let url = format!("http://{addr}/abort");
+    let src = r#"
+use http_host::net::{ http_send, http_read_err, http_resp_stream };
+use http_host::stream::{ http_stream_next };
+use futures::{ launch_future, sleep, LaunchedFutureHandle };
+use ink_host::{ create_logger, logger_log };
+
+async fn probe(log: opaque, url: str) -> nil {
+    let r: opaque = await http_send(opaque(nil), "GET", url, "", "".encode());
+    let s: opaque = http_resp_stream(r);
+    let first = await http_stream_next(s);
+    let n: i32 = -1;
+    if (first != nil) {
+        let v: bytes = first;
+        n = v.len();
+    }
+    logger_log(log, 2, f"first={n}");
+    let h = launch_future(http_stream_next(s));
+    await sleep(1);
+    let ok = h.abort();
+    logger_log(log, 2, f"abort={ok}");
+    // the cancel arm fires at the cancelled frame's next turn
+    await sleep(1);
+    let second = await http_stream_next(s);
+    if (second == nil) {
+        logger_log(log, 2, "next=nil");
+    } else {
+        logger_log(log, 2, "next=chunk");
+    }
+    let re = http_read_err(r);
+    if (re == nil) {
+        logger_log(log, 2, "read-err=nil");
+    } else {
+        let t: str = re;
+        logger_log(log, 2, f"read-err={t}");
+    }
+}
+
+entry fn boot_abort(url: str) -> nil {
+    let log = create_logger("t");
+    launch_future(probe(log, url));
+}
+"#;
+    let mut world = rut_native::dir_pkgs(
+        &std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../rut/futures"),
+    )
+    .expect("the async pair walks")
+    .pkgs;
+    let tree = std::path::Path::new(PKG_DIR);
+    for d in ["ink_host", "http_host", "http"] {
+        world.extend(
+            rut_native::dir_pkgs(&tree.join(d))
+                .unwrap_or_else(|e| panic!("mount {d}: {e}"))
+                .pkgs,
+        );
+    }
+    world.push(
+        rut_driver::Mounted::source("app", src).manifest(rut_driver::Manifest::lib(
+            "app",
+            &["http", "http_host", "futures", "async_host", "ink_host"],
+        )),
+    );
+    let compiled = rut_driver::Walk {
+        pkgs: world.clone(),
+        root: String::new(),
+    }
+    .pkgs
+    .iter()
+    .fold(rut_driver::RutRun::new(), |r, p| r.mount(p.clone()))
+    .entrypoint("app")
+    .compile()
+    .unwrap();
+    assert!(
+        compiled.graph.diags.is_empty(),
+        "{:?}",
+        compiled.graph.diags
+    );
+    let prog = compiled.graph.program.expect("compile");
+    rut_vm::verify::verify(&prog).unwrap();
+    let sink = Rc::new(std::cell::RefCell::new(Vec::<String>::new()));
+    let ctx = rut_driver::host_pkg_ctx(&world);
+    let mut hosts = rut_vm::interp::HostRegistry::new();
+    let sink2 = sink.clone();
+    hosts.install_host_pkg(
+        &ctx,
+        logger::pkg(move |m| sink2.borrow_mut().push(m.to_string())),
+    );
+    hosts.install_host_pkg(&ctx, async_host::pkg());
+    hosts.install_host_pkg(&ctx, strbuild::pkg());
+    hosts.install_host_pkg(&ctx, pkg()); // the reqwest lane
+    hosts.verify_against(&ctx.flatten());
+    let limits = rut_vm::interp::Limits {
+        fuel: Some(4_000_000),
+        heap_limit_bytes: Some(16 * 1024 * 1024),
+        interrupt_every: 1024,
+    };
+    let mut vm = rut_vm::interp::Vm::builder()
+        .program(Rc::new(prog))
+        .limits(limits)
+        .hosts(hosts)
+        .build()
+        .unwrap();
+    vm.call::<_, ()>("boot_abort", (url,)).unwrap();
+    // the sleep(1) arming: the probe's wall-clock send resolves, the
+    // first read takes the pre-landed chunk, the second read parks,
+    // the abort sleep arms
+    for _ in 0..500 {
+        vm.run_ready().expect("run_ready");
+        if vm.next_deadline().is_some() {
+            break;
+        }
+        std::thread::sleep(std::time::Duration::from_millis(2));
+    }
+    assert!(vm.next_deadline().is_some(), "the abort sleep armed");
+    let due = vm.next_deadline().expect("armed");
+    vm.set_now(due);
+    let _ = vm.next_deadline();
+    // the probes' tail sleeps + the arm's turn; the worker is
+    // wall-clock — the server's trickle carries the wake to the pump
+    for _ in 0..400 {
+        vm.run_ready().expect("run_ready");
+        if vm.next_deadline().is_some() {
+            let due = vm.next_deadline().expect("armed");
+            vm.set_now(due);
+            let _ = vm.next_deadline();
+        }
+        if vm.pending_tasks() == 0 {
+            break;
+        }
+        std::thread::sleep(std::time::Duration::from_millis(5));
+    }
+    let closed_by_server = server.join().expect("the server thread");
+    assert!(
+        closed_by_server,
+        "the server observed the connection drop — the pump dropped the \
+         response on the mark"
+    );
+    assert_eq!(
+        *sink.borrow(),
+        vec!["first=3", "abort=true", "next=nil", "read-err=cancelled"],
+        "the aborted read marked the source; the next read degrades to nil \
+         with the named error — never a trap"
+    );
+}
