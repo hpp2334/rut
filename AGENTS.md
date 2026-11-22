@@ -338,7 +338,7 @@ order:
   The extension writes NOTHING, anywhere — a pure reader.
 - **The three-lane ABI law**: `crates/rut-lsp-wasm`'s public surface
   is exactly three lanes — the provider queries (`analyze`, `hover`,
-  `complete` with src, definition/inlay/references/signature-help,
+  `complete`/`signature-help` with src, definition/inlay/references,
   `legend`, `forget`), the workspace-scan push (`indexFile`/
   `indexModAt`/`parseManifest` — the host's `findFiles` respects
   editor ignore semantics the env cannot), and the dep pull
@@ -349,8 +349,10 @@ order:
   `setDirectDeps`, `addDefNamed`, `addBundle`, `extractBundle`,
   `extractSrczip`, `docLen`, the stored-`complete` variant) is
   deleted; its behaviors live in the walk and its tests. The
-  `complete` entry takes the source ALWAYS (the doc-sync law — a
-  stored-only read races the analyze debounce).
+  `complete`/`signature-help` entries take the source ALWAYS (the
+  doc-sync law — a stored-only read races the analyze debounce;
+  signature help fires the instant `(` is typed, so the stored doc
+  may still be short the very paren that triggered the request).
 - **The ABI face lives in the crate**: `crates/rut-lsp-wasm/js/index.js`
   (the envelope parsing) and `js/index.d.ts` (every LSP/wire shape) are
   assembled into the wasm package by `scripts/build-lsp-pkg.mjs` (run by

@@ -3,8 +3,9 @@
 //! rule (self never surfaces), the never-wrong guards (arity
 //! mismatch, ambiguity, chained receivers, f-string commas, struct
 //! literals, control parens), the after-closer window (the hint lives
-//! through the just-typed `)` and dies on the next keystroke), and the
-//! doc lines riding along.
+//! through the just-typed `)` and dies on the next keystroke), the
+//! keystroke lane (the src rides every call), and the doc lines riding
+//! along.
 
 mod common;
 
@@ -297,4 +298,20 @@ fn doc_lines_render_as_documentation() {
         h["signatures"][0]["documentation"]["value"], "hex digit value",
         "{h}"
     );
+}
+
+// ---- the keystroke lane: the src rides every call ----
+
+#[test]
+fn the_paren_only_the_request_saw_still_answers() {
+    let mut s = S::boot();
+    let uri = "file:///t/main.rut";
+    // `f(|)`: the provider fires the instant `(` is typed — the caret
+    // sits between the parens the stored doc does not have (no analyze
+    // ever ran). The src rides the request, so the query syncs FIRST
+    // and answers on the CURRENT text: the stored-lane race is dead.
+    let src = "fn f(a: i32) -> i32 {\n    return a;\n}\nentry fn main() -> i32 {\n    f()\n}\n";
+    let (lbl, slot, _) = slot_of(&s.sig_pos(uri, src, (4, 6)));
+    assert_eq!(lbl, "fn f(a: i32) -> i32");
+    assert_eq!(slot, Some(0));
 }

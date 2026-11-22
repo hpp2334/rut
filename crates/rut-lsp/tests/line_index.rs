@@ -102,6 +102,6 @@ fn clamps_degrade_honestly() {
     );
     let r = s.refs_pos(uri, (999, 0), true);
     assert!(r.is_empty(), "a line past EOF references nothing: {r:?}");
-    let h = s.sig_pos(uri, (999, 0));
+    let h = s.sig_pos(uri, src, (999, 0));
     assert!(h.is_null(), "a line past EOF helps nobody: {h}");
 }

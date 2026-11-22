@@ -275,8 +275,18 @@ export class RutLsp {
     includeDeclaration: boolean
   ): Promise<LspLocation[]>;
 
-  /** signature help at an LSP position — `null` when there is none */
-  signatureHelp(uri: string, line: number, character: number): Promise<LspSignatureHelp | null>;
+  /**
+   * signature help at an LSP position (`null` when there is none). Pass
+   * `src` — the document's CURRENT text — to store it first (the
+   * doc-sync lane: the widget fires on the `(` keystroke, an analyze
+   * debounce may still be pending).
+   */
+  signatureHelp(
+    uri: string,
+    line: number,
+    character: number,
+    src: string
+  ): Promise<LspSignatureHelp | null>;
 
   /** index one workspace file (the host's stand-in for the fs walk) */
   indexFile(uri: string, src: string): Promise<void>;

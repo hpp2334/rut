@@ -62,7 +62,14 @@
 //!   type_definition(uri, line, ch) -> String   same shape
 //!   inlay(uri, sl, sc, el, ec) -> String       LSP InlayHint array or null
 //!   references(uri, line, ch, incl) -> String  LSP Location array or null
-//!   signature_help(uri, line, ch) -> String    LSP SignatureHelp or null
+//!   signature_help(uri, src, line, ch) -> String
+//!                                              LSP SignatureHelp or null
+//!                                              over the doc's CURRENT
+//!                                              text (stored first — the
+//!                                              doc-sync lane; the widget
+//!                                              fires on the `(` keystroke,
+//!                                              the analyze lane
+//!                                              debounces)
 //!   index_file(uri, src)                       index a workspace file
 //!   parse_manifest(text) -> String             rut.jsonc bytes -> the
 //!                                              dep-table JSON (or the
@@ -316,15 +323,28 @@ impl Lsp {
         .await
     }
 
-    /// signature help at an LSP position — the callee resolves through the
-    /// same machinery the parameter-name hints ride (free calls by unique
-    /// recorded params, methods through the receiver's type head), the
-    /// signature renders verbatim, the active parameter comes from the
-    /// comma/paren depth at the request position. Ambiguity or arity
-    /// mismatch → `null` (never wrong help).
-    pub async fn signature_help(&self, uri: String, line: u32, ch: u32) -> String {
-        self.text(|tx| event_loop::Msg::Cmd(event_loop::Cmd::SignatureHelp { uri, line, ch, tx }))
-            .await
+    /// signature help at an LSP position over the document's CURRENT
+    /// text — the callee resolves through the same machinery the
+    /// parameter-name hints ride (free calls by unique recorded params,
+    /// methods through the receiver's type head), the signature renders
+    /// verbatim, the active parameter comes from the comma/paren depth
+    /// at the request position. Ambiguity or arity mismatch → `null`
+    /// (never wrong help). The source rides every call — `complete`'s
+    /// keystroke race: the provider fires the instant `(` is typed
+    /// (the caret already at `f(|)`) while `analyze`'s debounce still
+    /// holds the stored text, so a stored-only read would miss the very
+    /// paren that triggered the request.
+    pub async fn signature_help(&self, uri: String, src: String, line: u32, ch: u32) -> String {
+        self.text(|tx| {
+            event_loop::Msg::Cmd(event_loop::Cmd::SignatureHelp {
+                uri,
+                src,
+                line,
+                ch,
+                tx,
+            })
+        })
+        .await
     }
 
     /// index one workspace file (the host's stand-in for an fs walk —

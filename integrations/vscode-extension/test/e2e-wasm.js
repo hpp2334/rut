@@ -1401,7 +1401,7 @@ async function main() {
             );
         }
         const wantHelp = async (pos, wantLabel, wantActive, what) => {
-            const h = await rut.signatureHelp(uri, pos[0], pos[1]);
+            const h = await rut.signatureHelp(uri, pos[0], pos[1], src);
             if (!h) {
                 bad.push(
                     `${what}: no help (wanted ${JSON.stringify(wantLabel)} slot ${wantActive})`,
@@ -1453,7 +1453,7 @@ async function main() {
         // METHOD call through a typed receiver: self never surfaces
         {
             const [ml, mc] = posOf(src, 'grown(2.0)', 1);
-            const h = await rut.signatureHelp(uri, ml, mc + 6);
+            const h = await rut.signatureHelp(uri, ml, mc + 6, src);
             if (
                 h?.signatures[0].label !== 'fn grown(self, k: f64) -> Circle' ||
                 h.activeParameter !== 0
@@ -1469,7 +1469,7 @@ async function main() {
         // a mismatch shows NO help, never wrong help
         {
             const [bl, bc] = posOf(src, '2, 3);', 1);
-            const h = await rut.signatureHelp(uri, bl, bc + 5);
+            const h = await rut.signatureHelp(uri, bl, bc + 5, src);
             if (h !== null) {
                 bad.push(`arity mismatch must show no help: ${JSON.stringify(h)}`);
             }
@@ -2520,7 +2520,7 @@ async function main() {
             'fn add(a: i32, b: i32) -> i32 {\n    return a + b;\n}\nfn go() -> i32 {\n    return add(1, 2);\n}\n';
         const curi = 'file:///ws/wire-sig.rut';
         await core.analyze(curi, call);
-        const sh = await core.signatureHelp(curi, 4, 16);
+        const sh = await core.signatureHelp(curi, 4, 16, call);
         if (sh) {
             declaredOnly(
                 sh,

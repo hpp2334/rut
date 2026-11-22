@@ -178,10 +178,15 @@ export function registerSignatureHelp(rut: RutLsp): vscode.Disposable {
                 doc: vscode.TextDocument,
                 position: vscode.Position,
             ): Promise<vscode.SignatureHelp | undefined> {
+                // the CURRENT text rides the request (the doc-sync entry):
+                // the widget fires the instant `(` is typed while the
+                // analyze lane debounces ~200 ms — the stored doc may
+                // still be short the very paren that triggered this request
                 const h = await rut.signatureHelp(
                     doc.uri.toString(),
                     position.line,
                     position.character,
+                    doc.getText(),
                 );
                 return h ? toSignatureHelp(h) : undefined;
             },

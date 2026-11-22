@@ -45,8 +45,8 @@
 //! every host and by the extension's wire-shape e2e block.
 //!
 //! THE SURFACE LAW — the ABI is exactly three lanes: the provider
-//! queries (`analyze`, `hover`, `complete` with src,
-//! definition/inlay/references/signature-help, `legend`, `forget`);
+//! queries (`analyze`, `hover`, `complete`/`signature-help` with src,
+//! definition/inlay/references, `legend`, `forget`);
 //! the workspace-scan push (`index_file`/`index_mod_at`/`parse_manifest`
 //! — the host's `findFiles` respects editor ignore semantics the env
 //! cannot); and the dep pull (`set_env` + `resolve_deps`/
@@ -142,9 +142,11 @@ impl RutLsp {
         self.core.references(uri, line, ch, include_decl).await
     }
 
-    /// signature help at an LSP position — LSP `SignatureHelp` or null
-    pub async fn signature_help(&self, uri: String, line: u32, ch: u32) -> String {
-        self.core.signature_help(uri, line, ch).await
+    /// signature help at an LSP position over the document's CURRENT
+    /// text (`uri`+`src`, the doc-sync lane) — LSP `SignatureHelp` or
+    /// null
+    pub async fn signature_help(&self, uri: String, src: String, line: u32, ch: u32) -> String {
+        self.core.signature_help(uri, src, line, ch).await
     }
 
     /// index one workspace file (the host's stand-in for an fs walk)

@@ -483,20 +483,27 @@ impl S {
     }
 
     /// signature help at the `occ`-th needle — the LSP value or null
+    /// (the CURRENT text rides every call — the doc-sync door)
     pub fn sig_at(&mut self, uri: &str, src: &str, needle: &str, occ: usize) -> Value {
         self.analyze(uri, src);
         let (l, c) = pos_of(src, needle, occ);
         take(
-            self.pool
-                .run_until(self.lsp.signature_help(uri.to_string(), l, c)),
+            self.pool.run_until(
+                self.lsp
+                    .signature_help(uri.to_string(), src.to_string(), l, c),
+            ),
         )
     }
 
-    /// signature help at a raw position over the stored doc
-    pub fn sig_pos(&mut self, uri: &str, pos: (u32, u32)) -> Value {
+    /// signature help at a raw position over `src`
+    pub fn sig_pos(&mut self, uri: &str, src: &str, pos: (u32, u32)) -> Value {
         take(
-            self.pool
-                .run_until(self.lsp.signature_help(uri.to_string(), pos.0, pos.1)),
+            self.pool.run_until(self.lsp.signature_help(
+                uri.to_string(),
+                src.to_string(),
+                pos.0,
+                pos.1,
+            )),
         )
     }
 
@@ -518,8 +525,12 @@ impl S {
         self.analyze(uri, src);
         let (l, c) = pos_of(src, needle, occ);
         take(
-            self.pool
-                .run_until(self.lsp.signature_help(uri.to_string(), l, c + off)),
+            self.pool.run_until(self.lsp.signature_help(
+                uri.to_string(),
+                src.to_string(),
+                l,
+                c + off,
+            )),
         )
     }
 

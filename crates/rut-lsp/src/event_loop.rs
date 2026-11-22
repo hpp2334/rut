@@ -140,6 +140,7 @@ pub enum Cmd {
     },
     SignatureHelp {
         uri: String,
+        src: String,
         line: u32,
         ch: u32,
         tx: Tx,
@@ -521,7 +522,19 @@ fn dispatch(l: &mut Loop, cmd: Cmd) {
             };
             let _ = tx.send(Reply::Text(answer));
         }
-        Cmd::SignatureHelp { uri, line, ch, tx } => {
+        Cmd::SignatureHelp {
+            uri,
+            src,
+            line,
+            ch,
+            tx,
+        } => {
+            // the doc-sync entry (complete's twin): the provider fires
+            // the instant `(` is typed while the analyze lane debounces,
+            // so the CURRENT text syncs FIRST — a stored-only read would
+            // miss the very paren that triggered the request. The
+            // envelope writes HERE, at the reply boundary.
+            l.state.sync(&uri, &src);
             let answer = match l.state.chain(&uri) {
                 None => "null".to_string(),
                 Some(chain) => {

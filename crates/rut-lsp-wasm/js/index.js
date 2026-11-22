@@ -121,9 +121,15 @@ export class RutLsp {
     );
   }
 
-  /** signature help at an LSP position — null when there is none to give */
-  async signatureHelp(uri, line, character) {
-    return JSON.parse(await this.lsp.signature_help(uri, line, character));
+  /**
+   * signature help at an LSP position over the document's CURRENT text —
+   * the source always rides the call (the doc-sync law): the widget
+   * fires the instant `(` is typed, while an analyze debounce may be
+   * pending — a stored-only read would miss the very paren that
+   * triggered the request.
+   */
+  async signatureHelp(uri, line, character, src) {
+    return JSON.parse(await this.lsp.signature_help(uri, src, line, character));
   }
 
   /** index one workspace file (the host's stand-in for the server's fs walk) */
