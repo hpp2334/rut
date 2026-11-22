@@ -159,7 +159,25 @@ impl<'a> Chain<'a> {
     /// the statement's recovery — and they are not the walk). The pub
     /// gates and the walk live inside. `None` = the cursor is not in a
     /// use statement.
-    pub(crate) fn use_exports(&self, node: AnyHandle, pos: u32) -> Option<UseExports<'a>> {
+    ///
+    /// `direct_deps` is the open document's own dep set — the module
+    /// NAMES arm's gate (`use <cursor>`): mounting is TRANSITIVE by
+    /// design (a walked dep's own deps mount too — goto-def/hover into
+    /// its files need them), but nameability is DECLARATION-scoped —
+    /// the compiler's closure check refuses `use` of a
+    /// mounted-but-undeclared package (the D5 diagnostic) — so a
+    /// transitive-only module never rides the plain offer (a plain
+    /// offer the compile would reject is a trap). The ambient prelude
+    /// rides unconditionally on its origin (`core` — D5's ambient
+    /// arm). The set threads LIVE — the
+    /// [`DocMods`](crate::world::mods::DocMods) precedent, a
+    /// state-derived fact, never the state itself.
+    pub(crate) fn use_exports(
+        &self,
+        node: AnyHandle,
+        pos: u32,
+        direct_deps: &HashSet<String>,
+    ) -> Option<UseExports<'a>> {
         let uh = node.downcast::<UseNode>()?;
         let ast = self.head().doc.ast();
         let d = uh.get(ast);
@@ -186,10 +204,21 @@ impl<'a> Chain<'a> {
         };
         let Some(pkg) = before.first() else {
             // `use <cursor>`: the chain's module names — every NAMED
-            // index (the names come from the uniform index set, no
-            // hardcoded table)
+            // index the document may NAME (the auto-import tier's
+            // `direct` gate, mirrored byte-for-byte in spirit: origin
+            // `core` passes, every other name must be a row of the
+            // document's own manifest; the unnamed/stem-derived
+            // workspace files stay out by the filter_map below, as
+            // before)
             return Some(UseExports::Modules(
                 self.iter()
+                    .filter(|f| {
+                        f.mount.origin == "core"
+                            || f.mount
+                                .module
+                                .as_deref()
+                                .is_some_and(|m| direct_deps.contains(m))
+                    })
                     .filter_map(|f| f.mount.module.clone().map(|m| (m, f.mount.origin.clone())))
                     .collect(),
             ));

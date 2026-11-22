@@ -166,6 +166,40 @@ fn declare_direct(names: &[&str]) -> (Rc<MemIo>, String) {
     (Rc::new(io), "/ws/proj".to_string())
 }
 
+/// the transitive world — the module-tier twin of the auto-import
+/// twin's world: the root declares `http` + `pads` (path deps) while
+/// `http`'s OWN manifest declares `http_host` — the walk mounts it
+/// (transitive by design; goto-def into http's files needs it), but
+/// the root never declared it, so the compiler refuses `use
+/// http_host::…` (the D5 diagnostic)
+fn transitive_world() -> (Rc<MemIo>, String) {
+    let mut io = MemIo::default();
+    io.put(
+        "/ws/proj/rut.jsonc",
+        "{\n  \"name\": \"proj\",\n  \"deps\": {\"http\": {\"path\": \"/ws/http\"}, \"pads\": {\"path\": \"/ws/pads\"}}\n}\n",
+    );
+    io.put("/ws/proj/src/mod.rut", "fn main() -> nil {\n}\n");
+    io.put(
+        "/ws/http/rut.jsonc",
+        "{\n  \"name\": \"http\",\n  \"deps\": {\"http_host\": {\"path\": \"/ws/http_host\"}}\n}\n",
+    );
+    io.put(
+        "/ws/http/src/mod.rut",
+        "pub fn get() -> str {\n    return \"\";\n}\n",
+    );
+    io.put(
+        "/ws/http_host/rut.jsonc",
+        "{\n  \"name\": \"http_host\"\n}\n",
+    );
+    io.put("/ws/http_host/src/mod.rut", "pub fn listen() -> nil {\n}\n");
+    io.put("/ws/pads/rut.jsonc", "{\n  \"name\": \"pads\"\n}\n");
+    io.put(
+        "/ws/pads/src/mod.rut",
+        "pub fn pad() -> i32 {\n    return 1;\n}\n",
+    );
+    (Rc::new(io), "/ws/proj".to_string())
+}
+
 #[test]
 fn member_completion_lists_impl_methods_and_fields() {
     let mut s = S::boot();
@@ -363,6 +397,56 @@ fn a_transitive_only_dep_never_auto_imports() {
 }
 
 #[test]
+fn a_transitive_only_dep_never_rides_the_use_module_tier() {
+    // the module-name tier's twin of `a_transitive_only_dep_never_auto_imports`:
+    // `use <cursor>` competes on the SAME direct-dep gate — `http`'s
+    // own dep `http_host` mounts into the chain (transitive by
+    // design), but the compiler refuses `use http_host::…`
+    // (nameability is declaration-scoped, the D5 diagnostic), so the
+    // tier never OFFERS it — a plain offer the compile would reject
+    // is a trap. The declared `pads` is the positive control.
+    let (io, root) = transitive_world();
+    let mut s = S::with_io(&io);
+    s.resolve(&[&root]);
+    let uri = "file:///t/main.rut";
+    // `use ⏐` — the nameable set: the two declared deps + ambient core
+    let items = s.complete_pos(uri, "use ", 0, 4);
+    let ls = labels(&items);
+    assert!(ls.contains(&"http"), "the declared dep offers: {ls:?}");
+    assert!(
+        ls.contains(&"pads"),
+        "the second declared dep offers: {ls:?}"
+    );
+    assert!(
+        ls.contains(&"core"),
+        "the ambient prelude rides its origin: {ls:?}"
+    );
+    assert!(
+        !ls.contains(&"http_host"),
+        "a transitive-only dep never offers on the module tier: {ls:?}"
+    );
+    // `use h⏐` — the prefix filters through the gate
+    let items = s.complete_pos(uri, "use h", 0, 5);
+    let ls = labels(&items);
+    assert!(ls.contains(&"http"), "{ls:?}");
+    assert!(!ls.contains(&"http_host"), "{ls:?}");
+    // typing the transitive name in full still never offers
+    let items = s.complete_pos(uri, "use http_host", 0, 13);
+    assert!(
+        !offers(&items, "http_host"),
+        "the mounted-but-undeclared module stays off: {:?}",
+        labels(&items)
+    );
+    // the positive control: the second declared dep still offers
+    let items = s.complete_pos(uri, "use p", 0, 5);
+    assert!(
+        offers(&items, "pads"),
+        "a declared dep still offers: {:?}",
+        labels(&items)
+    );
+}
+
+#[test]
 fn a_name_reachable_two_ways_offers_exactly_one_item() {
     // A4: `tag` completes bare (the doc's `use` names it) AND the
     // auto-import tier would offer it — the merged list retains the
@@ -449,10 +533,12 @@ fn string_receiver_completes_str_surface() {
 
 #[test]
 fn use_path_completion_lists_the_chain_module_names() {
-    // `use ⏐` — module names from every NAMED index, the std
-    // fixtures included (std is not special; no hardcoded table)
-    let mut s = S::boot();
-    mount_std(&mut s);
+    // `use ⏐` — module names from the chain's NAMEABLE indexes: the
+    // root manifest's own rows (the walk seeded the direct set — std
+    // is not special; no hardcoded table) plus the ambient prelude
+    let (io, root) = std_io_world();
+    let mut s = S::with_io(&io);
+    s.resolve(&[&root]);
     let uri = "file:///t/main.rut";
     let items = s.complete_pos(uri, "use ", 0, 4);
     let ls = labels(&items);

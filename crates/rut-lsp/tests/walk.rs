@@ -793,6 +793,29 @@ fn direct_deps_accumulate_across_roots() {
         arr.iter().map(|i| &i["label"]).collect::<Vec<_>>()
     );
 
+    // the use tier's module names gate on the same seeded set:
+    // `use ⏐` offers the walked direct heads (+ ambient core) —
+    // never the transitive `gamma`
+    let udoc = "use \nfn main() -> nil {\n}\n";
+    take(pool.run_until(lsp.analyze(uri.clone(), udoc.to_string())));
+    let mods = take(pool.run_until(lsp.complete(uri.clone(), udoc.to_string(), 0, 4)));
+    let names: Vec<&str> = mods
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|i| i["label"].as_str().unwrap_or(""))
+        .collect();
+    for want in ["alpha", "beta", "core"] {
+        assert!(
+            names.contains(&want),
+            "the module name `{want}` offers: {names:?}"
+        );
+    }
+    assert!(
+        !names.contains(&"gamma"),
+        "a transitive-only dep never offers on the module tier: {names:?}"
+    );
+
     // … and once the doc `use`s a dep, its fn is a PLAIN bare item —
     // exactly one offer, no import edit riding (the old push-lane
     // bare-scope law, re-homed through the walk)

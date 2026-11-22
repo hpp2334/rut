@@ -10,10 +10,11 @@
 //! foreign**. Heuristic, like hover: a
 //! miss is an empty list, never wrong text.
 //!
-//! The use-path tiers: at `use <cursor>` the chain's module names
-//! compete (every named index — a walked dep, the prelude — no index
-//! is special); at `use mod::<cursor>` that module's exported public
-//! names. The bare position rides the compiler's bare-name law: the
+//! The use-path tiers: at `use <cursor>` the chain's nameable module
+//! names compete (the document's own manifest rows + the ambient
+//! prelude — mounting is transitive, nameability declaration-scoped);
+//! at `use mod::<cursor>` that module's exported public names. The
+//! bare position rides the compiler's bare-name law: the
 //! fn-local bindings ahead of the keyword table, then the document's
 //! own decls + the chain's ambient builtin rows + the names the
 //! document already `use`s — every other foreign name rides only the
@@ -140,7 +141,7 @@ pub fn complete(
             if let Some(out) = position_path_completions(chain, doc, &segs) {
                 return filtered(out, &prefix);
             }
-            use_tier_out(chain, chain.use_exports(node, pos), &prefix)
+            use_tier_out(chain, chain.use_exports(node, pos, direct_deps), &prefix)
         }
         // a lone `:` (or the `->` arrow) under the cursor is the
         // annotation boundary — the type tier answers it: the primitive
