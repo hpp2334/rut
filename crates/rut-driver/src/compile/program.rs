@@ -79,6 +79,200 @@ fn unbound_use_msg(
     }
 }
 
+/// The dep head's own-package answer for a glob leaf — the same walk
+/// `Session::own_use_head` runs at the graph, read off the mod inputs
+/// the compile already carries: a `mod` edge visible-walked from `from`
+/// (the current module first, then the ancestors, nearest wins), or the
+/// unit's own spec naming the root module. A flat package claims
+/// nothing — its own name was never a legal use head there.
+fn own_glob_target(
+    mods: &rut_lir::check::ModInputs,
+    spec: &str,
+    head: &str,
+    from: &str,
+) -> Option<String> {
+    let mut cur = from.to_string();
+    loop {
+        if let Some((path, _)) = mods.scopes.get(&cur).and_then(|s| s.children.get(head)) {
+            return Some(path.clone());
+        }
+        let parent = match cur.rsplit_once('/') {
+            Some((p, _)) => p.to_string(),
+            None => String::new(),
+        };
+        if parent == cur {
+            break;
+        }
+        cur = parent;
+    }
+    if !mods.scopes.is_empty() && head == spec {
+        return Some(String::new());
+    }
+    None
+}
+
+/// The walked path's pub surface names a glob leaf binds — the DEP
+/// lane's enumeration. The dep's binary surface answers (a packed
+/// `.rutbundle` enumerates the same way its per-leaf lookups do: a bare
+/// text at the root, a `{prefix}::{leaf}` text at the walked module),
+/// and the dep's decl rows answer beside it (a source dep's mod
+/// placement and its `pub use` re-export edges — the rows the leaf gate
+/// reads). Only `pub` crosses packages; module names are not imports (a
+/// `pub mod` row never enumerates — the qualified spellings reach it);
+/// the AMBIENT builtin rows bind with no `use` and enumerate nowhere.
+fn glob_surface_names(
+    surface: Option<&rut_core::binary::Surface>,
+    decls: Option<&std::collections::BTreeMap<String, Vec<crate::mods::DeclRow>>>,
+    prefix: &str,
+) -> Vec<String> {
+    let mut out: Vec<String> = Vec::new();
+    let mut seen: std::collections::HashSet<String> = std::collections::HashSet::new();
+    if let Some(surface) = surface {
+        // a row enumerates at exactly the walked prefix: bare at the
+        // root, `{prefix}::{leaf}` with no deeper path at a module
+        let at_walk = |text: &str| -> Option<String> {
+            if prefix.is_empty() {
+                (!text.contains("::")).then(|| text.to_string())
+            } else {
+                text.strip_prefix(prefix)
+                    .and_then(|rest| rest.strip_prefix("::"))
+                    .filter(|leaf| !leaf.contains("::"))
+                    .map(|leaf| leaf.to_string())
+            }
+        };
+        let mut push = |leaf: Option<String>| {
+            if let Some(leaf) = leaf {
+                if seen.insert(leaf.clone()) {
+                    out.push(leaf);
+                }
+            }
+        };
+        for f in &surface.funcs {
+            push(at_walk(surface.names.name(f.name)));
+        }
+        for g in &surface.fn_generics {
+            push(at_walk(surface.names.name(g.name)));
+        }
+        for c in &surface.consts {
+            push(at_walk(surface.names.name(c.name)));
+        }
+        for t in &surface.type_exports {
+            push(at_walk(surface.names.name(t.name)));
+        }
+        // the trait rows: an inst descriptor's spelling
+        // (`Readable<#T>`) is not a declaration name — never enumerates
+        for t in &surface.ifaces {
+            let text = surface.names.name(t.name);
+            if !text.contains('<') {
+                push(at_walk(text));
+            }
+        }
+        for (n, _kind, ambient) in &surface.native_types {
+            if !ambient {
+                push(at_walk(surface.names.name(*n)));
+            }
+        }
+        for (n, ambient) in &surface.native_fns {
+            if !ambient {
+                push(at_walk(surface.names.name(*n)));
+            }
+        }
+    }
+    if let Some(decls) = decls {
+        let key = if prefix.is_empty() {
+            ""
+        } else {
+            &prefix.replace("::", "/")
+        };
+        if let Some(rows) = decls.get(key) {
+            for d in rows {
+                if d.vis != rut_ast::Vis::Pub {
+                    continue; // only `pub` crosses packages
+                }
+                let crosses = matches!(
+                    d.kind,
+                    crate::mods::DeclKind::Fn
+                        | crate::mods::DeclKind::Struct
+                        | crate::mods::DeclKind::Enum
+                        | crate::mods::DeclKind::Class
+                        | crate::mods::DeclKind::Interface
+                        | crate::mods::DeclKind::Alias
+                        | crate::mods::DeclKind::Use
+                        | crate::mods::DeclKind::HostFn
+                );
+                if crosses && seen.insert(d.name.clone()) {
+                    out.push(d.name.clone());
+                }
+            }
+        }
+    }
+    out
+}
+
+/// The target module's names an OWN-package glob leaf binds — the
+/// consumer's own tree enumerated the way the graph's own lane reads a
+/// spelled leaf: the target's top-level decls, each visibility-gated
+/// under the crossing predicate (import is no visibility bypass), and
+/// the pub re-export edges (`pub use` leaves join the surface one
+/// level). Module names are not imports.
+fn own_glob_surface_names(
+    ast: &rut_ast::Ast,
+    mods: &rut_lir::check::ModInputs,
+    target: &str,
+    from: &str,
+) -> Vec<String> {
+    let mut out: Vec<String> = Vec::new();
+    let mut push = |vis: rut_ast::Vis, name: rut_core::IdentId| {
+        if rut_lir::check::vis_crosses(from, target, vis) {
+            out.push(ast.name(name).to_string());
+        }
+    };
+    for it in ast.root().items(ast) {
+        if mods.file_of(it.span(ast).lo) != target {
+            continue;
+        }
+        match it {
+            rut_ast::ItemRef::Fn(h) => {
+                let d = h.get(ast);
+                push(d.vis(), d.name.ident);
+            }
+            rut_ast::ItemRef::Struct(h) => {
+                let d = h.get(ast);
+                push(d.vis(), d.name.ident);
+            }
+            rut_ast::ItemRef::Class(h) => {
+                let d = h.get(ast);
+                push(d.vis(), d.name.ident);
+            }
+            rut_ast::ItemRef::Interface(h) => {
+                let d = h.get(ast);
+                push(d.vis(), d.name.ident);
+            }
+            rut_ast::ItemRef::Enum(h) => {
+                let d = h.get(ast);
+                push(d.vis(), d.name.ident);
+            }
+            rut_ast::ItemRef::Alias(h) => {
+                let d = h.get(ast);
+                push(d.vis(), d.name.ident);
+            }
+            rut_ast::ItemRef::ModuleLet(h) => {
+                let d = h.get(ast);
+                push(d.vis(), d.name.ident);
+            }
+            rut_ast::ItemRef::Use(h) => {
+                let d = h.get(ast);
+                let vis = d.vis();
+                for n in &d.names {
+                    push(vis, n.ident);
+                }
+            }
+            _ => {}
+        }
+    }
+    out
+}
+
 fn respell_surface_ty(
     types: &rut_core::types::TypeTable,
     t: TypeId,
@@ -354,7 +548,6 @@ fn compile_program_inner(
     // exact table. The ctx's live interner grows past it (the iface
     // pass re-interns trait and method names), so the snapshot keeps
     // every read answering v1's question against v1's word.
-    let frozen = ctx.interner.clone();
     ctx.allow_uses = allow_uses;
     // the file-module inputs (phase 3): the file layout + scope tree
     // this unit resolves against (flat for single-file packages)
@@ -362,12 +555,185 @@ fn compile_program_inner(
     // the own-package use bindings (the intra-package import): the
     // graph validation's rows — a bare name bound by `use imp::{ X }`
     // resolves through the TARGET module's decls, in the file whose
-    // `use` wrote it
+    // `use` wrote it. (Read off the pre-snapshot table — nothing has
+    // interned between the dep loop and here.)
     for (site, name, target) in own_uses {
-        if let Some(id) = frozen.lookup(name) {
+        if let Some(id) = ctx.interner.lookup(name) {
             ctx.own_uses.insert((site.clone(), id), target.clone());
         }
     }
+    // ---- the glob expansion: every `use pkg::*` leaf (flat, walked,
+    // or riding beside the brace list) binds the walked path's PUB
+    // surface. Precedence is silent shadowing — glob < explicit leaf <
+    // own decl: a name this file SPELLS on any use line, or DECLARES
+    // at its top level, never glob-binds here. Glob–glob: a name a
+    // DIFFERENT head's glob already bound errors AT THE SECOND use
+    // line (total validation, at the use line); the same head
+    // re-globbed is idempotent. Must-bind and the unreferenced-name
+    // lint exempt globs (no spelled leaves on the line) — the
+    // synthesized rows carry `glob: true` and the validated walk skips
+    // them.
+    //
+    // `UseBinding` — one use leaf's row: `file` the importing file's
+    // mod path, `head` the dep head text, `leaf` the bound bare name,
+    // `qualified` flat vs `head::path::{leaf}`, `composed` the
+    // host-row spelling when qualified (`net::ping`), `pub_use` the
+    // use's OWN vis (a `pub use` is a re-export edge — its const
+    // bindings ride the unit's surface, spelled by the file's mod
+    // path), `span` the use item's span (the must-bind law's error
+    // site), `glob` whether the row was synthesized by this expansion.
+    struct UseBinding {
+        file: String,
+        head: String,
+        leaf: rut_core::IdentId,
+        qualified: bool,
+        composed: String,
+        pub_use: bool,
+        span: rut_lexer::span::Span,
+        glob: bool,
+    }
+    // the precedence input, keyed by the file's mod path: every
+    // spelled use leaf (explicit dep and own bindings alike) and every
+    // top-level decl name of the file — a glob never steals a name the
+    // file spells or declares
+    let mut spelled: std::collections::HashSet<(String, String)> = std::collections::HashSet::new();
+    let mut own_decls: std::collections::HashSet<(String, String)> =
+        std::collections::HashSet::new();
+    for it in ast.root().items(ast) {
+        let file = ctx.mods.file_of(it.span(ast).lo).to_string();
+        if let rut_ast::ItemRef::Use(uh) = it {
+            for n in &uh.get(ast).names {
+                spelled.insert((file.clone(), ast.name(n.ident).to_string()));
+            }
+            continue;
+        }
+        let decl = match it {
+            rut_ast::ItemRef::Fn(h) => Some(h.get(ast).name.ident),
+            rut_ast::ItemRef::Struct(h) => Some(h.get(ast).name.ident),
+            rut_ast::ItemRef::Class(h) => Some(h.get(ast).name.ident),
+            rut_ast::ItemRef::Interface(h) => Some(h.get(ast).name.ident),
+            rut_ast::ItemRef::Enum(h) => Some(h.get(ast).name.ident),
+            rut_ast::ItemRef::Alias(h) => Some(h.get(ast).name.ident),
+            rut_ast::ItemRef::ModuleLet(h) => Some(h.get(ast).name.ident),
+            _ => None,
+        };
+        if let Some(id) = decl {
+            own_decls.insert((file, ast.name(id).to_string()));
+        }
+    }
+    let mut glob_rows: Vec<UseBinding> = Vec::new();
+    // the names a glob already bound, keyed by name: (the binding
+    // head, the use line's span) — the glob–glob conflict's ledger
+    let mut glob_bound: std::collections::HashMap<String, (String, rut_lexer::span::Span)> =
+        std::collections::HashMap::new();
+    let mut glob_conflicts: Vec<Diag> = Vec::new();
+    for it in ast.root().items(ast) {
+        let rut_ast::ItemRef::Use(uh) = it else {
+            continue;
+        };
+        let u = uh.get(ast);
+        if u.glob.is_none() {
+            continue;
+        }
+        let head = ast.name(u.path[0].ident).to_string();
+        let span = it.span(ast);
+        let file = ctx.mods.file_of(span.lo).to_string();
+        let prefix = u.path[1..]
+            .iter()
+            .map(|s| ast.name(s.ident))
+            .collect::<Vec<_>>()
+            .join("::");
+        // the head's namespace: a dep surface (the bound vec's rows —
+        // `used_pkgs`/D5 gated this head exactly as for a spelled
+        // leaf), else the own-package walk. Neither answers and
+        // nothing enumerates — the graph diagnosed the head already.
+        let dep = uses.iter().find(|(_, _, _, h)| h == &head);
+        let own_target = if dep.is_none() {
+            own_glob_target(&ctx.mods, module_name, &head, &file)
+        } else {
+            None
+        };
+        let names = match (dep, own_target.as_deref()) {
+            (Some((_, surface, _, h)), _) => {
+                let decls = dep_decls.iter().find(|(dh, _)| dh == h).map(|(_, t)| t);
+                glob_surface_names(Some(surface), decls, &prefix)
+            }
+            (None, Some(target)) => own_glob_surface_names(ast, &ctx.mods, target, &file),
+            _ => Vec::new(),
+        };
+        for name in names {
+            // precedence: an explicit leaf or own decl of THIS file
+            // wins silently — the glob skips the name
+            if spelled.contains(&(file.clone(), name.clone()))
+                || own_decls.contains(&(file.clone(), name.clone()))
+            {
+                continue;
+            }
+            // glob–glob: a DIFFERENT head's glob already bound the
+            // name — the SECOND use line errors
+            match glob_bound.get(&name) {
+                Some((first, _)) if first != &head => {
+                    glob_conflicts.push(Diag::new(
+                        span,
+                        format!(
+                            "`{name}` arrives from both `{first}::*` and \
+                             `{head}::*` — import it explicitly"
+                        ),
+                    ));
+                    continue;
+                }
+                Some(_) => continue, // same head re-globbed: idempotent
+                None => {
+                    glob_bound.insert(name.clone(), (head.clone(), span));
+                }
+            }
+            // the synthesized-name seam: the ctx's interner extension
+            // (the same door every dep surface name rides — the parse
+            // lane's store stays untouched)
+            let id = ctx.intern(&name);
+            ctx.used.insert(id);
+            match own_target.clone() {
+                Some(target) => {
+                    // the own lane: the claim per (file, name) — the
+                    // checker's own ladders answer exactly as for a
+                    // spelled own leaf
+                    ctx.own_uses.insert((file.clone(), id), target);
+                }
+                None => {
+                    let (qualified, composed) = if prefix.is_empty() {
+                        (false, String::new())
+                    } else {
+                        (true, format!("{prefix}::{name}"))
+                    };
+                    glob_rows.push(UseBinding {
+                        file: file.clone(),
+                        head: head.clone(),
+                        leaf: id,
+                        qualified,
+                        composed,
+                        pub_use: u.vis() != rut_ast::Vis::Self_,
+                        span,
+                        glob: true,
+                    });
+                    // the per-file site the gated rungs read (extern
+                    // traits, linked generics — the type-position gate)
+                    let sites = ctx.use_sites.entry(id).or_default();
+                    if !sites.contains(&file) {
+                        sites.push(file.clone());
+                    }
+                }
+            }
+        }
+    }
+    if !glob_conflicts.is_empty() {
+        diags.append(&mut glob_conflicts);
+        return fail(diags, ast_dump, ast_json);
+    }
+    // the snapshot rides AFTER the glob expansion (the glob rows' leaf
+    // ids must answer every binding-lane lookup below), keeping the
+    // tail order deterministic: parse names, dep names, glob names,
+    // then the ctx's mints.
+    let frozen = ctx.interner.clone();
     // the pkg names this unit's use statements name — a qualified head
     // spelling one of these is the cross-package door the position
     // grammar refuses; the diagnostic names the use fix
@@ -383,32 +749,16 @@ fn compile_program_inner(
     // importing file's mod path (`layout.file_of`; `""` = the root).
     // This is the single source of truth for "which file bound what
     // from which head": the binding loops below insert every dep row
-    // per (file, leaf) row instead of unit-globally.
-    //
-    // `UseBinding` — one use leaf's row: `file` the importing file's
-    // mod path, `head` the dep head text, `leaf` the bound bare name,
-    // `qualified` flat vs `head::path::{leaf}`, `composed` the
-    // host-row spelling when qualified (`net::ping`), `pub_use` the
-    // use's OWN vis (a `pub use` is a re-export edge — its const
-    // bindings ride the unit's surface, spelled by the file's mod
-    // path), `span` the use item's span (the must-bind law's error
-    // site).
-    struct UseBinding {
-        file: String,
-        head: String,
-        leaf: rut_core::IdentId,
-        qualified: bool,
-        composed: String,
-        pub_use: bool,
-        span: rut_lexer::span::Span,
-    }
+    // per (file, leaf) row instead of unit-globally. The glob
+    // expansion's rows join at the tail (the walked path's pub
+    // surface, already precedence-filtered above).
     // the own-package claims: the graph validation's rows — a leaf
     // these claim is the intra-package import, no dep head behind it
     let own_claims: std::collections::HashSet<(String, rut_core::IdentId)> = own_uses
         .iter()
         .filter_map(|(site, name, _)| frozen.lookup(name).map(|id| (site.clone(), id)))
         .collect();
-    let mut use_bindings: Vec<UseBinding> = Vec::new();
+    let mut use_bindings: Vec<UseBinding> = glob_rows;
     for it in ast.root().items(ast) {
         if let rut_ast::ItemRef::Use(uh) = it {
             let u = uh.get(ast);
@@ -441,6 +791,7 @@ fn compile_program_inner(
                     composed,
                     pub_use: u.vis() != rut_ast::Vis::Self_,
                     span,
+                    glob: false,
                 });
             }
         }
@@ -948,7 +1299,10 @@ fn compile_program_inner(
             if let Some(table) = dep_decls.iter().find(|(h, _)| h == head.as_str()) {
                 if let Some(rows) = table.1.get("") {
                     for b in &use_bindings {
-                        if b.head != *head.as_str() || b.qualified {
+                        // spelled mod leaves only — the glob rows bind
+                        // values, and their names live in the ctx's
+                        // interner, not the AST's
+                        if b.glob || b.head != *head.as_str() || b.qualified {
                             continue;
                         }
                         let leaf_text = ast.name(b.leaf);
@@ -983,6 +1337,12 @@ fn compile_program_inner(
         let mut reported: std::collections::HashSet<(String, rut_core::IdentId)> =
             std::collections::HashSet::new();
         for b in &use_bindings {
+            // the glob exemption: a glob line spells no leaf — its
+            // synthesized rows never trip the must-bind law (the
+            // glob–glob conflict fired its own diag at the expansion)
+            if b.glob {
+                continue;
+            }
             if bound_sites.contains(&(b.file.clone(), b.leaf))
                 || ambient_names.contains(&b.leaf)
                 || ctx.extern_iface_decls.contains_key(&b.leaf)
