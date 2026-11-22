@@ -46,7 +46,7 @@ nightly pin, a runnable smoke test) is
 //    dev pass.
 let loaded = block_on(rut_native::load_dir_with(
     std::path::Path::new("plugins/server"),
-    &rut_native::HttpRemote::project_local(project_dir), // cache-only — prime first, or use online_local
+    &rut_native::HttpRemote::online(rut_driver::deps_dir()), // the store root, wire armed — or `at(root)` cache-only
 ))?;
 
 // 2. The chain (rut-driver): mount the walk's yield, hand over the
@@ -263,22 +263,26 @@ The standard remote is **`rut_native::HttpRemote`** — cache-first, and
 **cache-only by default**: a hit NEVER touches the network, and a miss
 is the loud offline error (prime it with an embedder's
 `DepRemote::write`; the CLI's own `install` lane fills the
-global dep store under `$RUT_HOME` — a different address law, and the
-two never cross). Networking is the
-EXPLICIT `online_local` / `online` choice: a miss GETs (redirects on,
+global dep store under `$RUT_HOME`). Networking is the
+EXPLICIT `online` choice: a miss GETs (redirects on,
 loud status errors, a size cap, hard timeouts — 10 s to connect, 60 s
 for the whole request) on the remote's own private worker thread and
 writes the cache back atomically. Cache layout law:
-`<root>/<sha256(url)>.rutbundle`. The futures come back READY, so any
+`<root>/<sha256(url)>.rutbundle`. The constructors take the cache root
+EXPLICITLY — nothing defaults to a write beside the project. The
+conventional embedder root is `rut_driver::deps_dir()`, the global
+dep store root the CLI lanes ride: the remote's flat entries sit
+BESIDE the store's `<name>@<pin>/` dirs (two address laws, one root —
+the store looks its dirs up by derivation and never scans, the flat
+files never collide), shared across projects, warm without
+per-project state. The futures come back READY, so any
 executor works — including the std-only noop-waker `block_on` poll
 loop the examples spell.
 
 | constructor | behavior |
 |---|---|
-| `HttpRemote::project_local(project)` | `<project>/.rut/cache` — hermetic, project-local; **cache-only** — a miss never networks (the default) |
-| `HttpRemote::at(root)` | an explicit cache root, cache-only |
-| `HttpRemote::online_local(project)` | project-local **with the wire armed** — a miss GETs (under hard timeouts); the explicit opt-in for installers and plugin loaders |
-| `HttpRemote::online(root)` | an explicit cache root with the wire armed — the only flavor that networks |
+| `HttpRemote::at(root)` | an explicit cache root, **cache-only** — a miss never networks (the offline default; prime it with `DepRemote::write`) |
+| `HttpRemote::online(root)` | the same cache shape **with the wire armed** — a miss GETs (under hard timeouts); the explicit opt-in for installers and plugin loaders |
 | `path_for(url)` / `evict(url)` | the concrete entry path / delete a poisoned entry |
 
 **Guaranteed-offline loads** (tests, CI, wasm-adjacent hosts, and — by
@@ -373,7 +377,7 @@ contain those names.
 | `Source` | the one filesystem door, STRING keys: `read(key)`, `resolve(from, spec)`, `root()` — the key math is the impl's; a `Path` crosses nothing |
 | `FsSource::at(dir)` | the real filesystem with the root baked in |
 | `DepRemote` | the url-dep contract: `fetch(&self, url) -> Pin<Box<dyn Future<Output = Result<Vec<u8>, RemoteError>> + '_>>` (required), `lookup`, `write` — the call site owns HOW bytes arrive (transport, cache, offline policy). Dyn-compatible (hand-rolled boxing, no async-trait), deliberately **not** `+ Send`: a browser `fetch` bridge is `!Send`, and sync impls (cache hits, fixtures) are first-class |
-| `HttpRemote` | the standard remote: cache-first (`<root>/<sha256(url)>.rutbundle`), **cache-only by default** (`project_local` / `at` — a miss is the loud offline error), the wire only on `online_local` / `online` (a miss GETs under hard timeouts and writes back atomically); `path_for`/`evict` are concrete |
+| `HttpRemote` | the standard remote: cache-first (`<root>/<sha256(url)>.rutbundle`), **cache-only by default** (`at` — a miss is the loud offline error), the wire only on `online` (a miss GETs under hard timeouts and writes back atomically); the root is always explicit — the conventional embedder root is `rut_driver::deps_dir()`; `path_for`/`evict` are concrete |
 | `load_dir(dir)` / `load_dir_with(dir, &remote)` / `load_dir_fetched(dir, &map)` | the walk and its fetched lanes — the yield is `rut_driver::Walk` ([the walk vs the offer](#the-walk-vs-the-offer)) |
 | `load_path_session(path)` / `load_path_session_with(path, &remote)` | dispatch on the shape: directory walk or closed `.rutbundle` |
 | `load_bundle_session(path)` | load a packed `.rutbundle` from disk — the pure container lane plus the file read |

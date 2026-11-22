@@ -38,18 +38,31 @@ pub struct Plugin {
     table: HashMap<String, String>, // subscription snapshot from `init`
 }
 
+/// The plugin cache's HERMETIC SCRATCH root: `<tmp>/rut-03-plugin-cache`.
+/// The plugin demo owns its cache wholesale — never the global dep
+/// store under `$RUT_HOME` (that address law is the CLI's), never a
+/// write beside the project (the `.rut/cache` lane is retired) — a
+/// throwaway in the tmp dir, the same home the packed bundle below is
+/// written to. Warm across runs (the CDN is only the cold lane), and
+/// the TEST gate primes it from the committed dist artifacts
+/// (`DepRemote::write` is the stand-in for the GET), so the gate
+/// cannot network by construction.
+pub fn cache_root() -> std::path::PathBuf {
+    std::env::temp_dir().join("rut-03-plugin-cache")
+}
+
 impl Plugin {
     /// Load the plugin module from a module directory (`rut.jsonc`) or a
     /// packed `.rutbundle` — the two forms of the same
     /// contract; the root spec comes from the manifest, not the caller.
-    /// ONE shape for both: the Loader door with the project-local
+    /// ONE shape for both: the Loader door with the hermetic scratch
     /// remote named (a directory's url dep rows hit the cache/network;
     /// a bundle never fetches — it is closed, its closure rode inside
     /// at pack time). `init` registers the callback names; the table
     /// is frozen from then on.
     pub fn load(path: &std::path::Path, limits: &Limits) -> Result<Plugin, Trap> {
         let loaded = {
-            let remote = rut_native::HttpRemote::online_local(path);
+            let remote = rut_native::HttpRemote::online(cache_root());
             // the std-only driver for the walk's future: the remote's
             // fetch futures come back READY, so one noop-waker poll
             // settles them

@@ -17,14 +17,24 @@
 //! 4. the cold-store refusal: a missing dep set (pinned or not) is
 //!    ONE aggregated refusal at the run gate naming every dep and
 //!    the `rut install` fix — the walk's own `is not pinned`
-//!    mount-door law is rut-driver's (its url_deps tests).
+//!    mount-door law is rut-driver's (its url_deps tests);
+//! 5. the embedder's cache shape: an `HttpRemote::online` over
+//!    `rut_driver::deps_dir()` (the shape the embedding examples
+//!    spell) caches its entry FLAT beside the store dirs, a
+//!    cache-only `at` over the same root answers offline, and an
+//!    install into the same home publishes its dir beside the flat
+//!    entry — the two address laws share the root, never collide.
 
 use std::collections::BTreeMap;
+use std::future::Future;
 use std::io::{Read, Write};
 use std::net::TcpListener;
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
+use std::task::{Context, Poll};
+
+use rut_native::DepRemote;
 
 /// One localhost HTTP server serving fixed payloads by path — the tail
 /// after `host:port/`; 404 for anything the table does not name.
@@ -410,4 +420,106 @@ fn cold_run_names_every_missing_dep_at_once() {
     assert!(err.contains("run `rut install` first"), "{err}");
     assert!(err.contains("a — "), "{err}");
     assert!(err.contains("b — "), "{err}");
+}
+
+// -- 5 ----------------------------------------------------------------
+
+/// A temp `$RUT_HOME` for the test's lifetime — the in-process
+/// `deps_dir()` derivation never touches the real `~/.rut`. Mutating
+/// the process env here is safe under nextest's one-process-per-test
+/// model (the suite's runner), which is the only runner this repo
+/// uses; this binary's other tests pass `RUT_HOME` to their spawned
+/// `rut` children explicitly, so the process env never crosses with
+/// them.
+struct Home(PathBuf);
+impl Home {
+    fn new(tag: &str) -> Home {
+        let d = scratch(&format!("{tag} home"));
+        std::env::set_var("RUT_HOME", &d);
+        Home(d)
+    }
+}
+impl Drop for Home {
+    fn drop(&mut self) {
+        std::env::remove_var("RUT_HOME");
+        let _ = std::fs::remove_dir_all(&self.0);
+    }
+}
+
+/// The examples' std-only driver: the remote's fetch futures come
+/// back READY (its wire runs on its own worker thread), so one
+/// noop-waker poll settles them.
+fn block_on<F: Future>(fut: F) -> F::Output {
+    let mut fut = std::pin::pin!(fut);
+    let mut cx = Context::from_waker(std::task::Waker::noop());
+    loop {
+        match fut.as_mut().poll(&mut cx) {
+            Poll::Ready(v) => return v,
+            Poll::Pending => std::thread::yield_now(),
+        }
+    }
+}
+
+#[test]
+fn the_embedder_remote_caches_flat_beside_the_store_dirs() {
+    let bytes = leaf_bundle(
+        "embedder leaf",
+        "util",
+        "pub fn twice(v: i64) -> i64 {\n    return v * 2;\n}\n",
+    );
+    let mut payloads = BTreeMap::new();
+    payloads.insert("util.rutbundle".to_string(), bytes.clone());
+    let server = TestServer::serve(payloads);
+    let url = server.url("util.rutbundle");
+    let pin = rut_driver::sha256_hex(&bytes);
+    let _home = Home::new("embedder");
+    let deps = rut_driver::deps_dir();
+
+    // the wire-on shape the embedding examples spell: fetch through
+    // `HttpRemote::online` over the STORE root — the entry lands
+    // FLAT under `<deps>/`, `path_for`'s sha-addressed name
+    let remote = rut_native::HttpRemote::online(&deps);
+    let fetched = block_on(remote.fetch(&url)).expect("the wire fetch");
+    assert_eq!(fetched, bytes, "the wire delivered the pinned bytes");
+    let entry = remote.path_for(&url);
+    assert_eq!(
+        entry,
+        PathBuf::from(&deps).join(format!(
+            "{}{}",
+            rut_driver::sha256_hex(url.as_bytes()),
+            rut_driver::bundle::cache_ext(&url)
+        )),
+        "the entry is the flat sha-addressed file under $RUT_HOME/deps"
+    );
+    assert_eq!(
+        std::fs::read(&entry).unwrap(),
+        bytes,
+        "the cache entry IS the fetched bytes"
+    );
+
+    // the cache-only shape over the same root answers OFFLINE — the
+    // server's silence proves the hit never touched the wire
+    server.set_up(false);
+    let offline = block_on(rut_native::HttpRemote::at(&deps).fetch(&url)).expect("the offline hit");
+    assert_eq!(offline, bytes, "the flat cache serves the same bytes");
+
+    // and the store dir coexists: an install into the same home
+    // publishes `<deps>/util@<pin16>/` BESIDE the flat entry — the
+    // store looks its dirs up by derivation and never scans, so the
+    // embedder's flat file never collides
+    server.set_up(true);
+    let (root, app) = consumer_world(
+        "embedder consumer",
+        &format!(r#""util": {{"url": "{url}"}}"#),
+        "use util::{twice};\n\nentry fn main() {\n    let x = twice(21);\n}\n",
+    );
+    let home = root.join("home");
+    let (code, _out, err) = rut(&home, &["install", app.to_str().unwrap()]);
+    assert_eq!(code, 0, "install publishes beside the flat entry: {err}");
+    let dir = store_dir_for(&home, "util", &pin);
+    assert!(dir.is_dir(), "the store dir landed: {:?}", dir);
+    assert!(
+        entry.is_file(),
+        "the embedder's flat entry survived: {entry:?}"
+    );
 }

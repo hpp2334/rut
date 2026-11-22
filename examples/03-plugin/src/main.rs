@@ -56,12 +56,12 @@ fn main() {
 
     // form 2: the same directory, packed — deterministically. The pack
     // lane takes the SAME remote the load lane does (the url dep's
-    // bytes come from the project-local cache, a miss over the wire),
-    // and the rode-along law carries the pouch group inside the
+    // bytes come from the hermetic scratch cache, a miss over the
+    // wire), and the rode-along law carries the pouch group inside the
     // output, so the packed form stays closed (loading it never
     // fetches).
     let bytes = {
-        let remote = rut_native::HttpRemote::online_local(dir);
+        let remote = rut_native::HttpRemote::online(plugin::cache_root());
         let opts = rut_driver::PackOpts::default();
         // the remote's fetch futures come back READY: one noop-waker
         // poll settles the pack lane's prefetch

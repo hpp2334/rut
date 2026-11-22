@@ -45,14 +45,16 @@ fn block_on<F: Future>(fut: F) -> F::Output {
 }
 
 /// The manifest lane's walk: the project root through the walk door
-/// with the project-local remote named (the manifest is
-/// the ONLY url carrier — a cold start networks on its one miss, the
-/// pinned `http` bundle; a warm start is pure cache), then the
+/// with the GLOBAL dep store root named as the cache root
+/// (`rut_driver::deps_dir()` — the same content-addressed root the
+/// CLI lanes ride), wire armed (`online` — the manifest is the ONLY
+/// url carrier — a cold start networks on its one miss, the pinned
+/// `http` bundle; a warm start is pure cache), then the
 /// embedder half every lane owns (rgh_host's rows, offered beside the
 /// closure).
 fn load_rgh() -> Result<(rut_driver::Walk, rut_driver::Walk), String> {
     let base = std::path::Path::new(env!("CARGO_MANIFEST_DIR"));
-    let remote = rut_native::HttpRemote::online_local(base);
+    let remote = rut_native::HttpRemote::online(rut_driver::deps_dir());
     let loaded =
         block_on(rut_native::load_path_session_with(base, &remote)).map_err(|e| e.to_string())?;
     // the example's own CLI-I/O pkg (nothing fetches — the embedder

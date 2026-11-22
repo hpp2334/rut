@@ -68,13 +68,14 @@ fn load_dir() -> Plugin {
     Plugin::load(dir(), &limits()).unwrap()
 }
 
-/// Prime the plugin's PROJECT-LOCAL cache (`<dir>/.rut/cache`, the
-/// remote `Plugin::load` names) from the committed dist/std artifacts —
-/// the same doctrine `pack_seeded` applies to the pack lane: the pin's
-/// bytes are the committed bytes, so the gate is hermetic by
-/// construction (the CDN is only the human lane). ONCE per process:
-/// the tests run on parallel threads and the cache write is
-/// write-then-rename, so concurrent primers would race the `.part`.
+/// Prime the plugin's HERMETIC SCRATCH cache (`<tmp>/rut-03-plugin-cache`,
+/// the remote `Plugin::load` names — [`plugin::cache_root`]) from the
+/// committed dist/std artifacts — the same doctrine `pack_seeded`
+/// applies to the pack lane: the pin's bytes are the committed bytes,
+/// so the gate is hermetic by construction (the CDN is only the human
+/// lane). ONCE per process: the tests run on parallel threads and the
+/// cache write is write-then-rename, so concurrent primers would race
+/// the `.part`.
 fn prime_project_cache() {
     static PRIMED: std::sync::Once = std::sync::Once::new();
     PRIMED.call_once(|| {
@@ -83,7 +84,7 @@ fn prime_project_cache() {
             std::fs::read_to_string(d.join("rut.jsonc")).expect("read the plugin manifest");
         let manifest = rut_driver::bundle::parse_manifest(&manifest_text).expect("parse manifest");
         let dist = d.join("../../../dist/std-v18");
-        let remote = rut_native::HttpRemote::at(d.join(".rut").join("cache"));
+        let remote = rut_native::HttpRemote::at(plugin::cache_root());
         for desc in manifest.deps.values() {
             let Some(url) = desc.get("url") else { continue };
             let artifact = url.rsplit('/').next().unwrap_or_default();

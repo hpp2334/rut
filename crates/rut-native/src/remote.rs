@@ -5,10 +5,10 @@
 //! CACHE-ONLY: a miss errors loudly — the `rut install` door (or
 //! an embedder's [`DepRemote::write`] priming) fills the
 //! cache; run/pack-style loads never download. Networking is the
-//! EXPLICIT [`HttpRemote::online`]/[`HttpRemote::online_local`]
-//! choice: a miss GETs on a private worker thread and writes the
-//! cache back atomically, under hard timeouts (10 s connect, 60 s
-//! whole-request) — a stalled host fails loudly, never hangs.
+//! EXPLICIT [`HttpRemote::online`] choice: a miss GETs on a private
+//! worker thread and writes the cache back atomically, under hard
+//! timeouts (10 s connect, 60 s whole-request) — a stalled host fails
+//! loudly, never hangs.
 //!
 //! Layout law: `<root>/<sha256(url)><ext>` — the filename never
 //! carries the url's syntax, only its identity; the extension is the
@@ -69,10 +69,13 @@ pub trait DepRemote {
 }
 
 /// The standard remote: cache-first, and CACHE-ONLY by default —
-/// `project_local` / `at` never network (a miss is the loud offline
-/// error; prime the cache with `rut install` or an
-/// embedder's `DepRemote::write`). `online_local` / `online` are the
-/// explicit wire-on flavors: a miss GETs, under hard timeouts.
+/// `at` never networks (a miss is the loud offline error; prime the
+/// cache with `rut install` or an embedder's `DepRemote::write`).
+/// `online` is the explicit wire-on flavor: a miss GETs, under hard
+/// timeouts. Both take the cache root EXPLICITLY — the conventional
+/// embedder root is `rut_driver::deps_dir()` (the global dep store
+/// root the CLI lanes ride); nothing ever defaults to a write beside
+/// the project.
 pub struct HttpRemote {
     root: PathBuf,
     /// `true` — a miss may GET; `false` — cache-only.
@@ -82,13 +85,6 @@ pub struct HttpRemote {
 }
 
 impl HttpRemote {
-    /// The project-local cache: `<project>/.rut/cache` — hermetic, no
-    /// global state. CACHE-ONLY: a miss never networks — run
-    /// `rut install` first (the CLI's law: run/pack never download).
-    pub fn project_local(project: &std::path::Path) -> Self {
-        Self::at(project.join(".rut").join("cache"))
-    }
-
     /// An explicit cache root, CACHE-ONLY: a miss is the loud offline
     /// error, never a GET. The default remote.
     pub fn at(root: impl Into<PathBuf>) -> Self {
@@ -98,13 +94,6 @@ impl HttpRemote {
             #[cfg(feature = "http")]
             client: Self::plain_client(),
         }
-    }
-
-    /// The project-local cache with the wire armed — the explicit
-    /// opt-in for apps whose job is fetching (installers, plugin
-    /// loaders). A miss GETs (under hard timeouts) and caches.
-    pub fn online_local(project: &std::path::Path) -> Self {
-        Self::online(project.join(".rut").join("cache"))
     }
 
     /// An explicit cache root with the wire armed — a miss GETs on a
@@ -159,8 +148,8 @@ impl HttpRemote {
     }
 
     /// The miss arm: the wire when this remote has one, the loud
-    /// refusal when it does not (an `at()`/`project_local()` remote, or
-    /// a build without the `http` feature).
+    /// refusal when it does not (an `at()` remote, or a build without
+    /// the `http` feature).
     #[cfg(feature = "http")]
     fn fetch_miss(&self, url: &str) -> Result<Vec<u8>, RemoteError> {
         if self.wire {

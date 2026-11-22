@@ -18736,9 +18736,9 @@ msgstr "\"plugins/server\""
 
 #: src/reference/embedding.md:49
 msgid ""
-"// cache-only — prime first, or use online_local\n"
+"// the store root, wire armed — or `at(root)` cache-only\n"
 msgstr ""
-"// 只用缓存——先预热，或改用 online_local\n"
+"// 存储根，带网络线路——或 `at(root)` 只用缓存\n"
 
 
 #: src/reference/embedding.md:51
@@ -19227,9 +19227,9 @@ msgstr ""
 
 #: src/reference/embedding.md:262
 msgid ""
-"The standard remote is **`rut_native::HttpRemote`** — cache-first, and **cache-only by default**: a hit NEVER touches the network, and a miss is the loud offline error (prime it with an embedder's `DepRemote::write`; the CLI's own `install` lane fills the global dep store under `$RUT_HOME` — a different address law, and the two never cross). Networking is the EXPLICIT `online_local` / `online` choice: a miss GETs (redirects on, loud status errors, a size cap, hard timeouts — 10 s to connect, 60 s for the whole request) on the remote's own private worker thread and writes the cache back atomically. Cache layout law: `<root>/<sha256(url)>.rutbundle`. The futures come back READY, so any executor works — including the std-only noop-waker `block_on` poll loop the examples spell."
+"The standard remote is **`rut_native::HttpRemote`** — cache-first, and **cache-only by default**: a hit NEVER touches the network, and a miss is the loud offline error (prime it with an embedder's `DepRemote::write`; the CLI's own `install` lane fills the global dep store under `$RUT_HOME`). Networking is the EXPLICIT `online` choice: a miss GETs (redirects on, loud status errors, a size cap, hard timeouts — 10 s to connect, 60 s for the whole request) on the remote's own private worker thread and writes the cache back atomically. Cache layout law: `<root>/<sha256(url)>.rutbundle`. The constructors take the cache root EXPLICITLY — nothing defaults to a write beside the project. The conventional embedder root is `rut_driver::deps_dir()`, the global dep store root the CLI lanes ride: the remote's flat entries sit BESIDE the store's `<name>@<pin>/` dirs (two address laws, one root — the store looks its dirs up by derivation and never scans, the flat files never collide), shared across projects, warm without per-project state. The futures come back READY, so any executor works — including the std-only noop-waker `block_on` poll loop the examples spell."
 msgstr ""
-"标准远端是 **`rut_native::HttpRemote`** —— 缓存优先，且**默认只用缓存**：命中绝不碰网络，未命中是大声的离线错误（用嵌入方的 `DepRemote::write` 预热它；CLI 自己的 `install` 车道填充的是 `$RUT_HOME` 下的全局依赖存储——另一套地址法则，两者绝不互通）。联网是显式的 `online_local` / `online` 选择：未命中时在远端自己的私有 worker 线程上 GET（开重定向、响亮的状态码错误、大小上限、硬超时——连接 10 秒、整个请求 60 秒）并原子地写回缓存。缓存布局法则：`<root>/<sha256(url)>.rutbundle`。future 以 READY 形态返回，任何执行器都能用 —— 包括示例拼写的纯 std noop-waker `block_on` 轮询循环。"
+"标准远端是 **`rut_native::HttpRemote`** —— 缓存优先，且**默认只用缓存**：命中绝不碰网络，未命中是大声的离线错误（用嵌入方的 `DepRemote::write` 预热它；CLI 自己的 `install` 车道填充的是 `$RUT_HOME` 下的全局依赖存储）。联网是显式的 `online` 选择：未命中时在远端自己的私有 worker 线程上 GET（开重定向、响亮的状态码错误、大小上限、硬超时——连接 10 秒、整个请求 60 秒）并原子地写回缓存。缓存布局法则：`<root>/<sha256(url)>.rutbundle`。构造器显式地取缓存根——任何东西都不默认写进工程旁边。嵌入方的惯用根是 `rut_driver::deps_dir()`，即 CLI 车道骑乘的全局依赖存储根：远程的扁平条目坐在存储的 `<name>@<pin>/` 目录旁边（两套地址法则，一个根——存储按推导查它的目录、从不扫描，扁平文件绝不冲突），跨项目共享，无需每工程的状态即可保温。future 以 READY 形态返回，任何执行器都能用 —— 包括示例拼写的纯 std noop-waker `block_on` 轮询循环。"
 
 
 #: src/reference/embedding.md:276 src/reference/templates.md:17
@@ -19240,45 +19240,27 @@ msgstr "行为"
 
 
 #: src/reference/embedding.md:278
-msgid "`HttpRemote::project_local(project)`"
-msgstr ""
-
-
-#: src/reference/embedding.md:278
-msgid ""
-"`<project>/.rut/cache` — hermetic, project-local; **cache-only** — a miss never networks (the default)"
-msgstr "`<project>/.rut/cache`——工程本地、封闭；**只用缓存**——未命中绝不联网（默认）"
-
-
-#: src/reference/embedding.md:279
 msgid "`HttpRemote::at(root)`"
 msgstr ""
 
 
-#: src/reference/embedding.md:279
-msgid "an explicit cache root, cache-only"
-msgstr "显式缓存根，只用缓存"
-
-
-#: src/reference/embedding.md:280
-msgid "`HttpRemote::online_local(project)`"
-msgstr ""
-
-
-#: src/reference/embedding.md:280
+#: src/reference/embedding.md:284
 msgid ""
-"project-local **with the wire armed** — a miss GETs (under hard timeouts); the explicit opt-in for installers and plugin loaders"
-msgstr "工程本地、**带网络线路**——未命中时 GET（带硬超时）；安装器与插件加载器的显式选择"
+"an explicit cache root, **cache-only** — a miss never networks (the offline default; prime it with `DepRemote::write`)"
+msgstr ""
+"显式缓存根，**只用缓存**——未命中绝不联网（离线默认；用 `DepRemote::write` 预热它）"
 
 
-#: src/reference/embedding.md:281
+#: src/reference/embedding.md:285
 msgid "`HttpRemote::online(root)`"
 msgstr ""
 
 
-#: src/reference/embedding.md:281
-msgid "an explicit cache root with the wire armed — the only flavor that networks"
-msgstr "带网络线路的显式缓存根——唯一会联网的形态"
+#: src/reference/embedding.md:285
+msgid ""
+"the same cache shape **with the wire armed** — a miss GETs (under hard timeouts); the explicit opt-in for installers and plugin loaders"
+msgstr ""
+"同一缓存形态，**带网络线路**——未命中时 GET（带硬超时）；安装器与插件加载器的显式选择"
 
 
 #: src/reference/embedding.md:282
@@ -19422,11 +19404,11 @@ msgid "`HttpRemote`"
 msgstr ""
 
 
-#: src/reference/embedding.md:376
+#: src/reference/embedding.md:380
 msgid ""
-"the standard remote: cache-first (`<root>/<sha256(url)>.rutbundle`), **cache-only by default** (`project_local` / `at` — a miss is the loud offline error), the wire only on `online_local` / `online` (a miss GETs under hard timeouts and writes back atomically); `path_for`/`evict` are concrete"
+"the standard remote: cache-first (`<root>/<sha256(url)>.rutbundle`), **cache-only by default** (`at` — a miss is the loud offline error), the wire only on `online` (a miss GETs under hard timeouts and writes back atomically); the root is always explicit — the conventional embedder root is `rut_driver::deps_dir()`; `path_for`/`evict` are concrete"
 msgstr ""
-"标准远程：缓存优先（`<root>/<sha256(url)>.rutbundle`），**默认只用缓存**（`project_local` / `at`——未命中是大声的离线错误），联网只在 `online_local` / `online` 上（未命中在硬超时下 GET 并原子写回）；`path_for`/`evict` 是具体路径"
+"标准远程：缓存优先（`<root>/<sha256(url)>.rutbundle`），**默认只用缓存**（`at`——未命中是大声的离线错误），联网只在 `online` 上（未命中在硬超时下 GET 并原子写回）；根始终显式——嵌入方的惯用根是 `rut_driver::deps_dir()`；`path_for`/`evict` 是具体路径"
 
 
 #: src/reference/embedding.md:377

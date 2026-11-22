@@ -272,8 +272,10 @@ pub fn mirror_run() -> Result<RutRun, String> {
 /// miss NEVER touches the network, so the gate cannot network by
 /// construction. The pin's bytes are the committed bytes
 /// (`pack-std --check` green); the CDN is only the human lane. The
-/// cache root lives in the tmp dir: a throwaway, not the project-local
-/// `.rut/cache` a `rut run` would warm.
+/// cache root lives in the tmp dir: a throwaway per process — no
+/// project-dir write (the `.rut/cache` lane is retired; embedders
+/// name explicit roots) and no touch of the global store under
+/// `$RUT_HOME`.
 #[cfg(not(target_arch = "wasm32"))]
 fn std_remote() -> rut_native::HttpRemote {
     static ROOT: std::sync::OnceLock<std::path::PathBuf> = std::sync::OnceLock::new();

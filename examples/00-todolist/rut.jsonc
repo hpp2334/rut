@@ -9,7 +9,8 @@
   // rut.lock — the pin is law at the mount door on every load). pouch is a
   // GENERIC owner — this app's consumer-spelled `Vec<Todo>` compiles
   // from the source at the link. The embedder names
-  // its remote policy (`load_path_session_with` + `HttpRemote::online_local`)
+  // its remote policy (`load_path_session_with` + `HttpRemote::online`
+  // over `rut_driver::deps_dir()` — the global store root)
   // — a cold start networks on the miss, a warm start is pure cache; the TESTS prime an
   // offline remote from the committed artifacts (dist/std plays the
   // wire), so the gates never touch the network.
