@@ -74,23 +74,30 @@ impl<'a> FnView<'a> {
         unreachable!("a fn view addresses a fn node")
     }
 
-    /// the declared return as written (`None` = unwritten); inferred-
-    /// type hovers read it for call initializers. Surface rows never
-    /// record one (the v1 shape — inference does not ride the host
-    /// boundary).
+    /// the declared return as written, `Self` resolved to the owning
+    /// impl's target (`None` = unwritten); inferred-type hovers read
+    /// it for call initializers. An impl method's `-> Self` answers
+    /// `owner()` — the receiver's own type, the builder-chain law
+    /// (every std builder rung is `-> Self` style); a free fn's `Self`
+    /// names nothing (owner is `None`) and renders the written word.
+    /// Surface rows never record a ret (the v1 shape — inference does
+    /// not ride the host boundary).
     pub(crate) fn ret(&self) -> Option<String> {
         let ast = self.ast();
         if self.h.is::<SurfaceFnNode>() {
             return None;
         }
-        let r = if let Some(d) = self.h.downcast::<FnNode>() {
-            d.get(ast).ret
-        } else if let Some(d) = self.h.downcast::<MethodDeclNode>() {
-            d.get(ast).ret
-        } else {
-            unreachable!("a fn view addresses a fn node")
-        };
-        r.map(|r| ty_src(ast, r))
+        if let Some(d) = self.h.downcast::<MethodDeclNode>() {
+            let d = d.get(ast);
+            if matches!(&d.ret, Some(r) if r.is_self()) {
+                return self.owner();
+            }
+            return d.ret.map(|r| ty_src(ast, r));
+        }
+        if let Some(d) = self.h.downcast::<FnNode>() {
+            return d.get(ast).ret.map(|r| ty_src(ast, r));
+        }
+        unreachable!("a fn view addresses a fn node")
     }
 
     /// declared parameter names in order, `self` excluded

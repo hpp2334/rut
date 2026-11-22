@@ -170,6 +170,11 @@ pub(crate) fn ty_src(ast: &Ast, t: TyRef) -> String {
             .map(|&e| ty_src(ast, e))
             .collect::<Vec<_>>()
             .join(" | "),
+        // the enclosing type's own spelling (mirrors symbols.rs's
+        // `ty_text` — the memo all three renderers carry): a residual
+        // render shows the written word, never silent empty. Member
+        // lookups key on it and miss — no type is NAMED `Self`
+        TyRef::Self_(_) => "Self".to_string(),
         _ => String::new(),
     }
 }

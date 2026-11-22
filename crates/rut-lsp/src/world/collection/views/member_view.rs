@@ -62,16 +62,27 @@ impl<'a> MemberView<'a> {
         unreachable!("a member view addresses a member node")
     }
 
-    /// the declared type as written — fields: the type; methods: the
-    /// return (`None` = unwritten, i.e. `nil`-returning); enum members
-    /// carry none
+    /// the declared type as written, `Self` resolved to the owning
+    /// type's name — fields: the type; methods: the return (`None` =
+    /// unwritten, i.e. `nil`-returning); enum members carry none. A
+    /// `-> Self` method or a `Self`-typed field answers the declaring
+    /// type (the view owns it) — receiver inference steps through the
+    /// builder-chain rungs.
     pub(crate) fn ty(&self) -> Option<String> {
         let ast = self.ast();
         if let Some(d) = self.h.downcast::<FieldDeclNode>() {
-            return Some(ty_src(ast, d.get(ast).ty));
+            let d = d.get(ast);
+            if d.ty.is_self() {
+                return Some(self.ty.name().to_string());
+            }
+            return Some(ty_src(ast, d.ty));
         }
         if let Some(d) = self.h.downcast::<MethodDeclNode>() {
-            return d.get(ast).ret.map(|r| ty_src(ast, r));
+            let d = d.get(ast);
+            if matches!(&d.ret, Some(r) if r.is_self()) {
+                return Some(self.ty.name().to_string());
+            }
+            return d.ret.map(|r| ty_src(ast, r));
         }
         None
     }

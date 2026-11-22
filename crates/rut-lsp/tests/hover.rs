@@ -550,6 +550,27 @@ return d.r;
 }
 
 #[test]
+fn self_ret_chain_types_the_binding() {
+    // the `-> Self` rung types the binding through the chain — the
+    // builder shape (`Thing().m()` answers `Thing`, not the empty
+    // display the un-resolved `Self` used to render)
+    let mut s = S::boot();
+    let src = "\
+class Thing {
+c: i32;
+}
+impl Thing {
+fn m(self) -> Self { return self; }
+}
+fn go() -> nil {
+let r = Thing().m();
+}
+";
+    let md = markdown(s.hover_in("file:///t/hov.rut", src, "let r", 1, 4));
+    assert!(md.contains("let r: Thing"), "{md}");
+}
+
+#[test]
 fn for_of_var_resolves_members() {
     // the for-of binding is a receiver today's naive inference misses;
     // `[Point]` → `Point` (the elem rule)

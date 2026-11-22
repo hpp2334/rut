@@ -1479,3 +1479,66 @@ fn the_end_of_buffer_extension_never_leaks_a_closed_block() {
         "the closed fn's local stays in: {ls:?}"
     );
 }
+
+#[test]
+fn member_completion_steps_through_self_ret_chains() {
+    // the builder-chain law: an impl method's `-> Self` rung answers
+    // the impl's target type, so the next dot enumerates the same
+    // surface — the single ring and the multi-ring chain alike
+    let mut s = S::boot();
+    s.index_mod_at(
+        "file:///deps/things/mod.rut",
+        "things",
+        "",
+        "pub class Thing {\nc: i32;\n}\nimpl Thing {\npub fn m(self) -> Self { return self; }\npub fn done(self) -> i32 { return 1; }\n}\n",
+    );
+    let uri = "file:///t/main.rut";
+    let src = "use things::{ Thing };\nentry fn main() -> nil {\n    Thing().m().\n}\n";
+    let items = s.complete_at(uri, src, "Thing().m().", 1);
+    let ls = labels(&items);
+    assert!(
+        ls.contains(&"m") && ls.contains(&"done"),
+        "the `-> Self` rung completes the impl surface: {ls:?}"
+    );
+
+    // `m` answers `Self`, so the second ring steps to the same type
+    let src = "use things::{ Thing };\nentry fn main() -> nil {\n    Thing().m().m().\n}\n";
+    let items = s.complete_at(uri, src, "Thing().m().m().", 1);
+    let ls = labels(&items);
+    assert!(
+        ls.contains(&"m") && ls.contains(&"done"),
+        "the chain steps through both rungs: {ls:?}"
+    );
+}
+
+#[test]
+fn http_builder_chain_completes_after_self_steps() {
+    // the regression lock for the report: the REAL std http lane
+    // mounted as the dep (its cross-`use`s are inert here — the
+    // member tier never walks them), the user's statement verbatim.
+    // Every `-> Self` rung steps the receiver: the dot after
+    // `.header(..)` offers the builder's surface — and NOT a
+    // `Request`-only member, proving the type actually stepped to
+    // `RequestBuilder` rather than dumping a bare name
+    let mut s = S::boot();
+    s.index_mod_at(
+        "rut/http/src/mod.rut",
+        "http",
+        "",
+        include_str!("../../../rut/http/src/mod.rut"),
+    );
+    let uri = "file:///t/main.rut";
+    let src = "use http::HttpClient;\nentry fn main() -> nil {\n    let r = HttpClient().request()\n        .header(\"Content-Type\", \"application/json\").\n}\n";
+    let items = s.complete_at(uri, src, "application/json\").", 1);
+    let ls = labels(&items);
+    for want in ["method", "url", "header", "body", "build"] {
+        assert!(
+            ls.contains(&want),
+            "`{want}` rides the builder surface: {ls:?}"
+        );
+    }
+    assert!(
+        !ls.contains(&"send"),
+        "a `Request`-only member must not offer: {ls:?}"
+    );
+}
