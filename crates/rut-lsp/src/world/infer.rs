@@ -10,7 +10,7 @@
 //! A miss is `None` — never wrong text.
 
 use crate::semantic::IntSuffix;
-use rut_ast::{Ast, BinOp, Binding, ExprRef, Lit, PathSeg, SelfNode};
+use rut_ast::{Ast, BinOp, Binding, ExprRef, Lit, PathSeg, SelfNode, TyRef};
 
 use super::collection::MountedFile;
 use super::types::{head_of_ty, ty_src, TyForm};
@@ -46,7 +46,7 @@ pub(crate) fn expr_ty(home: &MountedFile, idxs: &[&MountedFile], e: ExprRef) -> 
         }
         ExprRef::Call(h) => {
             let d = h.get(ast);
-            call_ty(idxs, ast, d.callee)
+            call_ty(home, idxs, ast, d.callee)
         }
         ExprRef::Method(h) => {
             let d = h.get(ast);
@@ -168,7 +168,12 @@ fn path_ty(
 /// CAPITALIZED path segment the index knows as a class/struct — is the
 /// type itself (`let log = Logger("hello");` types `log` as `Logger`,
 /// the positional shape of the `Type::new(..)` arm below)
-fn call_ty(idxs: &[&MountedFile], ast: &Ast, callee: ExprRef) -> Option<String> {
+fn call_ty(
+    home: &MountedFile,
+    idxs: &[&MountedFile],
+    ast: &Ast,
+    callee: ExprRef,
+) -> Option<String> {
     if let ExprRef::Path(h) = callee {
         let segs = &h.get(ast).segs;
         if segs.len() == 1 {
@@ -185,25 +190,54 @@ fn call_ty(idxs: &[&MountedFile], ast: &Ast, callee: ExprRef) -> Option<String> 
             // class/struct answers: a capitalized name with no type
             // head behind it (an enum, a plain unknown) stays a miss —
             // never wrong text. The free-fn match keeps precedence.
+            // Generic args render as the OWNING doc's own source text
+            // (the verbatim law): `HashMap<i32, i32>()` types the
+            // binding `HashMap<i32, i32>`
             if is_cap(name) {
                 if let Some(ty) = super::collection::find_ty(idxs, name) {
                     if matches!(
                         ty.form(),
                         TyForm::Class | TyForm::Struct | TyForm::HostStruct
                     ) {
-                        return Some(name.to_string());
+                        return Some(if segs[0].generics.is_empty() {
+                            name.to_string()
+                        } else {
+                            generic_name(home, ast, name, &segs[0].generics)
+                        });
                     }
                 }
             }
             return None;
         }
-        // `Type::new(..)` — the two-seg shape IS the head's type
+        // `Type::new(..)` — the two-seg shape IS the head's type; the
+        // args ride whichever seg the tree recorded them on (the head,
+        // in the `HashMap<i32, str>::new(..)` spelling the parser's
+        // PathGen staging builds)
         if segs.len() == 2 && ast.name(segs[1].name.ident) == "new" {
-            return Some(ast.name(segs[0].name.ident).to_string());
+            let name = ast.name(segs[0].name.ident);
+            return Some(
+                segs.iter()
+                    .find(|s| !s.generics.is_empty())
+                    .map(|s| generic_name(home, ast, name, &s.generics))
+                    .unwrap_or_else(|| name.to_string()),
+            );
         }
         return None;
     }
     None
+}
+
+/// the constructor-call type text for `name<args>` — each argument is
+/// the OWNING doc's verbatim slice (`Doc::text` over the arg's span,
+/// trimmed), joined with `, `; nested args (`Vec<str>`) ride their own
+/// spans by construction. No type stringifier — a span×src join
+fn generic_name(home: &MountedFile, ast: &Ast, name: &str, args: &[TyRef]) -> String {
+    let rendered = args
+        .iter()
+        .map(|&a| home.doc.text(a.span(ast)).trim().to_string())
+        .collect::<Vec<_>>()
+        .join(", ");
+    format!("{name}<{rendered}>")
 }
 
 /// a member's declared type on `ty_name`: own-surface methods and

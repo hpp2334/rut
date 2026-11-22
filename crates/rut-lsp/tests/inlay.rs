@@ -167,6 +167,58 @@ fn tuple_types_render_no_empty_hints() {
     assert!(md.contains("let v: (opaque, str)"), "{md}");
 }
 
+// ---- generic args render verbatim ----
+
+#[test]
+fn generic_constructor_hints_the_full_type() {
+    // the args are the OWNING doc's source text (the span join): the
+    // hint AND the hover binding line carry `Pair<i32, i32>` whole
+    let mut s = S::boot();
+    let src = "class Pair<A, B> {\n    head: A;\n}\nfn go() -> i32 {\n    let p = Pair<i32, i32>();\n    return p.head;\n}\n";
+    let uri = "file:///t/main.rut";
+    let hs = s.inlay_all(uri, src);
+    assert_eq!(labels(&hs), [": Pair<i32, i32>"], "{hs:?}");
+    // the hover binding line rides the same `binding_ty` — one source
+    let md = markdown(s.hover_in(uri, src, "let p", 1, 4));
+    assert!(md.contains("let p: Pair<i32, i32>"), "{md}");
+}
+
+#[test]
+fn nested_generic_args_render_verbatim() {
+    // `Pair<Vec<str>, i32>()` — the arg's span covers the whole
+    // `Vec<str>` slice, so nesting renders by construction (no
+    // normalization, no stringifier)
+    let mut s = S::boot();
+    let src = "class Pair<A, B> {\n    head: A;\n}\nfn go() -> i32 {\n    let p = Pair<Vec<str>, i32>();\n    return 1;\n}\n";
+    let uri = "file:///t/main.rut";
+    let hs = s.inlay_all(uri, src);
+    assert_eq!(labels(&hs), [": Pair<Vec<str>, i32>"], "{hs:?}");
+}
+
+#[test]
+fn generic_new_call_renders_its_args() {
+    // `Map<i32, str>::new(..)` — the parser's PathGen staging records
+    // the args on the HEAD seg; the two-seg arm renders them
+    let mut s = S::boot();
+    let src = "class Map<K, V> {\n    n: K;\n}\nfn go() -> i32 {\n    let m = Map<i32, str>::new(1);\n    return m.n;\n}\n";
+    let uri = "file:///t/main.rut";
+    let hs = s.inlay_all(uri, src);
+    assert_eq!(labels(&hs), [": Map<i32, str>"], "{hs:?}");
+    let md = markdown(s.hover_in(uri, src, "let m", 1, 4));
+    assert!(md.contains("let m: Map<i32, str>"), "{md}");
+}
+
+#[test]
+fn bare_constructor_stays_bare() {
+    // the empty-generics path is untouched: `Logger("hello")` still
+    // types the binding `Logger`
+    let mut s = S::boot();
+    let src = "class Logger {\n    n: i32;\n}\nfn go() -> i32 {\n    let log = Logger(\"hello\");\n    return log.n;\n}\n";
+    let uri = "file:///t/main.rut";
+    let hs = s.inlay_all(uri, src);
+    assert_eq!(labels(&hs), [": Logger"], "{hs:?}");
+}
+
 // ---- PARAMETER hints ----
 
 #[test]
