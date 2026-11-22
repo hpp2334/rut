@@ -641,6 +641,11 @@ fn pack_dir_opts_locked(
         std::fs::read(&joined).map_err(|e| format!("cannot read {}: {e}", joined.display()))
     });
     let archives = std::mem::take(&mut world.archives);
+    // the zip fallback's temp-dir guards: the emission re-reads the
+    // unpacked trees through `read` AFTER `into_loaded` consumes the
+    // world, so the guards ride THIS scope, dropped only after `pack`
+    // has taken every byte it needs
+    let tempdirs = world.take_tempdirs();
     let world_pack = PackWorld {
         loaded: world.into_loaded(root),
         manifest,
@@ -650,7 +655,9 @@ fn pack_dir_opts_locked(
         archives,
         read,
     };
-    rut_driver::pack::pack(&world_pack, opts)
+    let packed = rut_driver::pack::pack(&world_pack, opts);
+    drop(tempdirs);
+    packed
 }
 
 /// Stage the wire rows into a manifest text — right after the opening

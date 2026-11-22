@@ -570,6 +570,142 @@ fn the_temp_fallback_unpacks_when_the_store_tree_is_absent() {
     );
 }
 
+#[test]
+fn a_gutted_store_tree_falls_back_to_the_temp_unpack() {
+    // the store entry's `unpack/` carries the manifest but the entry
+    // module's files are GUTTED (hand deletion, partial eviction):
+    // mounting it would die at the entry mount — and the state is
+    // unhealable (`store_hit` answers from the artifact bytes, the
+    // idempotent publish skips a present dir). The gate probes the
+    // entry files and takes the temp fallback instead: the validated
+    // bytes unpack, the dep loads and runs, the project stays clean.
+    //
+    // (The reviewer's one-url-two-specs shape needs no pin: it is
+    // UNREACHABLE — `[deps]` keys are bare names at parse
+    // (`descriptor.rs`), and a second name that disagrees with the
+    // zip's own pkg refuses at the name-vs-key gate
+    // (`name_vs_key_refuses` pins the refusal). One url mounts under
+    // exactly one name — the zip's own — so the address always
+    // matches the mount site.)
+    let root = leaf_world("zipgut", "util", UTIL_BODY);
+    let zip = pack_dir_zip(&root.join("util")).expect("pack util as a source zip");
+    let url = "https://fixtures.test/util.zip";
+    let app = root.join("app");
+    write(
+        &app,
+        "rut.jsonc",
+        &manifest(
+            "app",
+            "mod.rut",
+            &format!(r#", "deps": {{"util": {{"url": "{url}"}}}}"#),
+        ),
+    );
+    write(
+        &app,
+        "src/mod.rut",
+        "use util::{twice};\nentry fn go() -> i64 {\n    return twice(21);\n}\n",
+    );
+
+    // the store entry: the manifest rides, `src/` does not
+    let home = Home::new("zipgut");
+    let pin = sha256_hex(&zip);
+    let unpack = home
+        .path()
+        .join("deps")
+        .join(rut_driver::store_dir("util", &pin))
+        .join(rut_driver::UNPACK_DIR);
+    std::fs::create_dir_all(&unpack).unwrap();
+    std::fs::write(unpack.join("rut.jsonc"), manifest("util", "mod.rut", "")).unwrap();
+
+    let mut table = BTreeMap::new();
+    table.insert(url.to_string(), zip.clone());
+    write_lock(&app, &table);
+    let walked = block_on(rut_native::dir_pkgs_with(&app, &Table::from(table)))
+        .expect("the gutted store tree falls back, the dep mounts");
+    assert_eq!(walked.root, "app");
+    let util = walked
+        .pkgs
+        .iter()
+        .find(|p| p.spec == "util")
+        .expect("the dep mounted");
+    match &util.body {
+        rut_driver::MountedBody::Source { text, .. } => assert_eq!(
+            text, UTIL_BODY,
+            "the mount is the validated bytes' tree, not the gutted store tree"
+        ),
+        b => panic!("the fallback mount is a source pkg, got {b:?}"),
+    }
+    let answer: i64 = run_entry(walked, "go");
+    assert_eq!(answer, 42);
+    assert!(
+        !app.join(".rut").exists(),
+        "the fallback never writes the project"
+    );
+    // and the gutted entry stays as-it-was — the walk is a pure store
+    // reader (install's own lanes own any repair)
+    assert!(unpack.join("rut.jsonc").is_file());
+    assert!(!unpack.join("src").exists());
+}
+
+#[test]
+fn a_gutted_store_tree_falls_back_in_the_pack_lane_too() {
+    // the compiled-bundle pack lane consumes the world (and with it
+    // the fallback's temp guards) BEFORE the emission re-reads the
+    // unpacked trees through its `read` closure — the guards ride the
+    // lane's scope instead, so the gutted-store fallback packs clean
+    // (the crash this pins: `cannot read /tmp/rut-unpack-*/rut.jsonc`
+    // from the emission's re-read).
+    let root = leaf_world("zipgutpack", "util", UTIL_BODY);
+    let zip = pack_dir_zip(&root.join("util")).expect("pack util as a source zip");
+    let url = "https://fixtures.test/util.zip";
+    let app = root.join("app");
+    write(
+        &app,
+        "rut.jsonc",
+        &manifest(
+            "app",
+            "mod.rut",
+            &format!(r#", "deps": {{"util": {{"url": "{url}"}}}}"#),
+        ),
+    );
+    write(
+        &app,
+        "src/mod.rut",
+        "use util::{twice};\nentry fn go() -> i64 {\n    return twice(21);\n}\n",
+    );
+
+    let _home = Home::new("zipgutpack"); // manifest rides, src/ gutted
+    let pin = sha256_hex(&zip);
+    let unpack = _home
+        .path()
+        .join("deps")
+        .join(rut_driver::store_dir("util", &pin))
+        .join(rut_driver::UNPACK_DIR);
+    std::fs::create_dir_all(&unpack).unwrap();
+    std::fs::write(unpack.join("rut.jsonc"), manifest("util", "mod.rut", "")).unwrap();
+
+    let mut table = BTreeMap::new();
+    table.insert(url.to_string(), zip.clone());
+    write_lock(&app, &table);
+    let a = block_on(rut_native::pack_dir_opts_with(
+        &app,
+        &rut_driver::PackOpts::default(),
+        &Table::from(table.clone()),
+    ))
+    .expect("the fallback packs (guards outlive the emission)");
+    let b = block_on(rut_native::pack_dir_opts_with(
+        &app,
+        &rut_driver::PackOpts::default(),
+        &Table::from(table),
+    ))
+    .expect("deterministic");
+    assert_eq!(a.0, b.0, "the packed bytes are deterministic");
+    assert!(
+        !app.join(".rut").exists(),
+        "the pack never writes the project"
+    );
+}
+
 /// The archive source-group world: `codec` (interface + entries,
 /// dev-deps for its own build) packed INSIDE `zeta` as a declared-but-
 /// unused dep, so it rides the archive as a SOURCE group — the consumer

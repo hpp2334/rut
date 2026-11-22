@@ -214,6 +214,15 @@ impl World {
         self.ledger.insert(scope, spec.to_string());
     }
 
+    /// Hand the zip fallback's temp-dir guards to the caller — the
+    /// pack lanes' compiled lane consumes the world (`into_loaded`)
+    /// BEFORE the emission re-reads the unpacked trees through its
+    /// `read` closure, so the guards must ride the LANE's scope, not
+    /// the world's.
+    pub(crate) fn take_tempdirs(&mut self) -> Vec<RunTempDir> {
+        std::mem::take(&mut self.tempdirs)
+    }
+
     /// The yield: drain the pkgs (the world dies, the pkgs travel) —
     /// [`Walk`].
     pub(crate) fn into_loaded(self, root: String) -> Walk {
@@ -1083,6 +1092,25 @@ fn resolve_table(
     Ok(())
 }
 
+/// The store gate's content probe: can this tree feed the entry
+/// mount? The manifest rides (the caller's read answered), but the
+/// ENTRY files may have been gutted (hand deletion, partial
+/// eviction) — probe exactly the files [`load_entry_module`]'s entry
+/// arms read: a spelled `entry.type` surface under `src/`, else the
+/// root module (`src/mod.rut` lib, `src/mod.d.rut` host default).
+/// Deeper tree damage still dies loudly at its mount — the gate's
+/// job is the store-vs-fallback decision, not a full re-read.
+fn entry_module_present(dir: &Path, manifest: &Manifest) -> bool {
+    if let Some(rel) = &manifest.entry.type_path {
+        return dir.join(src_rel(rel)).is_file();
+    }
+    dir.join(match manifest.pkg_type {
+        PkgType::Host => DECL_ROOT_FILE,
+        PkgType::Lib => ROOT_FILE,
+    })
+    .is_file()
+}
+
 /// Mount a `.zip` url dep — the SOURCE transport's lane: gate 0 (the
 /// pin) ran at the caller; the bytes are a source zip ([`read_srczip`]
 /// — CRC, grammar, zip64 all enforced). The fetch GATES; the STORE
@@ -1091,16 +1119,16 @@ fn resolve_table(
 /// content-addressed, lock-free readers) — the walk derives that ONE
 /// address (`deps_dir` + `store_dir` + [`rut_driver::UNPACK_DIR`], the
 /// same derivation install keys on) and mounts it as the directory
-/// package it carries. A store entry whose `unpack/` is missing or
-/// manifest-less while the artifact vouches (partial eviction, hand
-/// deletion) unpacks ONCE into a run-scoped temp dir — the
-/// [`World::tempdirs`] guards hold it for the walk's lifetime — and
-/// mounts that; NEVER `<project>/.rut` (the project is `rut.jsonc` +
-/// `rut.lock` + `src/`, nothing else). From either tree it is the
-/// ordinary dir lane: the manifest, the name-vs-key gate, the entry
-/// mount, then the dep recursion (the rewritten rows resolve inside;
-/// an open url row resolves from the fetched closure, loudly absent
-/// otherwise).
+/// package it carries. A store entry whose `unpack/` is missing,
+/// manifest-less, or has lost the entry module's files while the
+/// artifact vouches (hand deletion, partial eviction) unpacks ONCE
+/// into a run-scoped temp dir — the [`World::tempdirs`] guards hold it
+/// for the walk's lifetime — and mounts that; NEVER `<project>/.rut`
+/// (the project is `rut.jsonc` + `rut.lock` + `src/`, nothing else).
+/// From either tree it is the ordinary dir lane: the name-vs-key
+/// gate, the entry mount, then the dep recursion (the rewritten rows
+/// resolve inside; an open url row resolves from the fetched closure,
+/// loudly absent otherwise).
 fn mount_zip_dep(
     world: &mut World,
     spec: &str,
@@ -1121,27 +1149,48 @@ fn mount_zip_dep(
     let store = PathBuf::from(rut_driver::deps_dir())
         .join(rut_driver::store_dir(spec, sha_hex))
         .join(rut_driver::UNPACK_DIR);
-    let dir = if store.is_dir() && store.join(MANIFEST_NAME).is_file() {
-        store
-    } else {
-        // the fallback: unpack once into a run-scoped temp dir — the
-        // bytes are validated and pin-checked, so the tree is whole;
-        // the guard rides the world and dies with the run
-        let tmp = RunTempDir::create()
-            .map_err(|e| LoadError::law(format!("{url}: unpack scratch: {e}")))?;
-        lay_entries(tmp.path(), &entries).map_err(|e| LoadError::law(format!("{url}: {e}")))?;
-        let path = tmp.path().to_path_buf();
-        world.tempdirs.push(tmp);
-        path
+    // the store gate: the tree must exist AND feed the entry mount —
+    // the manifest reads and the entry module's files are present. A
+    // tree carrying only `rut.jsonc` (src/ gutted by hand, a partial
+    // eviction) is INCOMPLETE while the artifact vouches: the temp
+    // fallback heals it from the validated bytes instead of dying at
+    // the entry mount — a state the store's own lanes never repair
+    // (a hit answers from the artifact bytes; the idempotent publish
+    // skips a present dir).
+    let mut chosen: Option<(PathBuf, Manifest)> = None;
+    if store.is_dir() {
+        let store_key = store.to_string_lossy().into_owned();
+        let store_src = FsSource::at(&store);
+        if let Ok(store_manifest) = read_manifest(&store_src, &store_key) {
+            if entry_module_present(&store, &store_manifest) {
+                chosen = Some((store.clone(), store_manifest));
+            }
+        }
+    }
+    let (dir, manifest) = match chosen {
+        Some(pair) => pair,
+        None => {
+            // the fallback: unpack once into a run-scoped temp dir —
+            // the bytes are validated and pin-checked, so the tree is
+            // whole; the guard rides the world and dies with the run
+            let tmp = RunTempDir::create()
+                .map_err(|e| LoadError::law(format!("{url}: unpack scratch: {e}")))?;
+            lay_entries(tmp.path(), &entries).map_err(|e| LoadError::law(format!("{url}: {e}")))?;
+            let path = tmp.path().to_path_buf();
+            let tmp_key = path.to_string_lossy().into_owned();
+            let tmp_src = FsSource::at(&path);
+            let manifest = read_manifest(&tmp_src, &tmp_key)?;
+            world.tempdirs.push(tmp);
+            (path, manifest)
+        }
     };
-    // the directory lane over the mounted tree — the manifest, the
-    // name-vs-key gate, the entry mount, then the dep recursion (the
-    // rewritten rows resolve inside; the first-mount edge records the
-    // declaring pkg's spec). ONE grammar here too: the tree parses
-    // like any directory.
+    // the directory lane over the mounted tree — the name-vs-key
+    // gate, the entry mount, then the dep recursion (the rewritten
+    // rows resolve inside; the first-mount edge records the declaring
+    // pkg's spec). ONE grammar here too: the tree parses like any
+    // directory.
     let dir_key = dir.to_string_lossy().into_owned();
     let src = FsSource::at(&dir);
-    let manifest = read_manifest(&src, &dir_key)?;
     let root_name = manifest
         .name
         .clone()
