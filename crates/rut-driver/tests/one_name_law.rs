@@ -396,6 +396,24 @@ fn lets_share_names_across_siblings() {
 // ---- the conservative boundary ------------------------------------------
 
 #[test]
+fn fn_fn_same_file_refuses_in_the_registry() {
+    // two fns of one name in ONE file: the registry's decl-vs-decl
+    // refusal citing the first — and never the program-wide
+    // "already declared in module" text (that shape belongs to the
+    // conservative CROSS-module gate only)
+    let ds = diags_of("fn dup() { }\nfn dup() { }\nentry fn main() { }\n");
+    assert!(
+        ds.iter().any(|d| d.contains("duplicate name `dup`")
+            && d.contains("the fn already declares it in this file")),
+        "{ds:?}"
+    );
+    assert!(
+        ds.iter().all(|d| !d.contains("already declared in module")),
+        "same-file fns must not take the cross-module text: {ds:?}"
+    );
+}
+
+#[test]
 fn fn_fn_across_siblings_still_refuses_conservatively() {
     // THE MECHANISM-BOUND HALF of the law: the compile keys
     // (`FnKey::Free`, the instantiation map, the link ledger's

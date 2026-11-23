@@ -208,12 +208,14 @@ inner wins:
    fallback layer: shadowable, never colliding — `fn panic` in your
    file is legal, and a call spells yours.
 
-**Siblings never meet.** The law is per FILE (module ↔ file is 1:1),
-so two sibling modules may share names freely — `a.rut`'s `fn Foo`
-and `b.rut`'s `class Foo` coexist, and each file resolves its own.
-Cross-module access stays explicit: qualified paths (`a::Foo`) or use
-bindings in the importing file. The miss hints point at the `use`
-fix:
+**Siblings never meet — across kinds.** The law is per FILE (module ↔
+file is 1:1): a fn in one sibling beside a class in the other, two
+module `let`s of one name, or a `mod NAME;` edge beside a sibling's
+decl — all legal, each file resolving its own. Two of the SAME kind
+still refuse across siblings — two fns, or two types, of one name
+(the two exceptions spelled out below). Cross-module access stays
+explicit: qualified paths (`a::Foo`) or use bindings in the importing
+file. The miss hints point at the `use` fix:
 
 ```text
 `Foo` is declared in module `math` (math/mod.rut) — bind it with `use math::{ Foo }` (or qualify: `math::Foo`)
@@ -223,15 +225,15 @@ fix:
 own checks, unchanged: enum members, fields, methods, impl-block
 methods (type-scoped), and params/locals (fn-scoped).
 
-**Two boundaries the mechanism still holds shut.** Two pairs keep a
-program-wide refusal beyond the per-file law, because the machinery
-below the checker keys them by name across the package: two `fn`s of
-one name in different modules (``duplicate fn `f` — already declared
-in module `a```) and two types of one name in different modules
-(``duplicate type name `T` — already declared in module `a```). A fn
-and a type of one name across sibling modules is legal — the
-collision the old precedence rule used to arbitrate cannot even
-spell.
+**Two same-kind refusals across modules.** A package's fn table and
+its type table are each keyed by name, so two sibling modules cannot
+both declare a fn — or a type — of one name today; the refusal cites
+the first spelling's module. Two `fn`s of one name in different
+modules: ``duplicate fn `f` — already declared in module `a```. Two
+types of one name in different modules: ``duplicate type name `T` —
+already declared in module `a```. A fn and a type of one name across
+sibling modules is legal — the collision the old precedence rule used
+to arbitrate cannot even spell.
 
 **`entry fn` by name.** The host calls entry fns BY NAME, so a
 program may spell many differently-named entries (a dispatcher's

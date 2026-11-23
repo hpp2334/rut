@@ -1633,10 +1633,15 @@ impl<'a> Ctx<'a> {
         // calls entry fns BY NAME, so one program may spell many
         // differently-named entries (the digest examples' dispatcher
         // surface) — but a NAME spelled by two sibling modules'
-        // entries is ambiguous, and the old program-wide fn-duplicate
-        // law that used to catch it is gone. Every second spelling of
-        // an entry NAME errors at its own span, citing the first's
-        // module.
+        // entries is ambiguous. Every second spelling of an entry
+        // NAME errors at its own span, citing the first's module.
+        // While the compile-key boundary holds, this gate is
+        // REDUNDANT with the conservative cross-module fn gate
+        // (collect's pass-2 fn arm): two sibling `entry fn main`s
+        // already produce that gate's "duplicate fn `main`" beside
+        // this one's "duplicate `entry fn` `main`". It becomes the
+        // sole refusal for the shape exactly when that boundary
+        // opens (the fn keys carry their module).
         let mut seen: std::collections::HashMap<IdentId, (String, Span)> =
             std::collections::HashMap::new();
         let entries: Vec<(IdentId, Handle<FnNode>)> = self.entry_nodes.clone();
