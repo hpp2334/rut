@@ -147,13 +147,12 @@ pub(crate) fn expr_ty(home: &MountedFile, idxs: &[&MountedFile], e: ExprRef) -> 
         // `async { .. }` mints `Future<T>` — the engine's
         // `compile_async_block` law. T is the body's answer: the first
         // valued `return` (the weave records each return's found type
-        // and unifies them), else the tail expression, else `nil` (the
-        // unwritten-answer law)
+        // and unifies them), else `nil`. A TAIL expression has NO
+        // engine counterpart — the weave compiles and DISCARDS it (no
+        // answer-field write), so a tail-only block answers
+        // `Future<nil>` exactly like the engine
         ExprRef::AsyncBlock(h) => {
-            let d = h.get(ast);
-            let t = first_return(ast, d.body)
-                .or(d.body.get(ast).tail)
-                .and_then(|e| expr_ty(home, idxs, e));
+            let t = first_return(ast, h.get(ast).body).and_then(|e| expr_ty(home, idxs, e));
             Some(format!(
                 "Future<{}>",
                 t.unwrap_or_else(|| "nil".to_string())

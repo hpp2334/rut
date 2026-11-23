@@ -317,6 +317,18 @@ fn an_async_block_types_its_returns_and_the_awaits_chain() {
 }
 
 #[test]
+fn a_tail_only_async_block_answers_future_nil() {
+    // the weave compiles the block's tail and DISCARDS it (no
+    // answer-field write): `async { 5 }` answers `Future<nil>`
+    // exactly like the engine — never the tail's type — and the
+    // chained await answers that nil honestly
+    let mut s = S::boot();
+    let src = "entry fn main() -> nil {\n    const f = async { 5 };\n    const b = await f;\n}\n";
+    let hs = s.inlay_all("file:///t/main.rut", src);
+    assert_eq!(labels(&hs), [": Future<nil>", ": nil"], "{hs:?}");
+}
+
+#[test]
 fn await_through_a_local_unwraps() {
     let mut s = S::boot();
     let src = "class Response {\nn: i32;\n}\nimpl Response {\npub fn body(self) -> Future<bytes> { return nil; }\n}\n\
