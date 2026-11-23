@@ -79,6 +79,17 @@ t-1
 lift-off
 ```
 
+Launched work outlives `main`: `rut run` drives every launched future
+to completion before exiting — **host-backed included**. A launched
+host async fn ([the host futures
+bridge](../reference/host-futures.md)) parks its frame on a completer
+that a worker thread settles; the CLI parks on the engine's wake cell
+until those answers land, so the run ends only at idle or trap. The
+flip side is law, not a bug: a host worker that never completes hangs
+the run — no wall-clock budget, no hang guard. Cancellation stays
+best-effort: `abort()` marks the frame, the worker runs to its
+blocking completion, and the late answer is simply discarded.
+
 Calling an async function and awaiting it in the same body is the
 straight-line case; launching is for concurrency — independent work
 that overlaps through the loop's interleaving.

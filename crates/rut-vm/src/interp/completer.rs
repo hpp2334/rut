@@ -18,9 +18,11 @@
 //! `complete`/`fail` from the worker.
 //!
 //! THREAD LAW: the VM stays single-threaded. Workers touch only the
-//! Completer's atomics + Mutex slot — a clone shares them through one
-//! `Arc`; the rut cells are minted by `__take`/`into_slot` on the VM
-//! thread. `std::thread` appears only in embedder closures, never
+//! Completer's atomics + Mutex slot AND the machine's wake cell — a
+//! settle's `bump` (the condvar notify after the slot store) is the
+//! workers' one extra touch; a clone shares all three through one
+//! `Arc`, and the rut cells are minted by `__take`/`into_slot` on the
+//! VM thread. `std::thread` appears only in embedder closures, never
 //! here (this file's own `wakes_tests` play the embedder's worker —
 //! they are the exception, not machinery).
 
@@ -331,7 +333,7 @@ impl<T: Ret + 'static> Ret for Completer<T> {
 ///
 /// The abort closure receives a `Completer<T>` clone of the state
 /// cell — an `Arc` clone, safe to move anywhere, touching only the
-/// atomics + Mutex slot (the thread law).
+/// atomics + Mutex slot + the wake cell's bump (the thread law).
 #[macro_export]
 macro_rules! register_async {
     ($hosts:expr, $name:literal, ($($t:ty),* $(,)?) -> $ret:ty, $start:expr $(,)?) => {

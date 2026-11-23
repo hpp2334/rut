@@ -142,32 +142,33 @@ pub host async fn http_send(c: opaque, method: str, url: str,
 pub host async fn http_stream_next(s: opaque) -> ?bytes;
 ```
 
-and the embedder binds it with **one closure** that starts the work and
-returns the future's state cell:
+and the embedder binds it with **one closure** that starts the work —
+the sugar mints the future's state cell (wired to the machine's wake
+cell) and hands it to the closure as its FIRST parameter:
 
 ```rust
 rut_vm::register_async!(hosts, "http_host::stream::http_stream_next",
     (Opaque<HttpStream>,) -> Option<Vec<u8>>,
-    move |s: Opaque<HttpStream>| -> Completer<Option<Vec<u8>>> {
-        let c = Completer::new();
+    move |c: Completer<Option<Vec<u8>>>, s: Opaque<HttpStream>| {
         let w = c.clone();
         std::thread::spawn(move || {
             w.complete(read_chunk(s));     // settle from any thread
         });
-        c
     });
 ```
 
 `Completer<T>` is a small shared cell: `complete(v)`/`fail(msg)` are
 callable from any thread (atomics plus a mutex — the VM stays
 single-threaded), `fail`'s message becomes the trap **at the await**,
-and an optional abort closure runs when the script cancels a pending
-future (late results are then simply discarded). The macro registers
-the whole row family the weave drives — start, probe, take, cancel —
-and the load-time check verifies the expansion against the declaration,
-so a decl and its bodies cannot drift apart. IO written with plain
-`async`/`await` Rust maps onto this naturally: the work leaves the VM,
-and completion is one enqueue back into the ready queue.
+and every settle bumps the machine's wake cell, so a parked driving
+loop wakes to it. An optional abort closure runs when the script
+cancels a pending future (late results are then simply discarded). The
+macro registers the whole row family the weave drives — start, probe,
+take, cancel — and the load-time check verifies the expansion against
+the declaration, so a decl and its bodies cannot drift apart. IO
+written with plain `async`/`await` Rust maps onto this naturally: the
+work leaves the VM, and completion is one enqueue back into the ready
+queue.
 
 ## Structured concurrency, honestly
 

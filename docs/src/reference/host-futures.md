@@ -33,7 +33,7 @@ The completion cell — the one helper a host async fn's body needs:
 
 | Member | Thread | Meaning |
 |---|---|---|
-| `Completer::new() -> Completer<T>` | any | a fresh cell: atomic state + a mutex slot, one `Arc` |
+| `Completer::with_wake(wakes) -> Completer<T>` | the row sugars (`__start`, VM thread) | a fresh cell: atomic state + a mutex slot + the machine's wake cell, one `Arc` — the body never mints, the sugar hands it in |
 | `.clone()` | any | another handle on the **same** cell — never a copy of the state |
 | `.complete(v: T)` | any thread | settle with the answer |
 | `.fail(msg: String)` | any thread | settle with a failure — `msg` **becomes the trap at the await** |
@@ -65,8 +65,7 @@ use rut_vm::{ HostPkg, Completer, Vm };
 
 let mut pkg = HostPkg::new("mypkg");
 rut_vm::pkg_async_fn!(pkg, "fetch", (String,) -> Vec<u8>,
-    |url: String| -> Completer<Vec<u8>> {
-        let c = Completer::new();
+    |c: Completer<Vec<u8>>, url: String| {
         let w = c.clone();
         std::thread::spawn(move || {
             match std::fs::read(url) {
@@ -74,7 +73,7 @@ rut_vm::pkg_async_fn!(pkg, "fetch", (String,) -> Vec<u8>,
                 Err(e) => w.fail(e.to_string()),
             }
         });
-        c                       // returned immediately: the future parks
+        // return; the future parks on the handed cell
     });
 // the built pkg rides the run chain: .pkg(pkg.build())
 ```

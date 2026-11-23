@@ -1715,7 +1715,7 @@ msgstr ""
 #: src/tutorial/values-and-variables.md:307 src/tutorial/control-flow.md:400
 #: src/tutorial/functions.md:242 src/tutorial/types.md:284
 #: src/tutorial/interfaces.md:400 src/tutorial/errors.md:233
-#: src/tutorial/modules.md:300 src/tutorial/async.md:182
+#: src/tutorial/modules.md:300 src/tutorial/async.md:193
 #: src/tutorial/stdlib.md:409
 msgid "Put it together"
 msgstr ""
@@ -4451,58 +4451,71 @@ msgstr ""
 
 #: src/tutorial/async.md:82
 msgid ""
+"Launched work outlives `main`: `rut run` drives every launched future to "
+"completion before exiting — **host-backed included**. A launched host async "
+"fn ([the host futures bridge](../reference/host-futures.md)) parks its frame "
+"on a completer that a worker thread settles; the CLI parks on the engine's "
+"wake cell until those answers land, so the run ends only at idle or trap. "
+"The flip side is law, not a bug: a host worker that never completes hangs "
+"the run — no wall-clock budget, no hang guard. Cancellation stays "
+"best-effort: `abort()` marks the frame, the worker runs to its blocking "
+"completion, and the late answer is simply discarded."
+msgstr ""
+
+#: src/tutorial/async.md:93
+msgid ""
 "Calling an async function and awaiting it in the same body is the "
 "straight-line case; launching is for concurrency — independent work that "
 "overlaps through the loop's interleaving."
 msgstr ""
 
-#: src/tutorial/async.md:86
+#: src/tutorial/async.md:97
 msgid "Talking to the network: the `http` package"
 msgstr ""
 
-#: src/tutorial/async.md:88
+#: src/tutorial/async.md:99
 msgid ""
 "The standard `http` package is async-only where work actually waits. "
 "Everything else — the client, the verbs, the builder — is sync construction "
 "sugar:"
 msgstr ""
 
-#: src/tutorial/async.md:99
+#: src/tutorial/async.md:110
 msgid "The shape, step by step:"
 msgstr ""
 
-#: src/tutorial/async.md:101
+#: src/tutorial/async.md:112
 msgid ""
 "`client.get(url)` (or `request()`, `post`, `put`, `patch`, `del`) hands back "
 "a `RequestBuilder`; `.method(..)`, `.url(..)`, `.header(k, v)` (repeatable), "
 "`.body(bytes)` chain on it."
 msgstr ""
 
-#: src/tutorial/async.md:104
+#: src/tutorial/async.md:115
 msgid "`.build()` freezes a re-sendable `Request`."
 msgstr ""
 
-#: src/tutorial/async.md:105
+#: src/tutorial/async.md:116
 msgid ""
 "**`.send()` is the async point.** It resolves at _headers_ — the wire body "
 "is still unread."
 msgstr ""
 
-#: src/tutorial/async.md:107
+#: src/tutorial/async.md:118
 msgid "From the `Response`, take one of two readbacks:"
 msgstr ""
 
-#: src/tutorial/async.md:108
+#: src/tutorial/async.md:119
 msgid "`await resp.body()` — drain the remaining body in one future;"
 msgstr ""
 
-#: src/tutorial/async.md:109
+#: src/tutorial/async.md:120
 msgid ""
 "`resp.byte_stream()` then `await stream::next()` — one chunk per future, "
 "`nil` at end-of-stream, for bounded-memory downloads."
 msgstr ""
 
-#: src/tutorial/async.md:112
+#: src/tutorial/async.md:123
 msgid ""
 "Errors come back as data, not traps: status `0` is reserved for transport "
 "failure (`resp.transport_error()` carries the reason), any real status — 4xx "
@@ -4511,13 +4524,13 @@ msgid ""
 "`stream::error()`."
 msgstr ""
 
-#: src/tutorial/async.md:118
+#: src/tutorial/async.md:129
 msgid ""
 "A complete request handler from the repository's GitHub-viewer example — "
 "send, then drain:"
 msgstr ""
 
-#: src/tutorial/async.md:121
+#: src/tutorial/async.md:132
 msgid ""
 "```rut\n"
 "async fn do_list(client: HttpClient, owner: str, repo: str, rf: str) -> i32 "
@@ -4546,11 +4559,11 @@ msgid ""
 "```"
 msgstr ""
 
-#: src/tutorial/async.md:145
+#: src/tutorial/async.md:156
 msgid "The stream lane walks chunks — send, then loop:"
 msgstr ""
 
-#: src/tutorial/async.md:147
+#: src/tutorial/async.md:158
 msgid ""
 "```rut\n"
 "let resp = await client.get(url).build().send();\n"
@@ -4568,11 +4581,11 @@ msgid ""
 "```"
 msgstr ""
 
-#: src/tutorial/async.md:162
+#: src/tutorial/async.md:173
 msgid "Racing futures and the join tier"
 msgstr ""
 
-#: src/tutorial/async.md:164
+#: src/tutorial/async.md:175
 msgid ""
 "`select2(a, b)` races two futures and answers the first-ready side as an "
 "`Either2` (`is_a()`/`a_value()` or `is_b()`/`b_value()`); the losers are "
@@ -4585,11 +4598,11 @@ msgid ""
 "the race and completer surfaces."
 msgstr ""
 
-#: src/tutorial/async.md:175
+#: src/tutorial/async.md:186
 msgid "Parallelism"
 msgstr ""
 
-#: src/tutorial/async.md:177
+#: src/tutorial/async.md:188
 msgid ""
 "The language has none: a VM is single-threaded by construction (`!Send`, one "
 "heap — [the VM](../core-concepts/the-vm.md)); async is the whole concurrency "
@@ -4597,7 +4610,7 @@ msgid ""
 "surface for sharing between them."
 msgstr ""
 
-#: src/tutorial/async.md:184
+#: src/tutorial/async.md:195
 msgid ""
 "```rut\n"
 "use futures::{ launch_future, sleep };\n"
@@ -4620,7 +4633,7 @@ msgid ""
 "```"
 msgstr ""
 
-#: src/tutorial/async.md:211
+#: src/tutorial/async.md:222
 msgid "Next: [the standard library](stdlib.md)."
 msgstr ""
 
@@ -6615,7 +6628,7 @@ msgstr ""
 
 #: src/core-concepts/async-model.md:115 src/core-concepts/host-boundary.md:37
 #: src/reference/vm-heap.md:105 src/reference/resource-limits.md:61
-#: src/reference/host-futures.md:122
+#: src/reference/host-futures.md:121
 msgid "\"main\""
 msgstr ""
 
@@ -6669,11 +6682,12 @@ msgstr ""
 
 #: src/core-concepts/async-model.md:145
 msgid ""
-"and the embedder binds it with **one closure** that starts the work and "
-"returns the future's state cell:"
+"and the embedder binds it with **one closure** that starts the work — the "
+"sugar mints the future's state cell (wired to the machine's wake cell) and "
+"hands it to the closure as its FIRST parameter:"
 msgstr ""
 
-#: src/core-concepts/async-model.md:149
+#: src/core-concepts/async-model.md:150
 msgid "\"http_host::stream::http_stream_next\""
 msgstr ""
 
@@ -6681,25 +6695,26 @@ msgstr ""
 msgid "// settle from any thread\n"
 msgstr ""
 
-#: src/core-concepts/async-model.md:161
+#: src/core-concepts/async-model.md:160
 msgid ""
 "`Completer<T>` is a small shared cell: `complete(v)`/`fail(msg)` are "
 "callable from any thread (atomics plus a mutex — the VM stays "
-"single-threaded), `fail`'s message becomes the trap **at the await**, and an "
-"optional abort closure runs when the script cancels a pending future (late "
-"results are then simply discarded). The macro registers the whole row family "
-"the weave drives — start, probe, take, cancel — and the load-time check "
-"verifies the expansion against the declaration, so a decl and its bodies "
-"cannot drift apart. IO written with plain `async`/`await` Rust maps onto "
-"this naturally: the work leaves the VM, and completion is one enqueue back "
-"into the ready queue."
+"single-threaded), `fail`'s message becomes the trap **at the await**, and "
+"every settle bumps the machine's wake cell, so a parked driving loop wakes "
+"to it. An optional abort closure runs when the script cancels a pending "
+"future (late results are then simply discarded). The macro registers the "
+"whole row family the weave drives — start, probe, take, cancel — and the "
+"load-time check verifies the expansion against the declaration, so a decl "
+"and its bodies cannot drift apart. IO written with plain `async`/`await` "
+"Rust maps onto this naturally: the work leaves the VM, and completion is one "
+"enqueue back into the ready queue."
 msgstr ""
 
-#: src/core-concepts/async-model.md:172
+#: src/core-concepts/async-model.md:173
 msgid "Structured concurrency, honestly"
 msgstr ""
 
-#: src/core-concepts/async-model.md:174
+#: src/core-concepts/async-model.md:175
 msgid ""
 "The language today keeps the core vocabulary deliberately small: launch, "
 "abort, and await. Racing (`select2` / `select_all`) and the manually "
@@ -11090,7 +11105,7 @@ msgstr ""
 msgid "spelling"
 msgstr ""
 
-#: src/reference/modules-and-visibility.md:300 src/reference/embedding.md:529
+#: src/reference/modules-and-visibility.md:300 src/reference/embedding.md:547
 msgid "door"
 msgstr ""
 
@@ -17088,7 +17103,7 @@ msgstr ""
 msgid "Resumption"
 msgstr ""
 
-#: src/reference/resource-limits.md:52 src/reference/embedding.md:489
+#: src/reference/resource-limits.md:52 src/reference/embedding.md:507
 msgid "`OutOfMemory`"
 msgstr ""
 
@@ -17105,7 +17120,7 @@ msgid ""
 "free refs → `resume()`; a larger limit means a rebuilt VM — no live setter"
 msgstr ""
 
-#: src/reference/resource-limits.md:53 src/reference/embedding.md:488
+#: src/reference/resource-limits.md:53 src/reference/embedding.md:506
 msgid "`OutOfFuel`"
 msgstr ""
 
@@ -17609,7 +17624,7 @@ msgstr ""
 msgid "read / advance the deterministic virtual clock"
 msgstr ""
 
-#: src/reference/async.md:187 src/reference/embedding.md:433
+#: src/reference/async.md:187 src/reference/embedding.md:435
 msgid "`vm.next_deadline() -> Option<u64>`"
 msgstr ""
 
@@ -17629,7 +17644,7 @@ msgid ""
 "no completion"
 msgstr ""
 
-#: src/reference/async.md:189 src/reference/embedding.md:435
+#: src/reference/async.md:189 src/reference/embedding.md:437
 msgid "`vm.pending_tasks() -> usize`"
 msgstr ""
 
@@ -18079,20 +18094,25 @@ msgid "Thread"
 msgstr ""
 
 #: src/reference/host-futures.md:36
-msgid "`Completer::new() -> Completer<T>`"
-msgstr ""
-
-#: src/reference/host-futures.md:36 src/reference/host-futures.md:37
-#: src/reference/host-futures.md:40
-msgid "any"
+msgid "`Completer::with_wake(wakes) -> Completer<T>`"
 msgstr ""
 
 #: src/reference/host-futures.md:36
-msgid "a fresh cell: atomic state + a mutex slot, one `Arc`"
+msgid "the row sugars (`__start`, VM thread)"
+msgstr ""
+
+#: src/reference/host-futures.md:36
+msgid ""
+"a fresh cell: atomic state + a mutex slot + the machine's wake cell, one "
+"`Arc` — the body never mints, the sugar hands it in"
 msgstr ""
 
 #: src/reference/host-futures.md:37
 msgid "`.clone()`"
+msgstr ""
+
+#: src/reference/host-futures.md:37 src/reference/host-futures.md:40
+msgid "any"
 msgstr ""
 
 #: src/reference/host-futures.md:37
@@ -18181,101 +18201,101 @@ msgstr ""
 msgid "\"fetch\""
 msgstr ""
 
-#: src/reference/host-futures.md:77
-msgid "// returned immediately: the future parks\n"
+#: src/reference/host-futures.md:76
+msgid "// return; the future parks on the handed cell\n"
 msgstr ""
 
-#: src/reference/host-futures.md:78
+#: src/reference/host-futures.md:77
 msgid "// the built pkg rides the run chain: .pkg(pkg.build())\n"
 msgstr ""
 
-#: src/reference/host-futures.md:82
+#: src/reference/host-futures.md:81
 msgid "Emitted row"
 msgstr ""
 
-#: src/reference/host-futures.md:82
+#: src/reference/host-futures.md:81
 msgid "Signature"
 msgstr ""
 
-#: src/reference/host-futures.md:82
+#: src/reference/host-futures.md:81
 msgid "Role"
 msgstr ""
 
-#: src/reference/host-futures.md:84
+#: src/reference/host-futures.md:83
 msgid "`mypkg::fetch`"
 msgstr ""
 
-#: src/reference/host-futures.md:84
+#: src/reference/host-futures.md:83
 msgid "`(args) -> T`"
 msgstr ""
 
-#: src/reference/host-futures.md:84
+#: src/reference/host-futures.md:83
 msgid "the decl row — a teaching trap, never dispatched"
 msgstr ""
 
-#: src/reference/host-futures.md:85
+#: src/reference/host-futures.md:84
 msgid "`mypkg::fetch__start`"
 msgstr ""
 
-#: src/reference/host-futures.md:85
+#: src/reference/host-futures.md:84
 msgid "`(args) -> opaque`"
 msgstr ""
 
-#: src/reference/host-futures.md:85
+#: src/reference/host-futures.md:84
 msgid "calls the closure, boxes the `Completer` — the state cell"
 msgstr ""
 
-#: src/reference/host-futures.md:86
+#: src/reference/host-futures.md:85
 msgid "`mypkg::fetch__yield`"
 msgstr ""
 
-#: src/reference/host-futures.md:86
+#: src/reference/host-futures.md:85
 msgid "`(state, cx) -> i32`"
 msgstr ""
 
-#: src/reference/host-futures.md:86
+#: src/reference/host-futures.md:85
 msgid "the resumption probe: 0 pending / 1 ready / 2 failed"
 msgstr ""
 
-#: src/reference/host-futures.md:87
+#: src/reference/host-futures.md:86
 msgid "`mypkg::fetch__take`"
 msgstr ""
 
-#: src/reference/host-futures.md:87
+#: src/reference/host-futures.md:86
 msgid "`(state) -> T`"
 msgstr ""
 
-#: src/reference/host-futures.md:87
+#: src/reference/host-futures.md:86
 msgid ""
 "marshals the answer onto the heap **on the VM thread**; a failure traps here"
 msgstr ""
 
-#: src/reference/host-futures.md:88
+#: src/reference/host-futures.md:87
 msgid "`mypkg::fetch__cancel`"
 msgstr ""
 
-#: src/reference/host-futures.md:88
+#: src/reference/host-futures.md:87
 msgid "`(state)`"
 msgstr ""
 
-#: src/reference/host-futures.md:88
+#: src/reference/host-futures.md:87
 msgid "the abort closure when one is given; otherwise the disclosed no-op"
 msgstr ""
 
-#: src/reference/host-futures.md:90
+#: src/reference/host-futures.md:89
 msgid ""
 "The abort-closure form receives a `Completer<T>` clone (safe to move "
 "anywhere); without it, cancellation is the documented best-effort law — the "
 "thread finishes, the late result is discarded."
 msgstr ""
 
-#: src/reference/host-futures.md:94
+#: src/reference/host-futures.md:93
 msgid ""
 "Rut side, the closure's own surface is invisible — callers see a normal "
 "async fn (the cx is injected, never spelled):"
 msgstr ""
 
-#: src/reference/host-futures.md:97
+#: src/reference/host-futures.md:96
 msgid ""
 "```rut\n"
 "use futures::{ launch_future, sleep };\n"
@@ -18298,19 +18318,19 @@ msgid ""
 "```"
 msgstr ""
 
-#: src/reference/host-futures.md:117
+#: src/reference/host-futures.md:116
 msgid "The embedder's loop"
 msgstr ""
 
-#: src/reference/host-futures.md:119
+#: src/reference/host-futures.md:118
 msgid "The engine polls every future parked on a completer:"
 msgstr ""
 
-#: src/reference/host-futures.md:124
+#: src/reference/host-futures.md:123
 msgid "// drain + poll + drain\n"
 msgstr ""
 
-#: src/reference/host-futures.md:129
+#: src/reference/host-futures.md:128
 msgid ""
 "`run_ready()` drains the ready queue, polls the parked host futures (each "
 "poll runs the `__yield` probe; a ready one is driven through `__take` and "
@@ -18320,17 +18340,17 @@ msgid ""
 "loop alive — the flip side of best-effort cancellation."
 msgstr ""
 
-#: src/reference/host-futures.md:137
+#: src/reference/host-futures.md:136
 msgid ""
 "The virtual clock works here too: drive with finite fuel and `vm.set_now` "
 "for deterministic tests ([resource limits](resource-limits.md))."
 msgstr ""
 
-#: src/reference/host-futures.md:141
+#: src/reference/host-futures.md:140
 msgid "In-tree users"
 msgstr ""
 
-#: src/reference/host-futures.md:143
+#: src/reference/host-futures.md:142
 msgid ""
 "The standard HTTP lane is a `register_async!` client: `http_send` (living in "
 "the surface tree's `net/` mod), `http_body`, and `http_stream_next` (in "
@@ -18341,7 +18361,7 @@ msgid ""
 "viewer example](../examples/06-github-viewer-cli.md)."
 msgstr ""
 
-#: src/reference/host-futures.md:152
+#: src/reference/host-futures.md:151
 msgid ""
 "Plain `host fn` rows (synchronous, run to completion inside the crossing) "
 "are the other half of the boundary — see [embedding and native "
@@ -18491,7 +18511,7 @@ msgid ""
 "the pkg scope — the scope prefixes once, at the install:"
 msgstr ""
 
-#: src/reference/embedding.md:107 src/reference/host-fns.md:277
+#: src/reference/embedding.md:107 src/reference/host-fns.md:279
 msgid "\"http_host\""
 msgstr ""
 
@@ -19437,80 +19457,141 @@ msgid "resume a budget-parked call after refueling"
 msgstr ""
 
 #: src/reference/embedding.md:432
-msgid "`vm.run_ready()`"
+msgid "`vm.run_until_idle(wait) -> Result<Idle, Trap>`"
 msgstr ""
 
 #: src/reference/embedding.md:432
-msgid "drain the async ready queue once; returns frames run"
+msgid ""
+"the driving protocol — the one loop a host needs ([the "
+"contract](#the-embedders-driving-contract))"
 msgstr ""
 
 #: src/reference/embedding.md:433
-msgid "the earliest timer deadline, if any"
+msgid "`Wait::Block` / `Wait::NonBlock`"
+msgstr ""
+
+#: src/reference/embedding.md:433
+msgid ""
+"the parking policy: `Block` parks on host completions (the native lane); "
+"`NonBlock` never parks — it answers `Idle::WouldBlock` (the wasm lane)"
 msgstr ""
 
 #: src/reference/embedding.md:434
-msgid "`vm.set_now(t_ms)`"
+msgid "`vm.run_ready()`"
 msgstr ""
 
 #: src/reference/embedding.md:434
-msgid "advance the virtual clock"
+msgid "drain the async ready queue once; returns frames run"
 msgstr ""
 
 #: src/reference/embedding.md:435
+msgid "the earliest timer deadline, if any"
+msgstr ""
+
+#: src/reference/embedding.md:436
+msgid "`vm.set_now(t_ms)`"
+msgstr ""
+
+#: src/reference/embedding.md:436
+msgid "advance the virtual clock"
+msgstr ""
+
+#: src/reference/embedding.md:437
 msgid "unfinished async work"
 msgstr ""
 
-#: src/reference/embedding.md:436
+#: src/reference/embedding.md:438
 msgid "`vm.fuel_used` / `vm.heap_usage()`"
 msgstr ""
 
-#: src/reference/embedding.md:436
+#: src/reference/embedding.md:438
 msgid "budget meters"
 msgstr ""
 
-#: src/reference/embedding.md:437
+#: src/reference/embedding.md:439
 msgid "`vm.alloc_opaque_str(s)`"
 msgstr ""
 
-#: src/reference/embedding.md:437
+#: src/reference/embedding.md:439
 msgid "mint an `opaque` box over host-built text (the logger's named logger)"
 msgstr ""
 
-#: src/reference/embedding.md:438
+#: src/reference/embedding.md:440
 msgid "`vm.call_host_row(row, &[Value])`"
 msgstr ""
 
-#: src/reference/embedding.md:438
+#: src/reference/embedding.md:440
 msgid "dispatch a registered row by name (test/tooling reads)"
 msgstr ""
 
-#: src/reference/embedding.md:440
-msgid "The canonical async driving loop (single-threaded; the host owns it):"
+#: src/reference/embedding.md:442
+msgid "The embedder's driving contract"
 msgstr ""
 
-#: src/reference/embedding.md:446
-msgid "// advance to the next timer\n"
-msgstr ""
-
-#: src/reference/embedding.md:453
+#: src/reference/embedding.md:444
 msgid ""
-"Cap the loop in embedders that cannot prove termination, so a program that "
-"never idles fails loudly instead of hanging."
+"Build, call the entry, drive to idle, handle the trap — the engine owns the "
+"loop; the host names only its parking policy:"
 msgstr ""
 
-#: src/reference/embedding.md:456
+#: src/reference/embedding.md:449
+msgid "// every frame retired\n"
+msgstr ""
+
+#: src/reference/embedding.md:450
+msgid "// NonBlock only\n"
+msgstr ""
+
+#: src/reference/embedding.md:451
+msgid "/* print and exit; other frames may stay pending */"
+msgstr ""
+
+#: src/reference/embedding.md:455
+msgid ""
+"**`Wait::Block`** — the native embedder's policy. When nothing but settling "
+"host futures remains, the driving thread parks on the machine's wake cell — "
+"every completer's `complete`/`fail` bumps it — and wakes only to work worth "
+"doing. A host worker that never completes hangs the run **by law**: no "
+"wall-clock budget, no hang guard — best-effort cancellation is the disclosed "
+"contract."
+msgstr ""
+
+#: src/reference/embedding.md:461
+msgid ""
+"**`Wait::NonBlock`** — never parks (the wasm lane: a JS host can only settle "
+"outside this call, so a parked thread could never wake). The door answers "
+"`Idle::WouldBlock` the moment only host-parked work remains, and the "
+"embedder yields and re-enters."
+msgstr ""
+
+#: src/reference/embedding.md:465
+msgid ""
+"The first trap propagates as `Err(Trap)` — other frames may stay pending; "
+"the embedder exits."
+msgstr ""
+
+#: src/reference/embedding.md:468
+msgid ""
+"The raw doors under the protocol stay public for tooling and tests that "
+"drive by hand — `vm.run_ready()`, `vm.next_deadline()`, `vm.set_now(t_ms)`, "
+"`vm.pending_tasks()` — and the virtual clock keeps its law: drive with "
+"finite fuel and `vm.set_now` for deterministic tests ([resource "
+"limits](resource-limits.md))."
+msgstr ""
+
+#: src/reference/embedding.md:474
 msgid "Limits"
 msgstr ""
 
-#: src/reference/embedding.md:460
+#: src/reference/embedding.md:478
 msgid "// ops per turn; None = unlimited\n"
 msgstr ""
 
-#: src/reference/embedding.md:462
+#: src/reference/embedding.md:480
 msgid "// construct-time cadence; nothing gates on it today\n"
 msgstr ""
 
-#: src/reference/embedding.md:466
+#: src/reference/embedding.md:484
 msgid ""
 "Exhaustion surfaces as a resumable trap ([resource "
 "limits](resource-limits.md)): fuel is ticked per op, the heap budget is "
@@ -19519,114 +19600,114 @@ msgid ""
 "`vm.resume::<R>()` re-runs the turn."
 msgstr ""
 
-#: src/reference/embedding.md:472
+#: src/reference/embedding.md:490
 msgid "Native fn rules"
 msgstr ""
 
-#: src/reference/embedding.md:474
+#: src/reference/embedding.md:492
 msgid ""
 "A body is `FnMut(&mut Vm, P…) -> R` or `-> Result<R, Trap>`; the Rust "
 "parameter types **are** the declared row (compile error at the register site "
 "for a type that does not cross — [value boundary](value-boundary.md))."
 msgstr ""
 
-#: src/reference/embedding.md:477
+#: src/reference/embedding.md:495
 msgid ""
 "Native fns run **outside** the op budget. The host is trusted to be fast — "
 "or to hand the work to a future ([async host fns](host-fns.md))."
 msgstr ""
 
-#: src/reference/embedding.md:479
+#: src/reference/embedding.md:497
 msgid ""
 "Re-entrancy: a body may call `vm.call` on rut exports. Nested calls draw the "
 "same fuel pool; borrows held by the outer body are guarded ([value "
 "boundary](value-boundary.md))."
 msgstr ""
 
-#: src/reference/embedding.md:482
+#: src/reference/embedding.md:500
 msgid ""
 "Failures are values: return `Err(Trap)` — `Trap { kind, msg }`. The fn traps "
 "cleanly and the error propagates as an `Err` to the embedder with the rut "
 "backtrace intact. Traps never unwind Rust."
 msgstr ""
 
-#: src/reference/embedding.md:486
+#: src/reference/embedding.md:504
 msgid "`TrapKind`"
 msgstr ""
 
-#: src/reference/embedding.md:486
+#: src/reference/embedding.md:504
 msgid "raised by"
 msgstr ""
 
-#: src/reference/embedding.md:488
+#: src/reference/embedding.md:506
 msgid "budget exhaustion"
 msgstr ""
 
-#: src/reference/embedding.md:489 src/reference/cli.md:70
+#: src/reference/embedding.md:507 src/reference/cli.md:70
 msgid "heap limit"
 msgstr ""
 
-#: src/reference/embedding.md:490
+#: src/reference/embedding.md:508
 msgid "`Interrupted`"
 msgstr ""
 
-#: src/reference/embedding.md:490
+#: src/reference/embedding.md:508
 msgid "reserved — no producer in this build (the interrupt lane does not exist)"
 msgstr ""
 
-#: src/reference/embedding.md:491
+#: src/reference/embedding.md:509
 msgid "`Overflow` / `DivByZero`"
 msgstr ""
 
-#: src/reference/embedding.md:491
+#: src/reference/embedding.md:509
 msgid "arithmetic"
 msgstr ""
 
-#: src/reference/embedding.md:492
+#: src/reference/embedding.md:510
 msgid "`IndexOutOfBounds`"
 msgstr ""
 
-#: src/reference/embedding.md:492
+#: src/reference/embedding.md:510
 msgid "sequence access"
 msgstr ""
 
-#: src/reference/embedding.md:493
+#: src/reference/embedding.md:511
 msgid "`Panic`"
 msgstr ""
 
-#: src/reference/embedding.md:493
+#: src/reference/embedding.md:511
 msgid "`panic`"
 msgstr ""
 
-#: src/reference/embedding.md:494
+#: src/reference/embedding.md:512
 msgid "`BadUnbox`"
 msgstr ""
 
-#: src/reference/embedding.md:494
+#: src/reference/embedding.md:512
 msgid "a failed unbox"
 msgstr ""
 
-#: src/reference/embedding.md:495
+#: src/reference/embedding.md:513
 msgid "`NilDeref`"
 msgstr ""
 
-#: src/reference/embedding.md:495
+#: src/reference/embedding.md:513
 msgid "nil where a reference is required"
 msgstr ""
 
-#: src/reference/embedding.md:496
+#: src/reference/embedding.md:514
 msgid "`Invalid`"
 msgstr ""
 
-#: src/reference/embedding.md:496
+#: src/reference/embedding.md:514
 msgid "everything else, including boundary mismatches"
 msgstr ""
 
-#: src/reference/embedding.md:498
+#: src/reference/embedding.md:516
 msgid "The engine's own natives"
 msgstr ""
 
-#: src/reference/embedding.md:500
+#: src/reference/embedding.md:518
 msgid ""
 "The VM boots with internal native calls in the same dispatch family — the "
 "`str`/`bytes` members, the `f\"...\"` concatenation lowering, array "
@@ -19635,11 +19716,11 @@ msgid ""
 "registered modules."
 msgstr ""
 
-#: src/reference/embedding.md:506
+#: src/reference/embedding.md:524
 msgid "Host-side helpers (`rut-std`)"
 msgstr ""
 
-#: src/reference/embedding.md:508
+#: src/reference/embedding.md:526
 msgid ""
 "One `pkg()` builder per module; each rides the chain — "
 "`.pkg(rut_std::math::pkg())` — and installs at `.compile()` against the rows "
@@ -19647,62 +19728,62 @@ msgid ""
 "unmounted scope merges inert, so hosts blanket-install their subset):"
 msgstr ""
 
-#: src/reference/embedding.md:514
+#: src/reference/embedding.md:532
 msgid "builder"
 msgstr ""
 
-#: src/reference/embedding.md:514
+#: src/reference/embedding.md:532
 msgid "binds"
 msgstr ""
 
-#: src/reference/embedding.md:516 src/reference/cli.md:77
+#: src/reference/embedding.md:534 src/reference/cli.md:77
 msgid "`math::pkg()`"
 msgstr ""
 
-#: src/reference/embedding.md:516
+#: src/reference/embedding.md:534
 msgid "`calc`'s float functions, both widths"
 msgstr ""
 
-#: src/reference/embedding.md:517
+#: src/reference/embedding.md:535
 msgid "`logger::pkg(sink)`"
 msgstr ""
 
-#: src/reference/embedding.md:517
+#: src/reference/embedding.md:535
 msgid "`ink_host`'s two rows, routed to a `FnMut(&str)` sink"
 msgstr ""
 
-#: src/reference/embedding.md:518 src/reference/cli.md:79
+#: src/reference/embedding.md:536 src/reference/cli.md:79
 msgid "`nmap::pkg()`"
 msgstr ""
 
-#: src/reference/embedding.md:518
+#: src/reference/embedding.md:536
 msgid "the native key table behind `nmapset` ([stdlib](stdlib.md))"
 msgstr ""
 
-#: src/reference/embedding.md:519
+#: src/reference/embedding.md:537
 msgid "`strbuild::pkg()`"
 msgstr ""
 
-#: src/reference/embedding.md:519
+#: src/reference/embedding.md:537
 msgid ""
 "the string builder's rows behind `strbuild` ([stdlib](stdlib.md)) — growth "
 "is charged against the embedder's heap budget"
 msgstr ""
 
-#: src/reference/embedding.md:520 src/reference/cli.md:81
+#: src/reference/embedding.md:538 src/reference/cli.md:81
 msgid "`async_host::pkg()`"
 msgstr ""
 
-#: src/reference/embedding.md:520
+#: src/reference/embedding.md:538
 msgid "the launcher rows (`__launch`/`__abort`/`__sleep`/`__sleep_yield`)"
 msgstr ""
 
-#: src/reference/embedding.md:521 src/reference/embedding.md:531
+#: src/reference/embedding.md:539 src/reference/embedding.md:549
 #: src/reference/cli.md:82
 msgid "`http::pkg()`"
 msgstr ""
 
-#: src/reference/embedding.md:521
+#: src/reference/embedding.md:539
 msgid ""
 "the std HTTP lanes over reqwest (native builds; the `http` cargo feature, "
 "default-off); `http::pkg_with(f)` is the fixture twin, returning `(HostPkg, "
@@ -19714,91 +19795,91 @@ msgid ""
 "+ the readbacks, `stream::http_body`/`http_stream_next`)"
 msgstr ""
 
-#: src/reference/embedding.md:522 src/reference/cli.md:80
+#: src/reference/embedding.md:540 src/reference/cli.md:80
 msgid "`bench_cross::pkg()`"
 msgstr ""
 
-#: src/reference/embedding.md:522 src/reference/stdlib.md:135
+#: src/reference/embedding.md:540 src/reference/stdlib.md:135
 msgid "the crossing-tax benchmark rows"
 msgstr ""
 
-#: src/reference/embedding.md:524
+#: src/reference/embedding.md:542
 msgid "The std HTTP lane — your own transport (`pkg_over`)"
 msgstr ""
 
-#: src/reference/embedding.md:526
+#: src/reference/embedding.md:544
 msgid ""
 "rut-std carries no HTTP client of its own. The seven `http_host` rows are "
 "the surface; the transport is a door the embedder picks:"
 msgstr ""
 
-#: src/reference/embedding.md:529
+#: src/reference/embedding.md:547
 msgid "transport"
 msgstr ""
 
-#: src/reference/embedding.md:529
+#: src/reference/embedding.md:547
 msgid "gate"
 msgstr ""
 
-#: src/reference/embedding.md:531
+#: src/reference/embedding.md:549
 msgid "reqwest (one shared blocking client, one worker thread per request)"
 msgstr ""
 
-#: src/reference/embedding.md:531
+#: src/reference/embedding.md:549
 msgid "the `http` cargo feature; native targets only"
 msgstr ""
 
-#: src/reference/embedding.md:532
+#: src/reference/embedding.md:550
 msgid "`http::pkg_with(f)`"
 msgstr ""
 
-#: src/reference/embedding.md:532
+#: src/reference/embedding.md:550
 msgid ""
 "an injectable fixture keyed on method+URL, walking its chunk schedule on the "
 "virtual clock"
 msgstr ""
 
-#: src/reference/embedding.md:532
+#: src/reference/embedding.md:550
 msgid "feature-free; returns the `HttpFixture` settle handle"
 msgstr ""
 
-#: src/reference/embedding.md:533
+#: src/reference/embedding.md:551
 msgid "`http::pkg_over(backend)`"
 msgstr ""
 
-#: src/reference/embedding.md:533
+#: src/reference/embedding.md:551
 msgid "YOUR backend — any `Arc<dyn HttpBackend>`"
 msgstr ""
 
-#: src/reference/embedding.md:533
+#: src/reference/embedding.md:551
 msgid "feature-free"
 msgstr ""
 
-#: src/reference/embedding.md:534
+#: src/reference/embedding.md:552
 msgid "`http_wasm::pkg_fetch()`"
 msgstr ""
 
-#: src/reference/embedding.md:534
+#: src/reference/embedding.md:552
 msgid "the browser window's `fetch`"
 msgstr ""
 
-#: src/reference/embedding.md:534
+#: src/reference/embedding.md:552
 msgid "the `http-wasm` cargo feature, wasm32 only"
 msgstr ""
 
-#: src/reference/embedding.md:536
+#: src/reference/embedding.md:554
 msgid "All four bind the same rows over the same seam — only `send` differs."
 msgstr ""
 
-#: src/reference/embedding.md:538
+#: src/reference/embedding.md:556
 msgid "The `HttpBackend` contract"
 msgstr ""
 
-#: src/reference/embedding.md:540
+#: src/reference/embedding.md:558
 msgid "One trait, one method — the whole transport:"
 msgstr ""
 
-#: src/reference/embedding.md:548
+#: src/reference/embedding.md:566
 msgid ""
 "`HttpRequest { method, url, headers, body }` carries the crossing parts "
 "verbatim: the canonical verb, the `\"\\n"
@@ -19806,11 +19887,11 @@ msgid ""
 "bytes (empty = none — the disclosed empty-vs-none merge)."
 msgstr ""
 
-#: src/reference/embedding.md:553
+#: src/reference/embedding.md:571
 msgid "The contract, in order:"
 msgstr ""
 
-#: src/reference/embedding.md:555
+#: src/reference/embedding.md:573
 msgid ""
 "**Answer `out` exactly ONCE, at HEADERS.** Success mints through "
 "`HttpResponse::streaming(status)` — it returns the response half (complete "
@@ -19823,7 +19904,7 @@ msgid ""
 "once\" is the discipline, not an enforced invariant."
 msgstr ""
 
-#: src/reference/embedding.md:565
+#: src/reference/embedding.md:583
 msgid ""
 "**Then drive the writer — from any thread**: `push_chunk(bytes)` feeds one "
 "chunk (a parked stream read takes the queue's front, FIFO), `end()` is the "
@@ -19831,7 +19912,7 @@ msgid ""
 "readable — they did arrive). The terminal flags are sticky."
 msgstr ""
 
-#: src/reference/embedding.md:570
+#: src/reference/embedding.md:588
 msgid ""
 "**Never block the VM thread.** Do the wire work on your own threads/tasks; "
 "the completer and the writer (atomics + a Mutex slot, waiters completed "
@@ -19839,7 +19920,7 @@ msgid ""
 "to park on: it is YOUR worker thread that stalls, never the VM."
 msgstr ""
 
-#: src/reference/embedding.md:576
+#: src/reference/embedding.md:594
 msgid ""
 "Backpressure is inherited, not implemented: `push_chunk` is the budget "
 "gate's home — once `HttpBodyWriter::DEFAULT_STREAM_BUDGET_BYTES` (64 × 16 "
@@ -19855,39 +19936,39 @@ msgid ""
 "\"cancelled\"`)."
 msgstr ""
 
-#: src/reference/embedding.md:589
+#: src/reference/embedding.md:607
 msgid "The minimal backend — a thread per request, the reqwest lane's own shape:"
 msgstr ""
 
-#: src/reference/embedding.md:605
+#: src/reference/embedding.md:623
 msgid "// HEADERS — send resolves here\n"
 msgstr ""
 
-#: src/reference/embedding.md:607
+#: src/reference/embedding.md:625
 msgid "// the wire-abort: drop the wire\n"
 msgstr ""
 
-#: src/reference/embedding.md:608
+#: src/reference/embedding.md:626
 msgid "// bounded — may park this thread\n"
 msgstr ""
 
-#: src/reference/embedding.md:610
+#: src/reference/embedding.md:628
 msgid "// clean EOF\n"
 msgstr ""
 
-#: src/reference/embedding.md:613
+#: src/reference/embedding.md:631
 msgid "// status 0\n"
 msgstr ""
 
-#: src/reference/embedding.md:618
+#: src/reference/embedding.md:636
 msgid "// the seven rows bind over it like any host pkg:\n"
 msgstr ""
 
-#: src/reference/embedding.md:626
+#: src/reference/embedding.md:644
 msgid "The wasm lane — `pkg_fetch`"
 msgstr ""
 
-#: src/reference/embedding.md:628
+#: src/reference/embedding.md:646
 msgid ""
 "On wasm32 the `http-wasm` cargo feature (target-gated "
 "`wasm-bindgen`/`web-sys`/`js-sys`, default-off like the reqwest lane) "
@@ -19895,7 +19976,7 @@ msgid ""
 "browser's `fetch`, the playground's transport:"
 msgstr ""
 
-#: src/reference/embedding.md:633
+#: src/reference/embedding.md:651
 msgid ""
 "`send` resolves at HEADERS: one `spawn_local` task awaits the `fetch`, mints "
 "`streaming(status)`, and keeps pumping the body on the same task through the "
@@ -19903,7 +19984,7 @@ msgid ""
 "queue drains between steps and the VM thread never blocks."
 msgstr ""
 
-#: src/reference/embedding.md:638
+#: src/reference/embedding.md:656
 msgid ""
 "The budget gate's wasm flavor is park/resume: a JS thread has no condvar (a "
 "park there would block the whole world), so the pump checks "
@@ -19913,13 +19994,13 @@ msgid ""
 "slows the socket — real backpressure all the same."
 msgstr ""
 
-#: src/reference/embedding.md:645
+#: src/reference/embedding.md:663
 msgid ""
 "Cancel is the same between-chunk wire-abort (the `cancelled()` probe drops "
 "the reader, the connection closes)."
 msgstr ""
 
-#: src/reference/embedding.md:648
+#: src/reference/embedding.md:666
 msgid ""
 "The RUN shape follows the thread: chunks land from JS microtasks, so they "
 "can never settle inside the synchronous `run` export. When a session's main "
@@ -19932,18 +20013,18 @@ msgid ""
 "and stream lanes degrading exactly as `HttpResponse::failed` discloses."
 msgstr ""
 
-#: src/reference/embedding.md:659
+#: src/reference/embedding.md:677
 msgid "In-tree examples"
 msgstr ""
 
-#: src/reference/embedding.md:661
+#: src/reference/embedding.md:679
 msgid ""
 "[03 — Plugin](../examples/03-plugin.md): a Rust chat server driving a rut "
 "moderator plugin, loaded from a module directory and from a packed "
 "`.rutbundle`; re-entrant `emit` crossings."
 msgstr ""
 
-#: src/reference/embedding.md:664
+#: src/reference/embedding.md:682
 msgid ""
 "[06 — GitHub viewer CLI](../examples/06-github-viewer-cli.md): walks the std "
 "packages, binds example-local I/O rows, launches an async entry fn, and "
@@ -20903,14 +20984,16 @@ msgstr ""
 
 #: src/reference/host-fns.md:270
 msgid ""
-"The embedder binds the family with one spelling; the closure spawns the "
-"work, hands out a completer clone, and returns. On the installer lane the "
-"row name is the scope-relative spelling — bare for a root row, the mod path "
-"for a row under a surface tree (`net::http_send`; the scope itself prefixes "
-"once, at the install):"
+"The embedder binds the family with one spelling; the sugar mints the "
+"wake-wired completer and hands it to the closure as its FIRST parameter — "
+"the closure spawns the work, hands out a clone, and returns (the cell is "
+"never minted by hand). On the installer lane the row name is the "
+"scope-relative spelling — bare for a root row, the mod path for a row under "
+"a surface tree (`net::http_send`; the scope itself prefixes once, at the "
+"install):"
 msgstr ""
 
-#: src/reference/host-fns.md:278
+#: src/reference/host-fns.md:280
 msgid "\"net::http_send\""
 msgstr ""
 
@@ -20998,11 +21081,13 @@ msgid "`Completer<T>` API"
 msgstr ""
 
 #: src/reference/host-fns.md:315
-msgid "`Completer::new()`"
+msgid "`Completer::with_wake(wakes)`"
 msgstr ""
 
 #: src/reference/host-fns.md:315
-msgid "a fresh cell; `clone()` shares it (one `Arc`)"
+msgid ""
+"the ONE mint — the row sugars call it and hand the body the cell; `clone()` "
+"shares it (one `Arc`)"
 msgstr ""
 
 #: src/reference/host-fns.md:316

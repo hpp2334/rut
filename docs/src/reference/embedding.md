@@ -429,6 +429,8 @@ lives in `rut-native`.
 | `hosts.verify_against(&expected)` | the raw lane's net: panic on declared-unbound / bound-undeclared / signature drift |
 | `vm.call::<A, R>(export, args)` | call an export with Rust values, get a Rust value back ([value boundary](value-boundary.md)) |
 | `vm.resume::<R>()` | resume a budget-parked call after refueling |
+| `vm.run_until_idle(wait) -> Result<Idle, Trap>` | the driving protocol — the one loop a host needs ([the contract](#the-embedders-driving-contract)) |
+| `Wait::Block` / `Wait::NonBlock` | the parking policy: `Block` parks on host completions (the native lane); `NonBlock` never parks — it answers `Idle::WouldBlock` (the wasm lane) |
 | `vm.run_ready()` | drain the async ready queue once; returns frames run |
 | `vm.next_deadline() -> Option<u64>` | the earliest timer deadline, if any |
 | `vm.set_now(t_ms)` | advance the virtual clock |
@@ -437,21 +439,37 @@ lives in `rut-native`.
 | `vm.alloc_opaque_str(s)` | mint an `opaque` box over host-built text (the logger's named logger) |
 | `vm.call_host_row(row, &[Value])` | dispatch a registered row by name (test/tooling reads) |
 
-The canonical async driving loop (single-threaded; the host owns it):
+### The embedder's driving contract
+
+Build, call the entry, drive to idle, handle the trap — the engine
+owns the loop; the host names only its parking policy:
 
 ```rust
-loop {
-    vm.run_ready()?;
-    match vm.next_deadline() {
-        Some(d) => vm.set_now(d),          // advance to the next timer
-        None if vm.pending_tasks() == 0 => break,
-        None => std::thread::sleep(std::time::Duration::from_millis(2)),
-    }
+match vm.run_until_idle(rut_vm::interp::Wait::Block) {
+    Ok(rut_vm::interp::Idle::Drained) => {}, // every frame retired
+    Ok(rut_vm::interp::Idle::WouldBlock) => unreachable!(), // NonBlock only
+    Err(trap) => { /* print and exit; other frames may stay pending */ }
 }
 ```
 
-Cap the loop in embedders that cannot prove termination, so a program that
-never idles fails loudly instead of hanging.
+- **`Wait::Block`** — the native embedder's policy. When nothing but
+  settling host futures remains, the driving thread parks on the
+  machine's wake cell — every completer's `complete`/`fail` bumps it —
+  and wakes only to work worth doing. A host worker that never
+  completes hangs the run **by law**: no wall-clock budget, no hang
+  guard — best-effort cancellation is the disclosed contract.
+- **`Wait::NonBlock`** — never parks (the wasm lane: a JS host can
+  only settle outside this call, so a parked thread could never wake).
+  The door answers `Idle::WouldBlock` the moment only host-parked work
+  remains, and the embedder yields and re-enters.
+- The first trap propagates as `Err(Trap)` — other frames may stay
+  pending; the embedder exits.
+
+The raw doors under the protocol stay public for tooling and tests
+that drive by hand — `vm.run_ready()`, `vm.next_deadline()`,
+`vm.set_now(t_ms)`, `vm.pending_tasks()` — and the virtual clock keeps
+its law: drive with finite fuel and `vm.set_now` for deterministic
+tests ([resource limits](resource-limits.md)).
 
 ## Limits
 

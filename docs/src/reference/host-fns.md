@@ -267,8 +267,10 @@ pub host async fn http_send(c: opaque, method: str, url: str,
                             headers: str, body: bytes) -> opaque;
 ```
 
-The embedder binds the family with one spelling; the closure spawns
-the work, hands out a completer clone, and returns. On the installer
+The embedder binds the family with one spelling; the sugar mints the
+wake-wired completer and hands it to the closure as its FIRST
+parameter — the closure spawns the work, hands out a clone, and
+returns (the cell is never minted by hand). On the installer
 lane the row name is the scope-relative spelling — bare for a root
 row, the mod path for a row under a surface tree (`net::http_send`;
 the scope itself prefixes once, at the install):
@@ -277,9 +279,8 @@ the scope itself prefixes once, at the install):
 let mut http = rut_vm::HostPkg::new("http_host");
 rut_vm::pkg_async_fn!(http, "net::http_send",
     (OpaqueRef, &str, &str, &str, &[u8]) -> OpaqueRef,
-    |c: OpaqueRef, method: &str, url: &str, headers: &str, body: &[u8]|
-        -> rut_vm::Completer<OpaqueRef> {
-        let done = rut_vm::Completer::new();
+    |done: rut_vm::Completer<OpaqueRef>, c: OpaqueRef, method: &str,
+     url: &str, headers: &str, body: &[u8]| {
         let w = done.clone();
         std::thread::spawn(move || {
             match do_request(c, method, url, headers, body) {
@@ -287,7 +288,6 @@ rut_vm::pkg_async_fn!(http, "net::http_send",
                 Err(e) => w.fail(e.to_string()),
             }
         });
-        done
     },
     /* optional abort hook: */ move |_c| { /* best-effort cancel */ },
 );
@@ -312,7 +312,7 @@ family the compiler's weave joins:
 
 | `Completer<T>` API | Meaning |
 |---|---|
-| `Completer::new()` | a fresh cell; `clone()` shares it (one `Arc`) |
+| `Completer::with_wake(wakes)` | the ONE mint — the row sugars call it and hand the body the cell; `clone()` shares it (one `Arc`) |
 | `complete(v)` / `fail(msg)` | settle from **any thread** (atomics + mutex only) |
 | `poll() -> i32` | the driving loop's probe |
 | `take_result() -> Result<T, Trap>` | VM thread only; a `fail` message becomes the trap at the `await` |

@@ -1,6 +1,7 @@
 msgid ""
 msgstr "Project-Id-Version: The rut Book\nPOT-Creation-Date: 1970-01-01 00:00:00+00:00\nPO-Revision-Date: \nLast-Translator: \nLanguage-Team: \nLanguage: en\nMIME-Version: 1.0\nContent-Type: text/plain; charset=UTF-8\nContent-Transfer-Encoding: 8bit\nPlural-Forms: nplurals=1; plural=0;\n"
 
+
 #: src/SUMMARY.md:1
 msgid "Summary"
 msgstr "目录"
@@ -1859,7 +1860,7 @@ msgstr "这个二元组也是 rut 标准的错误通道——接下来的章节�
 #: src/tutorial/values-and-variables.md:307 src/tutorial/control-flow.md:400
 #: src/tutorial/functions.md:242 src/tutorial/types.md:284
 #: src/tutorial/interfaces.md:400 src/tutorial/errors.md:233
-#: src/tutorial/modules.md:300 src/tutorial/async.md:182
+#: src/tutorial/modules.md:300 src/tutorial/async.md:193
 #: src/tutorial/stdlib.md:409
 msgid "Put it together"
 msgstr "综合运用"
@@ -4634,6 +4635,13 @@ msgstr ""
 "你从不编写驱动循环——_嵌入方_来写。`rut run` CLI 就是一个嵌入方：`main` 返回后它泵动循环——排空就绪的帧，把虚拟时钟推进到下一个定时器期限，如此往复——直到没有任何待处理的东西。于是程序从 `main` 发起工作，输出自然就出现了："
 
 
+#: src/tutorial/async.md:82
+msgid ""
+"Launched work outlives `main`: `rut run` drives every launched future to completion before exiting — **host-backed included**. A launched host async fn ([the host futures bridge](../reference/host-futures.md)) parks its frame on a completer that a worker thread settles; the CLI parks on the engine's wake cell until those answers land, so the run ends only at idle or trap. The flip side is law, not a bug: a host worker that never completes hangs the run — no wall-clock budget, no hang guard. Cancellation stays best-effort: `abort()` marks the frame, the worker runs to its blocking completion, and the late answer is simply discarded."
+msgstr ""
+"已启动的工作活得比 `main` 久：`rut run` 会把每个已启动的 future 驱动到完成才退出——宿主后端（host-backed）的也不例外。已启动的宿主 async fn（[宿主 future 桥接](../reference/host-futures.md)）把自己的帧停放在一个 completer 上，由 worker 线程结算；CLI 则停在引擎的唤醒单元（wake cell）上，直到这些应答落地——因此运行只会在空闲或陷阱处结束。另一面是法则，不是缺陷：一个永不完成的宿主 worker 会让运行挂起——没有墙钟预算，也没有挂起守卫。取消仍是尽力而为：`abort()` 标记帧，worker 跑完其阻塞式执行，迟到的应答被直接丢弃。"
+
+
 #: src/tutorial/async.md:72
 msgid ""
 "# a module dir (rut.jsonc + main.rut); main launches the countdown\n"
@@ -4641,76 +4649,76 @@ msgstr ""
 "# a module dir (rut.jsonc + main.rut); main launches the countdown\n"
 
 
-#: src/tutorial/async.md:82
+#: src/tutorial/async.md:93
 msgid ""
 "Calling an async function and awaiting it in the same body is the straight-line case; launching is for concurrency — independent work that overlaps through the loop's interleaving."
 msgstr "在同一个体内调用异步函数并 await 它，是直线情形；launch 则用于并发——经由循环的交错而彼此重叠的独立工作。"
 
 
-#: src/tutorial/async.md:86
+#: src/tutorial/async.md:97
 msgid "Talking to the network: the `http` package"
 msgstr "与网络对话：`http` 包"
 
 
-#: src/tutorial/async.md:88
+#: src/tutorial/async.md:99
 msgid ""
 "The standard `http` package is async-only where work actually waits. Everything else — the client, the verbs, the builder — is sync construction sugar:"
 msgstr "标准 `http` 包只在真正等待的工作处才是异步的。其余一切——客户端、各个动词、构建器——都是同步的构造糖："
 
 
-#: src/tutorial/async.md:99
+#: src/tutorial/async.md:110
 msgid "The shape, step by step:"
 msgstr "这个形状，一步一步："
 
 
-#: src/tutorial/async.md:101
+#: src/tutorial/async.md:112
 msgid ""
 "`client.get(url)` (or `request()`, `post`, `put`, `patch`, `del`) hands back a `RequestBuilder`; `.method(..)`, `.url(..)`, `.header(k, v)` (repeatable), `.body(bytes)` chain on it."
 msgstr ""
 "`client.get(url)`（或 `request()`、`post`、`put`、`patch`、`del`）交还一个 `RequestBuilder`；`.method(..)`、`.url(..)`、`.header(k, v)`（可重复）、`.body(bytes)` 在它上面链式调用。"
 
 
-#: src/tutorial/async.md:104
+#: src/tutorial/async.md:115
 msgid "`.build()` freezes a re-sendable `Request`."
 msgstr "`.build()` 冻结出一个可重发的 `Request`。"
 
 
-#: src/tutorial/async.md:105
+#: src/tutorial/async.md:116
 msgid ""
 "**`.send()` is the async point.** It resolves at _headers_ — the wire body is still unread."
 msgstr ""
 
 
-#: src/tutorial/async.md:107
+#: src/tutorial/async.md:118
 msgid "From the `Response`, take one of two readbacks:"
 msgstr "从 `Response` 出发，有两条读取路径："
 
 
-#: src/tutorial/async.md:108
+#: src/tutorial/async.md:119
 msgid "`await resp.body()` — drain the remaining body in one future;"
 msgstr ""
 
 
-#: src/tutorial/async.md:109
+#: src/tutorial/async.md:120
 msgid ""
 "`resp.byte_stream()` then `await stream::next()` — one chunk per future, `nil` at end-of-stream, for bounded-memory downloads."
 msgstr ""
 
 
-#: src/tutorial/async.md:112
+#: src/tutorial/async.md:123
 msgid ""
 "Errors come back as data, not traps: status `0` is reserved for transport failure (`resp.transport_error()` carries the reason), any real status — 4xx and 5xx included — is a normal response (`resp.ok()` is the 2xx test), and a mid-read wire death surfaces as `nil` from `next()` with the reason in `stream::error()`."
 msgstr ""
 "错误以数据的形式回来，而不是陷阱：状态 `0` 保留给传输失败（`resp.transport_error()` 携带原因），任何真实状态——包括 4xx 和 5xx——都是正常响应（`resp.ok()` 是 2xx 测试），而读取中途线路断开则表现为 `next()` 返回 `nil`，原因在 `stream::error()` 里。"
 
 
-#: src/tutorial/async.md:118
+#: src/tutorial/async.md:129
 msgid ""
 "A complete request handler from the repository's GitHub-viewer example — send, then drain:"
 msgstr "来自仓库 GitHub-viewer 示例的一个完整请求处理函数——先 send，再排干："
 
 
-#: src/tutorial/async.md:121
+#: src/tutorial/async.md:132
 msgid ""
 "```rut\n"
 "async fn do_list(client: HttpClient, owner: str, repo: str, rf: str) -> i32 {\n"
@@ -4738,12 +4746,12 @@ msgid ""
 msgstr ""
 
 
-#: src/tutorial/async.md:145
+#: src/tutorial/async.md:156
 msgid "The stream lane walks chunks — send, then loop:"
 msgstr "流路径逐块行走——先 send，再循环："
 
 
-#: src/tutorial/async.md:147
+#: src/tutorial/async.md:158
 msgid ""
 "```rut\n"
 "let resp = await client.get(url).build().send();\n"
@@ -4762,31 +4770,31 @@ msgid ""
 msgstr ""
 
 
-#: src/tutorial/async.md:162
+#: src/tutorial/async.md:173
 msgid "Racing futures and the join tier"
 msgstr "竞速 future 与 join 层级"
 
 
-#: src/tutorial/async.md:164
+#: src/tutorial/async.md:175
 msgid ""
 "`select2(a, b)` races two futures and answers the first-ready side as an `Either2` (`is_a()`/`a_value()` or `is_b()`/`b_value()`); the losers are cancelled, their drop paths running at their next checkpoint. `select_all(futs)` extends the race to a cohort, answering `(i, v)`. Joining a launched future's value (`await handle`) is still spelled in the grammar but rejected in this build — the compiler gates it with ``cannot `await` a LaunchedFutureHandle — the receipt is not a Future and cannot be re-launched``. See [launched futures](../reference/launched-futures.md) for the race and completer surfaces."
 msgstr ""
 "`select2(a, b)` 对两个 future 竞速，以 `Either2` 应答先就绪的一侧（`is_a()`/`a_value()` 或 `is_b()`/`b_value()`）；落败者会被取消，各自的 drop 路径在下一个检查点运行。`select_all(futs)` 把竞速扩展到一整组，应答 `(i, v)`。连接已启动 future 的值（`await handle`）仍在语法里拼写，但本构建会拒绝——编译器以 ``cannot `await` a LaunchedFutureHandle — the receipt is not a Future and cannot be re-launched`` 设门。竞速与 completer 表面见[已启动的 future](../reference/launched-futures.md)。"
 
 
-#: src/tutorial/async.md:175
+#: src/tutorial/async.md:186
 msgid "Parallelism"
 msgstr "并行"
 
 
-#: src/tutorial/async.md:177
+#: src/tutorial/async.md:188
 msgid ""
 "The language has none: a VM is single-threaded by construction (`!Send`, one heap — [the VM](../core-concepts/the-vm.md)); async is the whole concurrency story. A host that wants parallelism runs separate VMs — rut defines no surface for sharing between them."
 msgstr ""
 "语言层面没有并行：VM 在构造上就是单线程的（`!Send`，一套堆——[VM](../core-concepts/the-vm.md)）；异步就是全部的并发故事。想要并行的宿主运行多个独立的 VM——rut 不为它们之间的共享定义任何表面。"
 
 
-#: src/tutorial/async.md:184
+#: src/tutorial/async.md:195
 msgid ""
 "```rut\n"
 "use futures::{ launch_future, sleep };\n"
@@ -4810,7 +4818,7 @@ msgid ""
 msgstr ""
 
 
-#: src/tutorial/async.md:211
+#: src/tutorial/async.md:222
 msgid "Next: [the standard library](stdlib.md)."
 msgstr "下一章：[标准库](stdlib.md)。"
 
@@ -6711,7 +6719,7 @@ msgstr "队列归 VM 所有；循环归嵌入方所有："
 
 #: src/core-concepts/async-model.md:115 src/core-concepts/host-boundary.md:37
 #: src/reference/vm-heap.md:105 src/reference/resource-limits.md:61
-#: src/reference/host-futures.md:122
+#: src/reference/host-futures.md:121
 msgid "\"main\""
 msgstr "\"main\""
 
@@ -6782,11 +6790,12 @@ msgstr "原生代码加入同一个模型。声明文件写下这样一行："
 
 #: src/core-concepts/async-model.md:145
 msgid ""
-"and the embedder binds it with **one closure** that starts the work and returns the future's state cell:"
-msgstr "嵌入方用**一个闭包**绑定它：闭包启动工作并返回 future 的状态单元："
+"and the embedder binds it with **one closure** that starts the work — the sugar mints the future's state cell (wired to the machine's wake cell) and hands it to the closure as its FIRST parameter:"
+msgstr ""
+"而嵌入方用**一个闭包**绑定它：闭包只负责启动工作——糖宏铸造 future 的状态单元（接线到机器的唤醒单元），并把它作为闭包的第一个参数交进来："
 
 
-#: src/core-concepts/async-model.md:149
+#: src/core-concepts/async-model.md:150
 msgid "\"http_host::stream::http_stream_next\""
 msgstr "\"http_host::stream::http_stream_next\""
 
@@ -6798,19 +6807,19 @@ msgstr ""
 "// 从任意线程落定\n"
 
 
-#: src/core-concepts/async-model.md:161
+#: src/core-concepts/async-model.md:160
 msgid ""
-"`Completer<T>` is a small shared cell: `complete(v)`/`fail(msg)` are callable from any thread (atomics plus a mutex — the VM stays single-threaded), `fail`'s message becomes the trap **at the await**, and an optional abort closure runs when the script cancels a pending future (late results are then simply discarded). The macro registers the whole row family the weave drives — start, probe, take, cancel — and the load-time check verifies the expansion against the declaration, so a decl and its bodies cannot drift apart. IO written with plain `async`/`await` Rust maps onto this naturally: the work leaves the VM, and completion is one enqueue back into the ready queue."
+"`Completer<T>` is a small shared cell: `complete(v)`/`fail(msg)` are callable from any thread (atomics plus a mutex — the VM stays single-threaded), `fail`'s message becomes the trap **at the await**, and every settle bumps the machine's wake cell, so a parked driving loop wakes to it. An optional abort closure runs when the script cancels a pending future (late results are then simply discarded). The macro registers the whole row family the weave drives — start, probe, take, cancel — and the load-time check verifies the expansion against the declaration, so a decl and its bodies cannot drift apart. IO written with plain `async`/`await` Rust maps onto this naturally: the work leaves the VM, and completion is one enqueue back into the ready queue."
 msgstr ""
-"`Completer<T>` 是一个小的共享单元：`complete(v)`/`fail(msg)` 可从任意线程调用（原子操作加互斥锁——VM 保持单线程），`fail` 的消息**在 await 处**变成陷阱；当脚本取消一个挂起的 future 时，可选的中止闭包会运行（迟到的结果随后被直接丢弃）。这个宏注册织造所驱动的整行族——start、probe、take、cancel——加载期检查则对照声明校验展开结果，声明与函数体因此不可能漂移分离。用普通 `async`/`await` Rust 写的 IO 自然映射到此：工作离开 VM，完成就是一次重新入队，回到就绪队列。"
+"`Completer<T>` 是一个小的共享单元：`complete(v)`/`fail(msg)` 可从任意线程调用（原子操作加互斥锁——VM 保持单线程），`fail` 的消息**在 await 处**变成陷阱；每一次结算都会让机器的唤醒单元计数前进，停放中的驱动循环会因此醒来。当脚本取消一个挂起的 future 时，可选的中止闭包会运行（迟到的结果随后被直接丢弃）。这个宏注册织造所驱动的整行族——start、probe、take、cancel——加载期检查则对照声明校验展开结果，声明与函数体因此不可能漂移分离。用普通 `async`/`await` Rust 写的 IO 自然映射到此：工作离开 VM，完成就是一次重新入队，回到就绪队列。"
 
 
-#: src/core-concepts/async-model.md:172
+#: src/core-concepts/async-model.md:173
 msgid "Structured concurrency, honestly"
 msgstr "结构化并发，如实相告"
 
 
-#: src/core-concepts/async-model.md:174
+#: src/core-concepts/async-model.md:175
 msgid ""
 "The language today keeps the core vocabulary deliberately small: launch, abort, and await. Racing (`select2` / `select_all`) and the manually resolvable future (`completer<T>()`) are stdlib surface over the same engine rows — the losers of a race are cancelled through the ordinary abort path. Joining a launched future (`await handle`) parses but is compile-gated, and structured scopes (a block that cancels its children on exit) are the same story. What exists now is already enough to structure real programs — the launch/abort receipt gives you explicit ownership of background work, and drop-based cancellation gives it a clean off switch — but nothing in the model silently cancels siblings on your behalf. See the reference on [async and await](../reference/async.md), [launched futures](../reference/launched-futures.md), and the [host futures bridge](../reference/host-futures.md); the [GitHub viewer CLI](../examples/06-github-viewer-cli.md) example shows a full program living inside this loop."
 msgstr ""
@@ -11254,7 +11263,7 @@ msgid "spelling"
 msgstr "拼写"
 
 
-#: src/reference/modules-and-visibility.md:300 src/reference/embedding.md:529
+#: src/reference/modules-and-visibility.md:300 src/reference/embedding.md:547
 msgid "door"
 msgstr "门"
 
@@ -17274,7 +17283,7 @@ msgid "Resumption"
 msgstr "恢复"
 
 
-#: src/reference/resource-limits.md:52 src/reference/embedding.md:489
+#: src/reference/resource-limits.md:52 src/reference/embedding.md:507
 msgid "`OutOfMemory`"
 msgstr "`OutOfMemory`"
 
@@ -17294,7 +17303,7 @@ msgid "free refs → `resume()`; a larger limit means a rebuilt VM — no live s
 msgstr "丢弃引用 → `resume()`；更大的限额意味着重建 VM——没有线上设置器"
 
 
-#: src/reference/resource-limits.md:53 src/reference/embedding.md:488
+#: src/reference/resource-limits.md:53 src/reference/embedding.md:506
 msgid "`OutOfFuel`"
 msgstr "`OutOfFuel`"
 
@@ -17849,7 +17858,7 @@ msgid "read / advance the deterministic virtual clock"
 msgstr "读取 / 推进确定性的虚拟时钟"
 
 
-#: src/reference/async.md:187 src/reference/embedding.md:433
+#: src/reference/async.md:187 src/reference/embedding.md:435
 msgid "`vm.next_deadline() -> Option<u64>`"
 msgstr "`vm.next_deadline() -> Option<u64>`"
 
@@ -17871,7 +17880,7 @@ msgid ""
 msgstr "排空就绪队列，然后轮询停放中的宿主 future，直到一轮空转不再产生任何完成"
 
 
-#: src/reference/async.md:189 src/reference/embedding.md:435
+#: src/reference/async.md:189 src/reference/embedding.md:437
 msgid "`vm.pending_tasks() -> usize`"
 msgstr "`vm.pending_tasks() -> usize`"
 
@@ -18362,19 +18371,24 @@ msgstr "线程"
 
 
 #: src/reference/host-futures.md:36
-msgid "`Completer::new() -> Completer<T>`"
-msgstr "`Completer::new() -> Completer<T>`"
+msgid "the row sugars (`__start`, VM thread)"
+msgstr "行糖宏（`__start`，VM 线程）"
 
 
-#: src/reference/host-futures.md:36 src/reference/host-futures.md:37
-#: src/reference/host-futures.md:40
+#: src/reference/host-futures.md:36
+msgid "`Completer::with_wake(wakes) -> Completer<T>`"
+msgstr "`Completer::with_wake(wakes) -> Completer<T>`"
+
+
+#: src/reference/host-futures.md:37 src/reference/host-futures.md:40
 msgid "any"
 msgstr "任意"
 
 
 #: src/reference/host-futures.md:36
-msgid "a fresh cell: atomic state + a mutex slot, one `Arc`"
-msgstr "一个新单元：原子状态 + 一个互斥锁槽位，一个 `Arc`"
+msgid ""
+"a fresh cell: atomic state + a mutex slot + the machine's wake cell, one `Arc` — the body never mints, the sugar hands it in"
+msgstr "一个新的单元：原子状态 + 一个互斥锁槽位 + 机器的唤醒单元，一个 `Arc`——函数体绝不自行铸造，由糖宏递进来"
 
 
 #: src/reference/host-futures.md:37
@@ -18480,124 +18494,122 @@ msgid "\"fetch\""
 msgstr ""
 
 
+#: src/reference/host-futures.md:76
+msgid "// return; the future parks on the handed cell\n"
+msgstr "// 返回；future 停放在递进来的单元上\n"
+
+
 #: src/reference/host-futures.md:77
-msgid ""
-"// returned immediately: the future parks\n"
-msgstr ""
-"// returned immediately: the future parks\n"
-
-
-#: src/reference/host-futures.md:78
 msgid ""
 "// the built pkg rides the run chain: .pkg(pkg.build())\n"
 msgstr ""
 
 
-#: src/reference/host-futures.md:82
+#: src/reference/host-futures.md:81
 msgid "Emitted row"
 msgstr "生成行"
 
 
-#: src/reference/host-futures.md:82
+#: src/reference/host-futures.md:81
 msgid "Signature"
 msgstr "签名"
 
 
-#: src/reference/host-futures.md:82
+#: src/reference/host-futures.md:81
 msgid "Role"
 msgstr "角色"
 
 
-#: src/reference/host-futures.md:84
+#: src/reference/host-futures.md:83
 msgid "`mypkg::fetch`"
 msgstr "`mypkg::fetch`"
 
 
-#: src/reference/host-futures.md:84
+#: src/reference/host-futures.md:83
 msgid "`(args) -> T`"
 msgstr "`(args) -> T`"
 
 
-#: src/reference/host-futures.md:84
+#: src/reference/host-futures.md:83
 msgid "the decl row — a teaching trap, never dispatched"
 msgstr "声明行——一个教学式陷阱，绝不分派"
 
 
-#: src/reference/host-futures.md:85
+#: src/reference/host-futures.md:84
 msgid "`mypkg::fetch__start`"
 msgstr "`mypkg::fetch__start`"
 
 
-#: src/reference/host-futures.md:85
+#: src/reference/host-futures.md:84
 msgid "`(args) -> opaque`"
 msgstr "`(args) -> opaque`"
 
 
-#: src/reference/host-futures.md:85
+#: src/reference/host-futures.md:84
 msgid "calls the closure, boxes the `Completer` — the state cell"
 msgstr "调用闭包，把 `Completer` 装盒——状态单元"
 
 
-#: src/reference/host-futures.md:86
+#: src/reference/host-futures.md:85
 msgid "`mypkg::fetch__yield`"
 msgstr "`mypkg::fetch__yield`"
 
 
-#: src/reference/host-futures.md:86
+#: src/reference/host-futures.md:85
 msgid "`(state, cx) -> i32`"
 msgstr "`(state, cx) -> i32`"
 
 
-#: src/reference/host-futures.md:86
+#: src/reference/host-futures.md:85
 msgid "the resumption probe: 0 pending / 1 ready / 2 failed"
 msgstr "恢复探针：0 pending / 1 ready / 2 failed"
 
 
-#: src/reference/host-futures.md:87
+#: src/reference/host-futures.md:86
 msgid "`mypkg::fetch__take`"
 msgstr "`mypkg::fetch__take`"
 
 
-#: src/reference/host-futures.md:87
+#: src/reference/host-futures.md:86
 msgid "`(state) -> T`"
 msgstr "`(state) -> T`"
 
 
-#: src/reference/host-futures.md:87
+#: src/reference/host-futures.md:86
 msgid ""
 "marshals the answer onto the heap **on the VM thread**; a failure traps here"
 msgstr "**在 VM 线程上**把答案编组到堆上；失败在这里触发陷阱"
 
 
-#: src/reference/host-futures.md:88
+#: src/reference/host-futures.md:87
 msgid "`mypkg::fetch__cancel`"
 msgstr "`mypkg::fetch__cancel`"
 
 
-#: src/reference/host-futures.md:88
+#: src/reference/host-futures.md:87
 msgid "`(state)`"
 msgstr "`(state)`"
 
 
-#: src/reference/host-futures.md:88
+#: src/reference/host-futures.md:87
 msgid "the abort closure when one is given; otherwise the disclosed no-op"
 msgstr "给定了 abort 闭包时就是它；否则是明示的空操作"
 
 
-#: src/reference/host-futures.md:90
+#: src/reference/host-futures.md:89
 msgid ""
 "The abort-closure form receives a `Completer<T>` clone (safe to move anywhere); without it, cancellation is the documented best-effort law — the thread finishes, the late result is discarded."
 msgstr ""
 "abort 闭包形式会收到一个 `Completer<T>` 克隆（可以移动到任何地方）；没有它时，取消就是已记录在案的尽力而为法则——线程跑完，迟到的结果被丢弃。"
 
 
-#: src/reference/host-futures.md:94
+#: src/reference/host-futures.md:93
 msgid ""
 "Rut side, the closure's own surface is invisible — callers see a normal async fn (the cx is injected, never spelled):"
 msgstr ""
 
 
-#: src/reference/host-futures.md:97
+#: src/reference/host-futures.md:96
 msgid ""
 "```rut\n"
 "use futures::{ launch_future, sleep };\n"
@@ -18621,49 +18633,49 @@ msgid ""
 msgstr ""
 
 
-#: src/reference/host-futures.md:117
+#: src/reference/host-futures.md:116
 msgid "The embedder's loop"
 msgstr "嵌入方的循环"
 
 
-#: src/reference/host-futures.md:119
+#: src/reference/host-futures.md:118
 msgid "The engine polls every future parked on a completer:"
 msgstr "引擎轮询每一个停放在 completer 上的 future："
 
 
-#: src/reference/host-futures.md:124
+#: src/reference/host-futures.md:123
 msgid ""
 "// drain + poll + drain\n"
 msgstr ""
 "// drain + poll + drain\n"
 
 
-#: src/reference/host-futures.md:129
+#: src/reference/host-futures.md:128
 msgid ""
 "`run_ready()` drains the ready queue, polls the parked host futures (each poll runs the `__yield` probe; a ready one is driven through `__take` and its awaiter re-enqueued), then drains again — one pass settles a completed host future end to end. `vm.pending_tasks()` counts ready frames, armed timers, and the host-pending set, so a worker that never completes keeps the loop alive — the flip side of best-effort cancellation."
 msgstr ""
 "`run_ready()` 排空就绪队列，轮询停放中的宿主 future（每次轮询运行 `__yield` 探针；就绪者经由 `__take` 被驱动，其 awaiter 重新入队），然后再排空一次——一趟就把一个已完成的宿主 future 端到端落定。`vm.pending_tasks()` 统计就绪帧、已布防定时器和宿主 pending 集，因此一个永不完成的 worker 会让循环一直活着——这是尽力而为取消的另一面。"
 
 
-#: src/reference/host-futures.md:137
+#: src/reference/host-futures.md:136
 msgid ""
 "The virtual clock works here too: drive with finite fuel and `vm.set_now` for deterministic tests ([resource limits](resource-limits.md))."
 msgstr "虚拟时钟在这里同样适用：以有限燃料驱动并配合 `vm.set_now` 做确定性测试（[资源限制](resource-limits.md)）。"
 
 
-#: src/reference/host-futures.md:141
+#: src/reference/host-futures.md:140
 msgid "In-tree users"
 msgstr "树内使用者"
 
 
-#: src/reference/host-futures.md:143
+#: src/reference/host-futures.md:142
 msgid ""
 "The standard HTTP lane is a `register_async!` client: `http_send` (living in the surface tree's `net/` mod), `http_body`, and `http_stream_next` (in `stream/`) are `pub host async fn` rows whose bodies park `Completer`s answered from reqwest worker threads (or the fixture lane's virtual clock); the registrations spell the paths (`\"net::http_send__start\"` et al). Mount it with `rut/http_host` + `rut/http`; the full walk-through is [the GitHub viewer example](../examples/06-github-viewer-cli.md)."
 msgstr ""
 "标准 HTTP 链路就是一个 `register_async!` 客户端：`http_send`（住在表面树的 `net/` 模块里）、`http_body` 与 `http_stream_next`（在 `stream/` 里）都是 `pub host async fn` 行，它们的体停放一些 `Completer`，由 reqwest 的 worker 线程（或夹具链路的虚拟时钟）应答；注册名写明路径（`\"net::http_send__start\"` 等）。用 `rut/http_host` + `rut/http` 挂载它；完整演练见 [GitHub 查看器示例](../examples/06-github-viewer-cli.md)。"
 
 
-#: src/reference/host-futures.md:152
+#: src/reference/host-futures.md:151
 msgid ""
 "Plain `host fn` rows (synchronous, run to completion inside the crossing) are the other half of the boundary — see [embedding and native modules](embedding.md)."
 msgstr "普通的 `host fn` 行（同步的，在跨越内部一次运行到底）是边界的另一半——见[嵌入与原生模块](embedding.md)。"
@@ -18822,7 +18834,7 @@ msgstr ""
 "**表面 `mod` 树下的行以作用域相对路径注册。** `type = \"host\"` 包可以把表面组织成一棵模块树（`.d.rut` 里的 `pub mod net;`，各行在 `net/mod.d.rut` —— [项目结构](project-structure.md)）；`net/` 下的一行声明为 `pkg::net::name`，其函数体以**不含**包作用域的路径拼法注册 —— 作用域只在安装时加一次前缀："
 
 
-#: src/reference/embedding.md:107 src/reference/host-fns.md:277
+#: src/reference/embedding.md:107 src/reference/host-fns.md:279
 msgid "\"http_host\""
 msgstr ""
 
@@ -19785,570 +19797,628 @@ msgid "`vm.resume::<R>()`"
 msgstr "`vm.resume::<R>()`"
 
 
+#: src/reference/embedding.md:432
+msgid "`vm.run_until_idle(wait) -> Result<Idle, Trap>`"
+msgstr "`vm.run_until_idle(wait) -> Result<Idle, Trap>`"
+
+
+#: src/reference/embedding.md:432
+msgid ""
+"the driving protocol — the one loop a host needs ([the contract](#the-embedders-driving-contract))"
+msgstr "驱动协议——宿主所需的唯一循环（[契约](#the-embedders-driving-contract)）"
+
+
+#: src/reference/embedding.md:433
+msgid "`Wait::Block` / `Wait::NonBlock`"
+msgstr "`Wait::Block` / `Wait::NonBlock`"
+
+
+#: src/reference/embedding.md:433
+msgid ""
+"the parking policy: `Block` parks on host completions (the native lane); `NonBlock` never parks — it answers `Idle::WouldBlock` (the wasm lane)"
+msgstr ""
+"停放策略：`Block` 在宿主完成上停放（原生车道）；`NonBlock` 绝不停放——它应答 `Idle::WouldBlock`（wasm 车道）"
+
+
 #: src/reference/embedding.md:431
 msgid "resume a budget-parked call after refueling"
 msgstr "在补充燃料之后恢复一次因预算而停放的调用"
 
 
-#: src/reference/embedding.md:432
+#: src/reference/embedding.md:434
 msgid "`vm.run_ready()`"
 msgstr "`vm.run_ready()`"
 
 
-#: src/reference/embedding.md:432
+#: src/reference/embedding.md:434
 msgid "drain the async ready queue once; returns frames run"
 msgstr "排空一次异步就绪队列；返回运行的帧数"
 
 
-#: src/reference/embedding.md:433
+#: src/reference/embedding.md:435
 msgid "the earliest timer deadline, if any"
 msgstr "最早的定时器期限（若有）"
 
 
-#: src/reference/embedding.md:434
+#: src/reference/embedding.md:436
 msgid "`vm.set_now(t_ms)`"
 msgstr "`vm.set_now(t_ms)`"
 
 
-#: src/reference/embedding.md:434
+#: src/reference/embedding.md:436
 msgid "advance the virtual clock"
 msgstr "推进虚拟时钟"
 
 
-#: src/reference/embedding.md:435
+#: src/reference/embedding.md:437
 msgid "unfinished async work"
 msgstr "未完成的异步工作"
 
 
-#: src/reference/embedding.md:436
+#: src/reference/embedding.md:438
 msgid "`vm.fuel_used` / `vm.heap_usage()`"
 msgstr "`vm.fuel_used` / `vm.heap_usage()`"
 
 
-#: src/reference/embedding.md:436
+#: src/reference/embedding.md:438
 msgid "budget meters"
 msgstr "预算计量表"
 
 
-#: src/reference/embedding.md:437
+#: src/reference/embedding.md:439
 msgid "`vm.alloc_opaque_str(s)`"
 msgstr "`vm.alloc_opaque_str(s)`"
 
 
-#: src/reference/embedding.md:437
+#: src/reference/embedding.md:439
 msgid "mint an `opaque` box over host-built text (the logger's named logger)"
 msgstr "在宿主构建的文本之上铸造一个 `opaque` 盒（logger 的具名 logger）"
 
 
-#: src/reference/embedding.md:438
+#: src/reference/embedding.md:440
 msgid "`vm.call_host_row(row, &[Value])`"
 msgstr "`vm.call_host_row(row, &[Value])`"
 
 
-#: src/reference/embedding.md:438
+#: src/reference/embedding.md:440
 msgid "dispatch a registered row by name (test/tooling reads)"
 msgstr "按名称分派一个已注册的行（测试/工具用途的读取）"
 
 
-#: src/reference/embedding.md:440
-msgid "The canonical async driving loop (single-threaded; the host owns it):"
-msgstr "规范的异步驱动循环（单线程；由宿主拥有）："
-
-
-#: src/reference/embedding.md:446
+#: src/reference/embedding.md:444
 msgid ""
-"// advance to the next timer\n"
+"Build, call the entry, drive to idle, handle the trap — the engine owns the loop; the host names only its parking policy:"
+msgstr "构建、调用入口、驱动到空闲、处理陷阱——循环归引擎所有；宿主只指明自己的停放策略："
+
+
+#: src/reference/embedding.md:449
+msgid "// every frame retired\n"
+msgstr "// 每一帧都已退役\n"
+
+
+#: src/reference/embedding.md:450
+msgid "// NonBlock only\n"
+msgstr "// 仅 NonBlock\n"
+
+
+#: src/reference/embedding.md:451
+msgid "/* print and exit; other frames may stay pending */"
+msgstr "/* 打印并退出；其余帧可能仍挂起 */"
+
+
+#: src/reference/embedding.md:455
+msgid ""
+"**`Wait::Block`** — the native embedder's policy. When nothing but settling host futures remains, the driving thread parks on the machine's wake cell — every completer's `complete`/`fail` bumps it — and wakes only to work worth doing. A host worker that never completes hangs the run **by law**: no wall-clock budget, no hang guard — best-effort cancellation is the disclosed contract."
 msgstr ""
-"// advance to the next timer\n"
+"**`Wait::Block`**——原生嵌入方的策略。当只剩正在结算的宿主 future 时，驱动线程停放在机器的唤醒单元上——每个 completer 的 `complete`/`fail` 都会让它计数前进——并且只为值得做的工作醒来。一个永不完成的宿主 worker 会让运行挂起，这是**法则**：没有墙钟预算，没有挂起守卫——尽力而为的取消就是已披露的契约。"
 
 
-#: src/reference/embedding.md:453
+#: src/reference/embedding.md:461
 msgid ""
-"Cap the loop in embedders that cannot prove termination, so a program that never idles fails loudly instead of hanging."
-msgstr "在无法证明终止的嵌入方里给循环加上限，让永不空闲的程序响亮地失败，而不是挂死。"
+"**`Wait::NonBlock`** — never parks (the wasm lane: a JS host can only settle outside this call, so a parked thread could never wake). The door answers `Idle::WouldBlock` the moment only host-parked work remains, and the embedder yields and re-enters."
+msgstr ""
+"**`Wait::NonBlock`**——从不停放（wasm 车道：JS 宿主只能在此次调用之外结算，停放的线程永远无法醒来）。一旦只剩宿主停放的工作，这扇门就应答 `Idle::WouldBlock`，嵌入方让出并重新进入。"
 
 
-#: src/reference/embedding.md:456
+#: src/reference/embedding.md:465
+msgid ""
+"The first trap propagates as `Err(Trap)` — other frames may stay pending; the embedder exits."
+msgstr "第一个陷阱以 `Err(Trap)` 向外传播——其余帧可能仍处于挂起状态；嵌入方就此退出。"
+
+
+#: src/reference/embedding.md:468
+msgid ""
+"The raw doors under the protocol stay public for tooling and tests that drive by hand — `vm.run_ready()`, `vm.next_deadline()`, `vm.set_now(t_ms)`, `vm.pending_tasks()` — and the virtual clock keeps its law: drive with finite fuel and `vm.set_now` for deterministic tests ([resource limits](resource-limits.md))."
+msgstr ""
+"协议之下的原始门保持公开，供手工驱动的工具与测试使用——`vm.run_ready()`、`vm.next_deadline()`、`vm.set_now(t_ms)`、`vm.pending_tasks()`——虚拟时钟的法则依旧：给有限燃料并用 `vm.set_now` 驱动，即得确定性测试（[资源限制](resource-limits.md)）。"
+
+
+#: src/reference/embedding.md:442
+msgid "The embedder's driving contract"
+msgstr "嵌入方的驱动契约"
+
+
+#: src/reference/embedding.md:474
 msgid "Limits"
 msgstr "限制"
 
 
-#: src/reference/embedding.md:460
+#: src/reference/embedding.md:478
 msgid ""
 "// ops per turn; None = unlimited\n"
 msgstr ""
 "// ops per turn; None = unlimited\n"
 
 
-#: src/reference/embedding.md:462
+#: src/reference/embedding.md:480
 msgid ""
 "// construct-time cadence; nothing gates on it today\n"
 msgstr ""
 "// 构造期节奏字段；今天不约束任何东西\n"
 
 
-#: src/reference/embedding.md:466
+#: src/reference/embedding.md:484
 msgid ""
 "Exhaustion surfaces as a resumable trap ([resource limits](resource-limits.md)): fuel is ticked per op, the heap budget is charged at every allocation, and there is no separate interrupt lane. A trap inside re-entrant work propagates to the embedder parked at the host op; `vm.resume::<R>()` re-runs the turn."
 msgstr ""
 "耗尽以可恢复陷阱的形式浮现（[资源限制](resource-limits.md)）：燃料逐操作一跳，堆预算在每次分配时计费，且没有单独的中断车道。重入工作内部的陷阱会传播给停放在宿主操作处的嵌入方；`vm.resume::<R>()` 重新运行该轮。"
 
 
-#: src/reference/embedding.md:472
+#: src/reference/embedding.md:490
 msgid "Native fn rules"
 msgstr "原生函数规则"
 
 
-#: src/reference/embedding.md:474
+#: src/reference/embedding.md:492
 msgid ""
 "A body is `FnMut(&mut Vm, P…) -> R` or `-> Result<R, Trap>`; the Rust parameter types **are** the declared row (compile error at the register site for a type that does not cross — [value boundary](value-boundary.md))."
 msgstr ""
 "函数体是 `FnMut(&mut Vm, P…) -> R` 或 `-> Result<R, Trap>`；Rust 参数类型**就是**被声明的行（不可跨越的类型在注册点是编译错误——[值边界](value-boundary.md)）。"
 
 
-#: src/reference/embedding.md:477
+#: src/reference/embedding.md:495
 msgid ""
 "Native fns run **outside** the op budget. The host is trusted to be fast — or to hand the work to a future ([async host fns](host-fns.md))."
 msgstr "原生函数运行在操作预算**之外**。宿主被信任是快的——或者会把工作交给一个 future（[异步宿主函数](host-fns.md)）。"
 
 
-#: src/reference/embedding.md:479
+#: src/reference/embedding.md:497
 msgid ""
 "Re-entrancy: a body may call `vm.call` on rut exports. Nested calls draw the same fuel pool; borrows held by the outer body are guarded ([value boundary](value-boundary.md))."
 msgstr ""
 "重入：函数体可以对 rut 导出调用 `vm.call`。嵌套调用从同一个燃料池支取；外层函数体持有的借用受守卫保护（[值边界](value-boundary.md)）。"
 
 
-#: src/reference/embedding.md:482
+#: src/reference/embedding.md:500
 msgid ""
 "Failures are values: return `Err(Trap)` — `Trap { kind, msg }`. The fn traps cleanly and the error propagates as an `Err` to the embedder with the rut backtrace intact. Traps never unwind Rust."
 msgstr ""
 "失败是值：返回 `Err(Trap)`——`Trap { kind, msg }`。该函数干净地触发陷阱，错误作为一个 `Err` 连同完整的 rut 回溯传播给嵌入方。陷阱绝不 unwind Rust。"
 
 
-#: src/reference/embedding.md:486
+#: src/reference/embedding.md:504
 msgid "`TrapKind`"
 msgstr "`TrapKind`"
 
 
-#: src/reference/embedding.md:486
+#: src/reference/embedding.md:504
 msgid "raised by"
 msgstr "由何引发"
 
 
-#: src/reference/embedding.md:488
+#: src/reference/embedding.md:506
 msgid "budget exhaustion"
 msgstr "预算耗尽"
 
 
-#: src/reference/embedding.md:489 src/reference/cli.md:70
+#: src/reference/embedding.md:507 src/reference/cli.md:70
 msgid "heap limit"
 msgstr "堆上限"
 
 
-#: src/reference/embedding.md:490
+#: src/reference/embedding.md:508
 msgid "`Interrupted`"
 msgstr "`Interrupted`"
 
 
-#: src/reference/embedding.md:490
+#: src/reference/embedding.md:508
 msgid "reserved — no producer in this build (the interrupt lane does not exist)"
 msgstr "保留——本构建没有生产者（中断车道不存在）"
 
 
-#: src/reference/embedding.md:491
+#: src/reference/embedding.md:509
 msgid "`Overflow` / `DivByZero`"
 msgstr "`Overflow` / `DivByZero`"
 
 
-#: src/reference/embedding.md:491
+#: src/reference/embedding.md:509
 msgid "arithmetic"
 msgstr "算术"
 
 
-#: src/reference/embedding.md:492
+#: src/reference/embedding.md:510
 msgid "`IndexOutOfBounds`"
 msgstr "`IndexOutOfBounds`"
 
 
-#: src/reference/embedding.md:492
+#: src/reference/embedding.md:510
 msgid "sequence access"
 msgstr "序列访问"
 
 
-#: src/reference/embedding.md:493
+#: src/reference/embedding.md:511
 msgid "`Panic`"
 msgstr "`Panic`"
 
 
-#: src/reference/embedding.md:493
+#: src/reference/embedding.md:511
 msgid "`panic`"
 msgstr "`panic`"
 
 
-#: src/reference/embedding.md:494
+#: src/reference/embedding.md:512
 msgid "`BadUnbox`"
 msgstr "`BadUnbox`"
 
 
-#: src/reference/embedding.md:494
+#: src/reference/embedding.md:512
 msgid "a failed unbox"
 msgstr "一次失败的 unbox"
 
 
-#: src/reference/embedding.md:495
+#: src/reference/embedding.md:513
 msgid "`NilDeref`"
 msgstr "`NilDeref`"
 
 
-#: src/reference/embedding.md:495
+#: src/reference/embedding.md:513
 msgid "nil where a reference is required"
 msgstr "需要引用之处出现了 nil"
 
 
-#: src/reference/embedding.md:496
+#: src/reference/embedding.md:514
 msgid "`Invalid`"
 msgstr "`Invalid`"
 
 
-#: src/reference/embedding.md:496
+#: src/reference/embedding.md:514
 msgid "everything else, including boundary mismatches"
 msgstr "其余一切，包括边界不匹配"
 
 
-#: src/reference/embedding.md:498
+#: src/reference/embedding.md:516
 msgid "The engine's own natives"
 msgstr "引擎自有的原生设施"
 
 
-#: src/reference/embedding.md:500
+#: src/reference/embedding.md:518
 msgid ""
 "The VM boots with internal native calls in the same dispatch family — the `str`/`bytes` members, the `f\"...\"` concatenation lowering, array length/slice, and stack-trace capture. They are call slots fixed at boot, never IR-level special forms; hosts see them exactly like their own registered modules."
 msgstr ""
 "VM 启动时自带同一分派家族的内部原生调用——`str`/`bytes` 成员、`f\"...\"` 拼接的下降、数组 length/slice，以及栈追踪捕获。它们是启动时就固定的调用槽，绝不是 IR 级的特殊形式；宿主看到它们与看到自己注册的模块完全一样。"
 
 
-#: src/reference/embedding.md:506
+#: src/reference/embedding.md:524
 msgid "Host-side helpers (`rut-std`)"
 msgstr "宿主侧辅助设施（`rut-std`）"
 
 
-#: src/reference/embedding.md:508
+#: src/reference/embedding.md:526
 msgid ""
 "One `pkg()` builder per module; each rides the chain — `.pkg(rut_std::math::pkg())` — and installs at `.compile()` against the rows snapshot (see [host fns](host-fns.md) for the asymmetric contract — an unmounted scope merges inert, so hosts blanket-install their subset):"
 msgstr ""
 "每个模块一个 `pkg()` 构建器；各自搭载在链上 —— `.pkg(rut_std::math::pkg())` —— 并在 `.compile()` 时对着行快照安装（非对称契约见[宿主函数](host-fns.md) —— 未挂载的作用域惰性合并，宿主因此可以全量安装自己的子集）："
 
 
-#: src/reference/embedding.md:514
+#: src/reference/embedding.md:532
 msgid "builder"
 msgstr ""
 
 
-#: src/reference/embedding.md:514
+#: src/reference/embedding.md:532
 msgid "binds"
 msgstr "绑定"
 
 
-#: src/reference/embedding.md:516 src/reference/cli.md:77
+#: src/reference/embedding.md:534 src/reference/cli.md:77
 msgid "`math::pkg()`"
 msgstr "`async_host::pkg()`"
 
 
-#: src/reference/embedding.md:516
+#: src/reference/embedding.md:534
 msgid "`calc`'s float functions, both widths"
 msgstr "`calc` 的浮点函数，两种宽度皆有"
 
 
-#: src/reference/embedding.md:517
+#: src/reference/embedding.md:535
 msgid "`logger::pkg(sink)`"
 msgstr "`logger::pkg(sink)`"
 
 
-#: src/reference/embedding.md:517
+#: src/reference/embedding.md:535
 msgid "`ink_host`'s two rows, routed to a `FnMut(&str)` sink"
 msgstr "`ink_host` 的两行，路由到一个 `FnMut(&str)` 汇点"
 
 
-#: src/reference/embedding.md:518 src/reference/cli.md:79
+#: src/reference/embedding.md:536 src/reference/cli.md:79
 msgid "`nmap::pkg()`"
 msgstr "`http::pkg()`"
 
 
-#: src/reference/embedding.md:518
+#: src/reference/embedding.md:536
 msgid "the native key table behind `nmapset` ([stdlib](stdlib.md))"
 msgstr "`nmapset` 背后的原生键表（[标准库](stdlib.md)）"
 
 
-#: src/reference/embedding.md:519
+#: src/reference/embedding.md:537
 msgid "`strbuild::pkg()`"
 msgstr "`strbuild::pkg()`"
 
 
-#: src/reference/embedding.md:519
+#: src/reference/embedding.md:537
 msgid ""
 "the string builder's rows behind `strbuild` ([stdlib](stdlib.md)) — growth is charged against the embedder's heap budget"
 msgstr "`strbuild` 之后的字符串构建器各行（[标准库](stdlib.md)）——增长按嵌入方的堆预算记账"
 
 
-#: src/reference/embedding.md:520 src/reference/cli.md:81
+#: src/reference/embedding.md:538 src/reference/cli.md:81
 msgid "`async_host::pkg()`"
 msgstr "`async_host::pkg()`"
 
 
-#: src/reference/embedding.md:520
+#: src/reference/embedding.md:538
 msgid "the launcher rows (`__launch`/`__abort`/`__sleep`/`__sleep_yield`)"
 msgstr "启动器各行（`__launch`/`__abort`/`__sleep`/`__sleep_yield`）"
 
 
-#: src/reference/embedding.md:521 src/reference/embedding.md:531
+#: src/reference/embedding.md:539 src/reference/embedding.md:549
 #: src/reference/cli.md:82
 msgid "`http::pkg()`"
 msgstr "`http::pkg()`"
 
 
-#: src/reference/embedding.md:521
+#: src/reference/embedding.md:539
 msgid ""
 "the std HTTP lanes over reqwest (native builds; the `http` cargo feature, default-off); `http::pkg_with(f)` is the fixture twin, returning `(HostPkg, HttpFixture)`; `http::pkg_over(Arc<dyn HttpBackend>)` binds the same seven rows over YOUR transport, and on wasm32 `http_wasm::pkg_fetch()` binds them over the browser's `fetch` ([below](#the-std-http-lane--your-own-transport-pkg_over)). The `http_host` surface is a mod tree — the rows register scope-relatively (`net::http_send` + the readbacks, `stream::http_body`/`http_stream_next`)"
 msgstr ""
 "reqwest 之上的 std HTTP 链路（原生构建；`http` cargo 特性，默认关闭）；`http::pkg_with(f)` 是夹具孪生，返回 `(HostPkg, HttpFixture)`；`http::pkg_over(Arc<dyn HttpBackend>)` 把同样的七行绑定到你自己的传输之上，而在 wasm32 上 `http_wasm::pkg_fetch()` 把它们绑定到浏览器的 `fetch` 之上（[见下](#the-std-http-lane--your-own-transport-pkg_over)）。`http_host` 表面是一棵模块树——各行以作用域相对路径注册（`net::http_send` 与各读回、`stream::http_body`/`http_stream_next`）"
 
 
-#: src/reference/embedding.md:522 src/reference/cli.md:80
+#: src/reference/embedding.md:540 src/reference/cli.md:80
 msgid "`bench_cross::pkg()`"
 msgstr "`bench_cross::pkg()`"
 
 
-#: src/reference/embedding.md:522 src/reference/stdlib.md:135
+#: src/reference/embedding.md:540 src/reference/stdlib.md:135
 msgid "the crossing-tax benchmark rows"
 msgstr "跨越税基准测试行"
 
 
-#: src/reference/embedding.md:524
+#: src/reference/embedding.md:542
 msgid "The std HTTP lane — your own transport (`pkg_over`)"
 msgstr "std HTTP 链路——你自己的传输（`pkg_over`）"
 
 
-#: src/reference/embedding.md:526
+#: src/reference/embedding.md:544
 msgid ""
 "rut-std carries no HTTP client of its own. The seven `http_host` rows are the surface; the transport is a door the embedder picks:"
 msgstr "rut-std 自己不带 HTTP 客户端。七条 `http_host` 行是表面；传输是嵌入方挑选的一扇门："
 
 
-#: src/reference/embedding.md:529
+#: src/reference/embedding.md:547
 msgid "transport"
 msgstr "传输"
 
 
-#: src/reference/embedding.md:529
+#: src/reference/embedding.md:547
 msgid "gate"
 msgstr "门控"
 
 
-#: src/reference/embedding.md:531
+#: src/reference/embedding.md:549
 msgid "reqwest (one shared blocking client, one worker thread per request)"
 msgstr "reqwest（一个共享的阻塞式客户端，每个请求一条 worker 线程）"
 
 
-#: src/reference/embedding.md:531
+#: src/reference/embedding.md:549
 msgid "the `http` cargo feature; native targets only"
 msgstr "`http` cargo 特性；仅原生目标"
 
 
-#: src/reference/embedding.md:532
+#: src/reference/embedding.md:550
 msgid "`http::pkg_with(f)`"
 msgstr ""
 
 
-#: src/reference/embedding.md:532
+#: src/reference/embedding.md:550
 msgid ""
 "an injectable fixture keyed on method+URL, walking its chunk schedule on the virtual clock"
 msgstr "注入式夹具，以方法 + URL 为键，在虚拟时钟上走完它的数据块时间表"
 
 
-#: src/reference/embedding.md:532
+#: src/reference/embedding.md:550
 msgid "feature-free; returns the `HttpFixture` settle handle"
 msgstr "不依赖特性；返回 `HttpFixture` 结算句柄"
 
 
-#: src/reference/embedding.md:533
+#: src/reference/embedding.md:551
 msgid "`http::pkg_over(backend)`"
 msgstr ""
 
 
-#: src/reference/embedding.md:533
+#: src/reference/embedding.md:551
 msgid "YOUR backend — any `Arc<dyn HttpBackend>`"
 msgstr "你自己的后端——任意 `Arc<dyn HttpBackend>`"
 
 
-#: src/reference/embedding.md:533
+#: src/reference/embedding.md:551
 msgid "feature-free"
 msgstr "不依赖特性"
 
 
-#: src/reference/embedding.md:534
+#: src/reference/embedding.md:552
 msgid "`http_wasm::pkg_fetch()`"
 msgstr ""
 
 
-#: src/reference/embedding.md:534
+#: src/reference/embedding.md:552
 msgid "the browser window's `fetch`"
 msgstr "浏览器窗口的 `fetch`"
 
 
-#: src/reference/embedding.md:534
+#: src/reference/embedding.md:552
 msgid "the `http-wasm` cargo feature, wasm32 only"
 msgstr "`http-wasm` cargo 特性，仅 wasm32"
 
 
-#: src/reference/embedding.md:536
+#: src/reference/embedding.md:554
 msgid "All four bind the same rows over the same seam — only `send` differs."
 msgstr "四扇门把同样的行绑定在同一条接缝之上——只有 `send` 不同。"
 
 
-#: src/reference/embedding.md:538
+#: src/reference/embedding.md:556
 msgid "The `HttpBackend` contract"
 msgstr "`HttpBackend` 契约"
 
 
-#: src/reference/embedding.md:540
+#: src/reference/embedding.md:558
 msgid "One trait, one method — the whole transport:"
 msgstr "一个 trait，一个方法——传输的全部："
 
 
-#: src/reference/embedding.md:548
+#: src/reference/embedding.md:566
 msgid ""
 "`HttpRequest { method, url, headers, body }` carries the crossing parts verbatim: the canonical verb, the `\"\\n\"`\\-joined `Name: value` header block (empty = none), and the raw body bytes (empty = none — the disclosed empty-vs-none merge)."
 msgstr ""
 "`HttpRequest { method, url, headers, body }` 原样携带跨越部分：规范的动词、`\"\\n\"`\\-拼接的 `Name: value` 头部块（空即无），以及原始的响应体字节（空即无——已明示的空与无合并）。"
 
 
-#: src/reference/embedding.md:553
+#: src/reference/embedding.md:571
 msgid "The contract, in order:"
 msgstr "契约，依序是："
 
 
-#: src/reference/embedding.md:555
+#: src/reference/embedding.md:573
 msgid ""
 "**Answer `out` exactly ONCE, at HEADERS.** Success mints through `HttpResponse::streaming(status)` — it returns the response half (complete `out` with it; `send` resolves here) and an `HttpBodyWriter` you keep. Transport trouble completes with `HttpResponse::failed(msg)` — status 0 plus the message; its body is born dead, so the read lanes degrade to empty / immediate EOF. A double complete is NOT loud: the `Completer` contract is last-write-wins (the second answer overwrites the slot, the first is silently lost; a late answer after the take is never taken). \"Exactly once\" is the discipline, not an enforced invariant."
 msgstr ""
 "**应答 `out` 恰好一次，在响应头。**成功经 `HttpResponse::streaming(status)` 铸造——它返回响应的那一半（用它完成 `out`；`send` 在此解析）和一个由你持有的 `HttpBodyWriter`。传输故障则以 `HttpResponse::failed(msg)` 完成——状态码 0 加消息；其响应体生来即死，因此各读链路退化为空 / 立即 EOF。双重完成不会响：`Completer` 契约是后写者胜（第二个应答覆盖槽位，第一个被无声丢弃；取走之后的迟到应答永不入账）。“恰好一次”是纪律，不是被强制的不变量。"
 
 
-#: src/reference/embedding.md:565
+#: src/reference/embedding.md:583
 msgid ""
 "**Then drive the writer — from any thread**: `push_chunk(bytes)` feeds one chunk (a parked stream read takes the queue's front, FIFO), `end()` is the clean EOF, `fail(msg)` the sticky mid-read death (the queued chunks stay readable — they did arrive). The terminal flags are sticky."
 msgstr ""
 "**然后驱动写入器——从任何线程**：`push_chunk(bytes)` 喂入一个数据块（停放的流读取取走队首，FIFO），`end()` 是干净的 EOF，`fail(msg)` 是粘性的读取中途死亡（已排队的数据块仍可读——它们确实到达了）。终止标志是粘性的。"
 
 
-#: src/reference/embedding.md:570
+#: src/reference/embedding.md:588
 msgid ""
 "**Never block the VM thread.** Do the wire work on your own threads/tasks; the completer and the writer (atomics + a Mutex slot, waiters completed outside it) are the only shared state. This is also why `push_chunk` is safe to park on: it is YOUR worker thread that stalls, never the VM."
 msgstr ""
 "**绝不阻塞 VM 线程。**把线上的活交给自己的线程/任务去做；completer 与写入器（原子量 + 一个 Mutex 槽位，等待者在锁外完成）是仅有的共享状态。这也是 `push_chunk` 可以安全停放的原因：停住的是你自己的 worker 线程，绝不是 VM。"
 
 
-#: src/reference/embedding.md:576
+#: src/reference/embedding.md:594
 msgid ""
 "Backpressure is inherited, not implemented: `push_chunk` is the budget gate's home — once `HttpBodyWriter::DEFAULT_STREAM_BUDGET_BYTES` (64 × 16 KiB ≈ 1 MiB) sits queued and unread, the next push PARKS the calling thread until readers drain below the bound (the one-shot body drain stands the gate down — its answer IS the whole body). A slow guest backs the pressure out to your socket; you get TCP flow control for free. Cancel is a probe: a guest-cancelled read marks the source through the pkg's cancel registry, `writer.cancelled()` goes true, and a backend that checks it between chunks drops its response there — the connection closes with the cancelled frame. A backend that never checks keeps the disclosed best-effort lane (the mark is sticky; no reader ever sees more than `nil` + `read_error() == \"cancelled\"`)."
 msgstr ""
 "背压是继承来的，不是自己实现的：`push_chunk` 是预算门的住址——一旦 `HttpBodyWriter::DEFAULT_STREAM_BUDGET_BYTES`（64 × 16 KiB ≈ 1 MiB）排队且无人读取，下一次推送就会停放调用线程，直到读取者排到边界之下（一次性的响应体排干会让门收班——它的答案就是整个响应体）。缓慢的 guest 把压力一路顶回你的套接字；TCP 流量控制白拿。取消是一个探针：guest 取消的读取会经 pkg 的取消注册表标记数据源，`writer.cancelled()` 变为 true，在数据块之间检查它的后端就地丢弃自己的响应——连接随被取消的帧一起关闭。从不检查的后端保持已明示的尽力而为链路（标记是粘性的；读取者最多只会看到 `nil` + `read_error() == \"cancelled\"`）。"
 
 
-#: src/reference/embedding.md:589
+#: src/reference/embedding.md:607
 msgid "The minimal backend — a thread per request, the reqwest lane's own shape:"
 msgstr "最小后端——每个请求一条线程，reqwest 链路自己的形状："
 
 
-#: src/reference/embedding.md:605
+#: src/reference/embedding.md:623
 msgid ""
 "// HEADERS — send resolves here\n"
 msgstr "// 响应头——send 在此解析"
 
 
-#: src/reference/embedding.md:607
+#: src/reference/embedding.md:625
 msgid ""
 "// the wire-abort: drop the wire\n"
 msgstr "// 线路中止：丢掉这条线"
 
 
-#: src/reference/embedding.md:608
+#: src/reference/embedding.md:626
 msgid ""
 "// bounded — may park this thread\n"
 msgstr "// 有界——可能停放这条线程"
 
 
-#: src/reference/embedding.md:610
+#: src/reference/embedding.md:628
 msgid ""
 "// clean EOF\n"
 msgstr "// 干净的 EOF"
 
 
-#: src/reference/embedding.md:613
+#: src/reference/embedding.md:631
 msgid ""
 "// status 0\n"
 msgstr "// 状态码 0"
 
 
-#: src/reference/embedding.md:618
+#: src/reference/embedding.md:636
 msgid ""
 "// the seven rows bind over it like any host pkg:\n"
 msgstr "// 七条行像任何宿主 pkg 一样绑定在它之上："
 
 
-#: src/reference/embedding.md:626
+#: src/reference/embedding.md:644
 msgid "The wasm lane — `pkg_fetch`"
 msgstr "wasm 链路——`pkg_fetch`"
 
 
-#: src/reference/embedding.md:628
+#: src/reference/embedding.md:646
 msgid ""
 "On wasm32 the `http-wasm` cargo feature (target-gated `wasm-bindgen`/`web-sys`/`js-sys`, default-off like the reqwest lane) exposes `rut_std::http_wasm::pkg_fetch()` — the same seven rows over the browser's `fetch`, the playground's transport:"
 msgstr ""
 "在 wasm32 上，`http-wasm` cargo 特性（按目标门控的 `wasm-bindgen`/`web-sys`/`js-sys`，默认关闭，与 reqwest 链路一样）暴露 `rut_std::http_wasm::pkg_fetch()`——同样的七行骑在浏览器的 `fetch` 之上，Playground 的传输："
 
 
-#: src/reference/embedding.md:633
+#: src/reference/embedding.md:651
 msgid ""
 "`send` resolves at HEADERS: one `spawn_local` task awaits the `fetch`, mints `streaming(status)`, and keeps pumping the body on the same task through the `ReadableStream` default reader — ONE read per step, so the JS microtask queue drains between steps and the VM thread never blocks."
 msgstr ""
 "`send` 在响应头处解析：一个 `spawn_local` 任务 await 这个 `fetch`，铸造 `streaming(status)`，然后在同一个任务上经 `ReadableStream` 默认 reader 持续泵送响应体——每步一次读取，JS 微任务队列因此能在步与步之间排空，VM 线程绝不阻塞。"
 
 
-#: src/reference/embedding.md:638
+#: src/reference/embedding.md:656
 msgid ""
 "The budget gate's wasm flavor is park/resume: a JS thread has no condvar (a park there would block the whole world), so the pump checks `parked_at_budget()` between reads and re-arms itself one macrotask at a time; the guest's one-pop-per-await pacing drains below the bound and the next tick resumes the pump. The stream's internal buffer fills, the browser slows the socket — real backpressure all the same."
 msgstr ""
 "预算门的 wasm 风味是停放/恢复：JS 线程没有条件变量（在那里停放会阻塞整个世界），因此泵在读取之间检查 `parked_at_budget()`，一次一个宏任务地重新布防自己；guest 每次 await 只弹出一个数据块的节律把队列排到边界之下，下一个 tick 恢复泵。流的内部缓冲填满，浏览器放慢套接字——背压同样是真的。"
 
 
-#: src/reference/embedding.md:645
+#: src/reference/embedding.md:663
 msgid ""
 "Cancel is the same between-chunk wire-abort (the `cancelled()` probe drops the reader, the connection closes)."
 msgstr "取消是同一个数据块之间的线路中止（`cancelled()` 探针丢弃 reader，连接关闭）。"
 
 
-#: src/reference/embedding.md:648
+#: src/reference/embedding.md:666
 msgid ""
 "The RUN shape follows the thread: chunks land from JS microtasks, so they can never settle inside the synchronous `run` export. When a session's main has retired, no timer is armed, and only host completers remain pending, the wasm engine PARKS — the run envelope carries `\"parked\": true` beside a null trap — and `resume` re-drives the parked machine one macrotask leg at a time; a page pumps until idle. A window-less host (node, the smoke lane) answers the immediate status-0 transport failure — no JS call, no panic — so an offline run completes synchronously inside the first run envelope, body and stream lanes degrading exactly as `HttpResponse::failed` discloses."
 msgstr ""
 "RUN 形状随线程而来：数据块从 JS 微任务落地，所以它们绝不可能在同步的 `run` 导出内结算。当一个会话的 main 已退役、没有定时器布防、只剩宿主 completer 挂起时，wasm 引擎停放——run 信封携带 `\"parked\": true` 伴一个 null 陷阱——`resume` 以一次一条宏任务腿的节奏重新驱动停放的机器；页面泵送到空闲为止。无窗口的宿主（node，smoke 链路）应答立即的状态码 0 传输失败——没有 JS 调用，没有 panic——因此离线运行在第一个 run 信封内同步完成，响应体与流链路恰好按 `HttpResponse::failed` 明示的那样退化。"
 
 
-#: src/reference/embedding.md:659
+#: src/reference/embedding.md:677
 msgid "In-tree examples"
 msgstr "树内示例"
 
 
-#: src/reference/embedding.md:661
+#: src/reference/embedding.md:679
 msgid ""
 "[03 — Plugin](../examples/03-plugin.md): a Rust chat server driving a rut moderator plugin, loaded from a module directory and from a packed `.rutbundle`; re-entrant `emit` crossings."
 msgstr ""
 "[03 — 插件](../examples/03-plugin.md)：一个 Rust 聊天服务器驱动一个 rut 管理插件，从模块目录和打包好的 `.rutbundle` 加载；含重入的 `emit` 跨越。"
 
 
-#: src/reference/embedding.md:664
+#: src/reference/embedding.md:682
 msgid ""
 "[06 — GitHub viewer CLI](../examples/06-github-viewer-cli.md): walks the std packages, binds example-local I/O rows, launches an async entry fn, and pumps the driving loop to idle."
 msgstr "遍历 std 包，绑定示例本地的 I/O 行，启动异步 entry fn，并把驱动循环泵到空闲。"
@@ -21392,12 +21462,12 @@ msgstr ""
 
 #: src/reference/host-fns.md:270
 msgid ""
-"The embedder binds the family with one spelling; the closure spawns the work, hands out a completer clone, and returns. On the installer lane the row name is the scope-relative spelling — bare for a root row, the mod path for a row under a surface tree (`net::http_send`; the scope itself prefixes once, at the install):"
+"The embedder binds the family with one spelling; the sugar mints the wake-wired completer and hands it to the closure as its FIRST parameter — the closure spawns the work, hands out a clone, and returns (the cell is never minted by hand). On the installer lane the row name is the scope-relative spelling — bare for a root row, the mod path for a row under a surface tree (`net::http_send`; the scope itself prefixes once, at the install):"
 msgstr ""
-"嵌入方用一次拼写绑定整个家族；闭包生成工作、交出 completer 克隆并返回。在安装者车道上，行名是作用域相对拼写——根行是裸名，表面树下的一行带模块路径（`net::http_send`；作用域本身在安装时加一次前缀）："
+"嵌入方用一次拼写绑定整个家族；糖宏铸造接线好唤醒的 completer，并把它作为闭包的第一个参数交进来——闭包生成工作、交出一个克隆并返回（单元绝不手工铸造）。在安装者车道上，行名是作用域相对拼写——根行是裸名，表面树下的一行带模块路径（`net::http_send`；作用域本身在安装时加一次前缀）："
 
 
-#: src/reference/host-fns.md:278
+#: src/reference/host-fns.md:280
 msgid "\"net::http_send\""
 msgstr ""
 
@@ -21504,13 +21574,14 @@ msgstr "`Completer<T>` API"
 
 
 #: src/reference/host-fns.md:315
-msgid "`Completer::new()`"
-msgstr "`Completer::new()`"
+msgid "`Completer::with_wake(wakes)`"
+msgstr "`Completer::with_wake(wakes)`"
 
 
 #: src/reference/host-fns.md:315
-msgid "a fresh cell; `clone()` shares it (one `Arc`)"
-msgstr "一个新单元；`clone()` 共享它（一个 `Arc`）"
+msgid ""
+"the ONE mint — the row sugars call it and hand the body the cell; `clone()` shares it (one `Arc`)"
+msgstr "唯一的铸造入口——行糖宏调用它并把单元交给函数体；`clone()` 共享它（一个 `Arc`）"
 
 
 #: src/reference/host-fns.md:316
