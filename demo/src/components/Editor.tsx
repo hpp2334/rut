@@ -1,6 +1,10 @@
 import { Fragment, memo, useMemo, useRef, useState } from "react";
 import type { OverlaySpan } from "../lsp/overlay";
-import type { LspCompletionItem, LspDiag } from "../lsp/rut-lsp";
+import type {
+  LspCompletionItem,
+  LspDiag,
+  LspSignatureHelp,
+} from "../lsp/rut-lsp";
 
 /** What the analyzer layer hands the editor: the overlay spans (token
  * classes + squiggle marks already cut) and the raw diags for the
@@ -23,6 +27,18 @@ export type CompletionSource = (
   src: string,
 ) => Promise<LspCompletionItem[]>;
 
+/**
+ * the signature source — the editor bubble's one query, answered by
+ * the binding's `signatureHelp` (the doc-sync law: the live text
+ * rides the call — the bubble fires the instant `(` is typed, an
+ * analyze debounce may still be pending)
+ */
+export type SignatureSource = (
+  line: number,
+  character: number,
+  src: string,
+) => Promise<LspSignatureHelp | null>;
+
 /** must match .editor-input's padding in styles.css */
 const PAD_X = 12;
 const PAD_Y = 10;
@@ -34,6 +50,15 @@ const TRIGGER_CHARS = new Set(["{", ":", "."]);
 /** the max rows the popup lists before it scrolls */
 const POPUP_MAX_ROWS = 9;
 
+/** the characters whose keystroke opens the signature bubble (D5:
+ * the call shape — the textarea has no auto-pairs and no host widget,
+ * so the editor drives the lifecycle itself) */
+const SIG_TRIGGER_CHARS = new Set(["(", ",", ")"]);
+/** the bubble's estimated pixel height while its answer is still
+ * unknown — the flip math's placeholder (label row + one doc row +
+ * padding) */
+const SIG_EST_H = 48;
+
 /** the popup's live state — the items, the selected row, and the
  * caret coordinates (editor-body-relative, already scroll-adjusted) */
 interface CompletionPopup {
@@ -42,6 +67,62 @@ interface CompletionPopup {
   x: number;
   y: number;
   flipUp: boolean;
+}
+
+/** the signature bubble's live state — the one help answer (the core
+ * emits exactly one signature) and the anchor coordinates
+ * (editor-body-relative, the completion popup's own math) */
+interface SigHint {
+  help: LspSignatureHelp;
+  x: number;
+  y: number;
+}
+
+/** the bubble's pixel-height estimate for the flip math: the label
+ * row plus one row per doc line (the styles' line heights, rounded) */
+function sigEstH(help: LspSignatureHelp): number {
+  const sig =
+    help.signatures[help.activeSignature ?? 0] ?? help.signatures[0];
+  const docs = sig?.documentation?.value.split("\n").length ?? 0;
+  return 30 + 18 + docs * 16;
+}
+
+/** the bubble's one signature line (D6): the verbatim `label` with
+ * the ACTIVE parameter's piece bolded — each `parameters[i].label`
+ * is a substring of the label (the LSP contract the core already
+ * guarantees), and the search resumes after each earlier piece so
+ * repeated piece texts cannot grab the wrong slot. No bold when the
+ * piece is missing or not found; a zero-param call renders the bare
+ * label (no slot — `activeParameter` is null). */
+function SigLabel(props: {
+  sig: LspSignatureHelp["signatures"][number];
+  active: number | null;
+}): JSX.Element {
+  const { label } = props.sig;
+  const params = props.sig.parameters ?? [];
+  const piece =
+    props.active !== null ? params[props.active]?.label : undefined;
+  if (props.active === null || piece === undefined) {
+    return <span className="sig-label">{label}</span>;
+  }
+  let from = 0;
+  for (let i = 0; i < props.active; i++) {
+    const prev = params[i]?.label;
+    const at = prev !== undefined ? label.indexOf(prev, from) : -1;
+    if (at < 0) break;
+    from = at + prev.length;
+  }
+  const at = label.indexOf(piece, from);
+  if (at < 0) {
+    return <span className="sig-label">{label}</span>;
+  }
+  return (
+    <span className="sig-label">
+      {label.slice(0, at)}
+      <b className="sig-active">{piece}</b>
+      {label.slice(at + piece.length)}
+    </span>
+  );
 }
 
 /** One overlay line (the M-1 memo boundary): the row bails unless its
@@ -97,12 +178,22 @@ const OverlayLine = memo(function OverlayLine(props: {
  * Ctrl+Space open it, the walk-mounted world answers through the
  * `completions` source, and Enter/Tab/click inserts — the auto-import
  * tier's `additionalTextEdits` (the fresh `use` line) apply with it.
+ *
+ * The signature bubble (D5/D6): the editor drives the lifecycle itself
+ * — opens on `(`/`,`/`)` keystrokes, re-requests on every edit
+ * keystroke while open (LAST-WINS token), self-closes on a `null`
+ * answer, and closes on Escape (before the blur lane), blur, scroll,
+ * and a caret-moving click. The bubble renders the ONE signature the
+ * core emits with the active parameter's piece bolded, anchored at
+ * the caret with the popup's own metrics/flip math. Hidden entirely
+ * when `signatures` is absent.
  */
 export function Editor(props: {
   value: string;
   onChange: (src: string) => void;
   highlight?: Highlight | null;
   completions?: CompletionSource;
+  signatures?: SignatureSource;
 }): JSX.Element {
   const [lineCount, setLineCount] = useState(countLines(props.value));
   // the gutter follows the value on EVERY path: typing updates it in
@@ -124,6 +215,14 @@ export function Editor(props: {
   const [popup, setPopup] = useState<CompletionPopup | null>(null);
   /** the latest request's token — a stale answer never lands */
   const completionToken = useRef(0);
+
+  // ---- the signature bubble ----
+  const [sigHint, setSigHint] = useState<SigHint | null>(null);
+  /** the latest request's token — a stale answer never lands */
+  const sigToken = useRef(0);
+  /** the caret when the current mousedown landed — the click lane
+   * compares against it so only a CARET-MOVING click closes */
+  const clickCaret = useRef<number | null>(null);
 
   /** the textarea's metrics (the diag tip's own math): char width off
    * the probe, line height off the computed style */
@@ -195,6 +294,46 @@ export function Editor(props: {
       });
   };
 
+  /** fire one signature-help request at the caret; a `null` answer
+   * closes the bubble (D5's self-close). LAST-WINS on the token. The
+   * anchor is the completion popup's own math: below the caret row,
+   * flipped above when the body's bottom would clip it. */
+  const requestSignatures = () => {
+    const ta = inputRef.current;
+    if (!ta || !props.signatures) return;
+    const src = ta.value;
+    const m = metrics();
+    if (!m) return;
+    const caret = ta.selectionStart;
+    const [line, ch] = caretPos(src, caret);
+    const body = bodyRef.current;
+    const bodyH = body ? body.getBoundingClientRect().height : 0;
+    const estH = sigHint ? sigEstH(sigHint.help) : SIG_EST_H;
+    const belowY = PAD_Y + (line + 1) * m.lineH - ta.scrollTop;
+    const x = Math.min(
+      Math.max(PAD_X + ch * m.charW - ta.scrollLeft, 4),
+      (body?.clientWidth ?? 400) - 220,
+    );
+    const flipUp = belowY + estH > bodyH && belowY - m.lineH - estH > 0;
+    const token = ++sigToken.current;
+    void props
+      .signatures(line, ch, src)
+      .then((help) => {
+        if (token !== sigToken.current) return; // stale
+        if (!help || help.signatures.length === 0) {
+          setSigHint(null); // the null answer self-closes (D5)
+          return;
+        }
+        const y = flipUp
+          ? PAD_Y + line * m.lineH - ta.scrollTop - sigEstH(help)
+          : belowY;
+        setSigHint({ help, x, y });
+      })
+      .catch(() => {
+        if (token === sigToken.current) setSigHint(null);
+      });
+  };
+
   /** insert one item at the caret: the half-typed word before the
    * caret becomes the label, and the auto-import tier's
    * `additionalTextEdits` (a fresh `use pkg::{ Name };` line) apply
@@ -226,6 +365,7 @@ export function Editor(props: {
       if (!e.isLabel && e.end <= wordStart) caret += e.text.length - (e.end - e.start);
     }
     setPopup(null);
+    setSigHint(null); // the text moved under any open bubble
     props.onChange(next);
     requestAnimationFrame(() => {
       ta.selectionStart = ta.selectionEnd = caret;
@@ -255,6 +395,14 @@ export function Editor(props: {
         setPopup(null);
         return;
       }
+    }
+    // the signature bubble's Escape — one press closes it BEFORE the
+    // blur lane (the H-3 un-trap unchanged: with no bubble open,
+    // Escape still blurs and forwards out of the editor)
+    if (sigHint && e.key === "Escape") {
+      e.preventDefault();
+      setSigHint(null);
+      return;
     }
     // Ctrl+Space: the manual trigger — always requests
     if (e.key === " " && (e.ctrlKey || e.metaKey)) {
@@ -287,6 +435,7 @@ export function Editor(props: {
       overlayRef.current.scrollLeft = scrollLeft;
     }
     setPopup(null); // a scrolled popup misplaces the caret anchor
+    setSigHint(null); // so does a scrolled bubble
     hideTip();
   };
 
@@ -294,11 +443,20 @@ export function Editor(props: {
     const ta = e.target;
     props.onChange(ta.value);
     setLineCount(countLines(ta.value));
+    const caret = ta.selectionStart;
+    const prevCh = caret > 0 ? ta.value[caret - 1] : "";
+    // the signature bubble's lane (D5): a call-shape keystroke opens
+    // it, and while it is open EVERY edit keystroke re-requests — a
+    // null answer self-closes it (the LAST-WINS token orders the race)
+    if (
+      props.signatures &&
+      (SIG_TRIGGER_CHARS.has(prevCh) || sigHint !== null)
+    ) {
+      requestSignatures();
+    }
     // the auto-trigger: a trigger char opens the popup, a word
     // keystroke refreshes the open one, anything else closes it
     if (!props.completions) return;
-    const caret = ta.selectionStart;
-    const prevCh = caret > 0 ? ta.value[caret - 1] : "";
     const isWord = /[A-Za-z0-9_]/.test(prevCh);
     if (TRIGGER_CHARS.has(prevCh) || (popup !== null && isWord)) {
       requestCompletions();
@@ -370,6 +528,13 @@ export function Editor(props: {
   // the overlay's content is the value byte-for-byte
   const valueEndsNl = props.value.charCodeAt(props.value.length - 1) === 10;
 
+  // the bubble's ONE signature (the core emits exactly one) — resolved
+  // here so the JSX stays flat
+  const sigHintSig = sigHint
+    ? (sigHint.help.signatures[sigHint.help.activeSignature ?? 0] ??
+      sigHint.help.signatures[0])
+    : undefined;
+
   return (
     <div className="editor">
       <div className="editor-gutter" ref={gutterRef}>
@@ -402,9 +567,53 @@ export function Editor(props: {
           onKeyDown={onKeyDown}
           onScroll={onScroll}
           onMouseMove={onMouseMove}
-          onBlur={() => setPopup(null)}
+          onMouseDown={(e) => {
+            // the click lane's baseline: the caret position BEFORE
+            // the browser moved it
+            clickCaret.current = e.currentTarget.selectionStart;
+          }}
+          onClick={(e) => {
+            // a caret-moving click closes the bubble (D5) — a plain
+            // click that did not move the caret leaves it open
+            const ta = e.currentTarget;
+            if (
+              sigHint !== null &&
+              clickCaret.current !== null &&
+              ta.selectionStart !== clickCaret.current
+            ) {
+              setSigHint(null);
+            }
+          }}
+          onBlur={() => {
+            setPopup(null);
+            setSigHint(null);
+          }}
         />
         <div className="editor-tip" ref={tipRef} hidden />
+        {sigHint && sigHintSig && (
+          <div
+            className="editor-sig"
+            style={{ left: sigHint.x, top: sigHint.y }}
+            role="tooltip"
+            aria-label="signature help"
+          >
+            <SigLabel
+              sig={sigHintSig}
+              active={
+                sigHintSig.activeParameter ??
+                sigHint.help.activeParameter ??
+                null
+              }
+            />
+            {sigHintSig.documentation?.value
+              .split("\n")
+              .map((ln, i) => (
+                <div key={i} className="sig-doc">
+                  {ln}
+                </div>
+              ))}
+          </div>
+        )}
         {popup && (
           <div
             className="editor-complete"

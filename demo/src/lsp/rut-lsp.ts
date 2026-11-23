@@ -23,7 +23,12 @@
  * the dep walk after boot/edits/custom adds.
  */
 
-import { RutLsp as Binding, type Analysis, type HostEnv } from "../../../crates/rut-lsp-wasm/pkg/index.js";
+import {
+  RutLsp as Binding,
+  type Analysis,
+  type HostEnv,
+  type LspSignatureHelp,
+} from "../../../crates/rut-lsp-wasm/pkg/index.js";
 
 export { decodeTokens } from "../../../crates/rut-lsp-wasm/pkg/index.js";
 
@@ -39,6 +44,7 @@ export type {
   LspDiag,
   LspPosition,
   LspRange,
+  LspSignatureHelp,
   WalkOut,
 } from "../../../crates/rut-lsp-wasm/pkg/index.js";
 
@@ -96,6 +102,19 @@ export class RutLsp {
     src: string,
   ): Promise<import("../../../crates/rut-lsp-wasm/pkg/index.js").LspCompletionItem[]> {
     return this.core.complete(uri, line, character, src);
+  }
+
+  /** signature help at an LSP position over the doc's CURRENT text (the
+   * doc-sync law: the source rides the call — the widget fires on the
+   * `(` keystroke, an analyze debounce may still be pending) — the
+   * editor signature bubble's query; `null` when nothing resolves */
+  async signatureHelp(
+    uri: string,
+    line: number,
+    character: number,
+    src: string,
+  ): Promise<LspSignatureHelp | null> {
+    return this.core.signatureHelp(uri, line, character, src);
   }
 
   /** parse one `rut.jsonc` — the dep table, or the error envelope */

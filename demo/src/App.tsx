@@ -7,7 +7,7 @@ import { DepsPanel, type DepRowView } from "./components/DepsPanel";
 import { Editor, type Highlight } from "./components/Editor";
 import { Panes, type PaneData } from "./components/Panes";
 import { StatusBar } from "./components/StatusBar";
-import { PLAYGROUND_DOC, RutLsp, decodeTokens, isEnvelope } from "./lsp/rut-lsp";
+import { PLAYGROUND_DOC, RutLsp, decodeTokens, isEnvelope, type LspSignatureHelp } from "./lsp/rut-lsp";
 import {
   LOCK_PATH,
   MANIFEST_PATH,
@@ -586,6 +586,21 @@ export function App(): JSX.Element {
     [lsp],
   );
 
+  /** the editor signature bubble's query — the binding's
+   * `signatureHelp` (the doc-sync law: the live text rides the call;
+   * `null` before boot, which self-closes the bubble) */
+  const requestSignatureHelp = useCallback(
+    async (
+      line: number,
+      character: number,
+      src: string,
+    ): Promise<LspSignatureHelp | null> => {
+      if (!lsp) return null;
+      return lsp.signatureHelp(PLAYGROUND_DOC, line, character, src);
+    },
+    [lsp],
+  );
+
   const banner = useMemo(() => {
     if (!runner) return "booting…";
     return runner.state.mode === "wasm" ? runner.state.banner : "";
@@ -649,6 +664,7 @@ export function App(): JSX.Element {
           onChange={editSource}
           highlight={highlight}
           completions={requestCompletions}
+          signatures={requestSignatureHelp}
         />
         <Panes data={panes} />
       </main>

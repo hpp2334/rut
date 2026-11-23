@@ -36,7 +36,9 @@
 //      names, strings at known positions) whose token classes match
 //      ground truth through the shared decodeTokens, and the overlay
 //      builder (the exact paint path) reconstructing every source
-//      EXACTLY — the double-layer alignment law.
+//      EXACTLY — the double-layer alignment law. 6b: the signature
+//      bubble's query — the verbatim label + the active slot through
+//      the same binding.
 //   7. THE DEP LANE (phase 5): the browser boot offline — the std zips
 //      read from the COMMITTED dist/std mirror, installed into the
 //      demo's own MemoryEnv (the virtual $RUT_HOME) exactly the way
@@ -566,6 +568,97 @@ if (!existsSync(LSP_ARTIFACT)) {
       stringSpan !== undefined && stringSpan.type === 'string',
       `hello-format: the overlay paints "rut" as a string span`,
       JSON.stringify(lines[ln]),
+    );
+  }
+
+  // [6b] THE SIGNATURE BUBBLE (the signature-help lane's headless
+  // probe, beside the `complete` one): through the SAME binding, over
+  // a case source with a known call — the answer carries the verbatim
+  // label and the right activeParameter at each keystroke position.
+  // when-exhaustive's `mix` is a local 2-param fn: `(` opens on slot
+  // 0, the `,` advances to slot 1, the in-flight call keeps the slot
+  // through its trailing comma + closer (the after-closer window), a
+  // COMPLETE call past its closer is silent (never-wrong), a
+  // zero-param call answers the bare label with no slot, and the src
+  // lane answers on text the stored doc never saw.
+  console.log('\n[6b] the signature bubble: the verbatim label + the active slot');
+
+  {
+    const mixCase = all.find((x) => x.id === 'when-exhaustive');
+    const mixSrc = mixCase.source;
+    const mixUri = 'file:///smoke/when-exhaustive.rut';
+    const ls = mixSrc.split('\n');
+    const callLine = ls.findIndex((l) => l.includes('log.info(mix('));
+    const call = ls[callLine];
+    const sigAt = (src, line, col) =>
+      lsp.signatureHelp(mixUri, line, col, src);
+    const slotOf = (h) => {
+      if (!h) return null;
+      const sig = h.signatures[h.activeSignature ?? 0] ?? h.signatures[0];
+      return { label: sig.label, active: h.activeParameter ?? null };
+    };
+
+    // the stored-lane sanity: the doc the analyze loop already stored
+    // answers exactly what the src lane answers (the answer rides the
+    // call's own source either way)
+    await lsp.analyze(mixUri, mixSrc);
+    const atParen = slotOf(await sigAt(mixSrc, callLine, call.indexOf('mix(') + 'mix('.length));
+    check(
+      atParen !== null &&
+        atParen.label === 'fn mix(a: Color, b: Color) -> str' &&
+        atParen.active === 0,
+      'the call head answers the VERBATIM label with slot 0',
+      JSON.stringify(atParen),
+    );
+    const atComma = slotOf(await sigAt(mixSrc, callLine, call.indexOf(',') + 1));
+    check(
+      atComma !== null &&
+        atComma.label === 'fn mix(a: Color, b: Color) -> str' &&
+        atComma.active === 1,
+      'the comma advances the slot to 1',
+      JSON.stringify(atComma),
+    );
+    check(
+      (await sigAt(mixSrc, callLine, call.indexOf(')') + 1)) === null,
+      'the COMPLETE call past its closer is silent (never-wrong)',
+    );
+    check(
+      (await sigAt(mixSrc, callLine, call.indexOf(';') + 1)) === null,
+      'the `;` past the call answers null (the bubble self-closes)',
+    );
+
+    // the in-flight window the drive rides, typed fresh at the end of
+    // a buffer: `mix(Red,` -> slot 1, `mix(Red,)` -> slot 1 KEPT
+    // through the trailing comma + closer (the src rides every call —
+    // the stored doc never saw these parens)
+    const head = 'enum Color { Red, Green, Blue }\n\nfn mix(a: Color, b: Color) -> str {\n    return "x";\n}\n\nentry fn main() {\n    mix(';
+    const typed = (tail) => head + tail;
+    const lastLine = (src) => src.split('\n').length - 1;
+    const inFlight = slotOf(await sigAt(typed('Color::Red,'), lastLine(typed('Color::Red,')), typed('Color::Red,').length));
+    check(
+      inFlight !== null && inFlight.active === 1,
+      'the in-flight call after `,` answers slot 1 (the src lane)',
+      JSON.stringify(inFlight),
+    );
+    const kept = slotOf(await sigAt(typed('Color::Red,)'), lastLine(typed('Color::Red,)')), typed('Color::Red,)').length));
+    check(
+      kept !== null &&
+        kept.label === 'fn mix(a: Color, b: Color) -> str' &&
+        kept.active === 1,
+      'the `)` KEEPS the slot through the closer (the after-closer window)',
+      JSON.stringify(kept),
+    );
+
+    // the zero-param call: the bare label, NO slot (the bubble renders
+    // no bold piece)
+    const zeroSrc = 'fn mk() -> i32 {\n    return 1;\n}\nentry fn main() {\n    let v = mk()';
+    const zero = slotOf(await lsp.signatureHelp('file:///smoke/zero.rut', 4, zeroSrc.length, zeroSrc));
+    check(
+      zero !== null &&
+        zero.label === 'fn mk() -> i32' &&
+        zero.active === null,
+      'the zero-param call answers the bare label with NO active slot',
+      JSON.stringify(zero),
     );
   }
 }

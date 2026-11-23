@@ -372,6 +372,35 @@ button {
   text-overflow: ellipsis;
 }
 
+/* the signature bubble (the signature-help lane): ONE verbatim
+   signature anchored at the caret (the completion popup's own
+   anchor/flip math) — the active parameter's piece bolded, the doc
+   lines beneath as plain text */
+
+.editor-sig {
+  position: absolute;
+  z-index: 6;
+  max-width: 420px;
+  padding: 6px 10px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--bg-panel);
+  box-shadow: 0 4px 14px rgb(0 0 0 / 40%);
+  font: 12px/1.5 var(--mono);
+  white-space: pre-wrap;
+  word-break: break-word;
+  pointer-events: none;
+}
+
+.editor-sig .sig-active {
+  font-weight: 700;
+}
+
+.editor-sig .sig-doc {
+  color: var(--fg-dim);
+  font-size: 11px;
+}
+
 /* editor */
 
 .editor {

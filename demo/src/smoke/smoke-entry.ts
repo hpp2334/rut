@@ -2,9 +2,9 @@
  * The smoke bundle's entry (survey D5 + the runner law): exports the
  * EXACT surface the React app uses — the same Runner (boot, compile,
  * run, resume, dropFrame), the same RutLsp binding (boot, analyze,
- * complete, legend, decodeTokens), the same dep-lane pieces the deps
- * panel drives (the virtual store env + the std pin table), the same
- * CASES/EXAMPLES. rspack bundles it for node (CJS) so
+ * complete, signatureHelp, legend, decodeTokens), the same dep-lane
+ * pieces the deps panel drives (the virtual store env + the std pin
+ * table), the same CASES/EXAMPLES. rspack bundles it for node (CJS) so
  * scripts/smoke.mjs can drive the app's own load path headlessly —
  * the extension's out/wasm.js + e2e-wasm.js pattern.
  */
