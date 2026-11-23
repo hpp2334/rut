@@ -15,6 +15,7 @@ use rut_core::types::{
     TY_U32, TY_U64, TY_U8,
 };
 use std::rc::Rc;
+use std::time::Duration;
 
 mod boundary;
 pub mod builder;
@@ -188,6 +189,15 @@ pub struct Vm {
     /// driving loop parked on it wakes exactly when a settle lands.
     /// One cell per machine, shared by every host future in it.
     host_wakes: HostWakesHandle,
+    /// the wake-cell epoch the CURRENT driving turn's poll started at:
+    /// `run_until_idle` snapshots it before each `run_ready`, and
+    /// `wait_hosts` parks for a settle SINCE it. A settle that lands
+    /// between the poll and the park moves the cell past this epoch,
+    /// so the park answers at once and the loop re-polls (the
+    /// race-free re-check — a park against the post-poll epoch could
+    /// hang on work that already landed). Single-threaded machine:
+    /// a `Cell`, no sync.
+    host_seen: std::cell::Cell<u64>,
     /// the engine-minted cx record type (found by name; None when the
     /// program never mentions async)
     cx_ty: Option<TypeId>,
@@ -433,6 +443,7 @@ impl Vm {
             host_frames,
             host_pending: Vec::new(),
             host_wakes,
+            host_seen: std::cell::Cell::new(0),
             cx_ty,
         })
     }
@@ -440,9 +451,9 @@ impl Vm {
     /// The machine's ONE wake cell (a clone of the Arc the boot join
     /// carried over from the registry) — the sugars mint every host
     /// future's [`Completer`](crate::Completer) against it, and the
-    /// driving loop's park lane (a later phase) waits on it. Every
-    /// settle bumps the generation; a waiter that parked before it
-    /// wakes.
+    /// driving loop's park lane (`wait_hosts`, ridden by
+    /// `run_until_idle`) waits on it. Every settle bumps the
+    /// generation; a waiter that parked before it wakes.
     pub fn host_wakes(&self) -> HostWakesHandle {
         self.host_wakes.clone()
     }
@@ -1007,6 +1018,36 @@ pub enum Drive {
     Parked,
 }
 
+/// The driving protocol's parking policy ([`Vm::run_until_idle`]):
+/// whether the driving thread may park on the machine's wake cell
+/// while it waits for host work.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Wait {
+    /// Park on [`HostWakes`](crate::HostWakes) whenever nothing but
+    /// settling host futures remains — the native embedder's policy
+    /// (the workers settle on other threads; the parked wake is the
+    /// protocol's whole point). A host that never settles hangs the
+    /// run by law — no wall-clock budget, no hang guard; best-effort
+    /// cancellation is the disclosed contract.
+    Block,
+    /// Never park: answer [`Idle::WouldBlock`] as soon as nothing but
+    /// host-parked work remains — the wasm lane's policy (one thread;
+    /// a JS host settles inside its own call, so a parked thread could
+    /// never wake).
+    NonBlock,
+}
+
+/// [`Vm::run_until_idle`'s] answer.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Idle {
+    /// Every frame retired — the ready queue, the timers, and the
+    /// host poll set are all empty.
+    Drained,
+    /// Host-parked work remains and the [`Wait::NonBlock`] policy
+    /// forbids parking — the embedder yields and re-enters.
+    WouldBlock,
+}
+
 impl Vm {
     // ---- the engine-half record API ----
     // The host set's bodies receive `&mut Vm` — launch,
@@ -1205,6 +1246,98 @@ impl Vm {
             n += self.drain_ready()?;
         }
         Ok(n)
+    }
+
+    /// Park until a host future settles (or `timeout` fires) — answers
+    /// whether the wake fired. Only from the driving thread, and only
+    /// while the machine is quiescent (between polls — `run_until_idle`
+    /// is the only caller): the workers touch only the Completers'
+    /// atomics and this cell, so a parked driver cannot race the heap.
+    ///
+    /// The park's epoch is the snapshot the driving turn took BEFORE
+    /// its poll (`host_seen`), never the generation at park time: a
+    /// settle that landed between the poll and this park already moved
+    /// the cell past it, so the door answers `true` at once and the
+    /// caller re-polls — the immediate-return shape (parking on the
+    /// post-poll epoch could hang on work that already landed).
+    /// Spurious wakeups are fine — the caller re-polls regardless.
+    pub fn wait_hosts(&self, timeout: Option<Duration>) -> bool {
+        self.host_wakes
+            .wait_since_for(self.host_seen.get(), timeout)
+    }
+
+    /// The driving protocol, engine-owned — the one loop a host loop
+    /// needs (`docs/src/reference/async.md`'s model): drain the ready
+    /// queue and poll the host futures to quiescence
+    /// ([`Vm::run_ready`]), then, per turn —
+    ///
+    /// - a pending deadline: under [`Wait::Block`], park on the wake
+    ///   cell bounded by it when host work shares the wait
+    ///   (`wait_hosts(Some(d - now))` — the settle or the deadline,
+    ///   whichever fires first); either way, jump the virtual clock to
+    ///   the deadline (`set_now` — the deterministic fast-forward;
+    ///   `next_deadline` expires the due timers as a side effect).
+    ///   `Wait::NonBlock` skips the park (it never parks — the wasm
+    ///   lane: a JS host can only settle OUTSIDE this call, so a park
+    ///   there is a pure stall) and lets the clock lane run;
+    /// - no deadline, [`Wait::Block`]: park until a host future
+    ///   settles — forever, by law (no wall-clock budget, no hang
+    ///   guard; a worker that never completes hangs the run, the
+    ///   disclosed best-effort-cancellation contract);
+    /// - no deadline, [`Wait::NonBlock`]: one probe drain
+    ///   ([`Vm::run_ready`]) — the expiry above may have JUST moved
+    ///   fired timers into the ready queue, so a driven round loops
+    ///   and a quiet round answers [`Idle::WouldBlock`] (only
+    ///   host-parked work remains and the policy forbids parking —
+    ///   the verdict's honest shape; the embedder yields and
+    ///   re-enters).
+    ///
+    /// until nothing is pending ([`Idle::Drained`]). The first trap
+    /// propagates (`Err`) — other frames may stay pending; the
+    /// embedder exits.
+    pub fn run_until_idle(&mut self, wait: Wait) -> Result<Idle, Trap> {
+        loop {
+            // the turn's epoch: every settle from here on — during the
+            // poll or in the park lane — moves the cell past it, so
+            // the park below can never miss one (the pre-poll
+            // snapshot is the race-free re-check's whole trick)
+            self.host_seen.set(self.host_wakes.generation());
+            self.run_ready()?;
+            if self.pending_tasks() == 0 {
+                return Ok(Idle::Drained);
+            }
+            match self.next_deadline() {
+                Some(d) => {
+                    // either-first, Block only: the park is bounded by
+                    // the deadline (the condvar wakes on a settle; the
+                    // timeout path just runs the clock out). The
+                    // host-parked read is internal — the poll set's
+                    // size is the loop's business, not a public door.
+                    if wait == Wait::Block && !self.host_pending.is_empty() {
+                        self.wait_hosts(Some(Duration::from_millis(d.saturating_sub(self.now_ms))));
+                    }
+                    self.set_now(d);
+                }
+                None => match wait {
+                    Wait::Block => {
+                        self.wait_hosts(None);
+                    }
+                    Wait::NonBlock => {
+                        // the expiry may have JUST moved fired timers
+                        // into the ready queue (next_deadline's side
+                        // effect) — one probe round answers which: a
+                        // driven round loops (the clock lane
+                        // continues), a quiet round means only host
+                        // parks remain (the WouldBlock verdict's
+                        // honest shape — the consumer's "one probe
+                        // round", folded into the door)
+                        if self.run_ready()? == 0 {
+                            return Ok(Idle::WouldBlock);
+                        }
+                    }
+                },
+            }
+        }
     }
 
     /// One drive step of a future: a re-entrant call of its `yield`
@@ -1665,5 +1798,693 @@ mod tests {
         vm.cur_regs[0] = s;
         let err = vm.nat_bytes_clone(Some(0), Some(1)).unwrap_err();
         assert_eq!(err.kind, TrapKind::Invalid, "{}", err.msg);
+    }
+
+    // ---- the driving protocol's door-level tests (the plan's
+    // Phase-4 matrix is its own session; these pin the DOORS on a
+    // hand-minted machine — the compiler's host-frame shape spelled by
+    // hand, so a REAL parked host future exists without a compiled
+    // program) ----
+
+    mod idle_tests {
+        use super::*;
+        use rut_core::async_frame as af;
+        use rut_core::binary::{FuncCode, IfaceDesc, IfaceMethod, Program};
+        use rut_core::ops::{Op, NOREG};
+        use rut_core::types::{
+            FieldInfo, FieldVis, PrimTy, Repr, RutType, TyKind, TypeId, TY_BOOL, TY_I32, TY_I64,
+            TY_NIL, TY_OPAQUE,
+        };
+        use std::rc::Rc;
+        use std::sync::mpsc;
+        use std::time::{Duration, Instant};
+
+        /// One `probe: () -> i64` host async row + one minted frame —
+        /// the machine the door tests drive. `cell` is the settle
+        /// handle (the `__start` row's minted Completer); `frame` the
+        /// host frame, the test's own reference.
+        struct HostMachine {
+            vm: Vm,
+            cell: Completer<i64>,
+            frame: Slot,
+            /// the mini sleep fixture's type ids (the timer lane)
+            ckpt_ty: TypeId,
+            sleep_ty: TypeId,
+        }
+
+        impl HostMachine {
+            /// Mint the machine and ONE cold host frame: the state
+            /// cell armed (the `__start` row's answer in the state
+            /// field), nothing launched yet.
+            fn new() -> HostMachine {
+                // ---- the program: the compiler's `ensure_host_async`
+                // mint (rut-lir), spelled by hand. The `#hframe@probe`
+                // record, the `Future<i64>` iface slot, the RunContext
+                // cx, the four sugar rows, and the sealing wrapper —
+                // the same ops the compiler emits (the cancel probe,
+                // the resumption probe, the take marshal). ----
+                let mut interner = rut_core::Interner::default();
+                let s_future = interner.intern("Future<i64>");
+                let s_yield = interner.intern("yield");
+                let s_cx = interner.intern(af::RUN_CONTEXT_TYPE);
+                let s_frame_field = interner.intern("frame");
+                let s_state = interner.intern("state");
+                let s_cancelled = interner.intern("cancelled");
+                let s_awaiter = interner.intern("awaiter");
+                let s_pending = interner.intern("pending");
+                let s_answer = interner.intern("answer");
+                let s_ms = interner.intern("ms");
+                let s_frame = interner.intern(&format!("{}probe", af::HOST_FRAME_PREFIX));
+                let s_sleep = interner.intern("#frame@mini");
+                let s_ckpt = interner.intern("#ckpt@mini");
+                let row = |interner: &mut rut_core::Interner, suffix: &str| {
+                    interner.intern(&format!("probe{suffix}"))
+                };
+                let s_start = row(&mut interner, "__start");
+                let s_yield_row = row(&mut interner, "__yield");
+                let s_take = row(&mut interner, "__take");
+                let s_cancel = row(&mut interner, "__cancel");
+                let s_wrap = interner.intern("probe__yield.wrap");
+                let s_mini_yield = interner.intern("mini__yield");
+                let s_mini_wrap = interner.intern("mini__yield.wrap");
+
+                let mut types = rut_core::types::TypeTable::boot();
+                let cx_ty = types.intern(RutType {
+                    name: s_cx,
+                    kind: TyKind::Data {
+                        fields: vec![FieldInfo {
+                            name: s_frame_field,
+                            ty: TY_OPAQUE,
+                            vis: FieldVis::Pub,
+                        }],
+                    },
+                });
+                let frame_ty = types.intern(RutType {
+                    name: s_frame,
+                    kind: TyKind::Data {
+                        fields: vec![
+                            FieldInfo {
+                                name: s_state,
+                                ty: TY_OPAQUE,
+                                vis: FieldVis::Pub,
+                            },
+                            FieldInfo {
+                                name: s_cancelled,
+                                ty: TY_BOOL,
+                                vis: FieldVis::Pub,
+                            },
+                            FieldInfo {
+                                name: s_awaiter,
+                                ty: TY_OPAQUE,
+                                vis: FieldVis::Pub,
+                            },
+                            FieldInfo {
+                                name: s_pending,
+                                ty: TY_OPAQUE,
+                                vis: FieldVis::Pub,
+                            },
+                            FieldInfo {
+                                name: s_answer,
+                                ty: TY_I64,
+                                vis: FieldVis::Pub,
+                            },
+                        ],
+                    },
+                });
+                let ckpt_ty = types.intern(RutType {
+                    name: s_ckpt,
+                    kind: TyKind::Enum {
+                        members: vec![(s_state, 0), (s_pending, 1)],
+                    },
+                });
+                let sleep_ty = types.intern(RutType {
+                    name: s_sleep,
+                    kind: TyKind::Data {
+                        fields: vec![
+                            FieldInfo {
+                                name: s_state,
+                                ty: ckpt_ty,
+                                vis: FieldVis::Pub,
+                            },
+                            FieldInfo {
+                                name: s_cancelled,
+                                ty: TY_BOOL,
+                                vis: FieldVis::Pub,
+                            },
+                            FieldInfo {
+                                name: s_awaiter,
+                                ty: TY_OPAQUE,
+                                vis: FieldVis::Pub,
+                            },
+                            FieldInfo {
+                                name: s_pending,
+                                ty: TY_OPAQUE,
+                                vis: FieldVis::Pub,
+                            },
+                            FieldInfo {
+                                name: s_answer,
+                                ty: TY_NIL,
+                                vis: FieldVis::Pub,
+                            },
+                            FieldInfo {
+                                name: s_ms,
+                                ty: TY_I64,
+                                vis: FieldVis::Pub,
+                            },
+                        ],
+                    },
+                });
+                let n_types = types.types.len();
+
+                // the funcs: the four sugar rows (bodyless host thunks
+                // — the boot join resolves `host_id` against the
+                // registry), the sealing wrapper (compiled ops), and
+                // the mini sleep's engine-backed pair (the
+                // `__sleep_yield` precedent: a compiled wrapper seals
+                // the raw pair into boxes and calls the bodyless
+                // thunk). Fid order here IS the wiring below;
+                // `__start` dispatches by name through `call_host_row`.
+                const YIELD_FID: u32 = 1;
+                const TAKE_FID: u32 = 2;
+                const CANCEL_FID: u32 = 3;
+                const WRAP_FID: u32 = 4;
+                const MINI_YIELD_FID: u32 = 5;
+                const MINI_WRAP_FID: u32 = 6;
+                let thunk = |name, params: Vec<TypeId>, ret: TypeId| -> FuncCode {
+                    FuncCode {
+                        name,
+                        regs: params.clone(),
+                        params,
+                        ret,
+                        is_method: false,
+                        n_captures: 0,
+                        argv: vec![],
+                        labels: vec![],
+                        code: vec![],
+                        spans: vec![],
+                        pos: vec![],
+                        host_id: Some(name),
+                    }
+                };
+                let funcs = vec![
+                    thunk(s_start, vec![], TY_OPAQUE),
+                    thunk(s_yield_row, vec![TY_OPAQUE, TY_OPAQUE], TY_I32),
+                    thunk(s_take, vec![TY_OPAQUE], TY_I64),
+                    thunk(s_cancel, vec![TY_OPAQUE], TY_NIL),
+                    // the sealing wrapper: r0 frame, r1 cx, r2 state,
+                    // r3 sealed cx, r4 probe, r5 null, r6 answer, r7
+                    // cancelled flag
+                    FuncCode {
+                        name: s_wrap,
+                        regs: vec![
+                            frame_ty, cx_ty, TY_OPAQUE, TY_OPAQUE, TY_I32, TY_OPAQUE, TY_I64,
+                            TY_BOOL,
+                        ],
+                        params: vec![frame_ty, cx_ty],
+                        ret: TY_NIL,
+                        is_method: false,
+                        n_captures: 0,
+                        // the argv pool: [state] for the cancel row ·
+                        // [state, sealed cx] for the yield probe ·
+                        // [state] for the take marshal
+                        argv: vec![2, 3, 2],
+                        labels: vec![],
+                        code: vec![
+                            // a re-drive of a retired frame answers here
+                            Op::GetF {
+                                dst: 2,
+                                obj: 0,
+                                field: af::STATE_FIELD,
+                                repr: Repr::Ref,
+                            },
+                            Op::Br {
+                                cond: 2,
+                                then_t: 3,
+                                else_t: 2,
+                            },
+                            Op::Ret { val: None },
+                            // the cancel probe (the cx `cancelled()` data path)
+                            Op::GetF {
+                                dst: 7,
+                                obj: 0,
+                                field: af::CANCELLED_FIELD,
+                                repr: Repr::Prim(PrimTy::Bool),
+                            },
+                            Op::Br {
+                                cond: 7,
+                                then_t: 5,
+                                else_t: 9,
+                            },
+                            // the cancel arm: the abort row, then retire
+                            Op::Call {
+                                func: CANCEL_FID,
+                                argv_off: 2,
+                                argc: 1,
+                                dst: NOREG,
+                            },
+                            Op::ConstRaw { dst: 5, bits: 0 },
+                            Op::SetF {
+                                obj: 0,
+                                field: af::STATE_FIELD,
+                                val: 5,
+                                repr: Repr::Ref,
+                            },
+                            Op::Ret { val: None },
+                            // the resumption probe: seal the cx, call `__yield`
+                            Op::Box {
+                                dst: 3,
+                                val: 1,
+                                ty: cx_ty,
+                            },
+                            Op::Call {
+                                func: YIELD_FID,
+                                argv_off: 0,
+                                argc: 2,
+                                dst: 4,
+                            },
+                            Op::Br {
+                                cond: 4,
+                                then_t: 12,
+                                else_t: 16,
+                            },
+                            // settle (ready/failed): marshal the answer
+                            // FIRST, then retire — a failed completer
+                            // traps HERE, through `__take` (the state
+                            // stays armed behind the propagated trap)
+                            Op::Call {
+                                func: TAKE_FID,
+                                argv_off: 2,
+                                argc: 1,
+                                dst: 6,
+                            },
+                            Op::SetF {
+                                obj: 0,
+                                field: af::HOST_ANSWER_FIELD,
+                                val: 6,
+                                repr: Repr::Prim(PrimTy::I64),
+                            },
+                            Op::ConstRaw { dst: 5, bits: 0 },
+                            Op::SetF {
+                                obj: 0,
+                                field: af::STATE_FIELD,
+                                val: 5,
+                                repr: Repr::Ref,
+                            },
+                            Op::Ret { val: None },
+                        ],
+                        spans: vec![],
+                        pos: vec![],
+                        host_id: None,
+                    },
+                    thunk(
+                        s_mini_yield,
+                        vec![TY_OPAQUE, TY_OPAQUE], // the row: sealed boxes
+                        TY_NIL,
+                    ),
+                    // the mini sleep's sealing wrapper (the
+                    // `__sleep_yield.wrap` shape): the driving loop's
+                    // raw (frame, cx) pair seals into boxes and the
+                    // host thunk crosses them
+                    FuncCode {
+                        name: s_mini_wrap,
+                        regs: vec![sleep_ty, cx_ty, TY_OPAQUE, TY_OPAQUE],
+                        params: vec![sleep_ty, cx_ty],
+                        ret: TY_NIL,
+                        is_method: false,
+                        n_captures: 0,
+                        argv: vec![2, 3],
+                        labels: vec![],
+                        code: vec![
+                            Op::Box {
+                                dst: 2,
+                                val: 0,
+                                ty: sleep_ty,
+                            },
+                            Op::Box {
+                                dst: 3,
+                                val: 1,
+                                ty: cx_ty,
+                            },
+                            Op::Call {
+                                func: MINI_YIELD_FID,
+                                argv_off: 0,
+                                argc: 2,
+                                dst: NOREG,
+                            },
+                            // well-formedness: the fn ends in Ret
+                            Op::Ret { val: None },
+                        ],
+                        spans: vec![],
+                        pos: vec![],
+                        host_id: None,
+                    },
+                ];
+
+                let prog = Program {
+                    name: "idle_fixture".into(),
+                    scope: 0,
+                    interner,
+                    surface: Default::default(),
+                    types,
+                    ifaces: vec![IfaceDesc {
+                        name: s_future,
+                        methods: vec![IfaceMethod {
+                            name: s_yield,
+                            params: vec![frame_ty, cx_ty],
+                            ret: TY_NIL,
+                        }],
+                    }],
+                    iface_slots: vec![(0, 0)],
+                    vtables: {
+                        let mut v: Vec<Vec<Option<u32>>> = vec![Vec::new(); n_types];
+                        v[frame_ty as usize] = vec![Some(WRAP_FID)];
+                        v[sleep_ty as usize] = vec![Some(MINI_WRAP_FID)];
+                        v
+                    },
+                    disposal_impls: vec![None; n_types],
+                    consts: vec![],
+                    funcs,
+                    exports: vec![],
+                    inst_types: vec![],
+                    inst_fns: vec![],
+                    templates: vec![],
+                    template_stubs: vec![],
+                    template_first_fid: 0,
+                    template_end_fid: 0,
+                };
+
+                // ---- the registry: the probe row family through the
+                // ONE-closure sugar, and the mini sleep's yield row ----
+                let mut hosts = HostRegistry::new();
+                let (tx, rx) = mpsc::channel::<Completer<i64>>();
+                crate::register_async!(hosts, "probe", () -> i64, move |c: Completer<i64>| {
+                    // the fixture's one mint — the test takes the
+                    // settle handle through the channel
+                    let _ = tx.send(c);
+                });
+                crate::register!(
+                    hosts,
+                    "mini__yield",
+                    (OpaqueRef, OpaqueRef) -> (),
+                    move |vm: &mut Vm, f: OpaqueRef, _cx: OpaqueRef| {
+                        // the `__sleep_yield` dance, mini: the fresh arm
+                        // arms the timer and parks at s1; the resumed arm
+                        // (or a cancelled/retired frame) retires
+                        let frame = vm
+                            .opaque_rut_value(Slot { r: f.ptr() })
+                            .map(|(s, _)| s)
+                            .ok_or_else(|| {
+                                Trap::new(
+                                    TrapKind::Invalid,
+                                    "mini sleep: the box holds no rut value",
+                                )
+                            })?;
+                        let cancelled = vm
+                            .record_field(frame, af::CANCELLED_FIELD as usize)
+                            .map(|s| s.as_bool())
+                            .unwrap_or(false);
+                        let state = vm
+                            .record_field(frame, af::STATE_FIELD as usize)
+                            .unwrap_or(Slot::null());
+                        let fresh = !unsafe { state.r.is_null() }
+                            && vm
+                                .enum_member_slot(ckpt_ty, 0)
+                                .ok()
+                                .map(|s0| Slot::same_ref(state, s0))
+                                .unwrap_or(false);
+                        if fresh && !cancelled {
+                            let ms = vm
+                                .record_field(frame, af::LOCALS_BASE as usize)
+                                .map(|s| unsafe { s.i } as u64)
+                                .unwrap_or(0);
+                            let s1 = vm.enum_member_slot(ckpt_ty, 1)?;
+                            vm.arm_timer(vm.now_ms() + ms, frame);
+                            vm.set_record_field(frame, af::STATE_FIELD as usize, s1);
+                        } else {
+                            vm.set_record_field(frame, af::STATE_FIELD as usize, Slot::null());
+                        }
+                        Ok(())
+                    }
+                );
+
+                let mut vm = Vm::new(Rc::new(prog), &Limits::default(), hosts).expect("fixture vm");
+
+                // ---- the frame mint (the call site's shape): `__start`
+                // answers the state cell; the cold frame arms it ----
+                let out = vm
+                    .call_host_row("probe__start", &[])
+                    .expect("the start row");
+                let Value::Opaque(_) = &out else {
+                    panic!("__start answers an opaque, got {out:?}");
+                };
+                let cell = rx.try_recv().expect("the fixture's completer");
+                let state = vm.value_in(&out, TY_OPAQUE).expect("the state cell in");
+                let nfields = match vm.prog.types.kind(frame_ty) {
+                    TyKind::Data { fields } => fields.len(),
+                    _ => unreachable!("the host frame type is a record"),
+                };
+                let frame = vm
+                    .alloc_zeroed_record(frame_ty, nfields)
+                    .expect("the frame record");
+                vm.set_record_field(frame, af::STATE_FIELD as usize, state);
+                vm.release(state); // the register's ref — the field owns the cell
+                drop(out); // the handle's ref — only the field's remains
+                HostMachine {
+                    vm,
+                    cell,
+                    frame,
+                    ckpt_ty,
+                    sleep_ty,
+                }
+            }
+
+            /// Launch the frame — the machine's only work. It parks on
+            /// the protocol's first poll.
+            fn launched() -> HostMachine {
+                let mut m = HostMachine::new();
+                m.vm.launch(m.frame);
+                m
+            }
+
+            /// Mint + launch one mini sleep frame (`ms`): the timer
+            /// lane's fixture. Returns the frame (the test's own
+            /// reference) so the retirement is readable.
+            fn launch_mini_sleep(&mut self, ms: i64) -> Slot {
+                let nfields = match self.vm.prog.types.kind(self.sleep_ty) {
+                    TyKind::Data { fields } => fields.len(),
+                    _ => unreachable!("the sleep frame type is a record"),
+                };
+                let frame = self
+                    .vm
+                    .alloc_zeroed_record(self.sleep_ty, nfields)
+                    .expect("the sleep frame");
+                let s0 = self.vm.enum_member_slot(self.ckpt_ty, 0).expect("s0");
+                self.vm
+                    .set_record_field(frame, af::STATE_FIELD as usize, s0);
+                self.vm
+                    .set_record_field(frame, af::LOCALS_BASE as usize, Slot::int(ms));
+                self.vm.launch(frame);
+                frame
+            }
+        }
+
+        // ---- wait_hosts: the Vm-level park door ----
+
+        /// The immediate-return shape AND the parked wake: a settle
+        /// that landed before the park answers true at once; a settle
+        /// landing from another thread wakes the park and answers
+        /// true.
+        #[test]
+        fn wait_hosts_answers_the_parked_wake_and_the_pre_park_settle() {
+            let vm = empty_vm();
+            let wakes = vm.host_wakes();
+            wakes.bump();
+            assert!(
+                vm.wait_hosts(None),
+                "a settle that landed before the park answers true"
+            );
+            let bumper = {
+                let wakes = wakes.clone();
+                std::thread::spawn(move || {
+                    std::thread::sleep(Duration::from_millis(50));
+                    wakes.bump();
+                })
+            };
+            assert!(vm.wait_hosts(None), "the parked wake answers true");
+            bumper.join().expect("the bumper thread");
+        }
+
+        /// No settle: the timeout answers false, honors the deadline,
+        /// and does not hang.
+        #[test]
+        fn wait_hosts_timeout_answers_false_without_hanging() {
+            let vm = empty_vm();
+            let t0 = Instant::now();
+            assert!(
+                !vm.wait_hosts(Some(Duration::from_millis(50))),
+                "no settle: the timeout answers false"
+            );
+            assert!(
+                t0.elapsed() >= Duration::from_millis(45),
+                "the deadline was honored, not skipped"
+            );
+        }
+
+        // ---- run_until_idle: the driving protocol ----
+
+        /// `Wait::Block` on a machine whose only work is a settling
+        /// host future (the row registered through `register_async!`,
+        /// completed from a thread): the protocol parks, the worker's
+        /// `complete` wakes it, the take marshal lands the answer, the
+        /// frame retires — Drained.
+        #[test]
+        fn run_until_idle_block_drains_a_settling_host_future() {
+            let mut m = HostMachine::launched();
+            let worker = {
+                let c = m.cell.clone();
+                std::thread::spawn(move || {
+                    std::thread::sleep(Duration::from_millis(30));
+                    c.complete(42);
+                })
+            };
+            let idle = m.vm.run_until_idle(Wait::Block).expect("clean run");
+            worker.join().expect("the worker thread");
+            assert_eq!(idle, Idle::Drained);
+            assert!(
+                m.vm.first_host_pending().is_none(),
+                "the settled frame left the poll set"
+            );
+            assert_eq!(m.vm.pending_tasks(), 0, "nothing left pending");
+            let answer =
+                m.vm.record_field(m.frame, af::HOST_ANSWER_FIELD as usize)
+                    .expect("the answer lane");
+            assert_eq!(unsafe { answer.i }, 42, "the take marshal landed");
+        }
+
+        /// `Wait::NonBlock` never parks: host-parked work answers
+        /// WouldBlock; work that settles inside the call (the JS-host
+        /// contract) and an empty machine answer Drained.
+        #[test]
+        fn run_until_idle_nonblock_answers_wouldblock_and_drains() {
+            let mut m = HostMachine::launched();
+            assert_eq!(
+                m.vm.run_until_idle(Wait::NonBlock).expect("clean run"),
+                Idle::WouldBlock,
+                "parked host work and a no-park policy: WouldBlock"
+            );
+            assert!(
+                m.vm.first_host_pending().is_some(),
+                "the driven frame sits in the poll set, unanswered"
+            );
+
+            // the JS-host shape: the future settles inside the call —
+            // Drained without a single park
+            let mut m2 = HostMachine::new();
+            m2.cell.complete(7);
+            m2.vm.launch(m2.frame);
+            assert_eq!(
+                m2.vm.run_until_idle(Wait::NonBlock).expect("clean run"),
+                Idle::Drained,
+                "a settle inside the call drains without parking"
+            );
+
+            let mut vm = empty_vm();
+            assert_eq!(
+                vm.run_until_idle(Wait::NonBlock).expect("clean run"),
+                Idle::Drained,
+                "no work at all drains at once"
+            );
+        }
+
+        /// The deadline arm under NonBlock never parks either: host
+        /// work plus a timer fast-forwards the virtual clock and
+        /// answers WouldBlock — no stall (a bounded park here would
+        /// show up as wall time). The WouldBlock answer comes only
+        /// after the probe round retires the expired timer's frame:
+        /// the verdict names genuinely un-drivable work.
+        #[test]
+        fn run_until_idle_nonblock_never_parks_the_deadline_arm() {
+            let mut m = HostMachine::launched();
+            let sleep_frame = m.launch_mini_sleep(50);
+            let t0 = Instant::now();
+            let idle = m.vm.run_until_idle(Wait::NonBlock).expect("clean run");
+            assert_eq!(idle, Idle::WouldBlock);
+            assert!(
+                t0.elapsed() < Duration::from_millis(40),
+                "the deadline arm must not park under NonBlock"
+            );
+            assert_eq!(m.vm.now_ms(), 50, "the clock lane still ran");
+            let st =
+                m.vm.record_field(sleep_frame, af::STATE_FIELD as usize)
+                    .expect("the sleep frame's state lane");
+            assert!(
+                unsafe { st.r.is_null() },
+                "the timer frame retired before the WouldBlock verdict"
+            );
+            assert!(
+                m.vm.first_host_pending().is_some(),
+                "only the host park remains"
+            );
+        }
+
+        /// The clock lane: host work shares the wait with a timer —
+        /// the Some(d) arm parks bounded by the deadline, jumps the
+        /// virtual clock (`set_now`), the sleep frame retires on its
+        /// re-drive after the expiry — and the host future's late
+        /// settle (after the deadline) finishes the drain.
+        #[test]
+        fn run_until_idle_jumps_the_clock_while_host_work_parks() {
+            let mut m = HostMachine::launched();
+            let sleep_frame = m.launch_mini_sleep(50);
+            // the settle lands AFTER the deadline: the bounded park
+            // runs the clock out first, the Block park catches it late
+            let worker = {
+                let c = m.cell.clone();
+                std::thread::spawn(move || {
+                    std::thread::sleep(Duration::from_millis(80));
+                    c.complete(42);
+                })
+            };
+            let idle = m.vm.run_until_idle(Wait::Block).expect("clean run");
+            worker.join().expect("the worker thread");
+            assert_eq!(idle, Idle::Drained);
+            assert_eq!(
+                m.vm.now_ms(),
+                50,
+                "the virtual clock sits at the deadline it jumped to"
+            );
+            assert_eq!(
+                m.vm.pending_tasks(),
+                0,
+                "the host future and the timer both retired"
+            );
+            let st =
+                m.vm.record_field(sleep_frame, af::STATE_FIELD as usize)
+                    .expect("the sleep frame's state lane");
+            assert!(
+                unsafe { st.r.is_null() },
+                "the sleep frame retired on the re-drive after the expiry"
+            );
+        }
+
+        /// The fail path: a worker's `fail` settles AND bumps, the
+        /// parked protocol wakes, the `__take` marshal traps, and the
+        /// first trap propagates out of `run_until_idle`.
+        #[test]
+        fn run_until_idle_propagates_a_failed_settle() {
+            let mut m = HostMachine::launched();
+            let worker = {
+                let c = m.cell.clone();
+                std::thread::spawn(move || {
+                    std::thread::sleep(Duration::from_millis(30));
+                    c.fail("kaboom".to_string());
+                })
+            };
+            let err =
+                m.vm.run_until_idle(Wait::Block)
+                    .expect_err("the failed settle traps at the take marshal");
+            worker.join().expect("the worker thread");
+            assert!(err.msg.contains("kaboom"), "{}", err.msg);
+        }
     }
 }

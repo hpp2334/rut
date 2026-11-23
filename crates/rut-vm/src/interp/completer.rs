@@ -25,6 +25,7 @@
 //! they are the exception, not machinery).
 
 use std::sync::{Arc, Condvar, Mutex};
+use std::time::{Duration, Instant};
 
 use rut_core::types::{TypeId, TY_OPAQUE};
 
@@ -44,8 +45,8 @@ pub const FAILED: i32 = 2;
 /// [`Vm`]) — a `complete`/`fail` bumps the generation and notifies
 /// AFTER the settle, so a driving loop that parks on
 /// [`HostWakes::wait_since`] wakes only to work worth doing (the
-/// run-waits-host-futures lane's substrate; the loop itself is a
-/// later phase).
+/// run-waits-host-futures lane's substrate; the driving protocol is
+/// [`Vm::run_until_idle`](super::Vm::run_until_idle)).
 ///
 /// One cell per machine, shared by every host future in it — a future
 /// settling without a bump is structurally impossible (the old
@@ -92,6 +93,38 @@ impl HostWakes {
             g = self.cv.wait(g).expect("host wakes");
         }
         *g
+    }
+
+    /// [`wait_since`] with a deadline: park until the generation moves
+    /// past `seen` or `timeout` elapses — answers whether a settle
+    /// fired. `None` waits forever (the condvar's plain `wait`; the
+    /// driving protocol's `Wait::Block` arm). The caller supplies the
+    /// epoch it last observed (the driving turn's pre-poll snapshot),
+    /// so a settle that landed between the last poll and this park
+    /// answers at once — the signal never precedes the settle, and a
+    /// pre-park settle is never lost. Spurious wakeups re-park (the
+    /// `while` is the condvar contract); on the timeout path the
+    /// deadline is honored against the clock (a spurious wake re-waits
+    /// only the remainder, never the whole budget), and a deadline
+    /// that runs out with no settle answers `false` — the caller
+    /// re-polls regardless.
+    pub fn wait_since_for(&self, seen: u64, timeout: Option<Duration>) -> bool {
+        let mut g = self.mx.lock().expect("host wakes");
+        let deadline = timeout.map(|t| Instant::now() + t);
+        while *g <= seen {
+            match deadline {
+                Some(d) => {
+                    let now = Instant::now();
+                    if now >= d {
+                        break; // the clock ran out with no settle
+                    }
+                    let (guard, _) = self.cv.wait_timeout(g, d - now).expect("host wakes");
+                    g = guard;
+                }
+                None => g = self.cv.wait(g).expect("host wakes"),
+            }
+        }
+        *g > seen
     }
 }
 
