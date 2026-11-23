@@ -193,7 +193,7 @@ entry fn main() {
   queue. Priorities are not in the model.
 - `vm.pending_tasks()` counts ready frames, armed timers, and host
   futures parked on Completers — the idle test behind the engine's
-  driving loop ([async and await](async.md),
+  driving loop, `run_until_idle` ([async and await](async.md),
   [the embedder's driving
   contract](embedding.md#the-embedders-driving-contract)).
 - A trap inside a launched future propagates out of the driving loop

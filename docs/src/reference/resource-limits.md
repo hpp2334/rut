@@ -83,6 +83,13 @@ The host owns time; the recipes differ by embedder:
 | desktop service | a watchdog thread flips a flag the host honors between `resume()` calls; no joins, no signals |
 | tests | finite fuel + the virtual clock (`vm.set_now`) → fully deterministic hang proofs |
 
+One hang no recipe above sees: a host future that never settles. That
+is not a script hang — fuel never runs — and under `Wait::Block` the
+run parks by law (no wall-clock budget, no hang guard). An embedder
+that needs a bound there picks `Wait::NonBlock`, answers
+`Idle::WouldBlock`, and runs its own watchdog around the drive
+([the embedder's driving contract](embedding.md#the-embedders-driving-contract)).
+
 Anything blocking that cannot be bounded by fuel (IO, locks) belongs on
 a worker thread answering a `Completer` — the VM thread never blocks on
 it ([the host futures bridge](host-futures.md)).

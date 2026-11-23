@@ -62,11 +62,14 @@ use futures::{ launch_future, sleep };
 
 ## Who drives?
 
-You never write a driving loop — the *embedder* does. The `rut run` CLI
-is an embedder: after `main` returns it pumps the loop — drain ready
-frames, advance the virtual clock to the next timer deadline, repeat —
-until nothing is pending. So a program launches work from `main` and
-the output simply appears:
+You never write a driving loop — and neither does the embedder: the
+*engine* owns it. The `rut run` CLI boots the program and calls
+`run_until_idle(Wait::Block)`: the engine drains ready frames, jumps
+the virtual clock to the next timer deadline, and parks on the wake
+cell for host futures, until nothing is pending
+([the embedder's driving
+contract](../reference/embedding.md#the-embedders-driving-contract)).
+So a program launches work from `main` and the output simply appears:
 
 ```sh
 rut run countdown/   # a module dir (rut.jsonc + main.rut); main launches the countdown

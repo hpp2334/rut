@@ -1715,7 +1715,7 @@ msgstr ""
 #: src/tutorial/values-and-variables.md:307 src/tutorial/control-flow.md:400
 #: src/tutorial/functions.md:242 src/tutorial/types.md:284
 #: src/tutorial/interfaces.md:400 src/tutorial/errors.md:233
-#: src/tutorial/modules.md:300 src/tutorial/async.md:193
+#: src/tutorial/modules.md:300 src/tutorial/async.md:196
 #: src/tutorial/stdlib.md:409
 msgid "Put it together"
 msgstr ""
@@ -4438,18 +4438,20 @@ msgstr ""
 
 #: src/tutorial/async.md:65
 msgid ""
-"You never write a driving loop — the _embedder_ does. The `rut run` CLI is "
-"an embedder: after `main` returns it pumps the loop — drain ready frames, "
-"advance the virtual clock to the next timer deadline, repeat — until nothing "
-"is pending. So a program launches work from `main` and the output simply "
-"appears:"
+"You never write a driving loop — and neither does the embedder: the _engine_ "
+"owns it. The `rut run` CLI boots the program and calls "
+"`run_until_idle(Wait::Block)`: the engine drains ready frames, jumps the "
+"virtual clock to the next timer deadline, and parks on the wake cell for "
+"host futures, until nothing is pending ([the embedder's driving "
+"contract](../reference/embedding.md#the-embedders-driving-contract)). So a "
+"program launches work from `main` and the output simply appears:"
 msgstr ""
 
-#: src/tutorial/async.md:72
+#: src/tutorial/async.md:75
 msgid "# a module dir (rut.jsonc + main.rut); main launches the countdown\n"
 msgstr ""
 
-#: src/tutorial/async.md:82
+#: src/tutorial/async.md:85
 msgid ""
 "Launched work outlives `main`: `rut run` drives every launched future to "
 "completion before exiting — **host-backed included**. A launched host async "
@@ -4462,60 +4464,60 @@ msgid ""
 "completion, and the late answer is simply discarded."
 msgstr ""
 
-#: src/tutorial/async.md:93
+#: src/tutorial/async.md:96
 msgid ""
 "Calling an async function and awaiting it in the same body is the "
 "straight-line case; launching is for concurrency — independent work that "
 "overlaps through the loop's interleaving."
 msgstr ""
 
-#: src/tutorial/async.md:97
+#: src/tutorial/async.md:100
 msgid "Talking to the network: the `http` package"
 msgstr ""
 
-#: src/tutorial/async.md:99
+#: src/tutorial/async.md:102
 msgid ""
 "The standard `http` package is async-only where work actually waits. "
 "Everything else — the client, the verbs, the builder — is sync construction "
 "sugar:"
 msgstr ""
 
-#: src/tutorial/async.md:110
+#: src/tutorial/async.md:113
 msgid "The shape, step by step:"
 msgstr ""
 
-#: src/tutorial/async.md:112
+#: src/tutorial/async.md:115
 msgid ""
 "`client.get(url)` (or `request()`, `post`, `put`, `patch`, `del`) hands back "
 "a `RequestBuilder`; `.method(..)`, `.url(..)`, `.header(k, v)` (repeatable), "
 "`.body(bytes)` chain on it."
 msgstr ""
 
-#: src/tutorial/async.md:115
+#: src/tutorial/async.md:118
 msgid "`.build()` freezes a re-sendable `Request`."
 msgstr ""
 
-#: src/tutorial/async.md:116
+#: src/tutorial/async.md:119
 msgid ""
 "**`.send()` is the async point.** It resolves at _headers_ — the wire body "
 "is still unread."
 msgstr ""
 
-#: src/tutorial/async.md:118
+#: src/tutorial/async.md:121
 msgid "From the `Response`, take one of two readbacks:"
 msgstr ""
 
-#: src/tutorial/async.md:119
+#: src/tutorial/async.md:122
 msgid "`await resp.body()` — drain the remaining body in one future;"
 msgstr ""
 
-#: src/tutorial/async.md:120
+#: src/tutorial/async.md:123
 msgid ""
 "`resp.byte_stream()` then `await stream::next()` — one chunk per future, "
 "`nil` at end-of-stream, for bounded-memory downloads."
 msgstr ""
 
-#: src/tutorial/async.md:123
+#: src/tutorial/async.md:126
 msgid ""
 "Errors come back as data, not traps: status `0` is reserved for transport "
 "failure (`resp.transport_error()` carries the reason), any real status — 4xx "
@@ -4524,13 +4526,13 @@ msgid ""
 "`stream::error()`."
 msgstr ""
 
-#: src/tutorial/async.md:129
+#: src/tutorial/async.md:132
 msgid ""
 "A complete request handler from the repository's GitHub-viewer example — "
 "send, then drain:"
 msgstr ""
 
-#: src/tutorial/async.md:132
+#: src/tutorial/async.md:135
 msgid ""
 "```rut\n"
 "async fn do_list(client: HttpClient, owner: str, repo: str, rf: str) -> i32 "
@@ -4559,11 +4561,11 @@ msgid ""
 "```"
 msgstr ""
 
-#: src/tutorial/async.md:156
+#: src/tutorial/async.md:159
 msgid "The stream lane walks chunks — send, then loop:"
 msgstr ""
 
-#: src/tutorial/async.md:158
+#: src/tutorial/async.md:161
 msgid ""
 "```rut\n"
 "let resp = await client.get(url).build().send();\n"
@@ -4581,11 +4583,11 @@ msgid ""
 "```"
 msgstr ""
 
-#: src/tutorial/async.md:173
+#: src/tutorial/async.md:176
 msgid "Racing futures and the join tier"
 msgstr ""
 
-#: src/tutorial/async.md:175
+#: src/tutorial/async.md:178
 msgid ""
 "`select2(a, b)` races two futures and answers the first-ready side as an "
 "`Either2` (`is_a()`/`a_value()` or `is_b()`/`b_value()`); the losers are "
@@ -4598,11 +4600,11 @@ msgid ""
 "the race and completer surfaces."
 msgstr ""
 
-#: src/tutorial/async.md:186
+#: src/tutorial/async.md:189
 msgid "Parallelism"
 msgstr ""
 
-#: src/tutorial/async.md:188
+#: src/tutorial/async.md:191
 msgid ""
 "The language has none: a VM is single-threaded by construction (`!Send`, one "
 "heap — [the VM](../core-concepts/the-vm.md)); async is the whole concurrency "
@@ -4610,7 +4612,7 @@ msgid ""
 "surface for sharing between them."
 msgstr ""
 
-#: src/tutorial/async.md:195
+#: src/tutorial/async.md:198
 msgid ""
 "```rut\n"
 "use futures::{ launch_future, sleep };\n"
@@ -4633,7 +4635,7 @@ msgid ""
 "```"
 msgstr ""
 
-#: src/tutorial/async.md:222
+#: src/tutorial/async.md:225
 msgid "Next: [the standard library](stdlib.md)."
 msgstr ""
 
@@ -5277,22 +5279,24 @@ msgstr ""
 msgid ""
 "**Embeddable by contract.** The host registers native functions whose Rust "
 "signatures _are_ the declared surface; every crossing is type-checked "
-"against reified types, and the host owns the event loop, the fuel budget, "
-"and the clock. See [the host boundary](host-boundary.md) and [the bytecode "
-"VM](the-vm.md)."
+"against reified types. The engine owns the driving loop (`run_until_idle`); "
+"the host names the parking policy and owns the fuel budget and the clock — "
+"and a host with its own event loop (a UI, a game, a web page) may drive "
+"frame-per-tick through the raw doors. See [the host "
+"boundary](host-boundary.md) and [the bytecode VM](the-vm.md)."
 msgstr ""
 
-#: src/core-concepts/design-goals.md:60
+#: src/core-concepts/design-goals.md:63
 msgid "Why not JavaScript"
 msgstr ""
 
-#: src/core-concepts/design-goals.md:62
+#: src/core-concepts/design-goals.md:65
 msgid ""
 "The case against shipping a JS engine — not just this or that implementation "
 "— is fourfold, and each item has a structural answer:"
 msgstr ""
 
-#: src/core-concepts/design-goals.md:65
+#: src/core-concepts/design-goals.md:68
 msgid ""
 "**History debt compounds.** Two nullish values, coercing `==`, `typeof "
 "null`, implicit semicolons: each is a permanent liability the ecosystem "
@@ -5301,7 +5305,7 @@ msgid ""
 "words each name what to write instead. Nothing legacy can accrete."
 msgstr ""
 
-#: src/core-concepts/design-goals.md:72
+#: src/core-concepts/design-goals.md:75
 msgid ""
 "**Conformance means implementing the world.** A compliant engine needs "
 "`BigInt`, `Intl`, `Date`'s quirks, microtask ordering — thousands of "
@@ -5311,7 +5315,7 @@ msgid ""
 "ordinary packages, several of them written _in rut_ and swappable."
 msgstr ""
 
-#: src/core-concepts/design-goals.md:80
+#: src/core-concepts/design-goals.md:83
 msgid ""
 "**Too slow without a JIT.** Interpreter-only JS runs one to two orders of "
 "magnitude slower, because a JS engine's speed _is_ its JIT. rut's no-JIT "
@@ -5321,7 +5325,7 @@ msgid ""
 "actually erases types."
 msgstr ""
 
-#: src/core-concepts/design-goals.md:87
+#: src/core-concepts/design-goals.md:90
 msgid ""
 "**Too much memory.** JS values are boxes — per-object headers, tagged "
 "pointers, boxed array elements, collector overhead. rut's answer is layout: "
@@ -5329,69 +5333,70 @@ msgid ""
 "buffers, and reference counting with no collector pass on the hot path."
 msgstr ""
 
-#: src/core-concepts/design-goals.md:93
+#: src/core-concepts/design-goals.md:96
 msgid "What \"no dynamic typing\" leaves you"
 msgstr ""
 
-#: src/core-concepts/design-goals.md:95
+#: src/core-concepts/design-goals.md:98
 msgid "Erasure is never silent — it is spelled and checked:"
 msgstr ""
 
-#: src/core-concepts/design-goals.md:97
+#: src/core-concepts/design-goals.md:100
 msgid ""
 "**Interface-typed values** (`s: Drawable`) for polymorphism. Dispatch is "
 "dynamic only where a value may be one of several concrete types, and an "
 "interface-typed value still carries its exact class at runtime."
 msgstr ""
 
-#: src/core-concepts/design-goals.md:100
+#: src/core-concepts/design-goals.md:103
 msgid ""
 "**The `opaque` box** (`opaque(v)`, `opaque::downcast<T>(o)`) for storage. "
 "Erasure mints a checked box; recovery checks the runtime type and yields "
 "`nil` on a mismatch — never a silent wrong-type read."
 msgstr ""
 
-#: src/core-concepts/design-goals.md:104
+#: src/core-concepts/design-goals.md:107
 msgid ""
 "JSON-shaped data, heterogeneous collections, and `any`\\-shaped host APIs "
 "all route through these two doors, which is what keeps \"every value has a "
 "runtime type\" true without giving up dynamism where it earns its keep."
 msgstr ""
 
-#: src/core-concepts/design-goals.md:108
+#: src/core-concepts/design-goals.md:111
 msgid "The execution model"
 msgstr ""
 
-#: src/core-concepts/design-goals.md:115
+#: src/core-concepts/design-goals.md:118
 msgid ""
 "**One thread per VM.** A `Vm` instance runs on one thread with one heap and "
 "no atomics."
 msgstr ""
 
-#: src/core-concepts/design-goals.md:117
+#: src/core-concepts/design-goals.md:120
 msgid ""
 "**The host owns time.** The VM exposes stepping verbs — drain the ready "
-"queue, expire timers, poll with a deadline — plus construction-time op and "
-"heap budgets (a per-op fuel tick and a per-allocation heap charge; there is "
-"no interrupt lane). A UI host drives script between frames and stays "
-"responsive; a test host virtualizes the clock and gets fully deterministic "
-"schedules."
+"queue, expire timers, poll with a deadline (the engine-owned "
+"`run_until_idle` loop rides them for hosts that own no loop) — plus "
+"construction-time op and heap budgets (a per-op fuel tick and a "
+"per-allocation heap charge; there is no interrupt lane). A UI host drives "
+"script between frames and stays responsive; a test host virtualizes the "
+"clock and gets fully deterministic schedules."
 msgstr ""
 
-#: src/core-concepts/design-goals.md:123
+#: src/core-concepts/design-goals.md:127
 msgid ""
 "**Traps stop at the boundary.** A panic in script (overflow, nil deref) "
 "unwinds as a `Trap` value to the host call — rut code never catches one. "
 "Bugs become host-visible errors with a script backtrace, not corrupted state."
 msgstr ""
 
-#: src/core-concepts/design-goals.md:128 src/core-concepts/reified-types.md:139
+#: src/core-concepts/design-goals.md:132 src/core-concepts/reified-types.md:139
 #: src/core-concepts/interfaces-and-dispatch.md:288
 #: src/core-concepts/memory.md:209
 msgid "What this buys you"
 msgstr ""
 
-#: src/core-concepts/design-goals.md:130
+#: src/core-concepts/design-goals.md:134
 msgid ""
 "If you are **writing scripts**: assignments never deep-copy; cleanup runs "
 "when the last reference dies; a miss is `nil`, a failure is a returned `err` "
@@ -5402,7 +5407,7 @@ msgid ""
 "boilerplate to maintain."
 msgstr ""
 
-#: src/core-concepts/design-goals.md:138
+#: src/core-concepts/design-goals.md:142
 msgid ""
 "The rest of this section walks each pillar in depth; the tutorial shows the "
 "day-to-day syntax, and the reference pins down exact rules."
@@ -6514,8 +6519,10 @@ msgstr ""
 msgid "the host must drain a job queue"
 msgstr ""
 
-#: src/core-concepts/async-model.md:19
-msgid "the host polls: drain ready frames, ask for the next deadline"
+#: src/core-concepts/async-model.md:19 src/reference/async.md:16
+msgid ""
+"the engine drives: `run_until_idle(wait)`; raw doors stay public for "
+"hand-driving"
 msgstr ""
 
 #: src/core-concepts/async-model.md:21 src/reference/opaque.md:9
@@ -17212,16 +17219,26 @@ msgstr ""
 
 #: src/reference/resource-limits.md:86
 msgid ""
+"One hang no recipe above sees: a host future that never settles. That is not "
+"a script hang — fuel never runs — and under `Wait::Block` the run parks by "
+"law (no wall-clock budget, no hang guard). An embedder that needs a bound "
+"there picks `Wait::NonBlock`, answers `Idle::WouldBlock`, and runs its own "
+"watchdog around the drive ([the embedder's driving "
+"contract](embedding.md#the-embedders-driving-contract))."
+msgstr ""
+
+#: src/reference/resource-limits.md:93
+msgid ""
 "Anything blocking that cannot be bounded by fuel (IO, locks) belongs on a "
 "worker thread answering a `Completer` — the VM thread never blocks on it "
 "([the host futures bridge](host-futures.md))."
 msgstr ""
 
-#: src/reference/resource-limits.md:90
+#: src/reference/resource-limits.md:97
 msgid "Fairness"
 msgstr ""
 
-#: src/reference/resource-limits.md:92
+#: src/reference/resource-limits.md:99
 msgid ""
 "Within one VM, the ready ring is round-robin: one greedy launched future "
 "cannot starve the rest of a queue drain indefinitely — each frame runs to "
@@ -17280,12 +17297,6 @@ msgstr ""
 
 #: src/reference/async.md:15
 msgid "`abort()` flags the frame; the probe at its checkpoint runs the drop path"
-msgstr ""
-
-#: src/reference/async.md:16
-msgid ""
-"the engine drives: `run_until_idle(wait)`; raw doors stay public for "
-"hand-driving"
 msgstr ""
 
 #: src/reference/async.md:18
@@ -17687,17 +17698,19 @@ msgstr ""
 msgid ""
 "The hand-drive test shape (deterministic; the engine loop is deterministic "
 "too when no host future is parked — pure timers fast-forward the virtual "
-"clock):"
+"clock). One caveat: this is the timer-only shape — a parked host future "
+"spins it forever (`run_ready()` finds nothing, `next_deadline()` answers "
+"`None`); a test with host futures rides `run_until_idle` instead:"
 msgstr ""
 
-#: src/reference/async.md:221
+#: src/reference/async.md:224
 msgid ""
 "Fuel rides the existing per-op budget ([resource "
 "limits](resource-limits.md)): a drive that runs out parks the frame and "
 "propagates `OutOfFuel`; a re-drive re-enters at the frame's checkpoint."
 msgstr ""
 
-#: src/reference/async.md:226
+#: src/reference/async.md:229
 msgid ""
 "See [launched futures](launched-futures.md) for receipts, cancellation, and "
 "the race/completer tier (`select2` / `select_all` / `completer`); [the host "
@@ -18046,8 +18059,8 @@ msgstr ""
 #: src/reference/launched-futures.md:194
 msgid ""
 "`vm.pending_tasks()` counts ready frames, armed timers, and host futures "
-"parked on Completers — the idle test behind the engine's driving loop "
-"([async and await](async.md), [the embedder's driving "
+"parked on Completers — the idle test behind the engine's driving loop, "
+"`run_until_idle` ([async and await](async.md), [the embedder's driving "
 "contract](embedding.md#the-embedders-driving-contract))."
 msgstr ""
 
@@ -18927,11 +18940,11 @@ msgstr ""
 
 #: src/reference/embedding.md:256
 msgid ""
-"The embedder owns exactly three things: the fs policy (\\[`Source`\\]), the "
-"remote policy (\\[`DepRemote`\\]), and its own runtime. The `_with` lanes "
-"take `&dyn DepRemote` and nothing else: the remote matters only when the dep "
-"walk actually reaches a url row. Url-free projects and `.rutbundle`s are "
-"closed — they load with no remote named at all."
+"The embedder supplies exactly three things: the fs policy (\\[`Source`\\]), "
+"the remote policy (\\[`DepRemote`\\]), and its own runtime. The `_with` "
+"lanes take `&dyn DepRemote` and nothing else: the remote matters only when "
+"the dep walk actually reaches a url row. Url-free projects and `.rutbundle`s "
+"are closed — they load with no remote named at all."
 msgstr ""
 
 #: src/reference/embedding.md:262

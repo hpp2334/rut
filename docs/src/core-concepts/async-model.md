@@ -16,7 +16,7 @@ nothing runs unless the driving loop runs it.
 | idle cost | reactions and queues exist whether or not anyone waits | nobody drives ⇒ nobody pays |
 | per-await allocation | promise + callback lists | one hidden frame record per call |
 | cancellation | abort flags layered on top | native: the frame is dropped at a checkpoint |
-| host integration | the host must drain a job queue | the host polls: drain ready frames, ask for the next deadline |
+| host integration | the host must drain a job queue | the engine drives: `run_until_idle(wait)`; raw doors stay public for hand-driving |
 
 ## The surface
 

@@ -3,6 +3,8 @@ msgstr "Project-Id-Version: The rut Book\nPOT-Creation-Date: 1970-01-01 00:00:00
 
 
 
+
+
 #: src/SUMMARY.md:1
 msgid "Summary"
 msgstr "目录"
@@ -1861,7 +1863,7 @@ msgstr "这个二元组也是 rut 标准的错误通道——接下来的章节�
 #: src/tutorial/values-and-variables.md:307 src/tutorial/control-flow.md:400
 #: src/tutorial/functions.md:242 src/tutorial/types.md:284
 #: src/tutorial/interfaces.md:400 src/tutorial/errors.md:233
-#: src/tutorial/modules.md:300 src/tutorial/async.md:193
+#: src/tutorial/modules.md:300 src/tutorial/async.md:196
 #: src/tutorial/stdlib.md:409
 msgid "Put it together"
 msgstr "综合运用"
@@ -4631,95 +4633,95 @@ msgstr "谁来驱动？"
 
 #: src/tutorial/async.md:65
 msgid ""
-"You never write a driving loop — the _embedder_ does. The `rut run` CLI is an embedder: after `main` returns it pumps the loop — drain ready frames, advance the virtual clock to the next timer deadline, repeat — until nothing is pending. So a program launches work from `main` and the output simply appears:"
+"You never write a driving loop — and neither does the embedder: the _engine_ owns it. The `rut run` CLI boots the program and calls `run_until_idle(Wait::Block)`: the engine drains ready frames, jumps the virtual clock to the next timer deadline, and parks on the wake cell for host futures, until nothing is pending ([the embedder's driving contract](../reference/embedding.md#the-embedders-driving-contract)). So a program launches work from `main` and the output simply appears:"
 msgstr ""
-"你从不编写驱动循环——_嵌入方_来写。`rut run` CLI 就是一个嵌入方：`main` 返回后它泵动循环——排空就绪的帧，把虚拟时钟推进到下一个定时器期限，如此往复——直到没有任何待处理的东西。于是程序从 `main` 发起工作，输出自然就出现了："
+"你从不编写驱动循环——嵌入方也不编写：_引擎_拥有它。`rut run` CLI 引导程序并调用 `run_until_idle(Wait::Block)`：引擎排空就绪的帧、把虚拟时钟推进到下一个定时器期限、并为宿主 future 停放在唤醒单元上，直到没有任何待处理的东西（[嵌入方的驱动契约](../reference/embedding.md#the-embedders-driving-contract)）。于是程序从 `main` 发起工作，输出自然就出现了："
 
 
-#: src/tutorial/async.md:82
+#: src/tutorial/async.md:85
 msgid ""
 "Launched work outlives `main`: `rut run` drives every launched future to completion before exiting — **host-backed included**. A launched host async fn ([the host futures bridge](../reference/host-futures.md)) parks its frame on a completer that a worker thread settles; the CLI parks on the engine's wake cell until those answers land, so the run ends only at idle or trap. The flip side is law, not a bug: a host worker that never completes hangs the run — no wall-clock budget, no hang guard. Cancellation stays best-effort: `abort()` marks the frame, the worker runs to its blocking completion, and the late answer is simply discarded."
 msgstr ""
 "已启动的工作活得比 `main` 久：`rut run` 会把每个已启动的 future 驱动到完成才退出——宿主后端（host-backed）的也不例外。已启动的宿主 async fn（[宿主 future 桥接](../reference/host-futures.md)）把自己的帧停放在一个 completer 上，由 worker 线程结算；CLI 则停在引擎的唤醒单元（wake cell）上，直到这些应答落地——因此运行只会在空闲或陷阱处结束。另一面是法则，不是缺陷：一个永不完成的宿主 worker 会让运行挂起——没有墙钟预算，也没有挂起守卫。取消仍是尽力而为：`abort()` 标记帧，worker 跑完其阻塞式执行，迟到的应答被直接丢弃。"
 
 
-#: src/tutorial/async.md:72
+#: src/tutorial/async.md:75
 msgid ""
 "# a module dir (rut.jsonc + main.rut); main launches the countdown\n"
 msgstr ""
 "# a module dir (rut.jsonc + main.rut); main launches the countdown\n"
 
 
-#: src/tutorial/async.md:93
+#: src/tutorial/async.md:96
 msgid ""
 "Calling an async function and awaiting it in the same body is the straight-line case; launching is for concurrency — independent work that overlaps through the loop's interleaving."
 msgstr "在同一个体内调用异步函数并 await 它，是直线情形；launch 则用于并发——经由循环的交错而彼此重叠的独立工作。"
 
 
-#: src/tutorial/async.md:97
+#: src/tutorial/async.md:100
 msgid "Talking to the network: the `http` package"
 msgstr "与网络对话：`http` 包"
 
 
-#: src/tutorial/async.md:99
+#: src/tutorial/async.md:102
 msgid ""
 "The standard `http` package is async-only where work actually waits. Everything else — the client, the verbs, the builder — is sync construction sugar:"
 msgstr "标准 `http` 包只在真正等待的工作处才是异步的。其余一切——客户端、各个动词、构建器——都是同步的构造糖："
 
 
-#: src/tutorial/async.md:110
+#: src/tutorial/async.md:113
 msgid "The shape, step by step:"
 msgstr "这个形状，一步一步："
 
 
-#: src/tutorial/async.md:112
+#: src/tutorial/async.md:115
 msgid ""
 "`client.get(url)` (or `request()`, `post`, `put`, `patch`, `del`) hands back a `RequestBuilder`; `.method(..)`, `.url(..)`, `.header(k, v)` (repeatable), `.body(bytes)` chain on it."
 msgstr ""
 "`client.get(url)`（或 `request()`、`post`、`put`、`patch`、`del`）交还一个 `RequestBuilder`；`.method(..)`、`.url(..)`、`.header(k, v)`（可重复）、`.body(bytes)` 在它上面链式调用。"
 
 
-#: src/tutorial/async.md:115
+#: src/tutorial/async.md:118
 msgid "`.build()` freezes a re-sendable `Request`."
 msgstr "`.build()` 冻结出一个可重发的 `Request`。"
 
 
-#: src/tutorial/async.md:116
+#: src/tutorial/async.md:119
 msgid ""
 "**`.send()` is the async point.** It resolves at _headers_ — the wire body is still unread."
 msgstr ""
 
 
-#: src/tutorial/async.md:118
+#: src/tutorial/async.md:121
 msgid "From the `Response`, take one of two readbacks:"
 msgstr "从 `Response` 出发，有两条读取路径："
 
 
-#: src/tutorial/async.md:119
+#: src/tutorial/async.md:122
 msgid "`await resp.body()` — drain the remaining body in one future;"
 msgstr ""
 
 
-#: src/tutorial/async.md:120
+#: src/tutorial/async.md:123
 msgid ""
 "`resp.byte_stream()` then `await stream::next()` — one chunk per future, `nil` at end-of-stream, for bounded-memory downloads."
 msgstr ""
 
 
-#: src/tutorial/async.md:123
+#: src/tutorial/async.md:126
 msgid ""
 "Errors come back as data, not traps: status `0` is reserved for transport failure (`resp.transport_error()` carries the reason), any real status — 4xx and 5xx included — is a normal response (`resp.ok()` is the 2xx test), and a mid-read wire death surfaces as `nil` from `next()` with the reason in `stream::error()`."
 msgstr ""
 "错误以数据的形式回来，而不是陷阱：状态 `0` 保留给传输失败（`resp.transport_error()` 携带原因），任何真实状态——包括 4xx 和 5xx——都是正常响应（`resp.ok()` 是 2xx 测试），而读取中途线路断开则表现为 `next()` 返回 `nil`，原因在 `stream::error()` 里。"
 
 
-#: src/tutorial/async.md:129
+#: src/tutorial/async.md:132
 msgid ""
 "A complete request handler from the repository's GitHub-viewer example — send, then drain:"
 msgstr "来自仓库 GitHub-viewer 示例的一个完整请求处理函数——先 send，再排干："
 
 
-#: src/tutorial/async.md:132
+#: src/tutorial/async.md:135
 msgid ""
 "```rut\n"
 "async fn do_list(client: HttpClient, owner: str, repo: str, rf: str) -> i32 {\n"
@@ -4747,12 +4749,12 @@ msgid ""
 msgstr ""
 
 
-#: src/tutorial/async.md:156
+#: src/tutorial/async.md:159
 msgid "The stream lane walks chunks — send, then loop:"
 msgstr "流路径逐块行走——先 send，再循环："
 
 
-#: src/tutorial/async.md:158
+#: src/tutorial/async.md:161
 msgid ""
 "```rut\n"
 "let resp = await client.get(url).build().send();\n"
@@ -4771,31 +4773,31 @@ msgid ""
 msgstr ""
 
 
-#: src/tutorial/async.md:173
+#: src/tutorial/async.md:176
 msgid "Racing futures and the join tier"
 msgstr "竞速 future 与 join 层级"
 
 
-#: src/tutorial/async.md:175
+#: src/tutorial/async.md:178
 msgid ""
 "`select2(a, b)` races two futures and answers the first-ready side as an `Either2` (`is_a()`/`a_value()` or `is_b()`/`b_value()`); the losers are cancelled, their drop paths running at their next checkpoint. `select_all(futs)` extends the race to a cohort, answering `(i, v)`. Joining a launched future's value (`await handle`) is still spelled in the grammar but rejected in this build — the compiler gates it with ``cannot `await` a LaunchedFutureHandle — the receipt is not a Future and cannot be re-launched``. See [launched futures](../reference/launched-futures.md) for the race and completer surfaces."
 msgstr ""
 "`select2(a, b)` 对两个 future 竞速，以 `Either2` 应答先就绪的一侧（`is_a()`/`a_value()` 或 `is_b()`/`b_value()`）；落败者会被取消，各自的 drop 路径在下一个检查点运行。`select_all(futs)` 把竞速扩展到一整组，应答 `(i, v)`。连接已启动 future 的值（`await handle`）仍在语法里拼写，但本构建会拒绝——编译器以 ``cannot `await` a LaunchedFutureHandle — the receipt is not a Future and cannot be re-launched`` 设门。竞速与 completer 表面见[已启动的 future](../reference/launched-futures.md)。"
 
 
-#: src/tutorial/async.md:186
+#: src/tutorial/async.md:189
 msgid "Parallelism"
 msgstr "并行"
 
 
-#: src/tutorial/async.md:188
+#: src/tutorial/async.md:191
 msgid ""
 "The language has none: a VM is single-threaded by construction (`!Send`, one heap — [the VM](../core-concepts/the-vm.md)); async is the whole concurrency story. A host that wants parallelism runs separate VMs — rut defines no surface for sharing between them."
 msgstr ""
 "语言层面没有并行：VM 在构造上就是单线程的（`!Send`，一套堆——[VM](../core-concepts/the-vm.md)）；异步就是全部的并发故事。想要并行的宿主运行多个独立的 VM——rut 不为它们之间的共享定义任何表面。"
 
 
-#: src/tutorial/async.md:195
+#: src/tutorial/async.md:198
 msgid ""
 "```rut\n"
 "use futures::{ launch_future, sleep };\n"
@@ -4819,7 +4821,7 @@ msgid ""
 msgstr ""
 
 
-#: src/tutorial/async.md:222
+#: src/tutorial/async.md:225
 msgid "Next: [the standard library](stdlib.md)."
 msgstr "下一章：[标准库](stdlib.md)。"
 
@@ -5421,120 +5423,120 @@ msgstr "**没有 JIT。**一切优化都提前发生：折叠、内联、单态�
 
 #: src/core-concepts/design-goals.md:54
 msgid ""
-"**Embeddable by contract.** The host registers native functions whose Rust signatures _are_ the declared surface; every crossing is type-checked against reified types, and the host owns the event loop, the fuel budget, and the clock. See [the host boundary](host-boundary.md) and [the bytecode VM](the-vm.md)."
+"**Embeddable by contract.** The host registers native functions whose Rust signatures _are_ the declared surface; every crossing is type-checked against reified types. The engine owns the driving loop (`run_until_idle`); the host names the parking policy and owns the fuel budget and the clock — and a host with its own event loop (a UI, a game, a web page) may drive frame-per-tick through the raw doors. See [the host boundary](host-boundary.md) and [the bytecode VM](the-vm.md)."
 msgstr ""
-"**以契约方式嵌入。**宿主注册原生函数，其 Rust 签名_就是_所声明的接口；每次跨越都针对具体化类型做类型检查，而事件循环、燃料预算与时钟都归宿主所有。参见[宿主边界](host-boundary.md)与[字节码 VM](the-vm.md)。"
+"**以契约方式嵌入。**宿主注册原生函数，其 Rust 签名_就是_所声明的接口；每次跨越都针对具体化类型做类型检查。引擎拥有驱动循环（`run_until_idle`）；宿主指名停放策略，并拥有燃料预算与时钟——而拥有自己事件循环的宿主（UI、游戏、网页）可以透过原始门逐帧驱动。参见[宿主边界](host-boundary.md)与[字节码 VM](the-vm.md)。"
 
 
-#: src/core-concepts/design-goals.md:60
+#: src/core-concepts/design-goals.md:63
 msgid "Why not JavaScript"
 msgstr "为什么不用 JavaScript"
 
 
-#: src/core-concepts/design-goals.md:62
+#: src/core-concepts/design-goals.md:65
 msgid ""
 "The case against shipping a JS engine — not just this or that implementation — is fourfold, and each item has a structural answer:"
 msgstr "反对内置 JS 引擎的理由——不针对某个具体实现，而是针对整类引擎——有四条，每一条都有一个结构层面的回答："
 
 
-#: src/core-concepts/design-goals.md:65
+#: src/core-concepts/design-goals.md:68
 msgid ""
 "**History debt compounds.** Two nullish values, coercing `==`, `typeof null`, implicit semicolons: each is a permanent liability the ecosystem re-implements forever. rut starts from a closed, small grammar — absence is `nil` on a nullable type, errors are values, and the handful of reserved words each name what to write instead. Nothing legacy can accrete."
 msgstr ""
 "**历史债务复利式累积。**两个表示\\\"空\\\"的值、会做转换的 `==`、`typeof null`、隐式分号：每一条都是永久性的负担，生态系统要永远为之重新实现补丁。rut 从一个封闭的小语法出发——缺失即可空类型上的 `nil`，错误是值，仅有的几个保留字各自指明该写什么。任何遗留物都无从沉积。"
 
 
-#: src/core-concepts/design-goals.md:72
+#: src/core-concepts/design-goals.md:75
 msgid ""
 "**Conformance means implementing the world.** A compliant engine needs `BigInt`, `Intl`, `Date`'s quirks, microtask ordering — thousands of person-hours before user code runs. rut's built-in contract is deliberately tiny: primitives, sequences, channels, string building. Everything else is library — maps and sets, JSON, logging, and the host's own domain are ordinary packages, several of them written _in rut_ and swappable."
 msgstr ""
 "**符合规范等于实现整个世界。**一个合规引擎需要 `BigInt`、`Intl`、`Date` 的种种怪癖、微任务顺序——在用户代码能跑起来之前就要投入数千人时。rut 的内置契约刻意保持极小：原始类型、序列、通道、字符串构建。其余一切都是库——map 与 set、JSON、日志以及宿主自身的领域都是普通的包，其中几个就是_in rut_ 写成的，而且可替换。"
 
 
-#: src/core-concepts/design-goals.md:80
+#: src/core-concepts/design-goals.md:83
 msgid ""
 "**Too slow without a JIT.** Interpreter-only JS runs one to two orders of magnitude slower, because a JS engine's speed _is_ its JIT. rut's no-JIT stance is viable only because the language is statically typed: calls bind statically whenever the call site names one concrete type, and dynamic dispatch is a checked vtable hop that happens only where the program actually erases types."
 msgstr ""
 "**没有 JIT 就太慢。**纯解释执行的 JS 慢一到两个数量级，因为 JS 引擎的速度_就是_它的 JIT。rut 的无 JIT 立场之所以可行，恰恰因为这门语言是静态类型的：只要调用点指明了一个具体类型，调用就静态绑定；动态分派则是一次经过检查的 vtable 跳转，只发生在程序真正擦除类型的地方。"
 
 
-#: src/core-concepts/design-goals.md:87
+#: src/core-concepts/design-goals.md:90
 msgid ""
 "**Too much memory.** JS values are boxes — per-object headers, tagged pointers, boxed array elements, collector overhead. rut's answer is layout: untagged 8-byte slots, record payloads as slot arrays, flat primitive buffers, and reference counting with no collector pass on the hot path."
 msgstr ""
 "**太占内存。**JS 的值都是盒子——每对象头部、带标签的指针、装箱的数组元素、收集器开销。rut 的答案是布局：无标签的 8 字节槽位、以槽数组存放的记录载荷、扁平的原始类型缓冲区，以及热路径上没有收集器扫描的引用计数。"
 
 
-#: src/core-concepts/design-goals.md:93
+#: src/core-concepts/design-goals.md:96
 msgid "What \"no dynamic typing\" leaves you"
 msgstr "\"没有动态类型\"给你留下什么"
 
 
-#: src/core-concepts/design-goals.md:95
+#: src/core-concepts/design-goals.md:98
 msgid "Erasure is never silent — it is spelled and checked:"
 msgstr "擦除从不悄悄发生——它被明确写出并接受检查："
 
 
-#: src/core-concepts/design-goals.md:97
+#: src/core-concepts/design-goals.md:100
 msgid ""
 "**Interface-typed values** (`s: Drawable`) for polymorphism. Dispatch is dynamic only where a value may be one of several concrete types, and an interface-typed value still carries its exact class at runtime."
 msgstr ""
 
 
-#: src/core-concepts/design-goals.md:100
+#: src/core-concepts/design-goals.md:103
 msgid ""
 "**The `opaque` box** (`opaque(v)`, `opaque::downcast<T>(o)`) for storage. Erasure mints a checked box; recovery checks the runtime type and yields `nil` on a mismatch — never a silent wrong-type read."
 msgstr ""
 "**`opaque` 盒**（`opaque(v)`、`opaque::downcast<T>(o)`）用于存储。擦除铸造一个经过检查的盒；恢复则检查运行时类型，不匹配时给出 `nil`——绝不会悄悄读出错误类型的值。"
 
 
-#: src/core-concepts/design-goals.md:104
+#: src/core-concepts/design-goals.md:107
 msgid ""
 "JSON-shaped data, heterogeneous collections, and `any`\\-shaped host APIs all route through these two doors, which is what keeps \"every value has a runtime type\" true without giving up dynamism where it earns its keep."
 msgstr ""
 "JSON 形状的数据、异构集合以及 `any`\\-形状的宿主 API 都经由这两扇门——\"每个值都有运行时类型\"因此保持为真，同时在动态性真正物有所值之处，它也未被放弃。"
 
 
-#: src/core-concepts/design-goals.md:108
+#: src/core-concepts/design-goals.md:111
 msgid "The execution model"
 msgstr "执行模型"
 
 
-#: src/core-concepts/design-goals.md:115
+#: src/core-concepts/design-goals.md:118
 msgid ""
 "**One thread per VM.** A `Vm` instance runs on one thread with one heap and no atomics."
 msgstr "**每个 VM 一个线程。**一个 `Vm` 实例运行在一个线程上，拥有一套堆，不使用原子操作。"
 
 
-#: src/core-concepts/design-goals.md:117
+#: src/core-concepts/design-goals.md:120
 msgid ""
-"**The host owns time.** The VM exposes stepping verbs — drain the ready queue, expire timers, poll with a deadline — plus construction-time op and heap budgets (a per-op fuel tick and a per-allocation heap charge; there is no interrupt lane). A UI host drives script between frames and stays responsive; a test host virtualizes the clock and gets fully deterministic schedules."
+"**The host owns time.** The VM exposes stepping verbs — drain the ready queue, expire timers, poll with a deadline (the engine-owned `run_until_idle` loop rides them for hosts that own no loop) — plus construction-time op and heap budgets (a per-op fuel tick and a per-allocation heap charge; there is no interrupt lane). A UI host drives script between frames and stays responsive; a test host virtualizes the clock and gets fully deterministic schedules."
 msgstr ""
-"**时间归宿主所有。**VM 暴露一组步进动词——排空就绪队列、让到期的定时器触发、带截止时间的 poll——外加构造期设定的操作与堆预算（逐操作的燃料一跳、逐分配的堆计费；没有中断车道）。UI 宿主在帧间驱动脚本并保持响应；测试宿主虚拟化时钟，得到完全确定性的调度。"
+"**时间归宿主所有。**VM 暴露一组步进动词——排空就绪队列、让到期的定时器触发、带截止时间的 poll（引擎拥有的 `run_until_idle` 循环为不拥有循环的宿主承载它们）——外加构造期设定的操作与堆预算（逐操作的燃料一跳、逐分配的堆计费；没有中断车道）。UI 宿主在帧间驱动脚本并保持响应；测试宿主虚拟化时钟，得到完全确定性的调度。"
 
 
-#: src/core-concepts/design-goals.md:123
+#: src/core-concepts/design-goals.md:127
 msgid ""
 "**Traps stop at the boundary.** A panic in script (overflow, nil deref) unwinds as a `Trap` value to the host call — rut code never catches one. Bugs become host-visible errors with a script backtrace, not corrupted state."
 msgstr ""
 "**陷阱止步于边界。**脚本中的 panic（溢出、对 nil 解引用）会以 `Trap` 值的形式沿栈展开到宿主调用——rut 代码永远捕获不到它。bug 变成宿主可见、带脚本回溯的错误，而不是被破坏的状态。"
 
 
-#: src/core-concepts/design-goals.md:128 src/core-concepts/reified-types.md:139
+#: src/core-concepts/design-goals.md:132 src/core-concepts/reified-types.md:139
 #: src/core-concepts/interfaces-and-dispatch.md:288
 #: src/core-concepts/memory.md:209
 msgid "What this buys you"
 msgstr "这给你带来什么"
 
 
-#: src/core-concepts/design-goals.md:130
+#: src/core-concepts/design-goals.md:134
 msgid ""
 "If you are **writing scripts**: assignments never deep-copy; cleanup runs when the last reference dies; a miss is `nil`, a failure is a returned `err` string, and a crash is a loud trap with a real stack trace. If you are **embedding**: you declare your API once in a rut declaration file, bind it with typed Rust closures, and the compiler plus the load-time verifier reject every mismatched shape before any script runs — there is no bridge boilerplate to maintain."
 msgstr ""
 "如果你在**写脚本**：赋值从不深拷贝；清理在最后一个引用消亡时运行；未命中是 `nil`，失败是一个返回的 `err` 字符串，崩溃则是伴随真实栈回溯的响亮陷阱。如果你在**做嵌入**：你在 rut 声明文件里一次性声明 API，用带类型的 Rust 闭包绑定它，编译器加上加载期校验器会在任何脚本运行之前拒绝每一个不匹配的形状——没有任何需要维护的桥接样板。"
 
 
-#: src/core-concepts/design-goals.md:138
+#: src/core-concepts/design-goals.md:142
 msgid ""
 "The rest of this section walks each pillar in depth; the tutorial shows the day-to-day syntax, and the reference pins down exact rules."
 msgstr "本节其余部分将逐一深入每根支柱；教程展示日常语法，参考手册钉死精确规则。"
@@ -6614,11 +6616,6 @@ msgstr "宿主集成"
 #: src/core-concepts/async-model.md:19 src/reference/async.md:16
 msgid "the host must drain a job queue"
 msgstr "宿主必须排空作业队列"
-
-
-#: src/core-concepts/async-model.md:19
-msgid "the host polls: drain ready frames, ask for the next deadline"
-msgstr "宿主做 poll：排空就绪帧，询问下一个截止时间"
 
 
 #: src/core-concepts/async-model.md:21 src/reference/opaque.md:9
@@ -17385,25 +17382,32 @@ msgid "tests"
 msgstr "测试"
 
 
+#: src/reference/resource-limits.md:86
+msgid ""
+"One hang no recipe above sees: a host future that never settles. That is not a script hang — fuel never runs — and under `Wait::Block` the run parks by law (no wall-clock budget, no hang guard). An embedder that needs a bound there picks `Wait::NonBlock`, answers `Idle::WouldBlock`, and runs its own watchdog around the drive ([the embedder's driving contract](embedding.md#the-embedders-driving-contract))."
+msgstr ""
+"上表的配方都看不见的一种挂起：一个永不结算的宿主 future。那不是脚本挂起——燃料根本不会运行——而且在 `Wait::Block` 下运行依法停放（没有墙钟预算，没有挂起守卫）。需要在那里有界限的嵌入方选择 `Wait::NonBlock`、应答 `Idle::WouldBlock`，并在驱动周围运行自己的看门狗（[嵌入方的驱动契约](embedding.md#the-embedders-driving-contract)）。"
+
+
 #: src/reference/resource-limits.md:84
 msgid ""
 "finite fuel + the virtual clock (`vm.set_now`) → fully deterministic hang proofs"
 msgstr "有限燃料 + 虚拟时钟（`vm.set_now`）→ 完全确定性的挂起证明"
 
 
-#: src/reference/resource-limits.md:86
+#: src/reference/resource-limits.md:93
 msgid ""
 "Anything blocking that cannot be bounded by fuel (IO, locks) belongs on a worker thread answering a `Completer` — the VM thread never blocks on it ([the host futures bridge](host-futures.md))."
 msgstr ""
 "无法用燃料约束的任何阻塞操作（IO、锁）属于 worker 线程上应答 `Completer` 的工作 —— VM 线程绝不在其上阻塞（[宿主 future 桥接](host-futures.md)）。"
 
 
-#: src/reference/resource-limits.md:90
+#: src/reference/resource-limits.md:97
 msgid "Fairness"
 msgstr "公平性"
 
 
-#: src/reference/resource-limits.md:92
+#: src/reference/resource-limits.md:99
 msgid ""
 "Within one VM, the ready ring is round-robin: one greedy launched future cannot starve the rest of a queue drain indefinitely — each frame runs to its next park or completion, and fuel bounds each of those runs."
 msgstr ""
@@ -17472,7 +17476,7 @@ msgid "`abort()` flags the frame; the probe at its checkpoint runs the drop path
 msgstr "`abort()` 给帧打上标志；其检查点处的探针运行 drop 路径"
 
 
-#: src/reference/async.md:16
+#: src/core-concepts/async-model.md:19 src/reference/async.md:16
 msgid ""
 "the engine drives: `run_until_idle(wait)`; raw doors stay public for hand-driving"
 msgstr "引擎驱动：`run_until_idle(wait)`；原始门保持公开，供手工驱动"
@@ -17868,8 +17872,9 @@ msgstr "`vm.pending_tasks() -> usize`"
 
 #: src/reference/async.md:210
 msgid ""
-"The hand-drive test shape (deterministic; the engine loop is deterministic too when no host future is parked — pure timers fast-forward the virtual clock):"
-msgstr "手工驱动的测试形状（确定性的；当没有宿主 future 停放时，引擎循环同样是确定性的——纯定时器会让虚拟时钟快进）："
+"The hand-drive test shape (deterministic; the engine loop is deterministic too when no host future is parked — pure timers fast-forward the virtual clock). One caveat: this is the timer-only shape — a parked host future spins it forever (`run_ready()` finds nothing, `next_deadline()` answers `None`); a test with host futures rides `run_until_idle` instead:"
+msgstr ""
+"手工驱动的测试形状（确定性的；当没有宿主 future 停放时，引擎循环同样是确定性的——纯定时器会让虚拟时钟快进）。一条告诫：这是仅限定时器的形状——停放的宿主 future 会让它永远空转（`run_ready()` 一无所获，`next_deadline()` 应答 `None`）；带宿主 future 的测试改用 `run_until_idle`："
 
 
 #: src/reference/async.md:208
@@ -17882,14 +17887,14 @@ msgid "\"boot\""
 msgstr "\"boot\""
 
 
-#: src/reference/async.md:221
+#: src/reference/async.md:224
 msgid ""
 "Fuel rides the existing per-op budget ([resource limits](resource-limits.md)): a drive that runs out parks the frame and propagates `OutOfFuel`; a re-drive re-enters at the frame's checkpoint."
 msgstr ""
 "燃料搭在现有的按操作预算上（[资源限制](resource-limits.md)）：一次耗尽燃料的驱动会停放该帧并传播 `OutOfFuel`；再驱动时从该帧的检查点重新进入。"
 
 
-#: src/reference/async.md:226
+#: src/reference/async.md:229
 msgid ""
 "See [launched futures](launched-futures.md) for receipts, cancellation, and the race/completer tier (`select2` / `select_all` / `completer`); [the host futures bridge](host-futures.md) for backing a host async fn with Rust."
 msgstr ""
@@ -18255,9 +18260,9 @@ msgstr ""
 
 #: src/reference/launched-futures.md:194
 msgid ""
-"`vm.pending_tasks()` counts ready frames, armed timers, and host futures parked on Completers — the idle test behind the engine's driving loop ([async and await](async.md), [the embedder's driving contract](embedding.md#the-embedders-driving-contract))."
+"`vm.pending_tasks()` counts ready frames, armed timers, and host futures parked on Completers — the idle test behind the engine's driving loop, `run_until_idle` ([async and await](async.md), [the embedder's driving contract](embedding.md#the-embedders-driving-contract))."
 msgstr ""
-"`vm.pending_tasks()` 统计就绪帧、已布防定时器以及停放在 Completer 上的宿主 future——引擎驱动循环背后的空闲判据（[异步与 await](async.md)、[嵌入方的驱动契约](embedding.md#the-embedders-driving-contract)）。"
+"`vm.pending_tasks()` 统计就绪帧、已布防定时器以及停放在 Completer 上的宿主 future——引擎驱动循环 `run_until_idle` 背后的空闲判据（[异步与 await](async.md)、[嵌入方的驱动契约](embedding.md#the-embedders-driving-contract)）。"
 
 
 #: src/reference/launched-futures.md:199
@@ -19195,8 +19200,9 @@ msgstr ""
 
 #: src/reference/embedding.md:256
 msgid ""
-"The embedder owns exactly three things: the fs policy (\\[`Source`\\]), the remote policy (\\[`DepRemote`\\]), and its own runtime. The `_with` lanes take `&dyn DepRemote` and nothing else: the remote matters only when the dep walk actually reaches a url row. Url-free projects and `.rutbundle`s are closed — they load with no remote named at all."
+"The embedder supplies exactly three things: the fs policy (\\[`Source`\\]), the remote policy (\\[`DepRemote`\\]), and its own runtime. The `_with` lanes take `&dyn DepRemote` and nothing else: the remote matters only when the dep walk actually reaches a url row. Url-free projects and `.rutbundle`s are closed — they load with no remote named at all."
 msgstr ""
+"嵌入方恰好提供三样东西：文件系统策略（\\[`Source`\\]）、远程策略（\\[`DepRemote`\\]）与它自己的运行时。`_with` 车道只收 `&dyn DepRemote`，别的什么都不要：只有当依赖遍历真正走到某个 url 行时远程才有意义。没有 url 依赖的项目和 `.rutbundle` 是封闭的——加载时完全不点名远程。"
 
 
 #: src/reference/embedding.md:262

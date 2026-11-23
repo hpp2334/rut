@@ -53,8 +53,11 @@ predictable startup, predictable per-op cost, no tiering.
 
 **Embeddable by contract.** The host registers native functions whose
 Rust signatures *are* the declared surface; every crossing is type-checked
-against reified types, and the host owns the event loop, the fuel
-budget, and the clock. See [the host boundary](host-boundary.md) and
+against reified types. The engine owns the driving loop
+(`run_until_idle`); the host names the parking policy and owns the
+fuel budget and the clock — and a host with its own event loop (a UI,
+a game, a web page) may drive frame-per-tick through the raw doors.
+See [the host boundary](host-boundary.md) and
 [the bytecode VM](the-vm.md).
 
 ## Why not JavaScript
@@ -115,8 +118,9 @@ source ──► lexer/parser ──► typecheck ──► IR ──► typed b
 - **One thread per VM.** A `Vm` instance runs on one thread with one
   heap and no atomics.
 - **The host owns time.** The VM exposes stepping verbs — drain the
-  ready queue, expire timers, poll with a deadline — plus
-  construction-time op and heap budgets (a per-op fuel tick and a
+  ready queue, expire timers, poll with a deadline (the engine-owned
+  `run_until_idle` loop rides them for hosts that own no loop) —
+  plus construction-time op and heap budgets (a per-op fuel tick and a
   per-allocation heap charge; there is no interrupt lane). A UI host
   drives script between frames and stays responsive; a test host
   virtualizes the clock and gets fully deterministic schedules.

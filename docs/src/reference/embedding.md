@@ -253,7 +253,7 @@ world the host actually mounts. A `use` outside the declared set is D5.
 
 ## Url deps — the remote policy (`DepRemote` + `HttpRemote`)
 
-The embedder owns exactly three things: the fs policy ([`Source`]),
+The embedder supplies exactly three things: the fs policy ([`Source`]),
 the remote policy ([`DepRemote`]), and its own runtime. The `_with`
 lanes take `&dyn DepRemote` and nothing else: the remote matters only
 when the dep walk actually reaches a url row. Url-free projects and

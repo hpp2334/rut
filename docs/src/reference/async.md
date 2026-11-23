@@ -209,7 +209,10 @@ event loop (a frame per tick) and tests that want per-step control:
 
 The hand-drive test shape (deterministic; the engine loop is
 deterministic too when no host future is parked — pure timers
-fast-forward the virtual clock):
+fast-forward the virtual clock). One caveat: this is the timer-only
+shape — a parked host future spins it forever (`run_ready()` finds
+nothing, `next_deadline()` answers `None`); a test with host futures
+rides `run_until_idle` instead:
 
 ```rust
 while vm.pending_tasks() > 0 {
