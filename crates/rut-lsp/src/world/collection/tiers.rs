@@ -492,23 +492,9 @@ impl<'a> Chain<'a> {
     /// it (the flat doors re-spell it on top), the same walk the
     /// completion tiers enumerate (`bare`, `use_exports`).
     pub(crate) fn file_scope(&self, name: &str) -> FileScope<'a> {
-        let mut out = self.own_scope(name);
+        let mut out = own_scope_of(self.head(), name);
         self.use_bound_layers(name, &mut out);
         self.ambient_layers(name, &mut out);
-        out
-    }
-
-    /// layer 1 — the head's own decls (the DeclMap, source order)
-    fn own_scope(&self, name: &str) -> FileScope<'a> {
-        let doc = self.head();
-        let mut out = FileScope::default();
-        if let Some(t) = doc.ty(name) {
-            out.types.push(t);
-        }
-        out.lets
-            .extend(doc.lets().into_iter().filter(|l| l.name() == name));
-        out.fns
-            .extend(doc.fns().into_iter().filter(|f| f.name() == name));
         out
     }
 
@@ -728,31 +714,52 @@ impl<'a> Chain<'a> {
     ///   cross-package `pub` walk ([`walk_use_mods`]; glob leaves
     ///   bind no modules — a walkable child is a namespace segment,
     ///   never a bound name).
+    /// - a pkg-rooted DEP name (`calc::…`, the dep merely declared) —
+    ///   the manifest's own naming (the dep stamps: [`Mount::dep`]
+    ///   carries `module: Some(name)`), bound AMBIENTLY by the
+    ///   compiler — "the manifest's own naming, never a use's" — but
+    ///   ONLY when the dep carries a module tree ("a flat dep — no
+    ///   module path can root inside").
     ///
-    /// The interior segments walk the mounted mod tree edge by edge
-    /// (any declared edge intra-package, `pub`-gated cross-package);
-    /// the TAIL resolves in the walked module's own file scope
-    /// ([`Chain::file_scope`] over the reordered chain — the one
-    /// home, re-headed) with the leaves tier-gated by visibility:
-    /// [`vis_allows`] against the reading file intra-package,
-    /// `pub`-only cross-package, ambient rows passing. A head the
-    /// file does not bind answers NONE — never the flat sweep.
+    /// The TYPE ladder walks the own family ONLY
+    /// ([`resolve_position_head`] — `resolve_qualified_ty`'s law: a
+    /// used package's name in a type position refuses, "uses are the
+    /// only cross-package door"); the value ladder adds the two
+    /// cross-package heads. The interior segments walk the mounted
+    /// mod tree edge by edge (any declared edge intra-package,
+    /// `pub`-gated cross-package); the TAIL resolves against the
+    /// target module's OWN DECLARATIONS ([`own_scope_of`] — the
+    /// compiler's qualified leaf is decls-only:
+    /// `fn_in`/`data_in`/`enum_in`/`let_in` read the module's own
+    /// tables, so a use row never joins, `pub use` included) with the
+    /// leaves tier-gated by visibility: [`vis_allows`] against the
+    /// reading file intra-package, `pub`-only cross-package, ambient
+    /// rows passing. A head the file does not bind answers NONE —
+    /// never the flat sweep.
     pub(crate) fn qualified_scope(
         &self,
         doc_mods: &DocMods,
         segs: &[String],
+        is_ty: bool,
     ) -> Option<FileScope<'a>> {
         let doc = self.head();
         let (head, rest) = segs.split_first()?;
         let (tail, middles) = rest.split_last()?;
-        let (mut cur, mut cross) = self.module_head(doc_mods, head)?;
+        let (mut cur, mut cross) = self.module_head(doc_mods, head, is_ty)?;
         (cur, cross) = self.module_walk(cur, cross, middles)?;
-        let sub = Chain::reordered(self, cur);
-        let mut scope = sub.file_scope(tail);
+        let mut scope = own_scope_of(cur, tail);
+        // the leaf's fns are the module's own FREE fns — impl methods
+        // are type-scoped, never module rows (`fn_in`'s shape)
+        scope.fns.retain(|f| f.owner().is_none());
         // the leaves tier-gate by visibility (the compiler's leaf
         // rule — the phase-3 machinery's own law for exactly this
-        // position)
-        let from = crate::world::mods::mod_path_of(doc);
+        // position); the READER is the queried file — its true mod
+        // path is the face's knowledge (the stamped twin's pair),
+        // never the unstamped open entry's default
+        let from = doc_mods
+            .mod_path
+            .as_deref()
+            .unwrap_or_else(|| crate::world::mods::mod_path_of(doc));
         let def_mod = crate::world::mods::mod_path_of(cur);
         let gate = |vis: Vis, ambient: bool| {
             ambient
@@ -777,16 +784,21 @@ impl<'a> Chain<'a> {
         segs: &[String],
     ) -> Option<&'a MountedFile> {
         let (head, rest) = segs.split_first()?;
-        let (cur, cross) = self.module_head(doc_mods, head)?;
+        let (cur, cross) = self.module_head(doc_mods, head, false)?;
         let (file, _) = self.module_walk(cur, cross, rest)?;
         Some(file)
     }
 
-    /// the head's module file — the three sources (the own lane, the
-    /// DeclMap's own edge, the use-bound leaf), each answered through
-    /// its established walk; `cross` marks the use-bound source (its
-    /// walk and everything beyond stays `pub`-gated)
-    fn module_head(&self, doc_mods: &DocMods, head: &str) -> Option<(&'a MountedFile, bool)> {
+    /// the head's module file — the own family for both ladders, the
+    /// cross-package heads for the value ladder only; `cross` marks
+    /// the use-bound and dep-root sources (their walk and everything
+    /// beyond stays `pub`-gated)
+    fn module_head(
+        &self,
+        doc_mods: &DocMods,
+        head: &str,
+        is_ty: bool,
+    ) -> Option<(&'a MountedFile, bool)> {
         let doc = self.head();
         // 1. the own lane — the machinery's own walk (own/ancestor
         //    edges + the own-pkg head; the doc's stamp keys it)
@@ -804,6 +816,12 @@ impl<'a> Chain<'a> {
                 return Some((f, false));
             }
         }
+        // the TYPE ladder stops at the own family — a used package's
+        // name in a type position refuses ("uses are the only
+        // cross-package door" — `resolve_qualified_ty`'s law)
+        if is_ty {
+            return None;
+        }
         // 3. a use-bound module leaf — the cross-package pub walk
         for u in doc.uses() {
             if u.name() != head {
@@ -819,6 +837,36 @@ impl<'a> Chain<'a> {
                     return Some((f, true));
                 }
             }
+        }
+        // 4. a pkg-rooted DEP name — the manifest's own naming (the
+        //    dep stamps: [`Mount::dep`] carries `module: Some(name)`),
+        //    bound AMBIENTLY by the compiler — "the manifest's own
+        //    naming, never a use's" — but ONLY when the dep carries a
+        //    module tree ("a flat dep — no module path can root
+        //    inside"). The mounted carrier wins over the embedded
+        //    twin (the mounted-over-embed law).
+        let tree_carrying = |f: &'a MountedFile| {
+            !f.mods().is_empty()
+                || self.iter().any(|x| {
+                    crate::world::pkg::matches_pkg(x, head)
+                        && !crate::world::mods::mod_path_of(x).is_empty()
+                })
+        };
+        let root = self
+            .iter()
+            .find(|f| {
+                crate::world::pkg::matches_pkg(f, head)
+                    && crate::world::mods::mod_path_of(f).is_empty()
+                    && f.mount.src_path.is_none()
+            })
+            .or_else(|| {
+                self.iter().find(|f| {
+                    crate::world::pkg::matches_pkg(f, head)
+                        && crate::world::mods::mod_path_of(f).is_empty()
+                })
+            });
+        if let Some(root) = root.filter(|f| tree_carrying(f)) {
+            return Some((root, true));
         }
         None
     }
@@ -891,4 +939,27 @@ fn prefer_mounted<'a, T: Copy>(pairs: &[(&'a MountedFile, T)]) -> Vec<T> {
         mounted
     };
     pool.into_iter().map(|(_, v)| *v).collect()
+}
+
+/// the OWN layer of one file's scope — the shared core both scope
+/// doors call: `f`'s DeclMap decls named `name`, source order.
+/// [`Chain::file_scope`] layers the use-bound + ambient rows on top
+/// (the BARE name's scope); the qualified leaf answers from this
+/// alone — the compiler's qualified leaf is DECLS-ONLY
+/// (`fn_in`/`data_in`/`enum_in`/`let_in` read the module's own
+/// tables, `lir/call` + `check/resolve`; a use row never joins,
+/// `pub use` included — mirrored AS THE COMPILER IS TODAY; the book's
+/// "imported names join the module's public surface as if declared
+/// there" disagrees on qualified access — a compiler/doc follow-up,
+/// not this lane's)
+fn own_scope_of<'a>(f: &'a MountedFile, name: &str) -> FileScope<'a> {
+    let mut out = FileScope::default();
+    if let Some(t) = f.ty(name) {
+        out.types.push(t);
+    }
+    out.lets
+        .extend(f.lets().into_iter().filter(|l| l.name() == name));
+    out.fns
+        .extend(f.fns().into_iter().filter(|fv| fv.name() == name));
+    out
 }

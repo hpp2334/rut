@@ -792,3 +792,45 @@ fn qualified_paths_resolve_through_the_module_lane() {
         "an unbound qualified head is no jump: {hits:?}"
     );
 }
+
+#[test]
+fn pkg_rooted_dep_names_resolve() {
+    // HIGH 1's definition face: the dep-rooted path lands exactly on
+    // the module's decl ident; the type position stays silent (the
+    // type ladder walks the own family only — the compiler refuses
+    // `calc::math::Angle` with "unknown type"); the non-pub leaf and
+    // the flat dep stay empty
+    let mut s = S::boot();
+    let math_src = "pub fn sqrt(x: f64) -> f64 { return x; }\npub let PI2: f64 = 6.28;\nfn hidden() -> i32 { return 0; }\n";
+    s.index_mod_at(
+        "file:///deps/calc/src/mod.rut",
+        "calc",
+        "",
+        "pub mod math;\n",
+    );
+    s.index_mod_at("file:///deps/calc/src/math.rut", "calc", "math", math_src);
+    let uri = "file:///t/main.rut";
+    let doc = "entry fn main() -> f64 {\n    return calc::math::sqrt(4.0);\n}\n";
+    let hits = s.def_in(uri, doc, "calc::math::sqrt", 1, 13);
+    assert_eq!(hits.len(), 1, "{hits:?}");
+    assert_eq!(hits[0]["uri"], "file:///deps/calc/src/math.rut");
+    assert_target(math_src, &hits[0], "sqrt(x", 1, 4, "the dep module's ident");
+    // the type position: the type ladder takes no dep head
+    let doc2 = "entry fn main() -> i32 {\n    let a: calc::math::Angle = nil;\n    return 0;\n}\n";
+    let hits = s.def_in(uri, doc2, "calc::math::Angle", 1, 14);
+    assert!(hits.is_empty(), "no type jump through a dep head: {hits:?}");
+    // the non-pub leaf: no jump
+    let doc3 = "entry fn main() -> i32 {\n    return calc::math::hidden();\n}\n";
+    let hits = s.def_in(uri, doc3, "calc::math::hidden", 1, 13);
+    assert!(hits.is_empty(), "a non-pub leaf is no jump: {hits:?}");
+    // the flat dep: no root, no jump
+    s.index_mod_at(
+        "file:///deps/flat/src/lib.rut",
+        "flatdep",
+        "",
+        "pub fn top() -> i32 { return 10; }\n",
+    );
+    let flatdoc = "entry fn main() -> i32 {\n    return flatdep::top();\n}\n";
+    let hits = s.def_in("file:///t/flat.rut", flatdoc, "flatdep::top", 1, 10);
+    assert!(hits.is_empty(), "a flat dep roots nothing: {hits:?}");
+}

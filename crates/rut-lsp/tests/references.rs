@@ -384,3 +384,32 @@ fn qualified_paths_reference_through_the_module_lane() {
         "the module's decl ident joins: {hits:?}"
     );
 }
+
+#[test]
+fn qualified_leaves_never_leak_through_use_rows() {
+    // HIGH 2 through the matcher: the qualified tail resolves
+    // decls-only, so a private use import in the target yields NO
+    // references (the old file-scope layers leaked helper's decl in
+    // through the definition answer)
+    let mut s = S::boot();
+    s.index_mod_at(
+        "file:///deps/helper/src/mod.rut",
+        "helper",
+        "",
+        "pub fn two() -> i32 { return 20; }\n",
+    );
+    s.index_mod_at(
+        "file:///ws/pkg/src/layout/mod.rut",
+        "pkg",
+        "layout",
+        "use helper::{ two };\npub fn span() -> i32 { return 1; }\n",
+    );
+    let doc = "mod layout;\nentry fn main() -> i32 { return layout::two(); }\n";
+    let uri = "file:///ws/pkg/src/mod.rut";
+    s.index_mod_at(uri, "pkg", "", doc);
+    let hits = s.refs_in(uri, doc, "layout::two()", 1, 9, true);
+    assert!(
+        hits.is_empty(),
+        "a use-row leaf has no references: {hits:?}"
+    );
+}

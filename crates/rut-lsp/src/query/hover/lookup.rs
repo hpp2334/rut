@@ -408,7 +408,7 @@ fn qualified_path_hover(
         return Some(Some((md, span)));
     }
     let names: Vec<String> = q.segs.iter().map(|(n, _)| n.clone()).collect();
-    let Some(scope) = chain.qualified_scope(doc_mods, &names) else {
+    let Some(scope) = chain.qualified_scope(doc_mods, &names, q.is_ty) else {
         return Some(None); // an unbound head opens nothing
     };
     // hover's layer order — types in a type position; type → let →

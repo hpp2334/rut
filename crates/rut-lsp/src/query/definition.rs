@@ -664,7 +664,7 @@ fn qualified_tail_locations(
     if q.k + 1 != q.segs.len() {
         return None; // a mid-segment cursor keeps the pre-existing layers
     }
-    let Some(scope) = ctx.chain.qualified_scope(ctx.doc_mods, &q.segs) else {
+    let Some(scope) = ctx.chain.qualified_scope(ctx.doc_mods, &q.segs, q.is_ty) else {
         return Some(Vec::new());
     };
     let mut hits: Vec<(&MountedFile, Span)> = Vec::new();

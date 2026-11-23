@@ -1317,3 +1317,199 @@ fn qualified_path_without_the_binding_answers_nothing() {
         "an unbound qualified head answers nothing: {h}"
     );
 }
+
+#[test]
+fn pkg_rooted_dep_name_answers_through_the_lane() {
+    // HIGH 1: `calc::math::sqrt(x)` with calc ONLY a declared dep —
+    // the manifest's own naming, no use anywhere — the compiler
+    // answers it (the fully-qualified-module-path pin), so the lane
+    // does too. The tree-carrying rule rides along: a FLAT dep roots
+    // nothing (the package-head-in-a-position pin). The type cell
+    // REFUSES in the compiler (the type ladder walks the own family
+    // only) — silent here too; the non-pub leaf stays silent
+    // cross-package.
+    let mut s = S::boot();
+    s.index_mod_at(
+        "file:///deps/calc/src/mod.rut",
+        "calc",
+        "",
+        "pub mod math;\npub let ROOT: i32 = 1;\n",
+    );
+    s.index_mod_at(
+        "file:///deps/calc/src/math.rut",
+        "calc",
+        "math",
+        "pub fn sqrt(x: f64) -> f64 { return x; }\npub struct Angle {\n    deg: i32;\n}\npub let PI2: f64 = 6.28;\nfn hidden() -> i32 { return 0; }\n",
+    );
+    let uri = "file:///t/main.rut";
+    // the fn cell
+    let doc = "entry fn main() -> f64 {\n    return calc::math::sqrt(4.0);\n}\n";
+    let md = markdown(s.hover_in(uri, doc, "calc::math::sqrt", 1, 13));
+    assert!(md.contains("pub fn sqrt(x: f64) -> f64"), "{md}");
+    assert!(md.contains("math.rut"), "the module's provenance: {md}");
+    // the let cell
+    let doc3 = "entry fn main() -> f64 {\n    return calc::math::PI2;\n}\n";
+    let md = markdown(s.hover_in(uri, doc3, "calc::math::PI2", 1, 13));
+    assert!(md.contains("pub let PI2"), "{md}");
+    // the type cell: the type ladder takes no dep head
+    let doc2 = "entry fn main() -> i32 {\n    let a: calc::math::Angle = nil;\n    return 0;\n}\n";
+    let h = s.hover_in(uri, doc2, "calc::math::Angle", 1, 14);
+    assert!(no_hover(&h), "the type ladder takes no dep head: {h}");
+    // the non-pub leaf is silent cross-package
+    let doc4 = "entry fn main() -> i32 {\n    return calc::math::hidden();\n}\n";
+    let h = s.hover_in(uri, doc4, "calc::math::hidden", 1, 13);
+    assert!(no_hover(&h), "a non-pub leaf is silent cross-package: {h}");
+    // a FLAT dep roots nothing
+    s.index_mod_at(
+        "file:///deps/flat/src/lib.rut",
+        "flatdep",
+        "",
+        "pub fn top() -> i32 { return 10; }\n",
+    );
+    let flatdoc = "entry fn main() -> i32 {\n    return flatdep::top();\n}\n";
+    let h = s.hover_in("file:///t/flat.rut", flatdoc, "flatdep::top", 1, 10);
+    assert!(no_hover(&h), "a flat dep roots nothing: {h}");
+}
+
+#[test]
+fn qualified_leaves_are_the_module_own_decls_only() {
+    // HIGH 2: the qualified leaf is DECLS-ONLY — the target's use
+    // edges never open its qualified surface (the compiler: "`two` is
+    // not declared in module `layout` — it lives in module
+    // `helper`"). A PRIVATE use, a `pub use` re-export (mirrored as
+    // the compiler is today), a glob-bound name, and an
+    // ambient/prelude name all answer NOTHING; a non-pub leaf is
+    // silent from outside the declaring subtree.
+    let mut s = S::boot();
+    s.index_mod_at(
+        "file:///deps/helper/src/mod.rut",
+        "helper",
+        "",
+        "pub fn two() -> i32 { return 20; }\n",
+    );
+    const LAYOUT_URI: &str = "file:///ws/pkg/src/layout/mod.rut";
+    const ROOT_URI: &str = "file:///ws/pkg/src/mod.rut";
+    let variants = [
+        (
+            "private use",
+            "use helper::{ two };\npub fn span() -> i32 { return 1; }\n",
+        ),
+        (
+            "pub use",
+            "pub use helper::{ two };\npub fn span() -> i32 { return 1; }\n",
+        ),
+        (
+            "glob",
+            "use helper::*;\npub fn span() -> i32 { return 1; }\n",
+        ),
+    ];
+    let doc = "mod layout;\nentry fn main() -> i32 { return layout::two(); }\n";
+    for (tag, layout_src) in variants {
+        s.index_mod_at(LAYOUT_URI, "pkg", "layout", layout_src);
+        let h = s.hover_in(ROOT_URI, doc, "layout::two()", 1, 9);
+        assert!(no_hover(&h), "[{tag}] a use-row leaf is silent: {h}");
+        let hits = s.def_in(ROOT_URI, doc, "layout::two()", 1, 9);
+        assert!(
+            hits.is_empty(),
+            "[{tag}] no jump through a use row: {hits:?}"
+        );
+    }
+    // the ambient/prelude name of the target: not declared there
+    s.index_mod_at(
+        LAYOUT_URI,
+        "pkg",
+        "layout",
+        "pub fn span() -> i32 { return 1; }\npub let LIMIT: i32 = 5;\nfn internal() -> i32 { return 2; }\n",
+    );
+    let amb = "mod layout;\nentry fn main() -> i32 { return layout::keep(1); }\n";
+    let h = s.hover_in(ROOT_URI, amb, "layout::keep", 1, 9);
+    assert!(
+        no_hover(&h),
+        "an ambient name is no leaf of the module: {h}"
+    );
+    // the non-pub leaf from OUTSIDE the declaring subtree
+    let internal = "mod layout;\nentry fn main() -> i32 { return layout::internal(); }\n";
+    let h = s.hover_in(ROOT_URI, internal, "layout::internal", 1, 9);
+    assert!(no_hover(&h), "a private leaf is silent from outside: {h}");
+}
+
+#[test]
+fn qualified_leaf_inside_the_declaring_subtree_answers() {
+    // the visibility matrix's inside-the-subtree cell: grid's own
+    // file reads its own bare fn through the qualified spelling —
+    // the gate allows the reader inside the declaring subtree (the
+    // compiler compiles it)
+    let mut s = S::boot();
+    s.index_mod_at(
+        "file:///ws/pkg/src/layout/mod.rut",
+        "pkg",
+        "layout",
+        "pub mod grid;\n",
+    );
+    let grid =
+        "fn secret() -> i32 { return 1; }\npub fn local() -> i32 { return grid::secret(); }\n";
+    let grid_uri = "file:///ws/pkg/src/layout/grid.rut";
+    s.index_mod_at(grid_uri, "pkg", "layout/grid", grid);
+    let md = markdown(s.hover_in(grid_uri, grid, "grid::secret", 1, 9));
+    assert!(md.contains("fn secret() -> i32"), "{md}");
+}
+
+#[test]
+fn qualified_tail_never_falls_through_to_the_file_own_name() {
+    // the nastiest scope-false shape: the doc DECLARES its own
+    // `fn span` and binds no `layout` — the qualified spelling's tail
+    // must answer NOTHING (never the file's own same-named fn: an
+    // authoritative null, not a fall-through the bare lanes would
+    // turn into the doc's own decl)
+    let mut s = S::boot();
+    s.index_mod_at(
+        "file:///ws/pkg/src/layout/mod.rut",
+        "pkg",
+        "layout",
+        "pub fn span() -> i32 { return 1; }\n",
+    );
+    let doc = "fn span() -> i32 { return 9; }\nentry fn main() -> i32 { return layout::span(); }\n";
+    let uri = "file:///t/main.rut";
+    let h = s.hover_in(uri, doc, "layout::span()", 1, 9);
+    assert!(no_hover(&h), "an unbound head answers nothing: {h}");
+    let hits = s.def_in(uri, doc, "layout::span()", 1, 9);
+    assert!(
+        hits.is_empty(),
+        "never the file's own same-named fn: {hits:?}"
+    );
+}
+
+#[test]
+fn qualified_path_through_an_ancestor_edge_hovers() {
+    // the ancestor's edge opens the sibling module (the own lane's
+    // walk; the compiler compiles the sibling spelling from a child)
+    // — and the sibling's PRIVATE leaf stays silent (private to its
+    // own module, the visibility matrix's refusal)
+    let mut s = S::boot();
+    s.index_mod_at(
+        "file:///ws/app/src/helpers.rut",
+        "app",
+        "helpers",
+        "mod other;\npub mod deep;\n",
+    );
+    s.index_mod_at(
+        "file:///ws/app/src/helpers/other.rut",
+        "app",
+        "helpers/other",
+        "pub fn thing() -> i32 { return 3; }\n",
+    );
+    let deep = "pub fn dig() -> i32 { return other::thing(); }\n";
+    let deep_uri = "file:///ws/app/src/helpers/deep.rut";
+    s.index_mod_at(deep_uri, "app", "helpers/deep", deep);
+    let md = markdown(s.hover_in(deep_uri, deep, "other::thing", 1, 9));
+    assert!(md.contains("pub fn thing() -> i32"), "{md}");
+    // the private sibling leaf
+    s.index_mod_at(
+        "file:///ws/app/src/helpers/other.rut",
+        "app",
+        "helpers/other",
+        "fn thing() -> i32 { return 3; }\n",
+    );
+    let h = s.hover_in(deep_uri, deep, "other::thing", 1, 9);
+    assert!(no_hover(&h), "a sibling's private leaf is silent: {h}");
+}
