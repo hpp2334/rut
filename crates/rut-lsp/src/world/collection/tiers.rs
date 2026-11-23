@@ -87,6 +87,20 @@ pub(crate) struct Bare<'a> {
     pub fns: Vec<FnView<'a>>,
 }
 
+/// one file-scope resolve — the layers' views in the walk order the
+/// queries spell ([`Chain::file_scope`]). Every layer is exact inside:
+/// own decls in source order, use-bound rows body-preferred
+/// (`prefer_bodies`), ambient rows mounted-preferred.
+#[derive(Default)]
+pub(crate) struct FileScope<'a> {
+    /// the type decls the scope binds, walk order
+    pub types: Vec<TyView<'a>>,
+    /// the module lets, walk order
+    pub lets: Vec<LetView<'a>>,
+    /// the fns — free fns and impl methods alike, walk order
+    pub fns: Vec<FnView<'a>>,
+}
+
 impl<'a> Chain<'a> {
     /// completion's MEMBER tier — keyed on the walk's NODE: the
     /// member/receiver derive inside (a method call, a field access,
@@ -146,7 +160,13 @@ impl<'a> Chain<'a> {
             }
             return Some(rows);
         }
-        let ty = self.type_decl(&ty_name)?;
+        // the receiver's type head is a COMPUTED string (the inferred
+        // `RequestBuilder` behind `let b = builder()`), not a spelling
+        // the file binds — the file scope answers first, the doc's
+        // import pkgs the fallback ([`Chain::type_via_imports`])
+        let ty = self
+            .type_decl(&ty_name)
+            .or_else(|| self.type_via_imports(&ty_name))?;
         // the member-vis gate (the compiler's law mirrored): CLASS
         // fields + own-surface methods gate, impl fns by owner gate;
         // struct + host-struct fields carry no dial, enum variants are
@@ -455,4 +475,254 @@ impl<'a> Chain<'a> {
         }
         out
     }
+
+    // ---- the file scope — the one resolver the flat doors re-spell ----
+
+    /// THE file-scope resolver — what the QUERIED file (the chain
+    /// head) binds by `name`, walked in the compiler's layer order:
+    /// the head's own decls, then the names its use edges bind
+    /// ([`MountedFile::uses`] leaves at their walked mod path,
+    /// [`MountedFile::glob_uses`] leaves through the walked surface),
+    /// then the ambient prelude rows (`prelude builtin` — the
+    /// checker's wildcard-site split). A name the file never binds
+    /// answers an EMPTY scope — never a foreign decl: sibling modules
+    /// may share a name legally (the one-name law's Act 1), and the
+    /// old flat sweep answered for all of them. This is the one home
+    /// — hover, definition, and references answer bare names through
+    /// it (the flat doors re-spell it on top), the same walk the
+    /// completion tiers enumerate (`bare`, `use_exports`).
+    pub(crate) fn file_scope(&self, name: &str) -> FileScope<'a> {
+        let mut out = self.own_scope(name);
+        self.use_bound_layers(name, &mut out);
+        self.ambient_layers(name, &mut out);
+        out
+    }
+
+    /// layer 1 — the head's own decls (the DeclMap, source order)
+    fn own_scope(&self, name: &str) -> FileScope<'a> {
+        let doc = self.head();
+        let mut out = FileScope::default();
+        if let Some(t) = doc.ty(name) {
+            out.types.push(t);
+        }
+        out.lets
+            .extend(doc.lets().into_iter().filter(|l| l.name() == name));
+        out.fns
+            .extend(doc.fns().into_iter().filter(|f| f.name() == name));
+        out
+    }
+
+    /// layer 2 — the names the head's use edges bind: explicit leaves
+    /// at their walked mod path, glob leaves through the walked
+    /// surface (a chained re-export's rows answer from the deeper pkg,
+    /// where the name actually resolves — the export machinery's own
+    /// law, [`Chain::surface_names`])
+    fn use_bound_layers(&self, name: &str, out: &mut FileScope<'a>) {
+        let doc = self.head();
+        for u in doc.uses() {
+            if u.name() != name {
+                continue;
+            }
+            let path = u.path();
+            self.use_bound(u.pkg(), &path[1..], name, out);
+        }
+        for g in doc.glob_uses() {
+            let exports = self.surface_names(g.pkg, &g.interior);
+            let Some((_, owner)) = exports.into_iter().find(|(n, _)| *n == name) else {
+                continue; // the glob never bound the name
+            };
+            // the owner speaks at the glob's own interior when it IS
+            // the glob's pkg (`use gadgets::layout::*` — the walked
+            // mod path scopes the sweep); a re-exporting head answers
+            // flat from the deeper pkg (`use a::*` over a pkg that
+            // pub-globs util — util's rows, util's files)
+            let interior = if owner == g.pkg {
+                g.interior.as_slice()
+            } else {
+                &[]
+            };
+            self.use_bound(owner, interior, name, out);
+        }
+    }
+
+    /// one use edge's resolve — the (pkg, interior) scope's decls of
+    /// `name`. The interior walk rides the use tier's own machinery
+    /// (`walk_use_mods`); a walk the chain cannot satisfy falls back
+    /// to the flat pkg — an OWN-package edge over a private `mod`
+    /// child is the shape that needs it (the cross-package walk
+    /// refuses the non-pub edge, the intra-package use is legal). The
+    /// body-over-decl preference rides inside ([`Chain::prefer_bodies`]
+    /// — a pkg indexing both its `.d.rut` surface and its body
+    /// answers from the body); the queried file and its stamped twin
+    /// are excluded (layer 1 already spoke for the head's own uri).
+    fn use_bound(&self, pkg: &str, interior: &[String], name: &str, out: &mut FileScope<'a>) {
+        let head = self.head();
+        let walked = if interior.is_empty() {
+            Some(String::new())
+        } else {
+            crate::world::mods::walk_use_mods(self, pkg, interior)
+        };
+        // the walk's own carrying law (the use tier's): a mod-carrying
+        // package scopes the flat spelling to its root; a flat
+        // package's whole chain answers
+        let carrying = self
+            .iter()
+            .any(|f| crate::world::pkg::matches_pkg(f, pkg) && f.mount.mod_path.is_some());
+        let in_scope: Vec<&MountedFile> = match walked {
+            Some(p) if carrying => self
+                .iter()
+                .filter(|f| {
+                    crate::world::pkg::matches_pkg(f, pkg)
+                        && crate::world::mods::mod_path_of(f) == p
+                })
+                .collect(),
+            _ => self
+                .iter()
+                .filter(|f| crate::world::pkg::matches_pkg(f, pkg))
+                .collect(),
+        };
+        let mut tys: Vec<(&MountedFile, TyView<'a>)> = Vec::new();
+        let mut lets: Vec<(&MountedFile, LetView<'a>)> = Vec::new();
+        let mut fns: Vec<(&MountedFile, FnView<'a>)> = Vec::new();
+        for f in in_scope {
+            // the head (and its stamped twin — same origin) answered at
+            // layer 1; the sweep adds the files AROUND it
+            if std::ptr::eq(f, head)
+                || (!head.mount.origin.is_empty() && f.mount.origin == head.mount.origin)
+            {
+                continue;
+            }
+            if let Some(t) = f.ty(name) {
+                tys.push((f, t));
+            }
+            for l in f.lets() {
+                if l.name() == name {
+                    lets.push((f, l));
+                }
+            }
+            // the use leaves bind free fns — methods are reached
+            // through a receiver, never named bare
+            for fv in f.fns() {
+                if fv.name() == name && fv.owner().is_none() {
+                    fns.push((f, fv));
+                }
+            }
+        }
+        out.types
+            .extend(self.prefer_bodies(&tys).into_iter().map(|(_, t)| t));
+        out.lets
+            .extend(self.prefer_bodies(&lets).into_iter().map(|(_, l)| l));
+        out.fns
+            .extend(self.prefer_bodies(&fns).into_iter().map(|(_, f)| f));
+    }
+
+    /// layer 3 — the chain's AMBIENT rows (`prelude builtin`: the
+    /// names the checker binds under its wildcard site, in every
+    /// file, no `use` needed). The head is excluded (its own decls
+    /// spoke at layer 1); the mounted carrier wins over the embedded
+    /// prelude — the mounted-over-embed preference, the fallback
+    /// shape the old flat `type_decl` carried. Module lets have no
+    /// ambient linkage — no lane.
+    fn ambient_layers(&self, name: &str, out: &mut FileScope<'a>) {
+        let head = self.head();
+        let mut tys: Vec<(&MountedFile, TyView<'a>)> = Vec::new();
+        let mut fns: Vec<(&MountedFile, FnView<'a>)> = Vec::new();
+        for f in self.iter() {
+            if std::ptr::eq(f, head) {
+                continue;
+            }
+            for t in f.types() {
+                if t.name() == name && t.ambient() {
+                    tys.push((f, t));
+                }
+            }
+            for fv in f.fns() {
+                if fv.name() == name && fv.ambient() {
+                    fns.push((f, fv));
+                }
+            }
+        }
+        out.types.extend(prefer_mounted(&tys));
+        out.fns.extend(prefer_mounted(&fns));
+    }
+
+    /// the computed-head lane — a type name REACHED THROUGH A VALUE
+    /// (the receiver's inferred `RequestBuilder`, a binding's type
+    /// head) is not a spelling the file binds, so the file-scope law
+    /// does not gate it: the pkgs the document's use edges NAME are
+    /// the first candidate set (the import machinery's own shape),
+    /// the chain's flat mounted-over-embed sweep the fallback. A
+    /// spelled type token never rides this door — the spelling lanes
+    /// answer through [`Chain::file_scope`].
+    pub(crate) fn type_via_imports(&self, name: &str) -> Option<TyView<'a>> {
+        let doc = self.head();
+        let mut pkgs: Vec<&str> = Vec::new();
+        for u in doc.uses() {
+            let p = u.pkg();
+            if !pkgs.contains(&p) {
+                pkgs.push(p);
+            }
+        }
+        for g in doc.glob_uses() {
+            let p = g.pkg;
+            if !pkgs.contains(&p) {
+                pkgs.push(p);
+            }
+        }
+        let mut hits: Vec<(&MountedFile, TyView<'a>)> = Vec::new();
+        for pkg in &pkgs {
+            for f in self
+                .iter()
+                .filter(|f| crate::world::pkg::matches_pkg(f, pkg))
+            {
+                if std::ptr::eq(f, doc)
+                    || (!doc.mount.origin.is_empty() && f.mount.origin == doc.mount.origin)
+                {
+                    continue;
+                }
+                if let Some(t) = f.ty(name) {
+                    hits.push((f, t));
+                }
+            }
+        }
+        let hits = self.prefer_bodies(&hits);
+        if let [(_, t), ..] = hits.as_slice() {
+            return Some(*t);
+        }
+        // the flat fallback — the old `type_decl` law, kept for the
+        // computed heads ONLY: a type the doc neither declares,
+        // imports, nor globs still navigates to its carrier (the
+        // ctor-inference shape — `Logger("h")` typing a binding off a
+        // mounted dep without a use edge); the mounted carrier wins
+        // over the embedded twin. Spelled names never ride this — the
+        // spelling lanes stop at [`Chain::file_scope`].
+        let mut flat: Vec<(&MountedFile, TyView<'a>)> = Vec::new();
+        for f in self.iter() {
+            if std::ptr::eq(f, doc) {
+                continue;
+            }
+            if let Some(t) = f.ty(name) {
+                flat.push((f, t));
+            }
+        }
+        let picked = prefer_mounted(&flat);
+        picked.into_iter().next()
+    }
+}
+
+/// the ambient layer's mounted-over-embed pick: the MOUNTED carriers
+/// (real origins) when any exist, else the embedded prelude — the
+/// zero-fetch fallback (the old flat `type_decl`'s precedence, kept
+/// as the ambient fallback shape)
+fn prefer_mounted<'a, T: Copy>(pairs: &[(&'a MountedFile, T)]) -> Vec<T> {
+    let mounted: Vec<&(&'a MountedFile, T)> = pairs
+        .iter()
+        .filter(|(f, _)| f.mount.src_path.is_none())
+        .collect();
+    let pool: Vec<&(&'a MountedFile, T)> = if mounted.is_empty() {
+        pairs.iter().collect()
+    } else {
+        mounted
+    };
+    pool.into_iter().map(|(_, v)| *v).collect()
 }

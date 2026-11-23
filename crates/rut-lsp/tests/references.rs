@@ -309,6 +309,35 @@ fn an_unrelated_same_named_type_does_not_leak_in() {
     assert_eq!(hits.len(), 2, "use name + usage only: {hits:?}");
 }
 
+#[test]
+fn sibling_duplicates_scope_the_reference_set() {
+    // Act 1 made sibling same-name decls legal — the reference set of
+    // the queried file's own binding stays in the file's view: the
+    // twins' same-named idents resolve to their OWN decls (the
+    // matcher law rides the file scope now) and never join, and the
+    // non-importing twin file is not even scanned
+    let mut s = S::boot();
+    s.index_file("file:///t/a.rut", "fn helper() -> i32 { return 1; }\n");
+    let src =
+        "fn helper() -> i32 { return 2; }\nentry fn main() -> nil {\n    let x = helper();\n}\n";
+    let uri = "file:///t/main.rut";
+    let hits = s.refs_in(uri, src, "fn helper()", 1, 3, true);
+    let mut offs = ref_offsets(src, uri, &hits);
+    offs.sort();
+    assert_eq!(
+        offs,
+        vec![
+            byte_of(src, "fn helper()", 1) + 3,
+            byte_of(src, "= helper();", 1) + 2
+        ],
+        "the file's own set (the decl via include_declaration): {hits:?}"
+    );
+    assert!(
+        hits.iter().all(|l| l["uri"] == uri),
+        "the twin's file never joins: {hits:?}"
+    );
+}
+
 // ---- misses ----
 
 #[test]

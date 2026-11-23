@@ -219,8 +219,13 @@ entry fn main() -> nil { let m: Map<i32, i32> = nil; }
 fn surface_prefixes_render_verbatim() {
     // the Decl-mode rows render as written — through the door the
     // consumer's CALL sites carry the verbatim signatures (`fetch`,
-    // `echo`, `keep` are bodiless surface rows; their hovers answer at
-    // uses), and the builtin class carries its spelled head
+    // `echo` are import-gated (`pub host` / `pub builtin` — the
+    // compile binds them only where the `use` names them, the
+    // file-scope law), so the doc's use edges ride; `keep` is
+    // `prelude builtin` — ambient, bound in every unit, it hovers
+    // with NO use edge), and the builtin class carries its spelled
+    // head. The surface mounts at a path whose stem segment spells
+    // the pkg head the use edges name.
     let mut s = S::boot();
     let src = "\
 pub host async fn fetch(u: str) -> bytes;
@@ -230,8 +235,9 @@ prelude builtin class Result<T> {
 fn is_ok(self) -> bool;
 }
 ";
-    s.index_file("file:///t/surf.d.rut", src);
+    s.index_file("file:///t/surf/surf.d.rut", src);
     let call = "\
+use surf::{ echo, fetch };
 async fn go() -> bytes {
 let x = echo(\"a\");
 let y = keep(x);
@@ -264,23 +270,110 @@ fn the_newtype_head_renders_without_the_terminator() {
 }
 
 #[test]
-fn ambiguity_lists_candidates() {
-    // two workspace files each defining `helper`
+fn ambiguity_lists_the_file_scope_own_ambiguity() {
+    // the candidates path survives scoped: the file scope bound the
+    // name to TWO of its own fns — a free fn and an impl method
+    // (methods are type-scoped, the one-name law never meets them) —
+    // and the honest answer lists both, never a silent pick. The
+    // world's other same-named decls do NOT join the list: a sibling
+    // file's twin is not the file scope's ambiguity.
     let mut s = S::boot();
-    s.index_file("file:///t/a.rut", "fn helper() -> nil { }\n");
-    s.index_file("file:///t/b.rut", "fn helper() -> nil { }\n");
-    let src = "fn go() -> nil { let h = helper(); }\n";
-    let md = markdown(s.hover_at("file:///t/main.rut", src, "helper", 1));
+    s.index_file("file:///t/a.rut", "fn helper() -> i32 { return 1; }\n");
+    let src = "class Box2 {\n    n: i32;\n}\nimpl Box2 {\n    fn helper(self) -> i32 { return self.n; }\n}\nfn helper() -> i32 { return 2; }\nentry fn main() -> nil { let h = helper(); }\n";
+    let md = markdown(s.hover_at("file:///t/main.rut", src, "helper();", 1));
     assert!(md.contains("multiple definitions"), "{md}");
-    assert!(md.contains("a.rut") && md.contains("b.rut"), "{md}");
+    assert!(md.contains("main.rut"), "the file's own two decls: {md}");
+    assert!(!md.contains("a.rut"), "the foreign twin never joins: {md}");
+}
+
+#[test]
+fn sibling_duplicates_answer_the_file_own_binding() {
+    // the one-name law's Act 2 headline: sibling modules may share a
+    // name legally (Act 1) — the flat sweep answered for ALL of them
+    // (a candidate list, or a foreign decl). The file scope answers
+    // the queried file's OWN binding, at the call site and at the
+    // decl site alike.
+    let mut s = S::boot();
+    s.index_file("file:///t/a.rut", "fn helper() -> i32 { return 1; }\n");
+    s.index_file("file:///t/b.rut", "fn helper() -> i32 { return 2; }\n");
+    let src = "// the local helper\nfn helper() -> i32 { return 3; }\nentry fn main() -> nil { let h = helper(); }\n";
+    let uri = "file:///t/main.rut";
+    // the call site: the file's own fn — no candidate list
+    let md = markdown(s.hover_at(uri, src, "helper();", 1));
+    assert!(md.contains("fn helper() -> i32"), "{md}");
+    assert!(
+        md.contains("the local helper"),
+        "the file's own doc line: {md}"
+    );
+    assert!(md.contains("main.rut"), "the file's own provenance: {md}");
+    assert!(!md.contains("multiple definitions"), "no candidates: {md}");
+    assert!(
+        !md.contains("a.rut") && !md.contains("b.rut"),
+        "no foreign twin: {md}"
+    );
+    // the decl site answers itself
+    let md = markdown(s.hover_in(uri, src, "fn helper", 1, 3));
+    assert!(md.contains("the local helper"), "{md}");
+}
+
+#[test]
+fn an_unbound_sibling_name_hovers_nothing() {
+    // the honest unbound answer: the file never binds the name (no
+    // decl, no use edge) — the siblings' decls are not the file's
+    // scope, so the hover is EMPTY, never a foreign decl nor a
+    // candidate list (the old flat sweep listed both twins). The
+    // binding layer answers doc bindings only; an unbound bare name
+    // has no local-binding fallback to give.
+    let mut s = S::boot();
+    s.index_file("file:///t/a.rut", "fn helper() -> i32 { return 1; }\n");
+    s.index_file("file:///t/b.rut", "fn helper() -> i32 { return 2; }\n");
+    let src = "entry fn main() -> nil { let h = helper(); }\n";
+    let h = s.hover_at("file:///t/main.rut", src, "helper", 1);
+    assert!(no_hover(&h), "an unbound sibling name answers nothing: {h}");
+}
+
+#[test]
+fn a_use_bound_name_hovers_through_the_import() {
+    // the file's use edges bind: the leaf (fn, type, and module let)
+    // and the glob — each hover answers the EXPORTING file's decl
+    let mut s = S::boot();
+    s.index_file(
+        "file:///t/gadgets.rut",
+        "pub fn tag() -> i32 { return 1; }\npub struct Cog {\n    n: i32;\n}\npub let LIMIT: i32 = 9;\n",
+    );
+    let uri = "file:///t/main.rut";
+    let src = "use gadgets::{ tag, Cog, LIMIT };\nentry fn main() -> nil {\n    let n = tag();\n    let c: Cog = nil;\n    let m = LIMIT;\n}\n";
+    let md = markdown(s.hover_in(uri, src, "= tag();", 1, 2));
+    assert!(md.contains("pub fn tag() -> i32"), "{md}");
+    assert!(
+        md.contains("gadgets.rut"),
+        "the exporter's provenance: {md}"
+    );
+    let md = markdown(s.hover_in(uri, src, "let c: Cog", 1, 7));
+    assert!(md.contains("struct Cog"), "{md}");
+    let md = markdown(s.hover_in(uri, src, "let m = LIMIT", 1, 8));
+    assert!(
+        md.contains("pub let LIMIT"),
+        "the use-bound module let: {md}"
+    );
+    // the glob binds the same three
+    let glob = "use gadgets::*;\nentry fn main() -> nil {\n    let n = tag();\n    let c: Cog = nil;\n    let m = LIMIT;\n}\n";
+    let md = markdown(s.hover_in(uri, glob, "= tag();", 1, 2));
+    assert!(md.contains("pub fn tag() -> i32"), "glob-bound fn: {md}");
+    let md = markdown(s.hover_in(uri, glob, "let c: Cog", 1, 7));
+    assert!(md.contains("struct Cog"), "glob-bound type: {md}");
+    let md = markdown(s.hover_in(uri, glob, "let m = LIMIT", 1, 8));
+    assert!(md.contains("pub let LIMIT"), "glob-bound let: {md}");
 }
 
 #[test]
 fn host_fn_surface_favors_own_methods() {
-    // std-style surface index ahead of the doc
+    // std-style surface index ahead of the doc — the call site rides
+    // its use edge (the file-scope law: a bare `pub host fn` the
+    // compile refuses hovers nothing)
     let mut s = S::boot();
     s.index_file("core", "pub host fn string_join(s: [str]) -> i32;\n");
-    let src = "fn main() -> i32 { return string_join([]); }\n";
+    let src = "use core::{ string_join };\nfn main() -> i32 { return string_join([]); }\n";
     let h = s.hover_at("file:///t/hov.rut", src, "string_join", 1);
     let md = markdown(h);
     assert!(md.contains("fn string_join"), "{md}");
@@ -923,9 +1016,9 @@ fn host_fn_surface_signature_cuts_at_its_own_semicolon() {
     // abs(x: f64) -> f64;` rendered `...f64;pub` in the detail
     let mut s = S::boot();
     let src = "pub host fn abs(x: f64) -> f64;\npub host fn ceil(x: f64) -> f64;\n";
-    s.index_file("file:///t/surf.d.rut", src);
+    s.index_file("file:///t/surf/surf.d.rut", src);
     let call =
-        "fn go(x: f64) -> f64 {\n    let a = abs(x);\n    let b = ceil(a);\n    return b;\n}\n";
+        "use surf::{ abs, ceil };\nfn go(x: f64) -> f64 {\n    let a = abs(x);\n    let b = ceil(a);\n    return b;\n}\n";
     let md = markdown(s.hover_at("file:///t/call.rut", call, "abs", 1));
     assert!(
         md.contains("pub host fn abs(x: f64) -> f64"),
@@ -958,7 +1051,7 @@ fn host_fn_hover_via_the_calc_fixture_has_no_next_decl_artifact() {
         "math",
         include_str!("../../../rut/calc/src/math.rut"),
     );
-    let src = "fn go(x: f64) -> f64 {\n    return abs(x);\n}\n";
+    let src = "use calc::math::{ abs };\nfn go(x: f64) -> f64 {\n    return abs(x);\n}\n";
     let h = s.hover_at("file:///t/hov.rut", src, "abs", 1);
     let md = markdown(h);
     assert!(

@@ -126,6 +126,11 @@ pub fn hover(chain: &Chain, doc: &DocMods, pos: u32) -> Option<HoverOut> {
     let (name_id, name_span) = name_at(ast, h, pos)?;
     let name = ast.name(name_id);
     {
+        // the FILE SCOPE's answers (the one home — the flat doors
+        // delegate to `Chain::file_scope`): a capitalized name
+        // resolves through the queried file's own decls, its use
+        // edges, and the ambient prelude — a name the file never
+        // binds answers nothing below, never a foreign decl
         if is_cap(name) || crate::semantic::is_primitive_ty(name) {
             if let Some(ty) = chain.type_decl(name) {
                 return Some(HoverOut {
@@ -152,7 +157,7 @@ pub fn hover(chain: &Chain, doc: &DocMods, pos: u32) -> Option<HoverOut> {
             });
         }
 
-        // module-let use sites — a unique name match across the chain
+        // module-let use sites — the file scope's unique match
         if let Some(md) = module_let_hover(chain, name) {
             return Some(HoverOut {
                 markdown: md,
@@ -160,7 +165,9 @@ pub fn hover(chain: &Chain, doc: &DocMods, pos: u32) -> Option<HoverOut> {
             });
         }
 
-        // bare name: unique fn match (free fns, methods); ambiguity lists
+        // bare name: the file scope's fn match (free fns, methods);
+        // the scope bound the name to more than one of its own fns →
+        // the candidates list (the mid-edit/legal-ambiguity path)
         let hits: Vec<FnView> = chain.functions(name);
         match hits.as_slice() {
             [] => {}
@@ -491,8 +498,8 @@ fn use_segment_hover(
     None
 }
 
-/// module-let use sites: a unique name match across the chain renders
-/// the decl; ambiguity stays a miss (the flat chain's honesty rule)
+/// module-let use sites: the queried file's unique match renders the
+/// decl; ambiguity stays a miss (the file scope's honesty rule)
 fn module_let_hover(chain: &Chain<'_>, name: &str) -> Option<String> {
     chain.module_let(name).map(|l| render_let(&l))
 }

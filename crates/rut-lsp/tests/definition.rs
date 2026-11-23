@@ -178,13 +178,33 @@ fn the_use_graph_restricts_the_search_to_the_imported_pkg() {
 }
 
 #[test]
-fn unimported_names_keep_the_flat_chain() {
+fn un_imported_names_answer_nothing() {
+    // the file-scope law (the one-name law's Act 2): the file never
+    // binds the name — no decl, no use edge — so the world's
+    // same-named decl is NOT the file's answer (the old flat chain
+    // jumped to it; the compile refuses the bare spelling with a
+    // `use` hint)
     let mut s = S::boot();
     s.index_file(WIDGET_URI, WIDGET_SRC);
     let src = "entry fn main() -> nil {\n    let w = Widget::new();\n}\n";
     let hits = s.def_in("file:///t/main.rut", src, "= Widget::new();", 1, 2);
+    assert!(hits.is_empty(), "an un-imported name is no jump: {hits:?}");
+}
+
+#[test]
+fn sibling_duplicates_answer_the_file_own_decl() {
+    // Act 1 made sibling same-name decls legal — the queried file's
+    // own binding IS the answer; the twins contribute nothing (the
+    // old flat chain answered a candidate list)
+    let mut s = S::boot();
+    s.index_file("file:///t/a.rut", "fn make() -> i32 { return 1; }\n");
+    s.index_file("file:///t/b.rut", "fn make() -> i32 { return 2; }\n");
+    let src = "fn make() -> i32 { return 3; }\nentry fn main() -> nil {\n    let x = make();\n}\n";
+    let uri = "file:///t/main.rut";
+    let hits = s.def_in(uri, src, "= make();", 1, 2);
     assert_eq!(hits.len(), 1, "{hits:?}");
-    assert_eq!(hits[0]["uri"], WIDGET_URI);
+    assert_eq!(hits[0]["uri"], uri);
+    assert_target(src, &hits[0], "make()", 1, 4, "the file's own decl");
 }
 
 // ---- the pkg's two files: the body over the decl surface ----

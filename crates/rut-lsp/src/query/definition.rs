@@ -13,7 +13,10 @@
 //!    (workspace) files — whose origin does (path segment or file
 //!    stem — how `rut.jsonc` `name` works, without re-implementing the
 //!    manifest loader);
-//!    un-imported names keep hover's flat-chain semantics. An OWN
+//!    un-imported names answer NOTHING (the file-scope law — the
+//!    one-name law's Act 2: sibling modules may share a name, so a
+//!    name the file neither declares nor imports is no jump, never a
+//!    foreign decl). An OWN
 //!    package head — the doc's own pkg name, or one of its own mod
 //!    edges (the ancestor-walk spelling, the doc context keyed) — rides
 //!    the intra-package lanes instead: the head opens the resolved
@@ -25,8 +28,13 @@
 //!
 //! Layering mirrors `hover` exactly (decl sites, then member position
 //! with the known-receiver-is-final law, then type position, then the
-//! binding pass, then the bare-name chain) so the two queries can't
-//! disagree about what an ident means.
+//! binding pass, then the bare-name file scope) so the two queries can't
+//! disagree about what an ident means. The bare-name layers (4/6/7)
+//! answer through the ONE file-scope home
+//! ([`Chain::file_scope`] — the queried file's own decls ∪ its use
+//! edges ∪ the ambient prelude); the use-edge targeting here (layer 2
+//! and typeDefinition's computed heads) is navigation, not a spelling
+//! question, and keeps its own walked-path lanes.
 //!
 //! The plan's API surface names a third door, `get_declaration(pos)` —
 //! the same walk with the surface preference inverted. CONSCIOUS
@@ -129,9 +137,11 @@ fn origin_uri(origin: &str) -> String {
     }
 }
 
-/// the chain restricted to the pkg that declares `name` — the use
-/// graph's gate. An import the chain cannot satisfy falls back to the
-/// flat chain (hover's semantics: better a broad answer than none)
+/// the chain restricted to the pkg that declares `name` — the
+/// computed-head lane's gate (typeDefinition's value-reached type
+/// heads; the spelling lanes answer through the file scope instead).
+/// An import the chain cannot satisfy falls back to the flat chain
+/// (navigation for a computed head: better a broad answer than none)
 fn chain_for<'a>(
     chain: &'a Chain<'a>,
     imported: &HashMap<&str, &str>,
@@ -213,7 +223,6 @@ fn get_definition_targets(ctx: &Ctx, pos: u32) -> Vec<DefLocation> {
     if h.is::<rut_ast::SelfNode>() || h.is::<rut_ast::SelfTyNode>() {
         return Vec::new();
     }
-    let imported = import_map(ctx.chain, doc);
 
     // 1. decl sites — the cursor rides a decl node's OWN name span
     //    (field / enum member / module let / fn decl / `mod` edge —
@@ -267,11 +276,16 @@ fn get_definition_targets(ctx: &Ctx, pos: u32) -> Vec<DefLocation> {
     };
     let name = ast.name(name_id).to_string();
 
-    // 4. type position — capitalized / primitive names, restricted to
-    //    the use graph for imported names
+    // 4. type position — the file scope's spelled type (the ONE home):
+    //    the head's own decl, its use-bound decl, or the ambient
+    //    prelude row; a name the file never binds is no jump
     if crate::world::infer::is_cap(&name) || crate::semantic::is_primitive_ty(&name) {
-        if let Some(locs) = ty_name_locations(ctx, chain, &imported, &name) {
-            return locs;
+        let tys = chain.file_scope(&name).types;
+        if !tys.is_empty() {
+            return tys
+                .iter()
+                .map(|t| loc_at(ctx.doc_uri, t.file, ty_span(t)))
+                .collect();
         }
         // a primitive token with no surface decl (i32, bool …) is a
         // miss — never a wrong jump
@@ -290,36 +304,23 @@ fn get_definition_targets(ctx: &Ctx, pos: u32) -> Vec<DefLocation> {
         }];
     }
 
-    // 6. module-let use sites — every hit (the candidate list), the
-    //    body over the decl surface (`prefer_bodies`)
-    let scoped = chain_for(chain, &imported, &name);
-    let mut lets: Vec<(&MountedFile, Span)> = Vec::new();
-    for f in &scoped {
-        for l in f.lets().into_iter().filter(|l| l.name() == name) {
-            lets.push((f, l.name_span().unwrap_or(l.span())));
-        }
-    }
-    let lets = chain.prefer_bodies(&lets);
-    if !lets.is_empty() {
-        return lets
-            .into_iter()
-            .map(|(f, sp)| loc_at(ctx.doc_uri, f, sp))
+    // 6. module-let use sites — the file scope's lets (the door),
+    //    every hit (the candidate list)
+    let scope = chain.file_scope(&name);
+    if !scope.lets.is_empty() {
+        return scope
+            .lets
+            .iter()
+            .map(|l| loc_at(ctx.doc_uri, l.file, l.name_span().unwrap_or(l.span())))
             .collect();
     }
 
-    // 7. fn names — free fns and impl methods by name; ambiguity
-    //    returns every hit (a peek, not a guess), the body over the
-    //    decl surface (`prefer_bodies`)
-    let mut fns: Vec<(&MountedFile, Span)> = Vec::new();
-    for f in &scoped {
-        for fv in f.fns().into_iter().filter(|f| f.name() == name) {
-            fns.push((f, fn_span(&fv)));
-        }
-    }
-    chain
-        .prefer_bodies(&fns)
-        .into_iter()
-        .map(|(f, sp)| loc_at(ctx.doc_uri, f, sp))
+    // 7. fn names — the file scope's fns (free fns and impl methods),
+    //    every hit (a peek, not a guess)
+    scope
+        .fns
+        .iter()
+        .map(|f| loc_at(ctx.doc_uri, f.file, fn_span(f)))
         .collect()
 }
 
@@ -592,9 +593,15 @@ fn member_name_span(ast: &rut_ast::Ast, h: rut_ast::AnyHandle, pos: u32) -> Opti
     None
 }
 
-/// a type head's declaration location(s) — the use graph restricts the
-/// search; `None` when the name has no indexed decl anywhere (a bare
-/// miss, kept distinct from an empty hit list)
+/// a type head's declaration location(s) — typeDefinition's
+/// computed-head lane: the type name here was REACHED THROUGH A VALUE
+/// (a member's declared type, a binding's inferred head, a module
+/// let's), not spelled at the cursor, so the file-scope law does not
+/// gate it — the use graph restricts the search (the pkg the name is
+/// imported from, else the flat chain), and `None` when the name has
+/// no indexed decl anywhere (a bare miss, kept distinct from an empty
+/// hit list). Spelled type tokens answer through the file scope
+/// (layer 4 — [`Chain::file_scope`]).
 fn ty_name_locations(
     ctx: &Ctx,
     chain: &Chain,

@@ -4,18 +4,22 @@
 //! The [`DefIndexCollection`] owns them and answers the cross-file
 //! questions. The subtree: `member` (the member law's resolver family
 //! — hover, definition, and completion share it), `tiers` (completion's
-//! folded tier doors), `views` (the typed views over `(Doc,
-//! AnyHandle)` — a view's verbatim text is a span×src join on the
-//! OWNING file's document, its line number is `doc.line_of`, its
-//! `ambient`/vis verdict derives from the node's modifier chain —
+//! folded tier doors and THE file-scope resolver), `views` (the typed
+//! views over `(Doc, AnyHandle)` — a view's verbatim text is a span×src
+//! join on the OWNING file's document, its line number is `doc.line_of`,
+//! its `ambient`/vis verdict derives from the node's modifier chain —
 //! nothing stored, nothing stale).
 //!
-//! The doors are questions with one home each: [`Chain::type_decl`]
-//! carries the mounted-over-embed preference, [`Chain::functions`]
-//! the 0/1/many honesty rule, [`Chain::module_let`] the
-//! unique-or-none rule. The member law lives in `member`, completion's
-//! tiers in `tiers`, and the body-over-decl preference once in
-//! [`DefIndexCollection::prefer_bodies`].
+//! The doors are questions with one home each: the FILE SCOPE is
+//! [`Chain::file_scope`] (tiers) — what the queried file binds by one
+//! name, own decls ∪ use-bound ∪ ambient, the law the one-name Act 2
+//! spelled (sibling modules may share a name; a name the file never
+//! binds answers nothing). The three flat doors re-spell that one
+//! home: [`Chain::type_decl`] the file scope's first type,
+//! [`Chain::functions`] the 0/1/many honesty rule,
+//! [`Chain::module_let`] the unique-or-none rule. The member law
+//! lives in `member`, completion's tiers in `tiers`, and the
+//! body-over-decl preference once in [`DefIndexCollection::prefer_bodies`].
 
 mod member;
 mod tiers;
@@ -360,48 +364,33 @@ impl<'a> Chain<'a> {
         Chain { files, head: 0 }
     }
 
-    // ---- the collection's doors ----
+    // ---- the collection's doors — the flat re-spellings of the ONE
+    //      file-scope home ([`Chain::file_scope`] in `tiers`) ----
 
-    /// the type named `name` — the mounted-over-embed preference
-    /// inside: the chain may carry the same ty twice (the dep walk's
-    /// real origins and the ambient prelude answering for a name
-    /// nothing mounted), and the MOUNTED carrier wins (chain order
-    /// keeps the doc freshest among equals); the embed is the
-    /// zero-fetch fallback.
+    /// the type named `name` — the QUERIED file's view: the head's own
+    /// decl, the use-bound decl, or the ambient prelude row (the
+    /// mounted-over-embed preference survives INSIDE the ambient
+    /// layer — the mounted carrier over the embedded twin, the
+    /// fallback shape). A name the file never binds answers `None` —
+    /// never a foreign decl (sibling modules may share a name; the
+    /// old flat sweep answered for all of them).
     pub(crate) fn type_decl(&self, name: &str) -> Option<TyView<'a>> {
-        let mut fallback = None;
-        for f in self.iter() {
-            if let Some(t) = f.ty(name) {
-                if f.mount.src_path.is_none() {
-                    return Some(t);
-                }
-                if fallback.is_none() {
-                    fallback = Some(t);
-                }
-            }
-        }
-        fallback
+        self.file_scope(name).types.into_iter().next()
     }
 
-    /// the fns named `name` across the chain — 0/1/many, the honesty
-    /// rule typed (free fns and impl methods alike; a consumer that
-    /// wants free fns only filters on `owner()`)
+    /// the fns named `name` in the queried file's view — 0/1/many, the
+    /// honesty rule typed (the file scope's own fns + its use-bound +
+    /// ambient rows; a consumer that wants free fns only filters on
+    /// `owner()`)
     pub(crate) fn functions(&self, name: &str) -> Vec<FnView<'a>> {
-        self.iter()
-            .flat_map(|f| f.fns())
-            .filter(|f| f.name() == name)
-            .collect()
+        self.file_scope(name).fns
     }
 
-    /// the module let named `name` — unique-or-none inside (ambiguity
-    /// stays a miss, the flat chain's honesty rule)
+    /// the module let named `name` in the queried file's view —
+    /// unique-or-none inside (ambiguity stays a miss, the honesty
+    /// rule)
     pub(crate) fn module_let(&self, name: &str) -> Option<LetView<'a>> {
-        let hits: Vec<LetView<'a>> = self
-            .iter()
-            .flat_map(|f| f.lets())
-            .filter(|l| l.name() == name)
-            .collect();
-        match hits.as_slice() {
+        match self.file_scope(name).lets.as_slice() {
             [one] => Some(*one),
             _ => None,
         }
@@ -427,9 +416,11 @@ impl<'a> Chain<'a> {
 
 /// `find_ty` over a plain file window — the inference pass rides
 /// slices (a one-file window for a module-let's initializer, the
-/// chain's pointer slice inside the binding pass); the law is
-/// [`Chain::type_decl`]'s mounted-over-embed rule, spelled once here
-/// for the window shape
+/// chain's pointer slice inside the binding pass); the mounted-over-
+/// embed preference spelled here for the window shape. The windows
+/// resolve SHAPES (a type head behind a value), not spellings — the
+/// file-scope law gates the spelling lanes
+/// ([`Chain::type_decl`]/[`Chain::file_scope`]), not this sweep.
 pub(crate) fn find_ty<'a>(idxs: &[&'a MountedFile], name: &str) -> Option<TyView<'a>> {
     let mut fallback = None;
     for f in idxs.iter().copied() {

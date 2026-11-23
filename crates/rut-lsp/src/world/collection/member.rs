@@ -90,8 +90,16 @@ impl<'a> Chain<'a> {
             }
             return MemberHit::None;
         }
-        let Some(ty) = self.type_decl(&ty_name) else {
-            return MemberHit::UnknownReceiver;
+        // the receiver's type head is a COMPUTED string (the inferred
+        // `RequestBuilder` behind `let b = builder()`), not a spelling
+        // the file binds — the file scope answers first, the doc's
+        // import pkgs the fallback ([`Chain::type_via_imports`])
+        let ty = match self
+            .type_decl(&ty_name)
+            .or_else(|| self.type_via_imports(&ty_name))
+        {
+            Some(t) => t,
+            None => return MemberHit::UnknownReceiver,
         };
         // own surface first
         if let Some(m) = ty.methods().into_iter().find(|m| m.name() == member_text) {
@@ -338,11 +346,15 @@ impl<'a> Chain<'a> {
         None
     }
 
-    /// the interface named `name` — [`type_decl`](Chain::type_decl)
-    /// cut to the interface form (the declaration and the observing
-    /// receiver may live in different files)
+    /// the interface named `name` — the file scope's answer
+    /// ([`Chain::type_decl`]) with the computed-head fallback (a
+    /// value-reached receiver's interface), cut to the interface form
+    /// (the declaration and the observing receiver may live in
+    /// different files). The use-both gate reads this answer — a
+    /// foreign interface resolves only once the document names it.
     pub(crate) fn iface_decl(&self, name: &str) -> Option<TyView<'a>> {
         self.type_decl(name)
+            .or_else(|| self.type_via_imports(name))
             .filter(|t| t.form() == TyForm::Interface)
     }
 }
