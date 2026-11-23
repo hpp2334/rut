@@ -2,6 +2,7 @@ msgid ""
 msgstr "Project-Id-Version: The rut Book\nPOT-Creation-Date: 1970-01-01 00:00:00+00:00\nPO-Revision-Date: \nLast-Translator: \nLanguage-Team: \nLanguage: en\nMIME-Version: 1.0\nContent-Type: text/plain; charset=UTF-8\nContent-Transfer-Encoding: 8bit\nPlural-Forms: nplurals=1; plural=0;\n"
 
 
+
 #: src/SUMMARY.md:1
 msgid "Summary"
 msgstr "目录"
@@ -367,7 +368,7 @@ msgid "The compiler pipeline"
 msgstr "编译器流水线"
 
 
-#: src/SUMMARY.md:102 src/core-concepts/the-vm.md:37
+#: src/SUMMARY.md:102 src/core-concepts/the-vm.md:42
 #: src/reference/typed-bytecode.md:1
 msgid "Typed bytecode"
 msgstr "类型化字节码"
@@ -4188,7 +4189,7 @@ msgstr "形式"
 #: src/reference/builtin-generic-types.md:85
 #: src/reference/builtin-generic-types.md:96
 #: src/reference/literals-and-inference.md:129 src/reference/opaque.md:14
-#: src/reference/async.md:180 src/reference/host-futures.md:34
+#: src/reference/async.md:199 src/reference/host-futures.md:34
 #: src/reference/embedding.md:375 src/reference/embedding.md:393
 #: src/reference/embedding.md:422 src/reference/value-boundary.md:97
 #: src/reference/host-fns.md:313 src/reference/native-containers.md:103
@@ -6713,113 +6714,92 @@ msgstr "驱动循环"
 
 
 #: src/core-concepts/async-model.md:112
-msgid "The VM owns the queues; the embedder owns the loop:"
-msgstr "队列归 VM 所有；循环归嵌入方所有："
+msgid ""
+"The engine owns the loop: build, call the entry, ride `vm.run_until_idle(wait)` to idle or trap — the embedder never writes a pump ([the embedder's driving contract](../reference/embedding.md#the-embedders-driving-contract)):"
+msgstr ""
+"循环归引擎所有：构建、调用入口、经 `vm.run_until_idle(wait)` 驱动到空闲或陷阱——嵌入方从不编写泵（[嵌入方的驱动契约](../reference/embedding.md#the-embedders-driving-contract)）："
 
 
-#: src/core-concepts/async-model.md:115 src/core-concepts/host-boundary.md:37
+#: src/core-concepts/async-model.md:118 src/core-concepts/host-boundary.md:37
 #: src/reference/vm-heap.md:105 src/reference/resource-limits.md:61
-#: src/reference/host-futures.md:121
+#: src/reference/host-futures.md:124
 msgid "\"main\""
 msgstr "\"main\""
 
 
-#: src/core-concepts/async-model.md:115
+#: src/core-concepts/async-model.md:119
+msgid "// idle or trap — the only exits\n"
+msgstr "// 空闲或陷阱——仅有的出口\n"
+
+
+#: src/core-concepts/async-model.md:118
 msgid ""
 "// script boots, launches futures\n"
 msgstr ""
 "// 脚本启动，发起 future\n"
 
 
-#: src/core-concepts/async-model.md:117
+#: src/core-concepts/async-model.md:122
 msgid ""
-"// one drive per ready frame\n"
+"`sleep(ms)` arms a deadline on the VM's **virtual clock** (`vm.now_ms()` / `vm.set_now()`). A test host advances the clock by hand and gets fully deterministic schedules — a UI host just maps it to wall time. The engine loop is deterministic too when no host future is parked: pure timers fast-forward the virtual clock."
 msgstr ""
-"// 每个就绪帧驱动一次\n"
+"`sleep(ms)` 在 VM 的**虚拟时钟**（`vm.now_ms()` / `vm.set_now()`）上设一个截止时间。测试宿主手动推进时钟，得到完全确定性的调度——UI 宿主只需把它映射到墙钟时间。没有宿主 future 停放时，引擎循环同样是确定性的：纯定时器会让虚拟时钟快进。"
 
 
-#: src/core-concepts/async-model.md:118
-msgid ""
-"// expire due timers into ready\n"
-msgstr ""
-"// 把到期定时器转入就绪\n"
-
-
-#: src/core-concepts/async-model.md:119
-msgid ""
-"// the wall-clock stand-in\n"
-msgstr ""
-"// 墙钟的替身\n"
-
-
-#: src/core-concepts/async-model.md:121
-msgid ""
-"// idle\n"
-msgstr ""
-"// 空闲\n"
-
-
-#: src/core-concepts/async-model.md:125
-msgid ""
-"`sleep(ms)` arms a deadline on the VM's **virtual clock** (`vm.now_ms()` / `vm.set_now()`). A test host advances the clock by hand and gets fully deterministic schedules — a UI host just maps it to wall time."
-msgstr ""
-"`sleep(ms)` 在 VM 的**虚拟时钟**（`vm.now_ms()` / `vm.set_now()`）上设一个截止时间。测试宿主手动推进时钟，得到完全确定性的调度——UI 宿主只需把它映射到墙钟时间。"
-
-
-#: src/core-concepts/async-model.md:129
+#: src/core-concepts/async-model.md:127
 msgid ""
 "Each queue entry owns one reference; a completed drive re-enqueues the awaiting frame through a one-directional edge pair, so wake wiring never forms a cycle."
 msgstr "每个队列条目持有一个引用；一次完成的驱动通过单向边对把等待中的帧重新入队，因此唤醒连线永远不会形成循环引用。"
 
 
-#: src/core-concepts/async-model.md:132
+#: src/core-concepts/async-model.md:130
 msgid ""
 "Fuel accounting rides the ordinary per-op budget: a drive that runs out parks the frame at its checkpoint and resumes there later."
 msgstr "燃料核算走普通的每操作预算：燃料耗尽的驱动把帧停在它的检查点上，稍后从那里恢复。"
 
 
-#: src/core-concepts/async-model.md:135
+#: src/core-concepts/async-model.md:133
 msgid "Host futures: `pub host async fn`"
 msgstr "宿主 future：`pub host async fn`"
 
 
-#: src/core-concepts/async-model.md:137
+#: src/core-concepts/async-model.md:135
 msgid "Native code joins the same model. A declaration file spells the row:"
 msgstr "原生代码加入同一个模型。声明文件写下这样一行："
 
 
-#: src/core-concepts/async-model.md:145
+#: src/core-concepts/async-model.md:143
 msgid ""
 "and the embedder binds it with **one closure** that starts the work — the sugar mints the future's state cell (wired to the machine's wake cell) and hands it to the closure as its FIRST parameter:"
 msgstr ""
 "而嵌入方用**一个闭包**绑定它：闭包只负责启动工作——糖宏铸造 future 的状态单元（接线到机器的唤醒单元），并把它作为闭包的第一个参数交进来："
 
 
-#: src/core-concepts/async-model.md:150
+#: src/core-concepts/async-model.md:148
 msgid "\"http_host::stream::http_stream_next\""
 msgstr "\"http_host::stream::http_stream_next\""
 
 
-#: src/core-concepts/async-model.md:155
+#: src/core-concepts/async-model.md:153
 msgid ""
 "// settle from any thread\n"
 msgstr ""
 "// 从任意线程落定\n"
 
 
-#: src/core-concepts/async-model.md:160
+#: src/core-concepts/async-model.md:158
 msgid ""
 "`Completer<T>` is a small shared cell: `complete(v)`/`fail(msg)` are callable from any thread (atomics plus a mutex — the VM stays single-threaded), `fail`'s message becomes the trap **at the await**, and every settle bumps the machine's wake cell, so a parked driving loop wakes to it. An optional abort closure runs when the script cancels a pending future (late results are then simply discarded). The macro registers the whole row family the weave drives — start, probe, take, cancel — and the load-time check verifies the expansion against the declaration, so a decl and its bodies cannot drift apart. IO written with plain `async`/`await` Rust maps onto this naturally: the work leaves the VM, and completion is one enqueue back into the ready queue."
 msgstr ""
 "`Completer<T>` 是一个小的共享单元：`complete(v)`/`fail(msg)` 可从任意线程调用（原子操作加互斥锁——VM 保持单线程），`fail` 的消息**在 await 处**变成陷阱；每一次结算都会让机器的唤醒单元计数前进，停放中的驱动循环会因此醒来。当脚本取消一个挂起的 future 时，可选的中止闭包会运行（迟到的结果随后被直接丢弃）。这个宏注册织造所驱动的整行族——start、probe、take、cancel——加载期检查则对照声明校验展开结果，声明与函数体因此不可能漂移分离。用普通 `async`/`await` Rust 写的 IO 自然映射到此：工作离开 VM，完成就是一次重新入队，回到就绪队列。"
 
 
-#: src/core-concepts/async-model.md:173
+#: src/core-concepts/async-model.md:171
 msgid "Structured concurrency, honestly"
 msgstr "结构化并发，如实相告"
 
 
-#: src/core-concepts/async-model.md:175
+#: src/core-concepts/async-model.md:173
 msgid ""
 "The language today keeps the core vocabulary deliberately small: launch, abort, and await. Racing (`select2` / `select_all`) and the manually resolvable future (`completer<T>()`) are stdlib surface over the same engine rows — the losers of a race are cancelled through the ordinary abort path. Joining a launched future (`await handle`) parses but is compile-gated, and structured scopes (a block that cancels its children on exit) are the same story. What exists now is already enough to structure real programs — the launch/abort receipt gives you explicit ownership of background work, and drop-based cancellation gives it a clean off switch — but nothing in the model silently cancels siblings on your behalf. See the reference on [async and await](../reference/async.md), [launched futures](../reference/launched-futures.md), and the [host futures bridge](../reference/host-futures.md); the [GitHub viewer CLI](../examples/06-github-viewer-cli.md) example shows a full program living inside this loop."
 msgstr ""
@@ -7192,10 +7172,8 @@ msgstr ""
 
 
 #: src/core-concepts/host-boundary.md:38
-msgid ""
-"// drive async work to idle\n"
-msgstr ""
-"// 把异步工作驱动到空闲\n"
+msgid "// idle or trap\n"
+msgstr "// 空闲或陷阱\n"
 
 
 #: src/core-concepts/host-boundary.md:41
@@ -7425,7 +7403,7 @@ msgstr ""
 "// 每操作预算\n"
 
 
-#: src/core-concepts/the-vm.md:20 src/core-concepts/the-vm.md:144
+#: src/core-concepts/the-vm.md:20 src/core-concepts/the-vm.md:149
 #: src/reference/resource-limits.md:12 src/reference/vm-core.md:17
 #: src/reference/vm-core.md:113
 msgid ""
@@ -7466,185 +7444,185 @@ msgstr ""
 
 #: src/core-concepts/the-vm.md:30
 msgid ""
-"A VM is single-threaded by construction (`!Send`). The host holds one and drives it with methods: `call` an entry point, `run_ready` to drain woken frames, `next_deadline` for the timer wheel, `drive` for a single resumption. See [the host boundary](host-boundary.md) for the embed loop and [the async model](async-model.md) for the queues' role in scheduling."
+"A VM is single-threaded by construction (`!Send`). The host holds one and drives it with methods: `call` an entry point, then `run_until_idle(wait)` — the engine's driving loop to idle or trap — or, for a frame-per-tick event loop or a test, the raw doors (`run_ready` to drain woken frames, `next_deadline` for the timer wheel, `drive` for a single resumption). See [the host boundary](host-boundary.md) for the embed loop, [the async model](async-model.md) for the queues' role in scheduling, and [the embedder's driving contract](../reference/embedding.md#the-embedders-driving-contract) for the loop itself."
 msgstr ""
-"VM 在构造上就是单线程的（`!Send`）。宿主持有一台并用方法驱动它：用 `call` 调入口点，用 `run_ready` 排空被唤醒的帧，用 `next_deadline` 查定时器轮盘，用 `drive` 做单次恢复。嵌入循环见[宿主边界](host-boundary.md)；队列在调度中的角色见[异步模型](async-model.md)。"
+"VM 按构造即是单线程的（`!Send`）。宿主持有一个，并用方法驱动它：`call` 一个入口点，然后 `run_until_idle(wait)`——引擎的驱动循环，直到空闲或陷阱——或者，对于逐帧事件循环或测试，用原始门（`run_ready` 排空被唤醒的帧，`next_deadline` 管定时器轮，`drive` 做单次恢复）。[宿主边界](host-boundary.md)讲嵌入循环，[异步模型](async-model.md)讲队列在调度中的角色，[嵌入方的驱动契约](../reference/embedding.md#the-embedders-driving-contract)讲循环本身。"
 
 
-#: src/core-concepts/the-vm.md:39
+#: src/core-concepts/the-vm.md:44
 msgid ""
 "The instruction set is register-based: operands are `u16` indices into a per-frame slot file, and **every register has a static type recorded in the function's signature**. That single decision is what lets the hot path stay tag-free (see [reified types](reified-types.md)) and what makes refcounting precise: the compiler emits plain moves for scalars and retain/release moves for references, with no runtime tag checks."
 msgstr ""
 "指令集基于寄存器：操作数是指向每帧槽位文件的 `u16` 索引，而**每个寄存器都有记录在函数签名中的静态类型**。正是这一个决定让热路径保持无标签（参见[具体化类型](reified-types.md)），也让引用计数精确：编译器为标量生成普通移动，为引用生成保留/释放移动，没有任何运行时标签检查。"
 
 
-#: src/core-concepts/the-vm.md:46
+#: src/core-concepts/the-vm.md:51
 msgid ""
 "Ops are small and fixed-size, with variadic operand lists (call arguments, branch tables) living in per-function pools. A representative sample:"
 msgstr "操作小而定长，变长的操作数列表（调用实参、分支表）放在每函数的池子里。一份代表性样本："
 
 
-#: src/core-concepts/the-vm.md:64
+#: src/core-concepts/the-vm.md:69
 msgid "The type system also decides what is _not_ an op:"
 msgstr "类型系统同样决定什么_不是_操作："
 
 
-#: src/core-concepts/the-vm.md:66
+#: src/core-concepts/the-vm.md:71
 msgid ""
 "**Nothing static.** What the type table can answer at compile time becomes a constant — no \"get type id\" instruction, no length load for a fixed-size array."
 msgstr "**没有静态之事。**类型表在编译期能回答的都会变成常量——没有\"取类型 id\"指令，定长数组也没有长度加载。"
 
 
-#: src/core-concepts/the-vm.md:69
+#: src/core-concepts/the-vm.md:74
 msgid ""
 "**Nothing polymorphic and nothing named.** An interface-typed receiver has exactly one op (the itable call); string concatenation is a native call, not an opcode."
 msgstr ""
 
 
-#: src/core-concepts/the-vm.md:72
+#: src/core-concepts/the-vm.md:77
 msgid ""
 "**Concrete memory, control flow, and two readbacks.** Ops touch memory only through compile-time-known layouts, plus the two reads reification needs: \"what is it\" (`tidof`) and the guarded payload extract behind a downcast."
 msgstr ""
 "**具体的内存、控制流，外加两个读回。**操作只透过编译期已知的布局触碰内存，再加上具体化需要的两次读取：\"它是什么\"（`tidof`）与向下转型背后带守卫的载荷提取。"
 
 
-#: src/core-concepts/the-vm.md:77
+#: src/core-concepts/the-vm.md:82
 msgid "The module binary"
 msgstr "模块二进制"
 
 
-#: src/core-concepts/the-vm.md:79
+#: src/core-concepts/the-vm.md:84
 msgid ""
 "Compilation produces a versioned, self-contained binary per module: types, constants, functions (with their typed register signatures), imports, and a symbol table for backtraces. Its properties matter more than its layout:"
 msgstr "编译为每个模块产出一个带版本、自包含的二进制：类型、常量、函数（带各自的类型化寄存器签名）、导入，以及用于回溯的符号表。它的性质比它的布局更重要："
 
 
-#: src/core-concepts/the-vm.md:84
+#: src/core-concepts/the-vm.md:89
 msgid ""
 "**Deterministic.** The same sources plus the same dependency versions produce byte-identical binaries, so artifacts are cacheable by content hash and shippable instead of sources."
 msgstr "**确定性。**同样的源码加同样的依赖版本产出逐字节相同的二进制，因此产物可以按内容哈希缓存，可以交付二进制而非源码。"
 
 
-#: src/core-concepts/the-vm.md:87
+#: src/core-concepts/the-vm.md:92
 msgid ""
 "**Self-describing but strippable.** Names and source spans are retained for traces by default; a release build can strip them, and a sidecar map file (keyed by content hash) can restore symbolication later. See the reference on [diagnostics](../reference/diagnostics.md)."
 msgstr ""
 "**自描述但可剥离。**名字与源码区间默认为追踪保留；release 构建可以剥离它们，而一个旁车 map 文件（按内容哈希为键）可以在日后恢复符号化。参见关于[诊断](../reference/diagnostics.md)的参考章节。"
 
 
-#: src/core-concepts/the-vm.md:92
+#: src/core-concepts/the-vm.md:97
 msgid ""
 "**Link-time identity.** Type ids are module-local at rest and rebased into the VM's global table at link, where the interface tables merge by name. Cross-module interface-typed calls specialize per concrete argument here too — the static-dispatch rule of [interfaces and dispatch](interfaces-and-dispatch.md) holds across module boundaries."
 msgstr ""
 
 
-#: src/core-concepts/the-vm.md:98
+#: src/core-concepts/the-vm.md:103
 msgid ""
 "**Little-endian everywhere**, by law — every serialized word, so artifacts are platform-independent by construction rather than by luck."
 msgstr "**处处小端**，依律而行——每个序列化的字都是——产物因此从构造上就平台无关，而不是靠运气。"
 
 
-#: src/core-concepts/the-vm.md:102
+#: src/core-concepts/the-vm.md:107
 msgid "Verification at load"
 msgstr "加载时校验"
 
 
-#: src/core-concepts/the-vm.md:104
+#: src/core-concepts/the-vm.md:109
 msgid ""
 "Loading re-checks each function before anything executes: register operands against the signature, operand pools and jump targets in range, type operands present in the type table, native slots declared, and async state tables closed. A failed verification is a load error naming the module and function — **corrupted binaries never execute**. This is also where crossing rules are enforced for host-facing signatures, so a non-crossing shape is rejected before any script runs."
 msgstr ""
 "加载会在任何东西执行之前重新检查每个函数：寄存器操作数对照签名、操作数池与跳转目标在范围内、类型操作数在类型表中存在、原生槽位已声明、异步状态表封闭。校验失败是一个指名模块与函数的加载错误——**损坏的二进制永不执行**。这里也是宿主向签名的跨越规则被强制之处，因此不可跨越的形状在任何脚本运行之前就被拒绝。"
 
 
-#: src/core-concepts/the-vm.md:112
+#: src/core-concepts/the-vm.md:117
 msgid ""
 "Module-level `let` initialization is folded at compile time: an `Int`, `Float`, `Str`, or `Bool` literal becomes a constant in the binary, and any other initializer — an operator, an enum member, a record literal, a call — is a compile error at the checker. There is no load-time execution at all: loading a module runs nothing."
 msgstr ""
 "模块级 `let` 初始化在编译期折叠：一个 `Int`、`Float`、`Str` 或 `Bool` 字面量成为二进制中的常量，任何其他初始化器——运算符、枚举成员、记录字面量、调用——都是检查器的编译错误。根本不存在加载期执行：加载模块不运行任何东西。"
 
 
-#: src/core-concepts/the-vm.md:118
+#: src/core-concepts/the-vm.md:123
 msgid "The interpreter loop and traps"
 msgstr "解释器循环与陷阱"
 
 
-#: src/core-concepts/the-vm.md:120
+#: src/core-concepts/the-vm.md:125
 msgid ""
 "Execution is a decode-dispatch loop over frames. A frame is the function's code, a program counter, its typed register file, and (for async frames) the resume state. Calls push frames; returns pop them; direct calls are an index plus jump, and interface calls are two loads plus an indirect jump through the itable."
 msgstr ""
 
 
-#: src/core-concepts/the-vm.md:126
+#: src/core-concepts/the-vm.md:131
 msgid ""
 "Failure is a **trap**, not an exception and not a Rust panic: integer overflow on the plain operators, a `nil` deref, an out-of-bounds index, a `panic(..)`, or an exhausted budget. A trap captures the raw frame chain (rendered lazily — symbolication happens only if someone prints it), runs destructors on the way out, and unwinds as an `Err(Trap)` to the host call. Rut code cannot catch one; the boundary is the catch point (see [the host boundary](host-boundary.md))."
 msgstr ""
 "失败是**陷阱**，不是异常，也不是 Rust panic：普通运算符上的整数溢出、对 `nil` 解引用、越界索引、`panic(..)`，或者耗尽的预算。陷阱捕获原始帧链（惰性渲染——只有当有人打印它时才做符号化），在退出路上运行析构器，并以 `Err(Trap)` 的形式沿栈展开到宿主调用。Rut 代码无法捕获它；边界就是捕获点（参见[宿主边界](host-boundary.md)）。"
 
 
-#: src/core-concepts/the-vm.md:135 src/reference/vm-core.md:107
+#: src/core-concepts/the-vm.md:140 src/reference/vm-core.md:107
 msgid "Budgets"
 msgstr "预算"
 
 
-#: src/core-concepts/the-vm.md:137
+#: src/core-concepts/the-vm.md:142
 msgid ""
 "Two knobs make it safe to run third-party code: a **heap budget** and **fuel**. Both are set at construction, and fuel is the one live budget (`Vm::add_fuel`):"
 msgstr "两个旋钮让运行第三方代码变得安全：**堆预算**与**燃料**。两者都在构造时设置，而燃料是唯一的线上预算（`Vm::add_fuel`）："
 
 
-#: src/core-concepts/the-vm.md:142
+#: src/core-concepts/the-vm.md:147
 msgid ""
 "// one unit per op, counts down\n"
 msgstr ""
 "// 每操作一个单位，倒数\n"
 
 
-#: src/core-concepts/the-vm.md:143
+#: src/core-concepts/the-vm.md:148
 msgid ""
 "// checked at every allocation\n"
 msgstr ""
 "// 每次分配都检查\n"
 
 
-#: src/core-concepts/the-vm.md:147
+#: src/core-concepts/the-vm.md:152
 msgid ""
 "Fuel is a cheap per-op tick — one unit decremented and checked on every op — and the heap budget is charged per allocation. The heap limit has no live setter: a heap trap is cleared by dropping references so the retry fits, or by rebuilding the VM with a larger budget. `interrupt_every` is construct-time only and **today gates nothing**: there is no interrupt lane, and natives are never preempted ([resource limits](../reference/resource-limits.md))."
 msgstr ""
 "燃料是廉价的每操作一跳——每个 op 递减并检查一个单位——堆预算则按分配计费。堆上限没有线上设置器：丢弃引用让重试装得下，或以更大的预算重建 VM，即可解除堆陷阱。`interrupt_every` 只是构造期的字段，**今天不约束任何东西**：没有中断车道，原生函数也绝不会被抢占（[资源上限](../reference/resource-limits.md)）。"
 
 
-#: src/core-concepts/the-vm.md:155
+#: src/core-concepts/the-vm.md:160
 msgid ""
 "Exhaustion is **resumable**: the trap parks the frame exactly where it was — the frame _is_ the loop state — so the host can add fuel and resume; a heap stop needs references dropped so the retry fits, or a VM rebuilt with a larger budget. A UI host yields mid-frame; a wasm page grants finite fuel; a test sets finite fuel plus a virtual clock and gets a deterministic hang proof."
 msgstr ""
 "耗尽是**可恢复的**：陷阱把帧停在原地——帧_就是_循环状态——宿主因此可以加燃料然后恢复；堆停止需要丢弃引用让重试装得下，或以更大的预算重建 VM。UI 宿主在帧中途让步；wasm 页面发放有限燃料；测试设有限燃料加虚拟时钟，得到一份确定性的挂起证明。"
 
 
-#: src/core-concepts/the-vm.md:161
+#: src/core-concepts/the-vm.md:166
 msgid ""
 "The heap check runs _before_ any write, so an out-of-memory failure leaves the heap byte-identical (see [memory](memory.md))."
 msgstr "堆检查在任何写入_之前_运行，所以内存耗尽的失败让堆保持逐字节相同（参见[内存](memory.md)）。"
 
 
-#: src/core-concepts/the-vm.md:164
+#: src/core-concepts/the-vm.md:169
 msgid ""
 "Native functions run outside the fuel budget — a hanging native is a host bug by contract, so keep native bodies non-blocking (there is no interrupt lane to preempt one)."
 msgstr "原生函数在燃料预算之外运行——挂起的原生函数按契约是宿主 bug，所以请保持原生函数体非阻塞（没有中断车道会抢占它）。"
 
 
-#: src/core-concepts/the-vm.md:168
+#: src/core-concepts/the-vm.md:173
 msgid "Why no JIT is viable"
 msgstr "为什么无 JIT 是可行的"
 
 
-#: src/core-concepts/the-vm.md:170
+#: src/core-concepts/the-vm.md:175
 msgid ""
 "A JS engine's speed is its JIT, and the JIT exists to speculate about polymorphic property loads. rut has no polymorphic loads: field access is by known index, calls bind statically whenever the site names one concrete type, generics are monomorphized, and the remaining dynamic dispatch is an honest checked vtable hop. The optimizer's currency is **type stability** — what the checker proves is everything the optimizer gets — and its passes (constant folding, inlining, monomorphization, register-level cleanup) all run ahead of time. The result is a runtime with no warmup curve, no deoptimization asymmetries, and per-op costs you can reason about from the bytecode alone."
 msgstr ""
 "JS 引擎的速度就是它的 JIT，而 JIT 的存在是为了对多态属性加载做投机。rut 没有多态加载：字段访问按已知索引，调用点指名一个具体类型时调用就静态绑定，泛型被单态化，剩下的动态分派是一次如实且受检的 vtable 跳转。优化器的通货是**类型稳定性**——检查器证明的一切就是优化器得到的全部——而它的各个 pass（常量折叠、内联、单态化、寄存器级清理）全部提前运行。结果是一个没有预热曲线、没有反优化不对称性的运行时，每操作的成本可以从字节码本身推演。"
 
 
-#: src/core-concepts/the-vm.md:182
+#: src/core-concepts/the-vm.md:187
 msgid ""
 "The full tables and laws live in the reference: [typed bytecode](../reference/typed-bytecode.md), [the module binary and verification](../reference/module-binary.md), [VM core](../reference/vm-core.md), and [resource limits and fuel](../reference/resource-limits.md)."
 msgstr ""
@@ -17495,8 +17473,9 @@ msgstr "`abort()` 给帧打上标志；其检查点处的探针运行 drop 路�
 
 
 #: src/reference/async.md:16
-msgid "the host polls the VM: `run_ready()`, `next_deadline()`"
-msgstr "宿主轮询 VM：`run_ready()`、`next_deadline()`"
+msgid ""
+"the engine drives: `run_until_idle(wait)`; raw doors stay public for hand-driving"
+msgstr "引擎驱动：`run_until_idle(wait)`；原始门保持公开，供手工驱动"
 
 
 #: src/reference/async.md:18
@@ -17798,130 +17777,119 @@ msgstr ""
 
 
 #: src/reference/async.md:178
-msgid "The VM owns the queues; the **embedder owns the loop**:"
-msgstr "VM 拥有各个队列；**循环由嵌入方拥有**："
+msgid ""
+"The engine owns the loop. Build, call the entry, drive to idle, handle the trap — one door does the whole drive ([the embedder's driving contract](embedding.md#the-embedders-driving-contract)):"
+msgstr ""
+"循环归引擎所有。构建、调用入口、驱动到空闲、处理陷阱——一扇门完成整个驱动（[嵌入方的驱动契约](embedding.md#the-embedders-driving-contract)）："
 
 
-#: src/reference/async.md:180
+#: src/reference/async.md:199
 msgid "Engine API"
 msgstr "引擎 API"
 
 
-#: src/reference/async.md:182
+#: src/reference/async.md:201
 msgid "`vm.launch(fut)`"
 msgstr "`vm.launch(fut)`"
 
 
-#: src/reference/async.md:182
+#: src/reference/async.md:201
 msgid "enqueue a future (the queue owns one reference)"
 msgstr "把一个 future 入队（队列持有一个引用）"
 
 
-#: src/reference/async.md:183
+#: src/reference/async.md:202
 msgid "`vm.cancel(fut) -> bool`"
 msgstr "`vm.cancel(fut) -> bool`"
 
 
-#: src/reference/async.md:183
+#: src/reference/async.md:202
 msgid "flag cancellation + re-enqueue; `false` when already retired"
 msgstr "打上取消标志 + 重新入队；已退役时返回 `false`"
 
 
-#: src/reference/async.md:184
+#: src/reference/async.md:203
 msgid "`vm.drive(fut) -> Drive`"
 msgstr "`vm.drive(fut) -> Drive`"
 
 
-#: src/reference/async.md:184
+#: src/reference/async.md:203
 msgid ""
 "one drive step through the future's designated yield slot; reads the state field"
 msgstr ""
 
 
-#: src/reference/async.md:185
+#: src/reference/async.md:204
 msgid "`vm.arm_timer(deadline_ms, fut)`"
 msgstr "`vm.arm_timer(deadline_ms, fut)`"
 
 
-#: src/reference/async.md:185
+#: src/reference/async.md:204
 msgid "arm a sleep deadline on the virtual clock"
 msgstr "在虚拟时钟上布防一个 sleep 期限"
 
 
-#: src/reference/async.md:186
+#: src/reference/async.md:205
 msgid "`vm.now_ms()` / `vm.set_now(t)`"
 msgstr "`vm.now_ms()` / `vm.set_now(t)`"
 
 
-#: src/reference/async.md:186
+#: src/reference/async.md:205
 msgid "read / advance the deterministic virtual clock"
 msgstr "读取 / 推进确定性的虚拟时钟"
 
 
-#: src/reference/async.md:187 src/reference/embedding.md:435
+#: src/reference/async.md:206 src/reference/embedding.md:435
 msgid "`vm.next_deadline() -> Option<u64>`"
 msgstr "`vm.next_deadline() -> Option<u64>`"
 
 
-#: src/reference/async.md:187
+#: src/reference/async.md:206
 msgid ""
 "expire due timers into the ready queue; answer the earliest remaining deadline"
 msgstr "把到期的定时器送入就绪队列；应答剩余的最早期限"
 
 
-#: src/reference/async.md:188
+#: src/reference/async.md:207
 msgid "`vm.run_ready() -> usize`"
 msgstr "`vm.run_ready() -> usize`"
 
 
-#: src/reference/async.md:188
+#: src/reference/async.md:207
 msgid ""
 "drain the ready queue, then poll parked host futures, until a spin produces no completion"
 msgstr "排空就绪队列，然后轮询停放中的宿主 future，直到一轮空转不再产生任何完成"
 
 
-#: src/reference/async.md:189 src/reference/embedding.md:437
+#: src/reference/async.md:208 src/reference/embedding.md:437
 msgid "`vm.pending_tasks() -> usize`"
 msgstr "`vm.pending_tasks() -> usize`"
 
 
-#: src/reference/async.md:189
+#: src/reference/async.md:210
+msgid ""
+"The hand-drive test shape (deterministic; the engine loop is deterministic too when no host future is parked — pure timers fast-forward the virtual clock):"
+msgstr "手工驱动的测试形状（确定性的；当没有宿主 future 停放时，引擎循环同样是确定性的——纯定时器会让虚拟时钟快进）："
+
+
+#: src/reference/async.md:208
 msgid "ready + armed timers + host futures parked on Completers — the idle test"
 msgstr "就绪帧 + 已布防定时器 + 停放在 Completer 上的宿主 future——空闲判据"
 
 
-#: src/reference/async.md:191
-msgid "Two embedder pumps:"
-msgstr "两个嵌入方泵送循环："
-
-
-#: src/reference/async.md:194
-msgid ""
-"// wall-clock (a CLI or service): settle from real threads\n"
-msgstr ""
-"// wall-clock (a CLI or service): settle from real threads\n"
-
-
-#: src/reference/async.md:195
+#: src/reference/async.md:183
 msgid "\"boot\""
 msgstr "\"boot\""
 
 
-#: src/reference/async.md:200
-msgid ""
-"// virtual clock (tests): fully deterministic\n"
-msgstr ""
-"// virtual clock (tests): fully deterministic\n"
-
-
-#: src/reference/async.md:208
+#: src/reference/async.md:221
 msgid ""
 "Fuel rides the existing per-op budget ([resource limits](resource-limits.md)): a drive that runs out parks the frame and propagates `OutOfFuel`; a re-drive re-enters at the frame's checkpoint."
 msgstr ""
 "燃料搭在现有的按操作预算上（[资源限制](resource-limits.md)）：一次耗尽燃料的驱动会停放该帧并传播 `OutOfFuel`；再驱动时从该帧的检查点重新进入。"
 
 
-#: src/reference/async.md:213
+#: src/reference/async.md:226
 msgid ""
 "See [launched futures](launched-futures.md) for receipts, cancellation, and the race/completer tier (`select2` / `select_all` / `completer`); [the host futures bridge](host-futures.md) for backing a host async fn with Rust."
 msgstr ""
@@ -18287,16 +18255,15 @@ msgstr ""
 
 #: src/reference/launched-futures.md:194
 msgid ""
-"`vm.pending_tasks()` counts ready frames, armed timers, and host futures parked on Completers — the embedder's idle test ([async and await](async.md))."
+"`vm.pending_tasks()` counts ready frames, armed timers, and host futures parked on Completers — the idle test behind the engine's driving loop ([async and await](async.md), [the embedder's driving contract](embedding.md#the-embedders-driving-contract))."
 msgstr ""
-"`vm.pending_tasks()` 统计就绪帧、已布防定时器以及停放在 Completer 上的宿主 future——这是嵌入方的空闲判据（[异步与 await](async.md)）。"
+"`vm.pending_tasks()` 统计就绪帧、已布防定时器以及停放在 Completer 上的宿主 future——引擎驱动循环背后的空闲判据（[异步与 await](async.md)、[嵌入方的驱动契约](embedding.md#the-embedders-driving-contract)）。"
 
 
-#: src/reference/launched-futures.md:197
+#: src/reference/launched-futures.md:199
 msgid ""
-"A trap inside a launched future propagates out of `run_ready()` / `drive()`; the frame is retired either way, and its locals ran their drop path."
-msgstr ""
-"已启动 future 内部的陷阱会传播出 `run_ready()` / `drive()`；无论哪种情况帧都会退役，其局部变量已运行过 drop 路径。"
+"A trap inside a launched future propagates out of the driving loop as `Err(Trap)`; the frame is retired either way, and its locals ran their drop path."
+msgstr "已启动 future 内部的陷阱会以 `Err(Trap)` 冒泡出驱动循环；无论哪种情况帧都会退役，其局部变量已走过 drop 路径。"
 
 
 #: src/reference/host-futures.md:3
@@ -18639,43 +18606,38 @@ msgstr "嵌入方的循环"
 
 
 #: src/reference/host-futures.md:118
-msgid "The engine polls every future parked on a completer:"
-msgstr "引擎轮询每一个停放在 completer 上的 future："
-
-
-#: src/reference/host-futures.md:123
 msgid ""
-"// drain + poll + drain\n"
+"One door drives everything — the engine's protocol at the `Block` policy parks on the machine's wake cell until the completers answer, so idle and trap are the only exits ([the embedder's driving contract](embedding.md#the-embedders-driving-contract)):"
 msgstr ""
-"// drain + poll + drain\n"
+"一扇门驱动一切——引擎协议以 `Block` 策略停放在机器的唤醒单元上，直到 completer 应答，因此空闲和陷阱是仅有的出口（[嵌入方的驱动契约](embedding.md#the-embedders-driving-contract)）："
 
 
 #: src/reference/host-futures.md:128
 msgid ""
-"`run_ready()` drains the ready queue, polls the parked host futures (each poll runs the `__yield` probe; a ready one is driven through `__take` and its awaiter re-enqueued), then drains again — one pass settles a completed host future end to end. `vm.pending_tasks()` counts ready frames, armed timers, and the host-pending set, so a worker that never completes keeps the loop alive — the flip side of best-effort cancellation."
+"Inside each turn, `run_ready()` drains the ready queue, polls the parked host futures (each poll runs the `__yield` probe; a ready one is driven through `__take` and its awaiter re-enqueued), then drains again — one pass settles a completed host future end to end. `vm.pending_tasks()` counts ready frames, armed timers, and the host-pending set, so a worker that never completes keeps the machine busy forever — the flip side of best-effort cancellation, and the law under `Block`: no wall-clock budget, no hang guard. An event-loop host that cannot park hand-drives instead: one `run_ready()` pass per tick, or the `Wait::NonBlock` policy, which answers `Idle::WouldBlock` the moment only host-parked work remains."
 msgstr ""
-"`run_ready()` 排空就绪队列，轮询停放中的宿主 future（每次轮询运行 `__yield` 探针；就绪者经由 `__take` 被驱动，其 awaiter 重新入队），然后再排空一次——一趟就把一个已完成的宿主 future 端到端落定。`vm.pending_tasks()` 统计就绪帧、已布防定时器和宿主 pending 集，因此一个永不完成的 worker 会让循环一直活着——这是尽力而为取消的另一面。"
+"每一轮内部，`run_ready()` 排空就绪队列、轮询停放的宿主 future（每次轮询运行 `__yield` 探针；就绪的那个经 `__take` 被驱动，其等待者重新入队），然后再排空一次——一趟就能把一个已完成的宿主 future 端到端结算完毕。`vm.pending_tasks()` 统计就绪帧、已布防定时器和宿主停放集，因此永不完成的 worker 会让机器永远忙碌——这是尽力而为取消的另一面，也是 `Block` 下的法则：没有墙钟预算，没有挂起守卫。无法停放的事件循环宿主改为手工驱动：每个 tick 一趟 `run_ready()`，或用 `Wait::NonBlock` 策略——一旦只剩宿主停放的工作它就应答 `Idle::WouldBlock`。"
 
 
-#: src/reference/host-futures.md:136
+#: src/reference/host-futures.md:140
 msgid ""
 "The virtual clock works here too: drive with finite fuel and `vm.set_now` for deterministic tests ([resource limits](resource-limits.md))."
 msgstr "虚拟时钟在这里同样适用：以有限燃料驱动并配合 `vm.set_now` 做确定性测试（[资源限制](resource-limits.md)）。"
 
 
-#: src/reference/host-futures.md:140
+#: src/reference/host-futures.md:144
 msgid "In-tree users"
 msgstr "树内使用者"
 
 
-#: src/reference/host-futures.md:142
+#: src/reference/host-futures.md:146
 msgid ""
 "The standard HTTP lane is a `register_async!` client: `http_send` (living in the surface tree's `net/` mod), `http_body`, and `http_stream_next` (in `stream/`) are `pub host async fn` rows whose bodies park `Completer`s answered from reqwest worker threads (or the fixture lane's virtual clock); the registrations spell the paths (`\"net::http_send__start\"` et al). Mount it with `rut/http_host` + `rut/http`; the full walk-through is [the GitHub viewer example](../examples/06-github-viewer-cli.md)."
 msgstr ""
 "标准 HTTP 链路就是一个 `register_async!` 客户端：`http_send`（住在表面树的 `net/` 模块里）、`http_body` 与 `http_stream_next`（在 `stream/` 里）都是 `pub host async fn` 行，它们的体停放一些 `Completer`，由 reqwest 的 worker 线程（或夹具链路的虚拟时钟）应答；注册名写明路径（`\"net::http_send__start\"` 等）。用 `rut/http_host` + `rut/http` 挂载它；完整演练见 [GitHub 查看器示例](../examples/06-github-viewer-cli.md)。"
 
 
-#: src/reference/host-futures.md:151
+#: src/reference/host-futures.md:155
 msgid ""
 "Plain `host fn` rows (synchronous, run to completion inside the crossing) are the other half of the boundary — see [embedding and native modules](embedding.md)."
 msgstr "普通的 `host fn` 行（同步的，在跨越内部一次运行到底）是边界的另一半——见[嵌入与原生模块](embedding.md)。"
@@ -19891,7 +19853,12 @@ msgid ""
 msgstr "构建、调用入口、驱动到空闲、处理陷阱——循环归引擎所有；宿主只指明自己的停放策略："
 
 
-#: src/reference/embedding.md:449
+#: src/reference/async.md:186
+msgid "// Block never answers WouldBlock\n"
+msgstr "// Block 绝不应答 WouldBlock\n"
+
+
+#: src/reference/async.md:185 src/reference/embedding.md:449
 msgid "// every frame retired\n"
 msgstr "// 每一帧都已退役\n"
 
@@ -19901,7 +19868,14 @@ msgid "// NonBlock only\n"
 msgstr "// 仅 NonBlock\n"
 
 
-#: src/reference/embedding.md:451
+#: src/reference/async.md:191
+msgid ""
+"Under `Wait::Block` (the native lane) the driving thread parks on the machine's wake cell whenever nothing but settling host futures remains — a worker that never completes hangs the run by law; `Wait::NonBlock` (the wasm lane) never parks and answers `Idle::WouldBlock`, and the embedder yields and re-enters. The raw doors under the protocol stay public for the two honest hand-driving uses — an embedder that owns an event loop (a frame per tick) and tests that want per-step control:"
+msgstr ""
+"在 `Wait::Block`（原生车道）下，每当只剩正在结算的宿主 future，驱动线程就停放在机器的唤醒单元上——永不完成的 worker 依法让运行挂起；`Wait::NonBlock`（wasm 车道）从不停放，而是应答 `Idle::WouldBlock`，嵌入方让出并重新进入。协议之下的原始门保持公开，服务两种正当的手工驱动场景——拥有事件循环（每个 tick 一帧）的嵌入方，以及需要逐步控制的测试："
+
+
+#: src/reference/async.md:187 src/reference/embedding.md:451
 msgid "/* print and exit; other frames may stay pending */"
 msgstr "/* 打印并退出；其余帧可能仍挂起 */"
 
@@ -20334,37 +20308,37 @@ msgstr "最小后端——每个请求一条线程，reqwest 链路自己的形�
 #: src/reference/embedding.md:623
 msgid ""
 "// HEADERS — send resolves here\n"
-msgstr "// 响应头——send 在此解析"
+msgstr "// 响应头——send 在此解析\n"
 
 
 #: src/reference/embedding.md:625
 msgid ""
 "// the wire-abort: drop the wire\n"
-msgstr "// 线路中止：丢掉这条线"
+msgstr "// 线路中止：丢掉这条线\n"
 
 
 #: src/reference/embedding.md:626
 msgid ""
 "// bounded — may park this thread\n"
-msgstr "// 有界——可能停放这条线程"
+msgstr "// 有界——可能停放这条线程\n"
 
 
 #: src/reference/embedding.md:628
 msgid ""
 "// clean EOF\n"
-msgstr "// 干净的 EOF"
+msgstr "// 干净的 EOF\n"
 
 
 #: src/reference/embedding.md:631
 msgid ""
 "// status 0\n"
-msgstr "// 状态码 0"
+msgstr "// 状态码 0\n"
 
 
 #: src/reference/embedding.md:636
 msgid ""
 "// the seven rows bind over it like any host pkg:\n"
-msgstr "// 七条行像任何宿主 pkg 一样绑定在它之上："
+msgstr "// 七条行像任何宿主 pkg 一样绑定在它之上：\n"
 
 
 #: src/reference/embedding.md:644
@@ -26562,44 +26536,51 @@ msgstr ""
 "`timers: BTreeMap<u64, Vec<Slot>>`——对照 VM **虚拟时钟**的 sleep 期限（`now_ms` / `set_now`——确定性的；宿主显式推进它，或把它映射到墙上时间）。"
 
 
+#: src/reference/vm-core.md:152
+msgid ""
+"`run_until_idle(wait)` — the engine's driving loop over these parts: drain, expire-or-jump the clock to the next deadline, then park on the machine's wake cell under `Wait::Block` (or answer `WouldBlock` under `Wait::NonBlock`) until idle or trap ([the embedder's driving contract](embedding.md#the-embedders-driving-contract))."
+msgstr ""
+"`run_until_idle(wait)`——跑在这些部件之上的引擎驱动循环：排空、把时钟过期或跳到下一个期限，然后在 `Wait::Block` 下停放在机器的唤醒单元上（或在 `Wait::NonBlock` 下应答 `WouldBlock`），直到空闲或陷阱（[嵌入方的驱动契约](embedding.md#the-embedders-driving-contract)）。"
+
+
 #: src/reference/vm-core.md:146
 msgid ""
 "`drive(fut)` — one drive step through the future's designated yield slot (the `Future<T>` class's engine ABI): a fresh engine context over the frame edge, answering `Done` or `Parked` off the frame's state field. Fuel accounting rides the per-op budget unchanged: an exhausted drive parks the frame at its pc, and a re-drive re-enters at the checkpoint state."
 msgstr ""
 
 
-#: src/reference/vm-core.md:152
+#: src/reference/vm-core.md:158
 msgid ""
 "`run_ready()` drains the ready queue one drive per entry; `next_deadline()` expires due timers into `ready` and answers the earliest remaining deadline; `pending_tasks()` is the idle test."
 msgstr ""
 "`run_ready()` 排空就绪队列，每个条目驱动一次；`next_deadline()` 把到期定时器过期进 `ready` 并应答剩余的最早期限；`pending_tasks()` 是空闲判据。"
 
 
-#: src/reference/vm-core.md:155
+#: src/reference/vm-core.md:161
 msgid ""
 "The wake pair (awaiter edge on the awaited frame, pending edge on the awaiter) is one-directional and cleared on resume — no cycle forms."
 msgstr "唤醒对（被 await 帧上的 awaiter 边、awaiter 上的 pending 边）是单向的，并在恢复时清除——不会成环。"
 
 
-#: src/reference/vm-core.md:157
+#: src/reference/vm-core.md:163
 msgid ""
 "A completed drive re-enqueues the frame's awaiter edge. A parked async frame is simply not in `ready` until its wake edge or timer fires."
 msgstr "一次完成的驱动会重新入队帧的 awaiter 边。停放的异步帧就是不在 `ready` 里，直到它的唤醒边或定时器触发。"
 
 
-#: src/reference/vm-core.md:160
+#: src/reference/vm-core.md:166
 msgid ""
 "The engine never owns a wall clock: sleeps are virtual-clock deadlines, and tests virtualize time by advancing the clock — full determinism ([Async and await](async.md), [Launched futures](launched-futures.md))."
 msgstr ""
 "引擎从不拥有墙上时钟：sleep 是虚拟时钟期限，测试通过推进时钟来虚拟化时间——完全确定性（[异步与 await](async.md)、[已启动的 future](launched-futures.md)）。"
 
 
-#: src/reference/vm-core.md:164
+#: src/reference/vm-core.md:170
 msgid "Heap integration"
 msgstr "堆集成"
 
 
-#: src/reference/vm-core.md:166
+#: src/reference/vm-core.md:172
 msgid ""
 "Allocation, retain, and release are inline loop work. There is **no collection pass at all**: destruction happens at release-to-zero, so nothing ever interrupts a frame. Strong reference cycles leak by design; the weak-reference machinery and the shutdown leak report are the diagnostic surface ([Weak references and the cycle collector](weak-refs.md), [The Rc heap and destructors](rc-heap.md)). Heap layout, cell formats, and the bump allocator are [The VM heap](vm-heap.md)."
 msgstr ""
@@ -26835,155 +26816,166 @@ msgid "`vm.resume()`"
 msgstr "`vm.resume()`"
 
 
+#: src/reference/loading.md:59
+msgid "`vm.run_until_idle(wait)`"
+msgstr "`vm.run_until_idle(wait)`"
+
+
+#: src/reference/loading.md:59
+msgid ""
+"the driving protocol — the engine-owned loop: idle or trap are the only exits ([the embedder's driving contract](embedding.md#the-embedders-driving-contract))"
+msgstr ""
+"驱动协议——引擎拥有的循环：空闲或陷阱是仅有的出口（[嵌入方的驱动契约](embedding.md#the-embedders-driving-contract)）"
+
+
 #: src/reference/loading.md:58
 msgid "continue a parked frame after `add_fuel`"
 msgstr "在 `add_fuel` 之后继续一个停放的帧"
 
 
-#: src/reference/loading.md:59
+#: src/reference/loading.md:60
 msgid ""
 "`vm.run_ready()`, `vm.next_deadline()`, `vm.pending_tasks()`, `vm.drive(fut)`"
 msgstr ""
 "`vm.run_ready()`, `vm.next_deadline()`, `vm.pending_tasks()`, `vm.drive(fut)`"
 
 
-#: src/reference/loading.md:59
-msgid "the async driving verbs"
-msgstr "异步驱动动词"
-
-
 #: src/reference/loading.md:60
+msgid "the raw driving doors — event-loop hosts and tests hand-drive with these"
+msgstr "原始驱动门——事件循环宿主与测试用它们手工驱动"
+
+
+#: src/reference/loading.md:61
 msgid "`vm.set_now(ms)`, `vm.arm_timer(deadline, fut)`"
 msgstr "`vm.set_now(ms)`, `vm.arm_timer(deadline, fut)`"
 
 
-#: src/reference/loading.md:60
+#: src/reference/loading.md:61
 msgid "the virtual clock"
 msgstr "虚拟时钟"
 
 
-#: src/reference/loading.md:61
+#: src/reference/loading.md:62
 msgid "`vm.add_fuel(n)`, `vm.fuel_used`, `vm.heap_usage()`"
 msgstr "`vm.add_fuel(n)`, `vm.fuel_used`, `vm.heap_usage()`"
 
 
-#: src/reference/loading.md:61
+#: src/reference/loading.md:62
 msgid "budgets and telemetry ([Resource limits and fuel](resource-limits.md))"
 msgstr "预算与遥测（[资源限制与燃料](resource-limits.md)）"
 
 
-#: src/reference/loading.md:62
+#: src/reference/loading.md:63
 msgid "`vm.call_host_row(row, args)`"
 msgstr "`vm.call_host_row(row, args)`"
 
 
-#: src/reference/loading.md:62
+#: src/reference/loading.md:63
 msgid "invoke a registered host row directly (tests, tooling)"
 msgstr "直接调用一个已注册的宿主行（测试、工具）"
 
 
-#: src/reference/loading.md:64
+#: src/reference/loading.md:65
 msgid ""
 "Errors are values (`Result`), bugs are traps, and the host is always in charge of time, I/O, and lifetime."
 msgstr "错误是值（`Result`），bug 是陷阱，而时间、I/O 与生命周期始终由宿主管。"
 
 
-#: src/reference/loading.md:67
+#: src/reference/loading.md:68
 msgid "The frame loop"
 msgstr "帧循环"
 
 
-#: src/reference/loading.md:69
+#: src/reference/loading.md:70
 msgid ""
 "An embedder that owns an event loop (a GUI, a game frame, a web page) runs one engine frame per tick:"
 msgstr "拥有事件循环的嵌入方（GUI、游戏帧、网页）每帧运行一个引擎帧："
 
 
-#: src/reference/loading.md:74
-msgid ""
-"// input, network, ...\n"
-msgstr ""
-"// input, network, ...\n"
-
-
 #: src/reference/loading.md:75
 msgid ""
-"// drive ready frames to completion\n"
+"// input, network, ...\n"
 msgstr ""
+"// input, network, ...\n"
 
 
 #: src/reference/loading.md:76
-msgid ""
-"// earliest armed sleep\n"
-msgstr ""
-"// earliest armed sleep\n"
+msgid "// one pass: drain ready + poll parked hosts\n"
+msgstr "// 一趟：排空就绪 + 轮询停放的宿主\n"
 
 
 #: src/reference/loading.md:77
 msgid ""
-"// host parks until then,\n"
+"// earliest armed sleep\n"
 msgstr ""
-"// host parks until then,\n"
+"// earliest armed sleep\n"
 
 
 #: src/reference/loading.md:78
 msgid ""
-"// then advances the clock\n"
+"// host parks until then,\n"
 msgstr ""
-"// then advances the clock\n"
+"// host parks until then,\n"
 
 
-#: src/reference/loading.md:83
+#: src/reference/loading.md:79
 msgid ""
-"`pending_tasks()` is the idle test — zero means the program has nothing runnable. There is no job executor inside the VM: parking, waking, and timing are these three verbs plus `set_now` ([Async and await](async.md)). A program whose world offers no async packages simply has no launcher; `await` stays cold-poll inline ([The async model](../core-concepts/async-model.md))."
+"// then advances the clock\n"
 msgstr ""
-"`pending_tasks()` 是空闲判据 —— 零意味着程序没有可运行的东西。VM 内部没有作业执行器：停靠、唤醒与计时就是这三个动词加 `set_now`（[异步与 await](async.md)）。世界不曾 offer 异步包的程序就是没有启动器；`await` 保持内联冷轮询（[async 模型](../core-concepts/async-model.md)）。"
+"// then advances the clock\n"
 
 
-#: src/reference/loading.md:90
+#: src/reference/loading.md:84
+msgid ""
+"`pending_tasks()` is the idle test — zero means the program has nothing runnable. A host that does NOT own an event loop does not hand-drive: the engine's `run_until_idle(wait)` is the whole loop, idle or trap ([the embedder's driving contract](embedding.md#the-embedders-driving-contract)). There is no job executor inside the VM: parking, waking, and timing are these raw doors plus `set_now` ([Async and await](async.md)). A program whose world offers no async packages simply has no launcher; `await` stays cold-poll inline ([The async model](../core-concepts/async-model.md))."
+msgstr ""
+"`pending_tasks()` 是空闲判据——零意味着程序没有任何可运行的东西。不拥有事件循环的宿主不做手工驱动：引擎的 `run_until_idle(wait)` 就是整个循环，空闲或陷阱（[嵌入方的驱动契约](embedding.md#the-embedders-driving-contract)）。VM 内部没有作业执行器：停放、唤醒和计时就是这些原始门加 `set_now`（[异步与 await](async.md)）。世界不提供异步包的程序根本没有启动器；`await` 保持内联冷轮询（[异步模型](../core-concepts/async-model.md)）。"
+
+
+#: src/reference/loading.md:94
 msgid "The soft-fail law (the err channel)"
 msgstr "软失败法则（err 通道）"
 
 
-#: src/reference/loading.md:92
+#: src/reference/loading.md:96
 msgid ""
 "An `entry fn -> (?T, err)` never produces `Err`. The pair decodes at `vm.call` as `Ok` — **with data in the pair**: a non-empty `err` string means the turn failed softly; an empty `err` means success (nil value = \"not found\"). `Err` remains exclusively the trapped turn: a bug, wiring drift, exhausted fuel — the loud channel."
 msgstr ""
 "`entry fn -> (?T, err)` 绝不产出 `Err`。这个对偶在 `vm.call` 处解码为 `Ok`——**数据就在对偶里**：非空的 `err` 字符串意味着这一轮软失败；空的 `err` 意味着成功（nil 值 = \"未找到\"）。`Err` 仍然专属于被陷阱打断的轮次：一个 bug、接线漂移、燃料耗尽——响亮的通道。"
 
 
-#: src/reference/loading.md:98
+#: src/reference/loading.md:102
 msgid ""
 "The law for host event loops (**the pump pattern**): per queued event, call the turn entry, then —"
 msgstr "宿主事件循环的法则（**泵送模式**）：对每个排队的事件，调用轮次入口，然后——"
 
 
-#: src/reference/loading.md:101
+#: src/reference/loading.md:105
 msgid ""
 "**`Ok`**: decode the pair. A non-empty err is _reported_ (surfaced to the user/log, retained) and the loop **keeps draining**: the container survives, the queue proceeds, the page stays alive. A returned err must never poison the container or kill the drain — it is data the host acts on."
 msgstr ""
 "**`Ok`**：解码对偶。非空的 err 被_上报_（呈现给用户/日志，予以保留），循环**继续排空**：容器幸存，队列继续，页面保持存活。返回的 err 绝不能毒化容器或杀死排空——它是宿主据以行动的数据。"
 
 
-#: src/reference/loading.md:106
+#: src/reference/loading.md:110
 msgid ""
 "**`Err`**: the pump aborts **loud** — a trapped turn is a bug, not data. The `Vm` itself survives for the next good turn."
 msgstr "**`Err`**：泵送**响亮**地中止——被陷阱打断的轮次是 bug，不是数据。`Vm` 本身幸存下来，迎接下一个正常的轮次。"
 
 
-#: src/reference/loading.md:109
+#: src/reference/loading.md:113
 msgid ""
 "On a raw JSON boundary (the wasm host), the envelope carries `\"err\"` beside `\"trap\"`: a soft-fail run reads `{\"trap\": null, \"err\": \"…\"}`, a success reads `\"err\": null`, and a panic sets `trap` with `\"err\": null`. `trap` never fills `err`. Fuel and heap reporting are unchanged by this."
 msgstr ""
 "在原始 JSON 边界上（wasm 宿主），信封在 `\"trap\"` 旁边携带 `\"err\"`：软失败的运行读到 `{\"trap\": null, \"err\": \"…\"}`，成功读到 `\"err\": null`，panic 则设置 `trap` 且 `\"err\": null`。`trap` 绝不填入 `err`。燃料与堆报告不因此改变。"
 
 
-#: src/reference/loading.md:114
+#: src/reference/loading.md:118
 msgid "Parse-time robustness"
 msgstr "解析期的健壮性"
 
 
-#: src/reference/loading.md:116
+#: src/reference/loading.md:120
 msgid ""
 "The same embeddability pillar holds at the other end of the pipeline: the [frontend](frontend.md) is stack-bounded with explicit nesting budgets — malformed or hostile module source yields diagnostics, never a host stack overflow, and a module with diagnostics never reaches the VM."
 msgstr ""

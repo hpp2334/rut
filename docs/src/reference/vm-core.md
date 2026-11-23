@@ -149,6 +149,12 @@ queues and a virtual clock:
   the frame's state field. Fuel accounting rides the per-op budget
   unchanged: an exhausted drive parks the frame at its pc, and a re-drive
   re-enters at the checkpoint state.
+- `run_until_idle(wait)` — the engine's driving loop over these parts:
+  drain, expire-or-jump the clock to the next deadline, then park on
+  the machine's wake cell under `Wait::Block` (or answer `WouldBlock`
+  under `Wait::NonBlock`) until idle or trap
+  ([the embedder's driving
+  contract](embedding.md#the-embedders-driving-contract)).
 - `run_ready()` drains the ready queue one drive per entry;
   `next_deadline()` expires due timers into `ready` and answers the
   earliest remaining deadline; `pending_tasks()` is the idle test.

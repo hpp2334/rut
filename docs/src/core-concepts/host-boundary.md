@@ -35,7 +35,7 @@ let compiled = rut_driver::RutRun::new()
 
 let mut vm = Vm::builder().compiled(compiled).limits(limits).hosts(hosts).build()?;
 vm.call::<_, ()>("main", ())?;      // an entry point
-vm.run_ready()?;                    // drive async work to idle
+vm.run_until_idle(rut_vm::interp::Wait::Block)?;   // idle or trap
 ```
 
 The declaration file (a *host package*) spells the surface in rut:

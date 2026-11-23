@@ -305,7 +305,7 @@ msgstr ""
 msgid "The compiler pipeline"
 msgstr ""
 
-#: src/SUMMARY.md:102 src/core-concepts/the-vm.md:37
+#: src/SUMMARY.md:102 src/core-concepts/the-vm.md:42
 #: src/reference/typed-bytecode.md:1
 msgid "Typed bytecode"
 msgstr ""
@@ -4002,7 +4002,7 @@ msgstr ""
 #: src/reference/builtin-generic-types.md:85
 #: src/reference/builtin-generic-types.md:96
 #: src/reference/literals-and-inference.md:129 src/reference/opaque.md:14
-#: src/reference/async.md:180 src/reference/host-futures.md:34
+#: src/reference/async.md:199 src/reference/host-futures.md:34
 #: src/reference/embedding.md:375 src/reference/embedding.md:393
 #: src/reference/embedding.md:422 src/reference/value-boundary.md:97
 #: src/reference/host-fns.md:313 src/reference/native-containers.md:103
@@ -6623,79 +6623,73 @@ msgid "The driving loop"
 msgstr ""
 
 #: src/core-concepts/async-model.md:112
-msgid "The VM owns the queues; the embedder owns the loop:"
+msgid ""
+"The engine owns the loop: build, call the entry, ride "
+"`vm.run_until_idle(wait)` to idle or trap — the embedder never writes a pump "
+"([the embedder's driving "
+"contract](../reference/embedding.md#the-embedders-driving-contract)):"
 msgstr ""
 
-#: src/core-concepts/async-model.md:115 src/core-concepts/host-boundary.md:37
+#: src/core-concepts/async-model.md:118 src/core-concepts/host-boundary.md:37
 #: src/reference/vm-heap.md:105 src/reference/resource-limits.md:61
-#: src/reference/host-futures.md:121
+#: src/reference/host-futures.md:124
 msgid "\"main\""
 msgstr ""
 
-#: src/core-concepts/async-model.md:115
+#: src/core-concepts/async-model.md:118
 msgid "// script boots, launches futures\n"
 msgstr ""
 
-#: src/core-concepts/async-model.md:117
-msgid "// one drive per ready frame\n"
-msgstr ""
-
-#: src/core-concepts/async-model.md:118
-msgid "// expire due timers into ready\n"
-msgstr ""
-
 #: src/core-concepts/async-model.md:119
-msgid "// the wall-clock stand-in\n"
+msgid "// idle or trap — the only exits\n"
 msgstr ""
 
-#: src/core-concepts/async-model.md:121
-msgid "// idle\n"
-msgstr ""
-
-#: src/core-concepts/async-model.md:125
+#: src/core-concepts/async-model.md:122
 msgid ""
 "`sleep(ms)` arms a deadline on the VM's **virtual clock** (`vm.now_ms()` / "
 "`vm.set_now()`). A test host advances the clock by hand and gets fully "
-"deterministic schedules — a UI host just maps it to wall time."
+"deterministic schedules — a UI host just maps it to wall time. The engine "
+"loop is deterministic too when no host future is parked: pure timers "
+"fast-forward the virtual clock."
 msgstr ""
 
-#: src/core-concepts/async-model.md:129
+#: src/core-concepts/async-model.md:127
 msgid ""
 "Each queue entry owns one reference; a completed drive re-enqueues the "
 "awaiting frame through a one-directional edge pair, so wake wiring never "
 "forms a cycle."
 msgstr ""
 
-#: src/core-concepts/async-model.md:132
+#: src/core-concepts/async-model.md:130
 msgid ""
 "Fuel accounting rides the ordinary per-op budget: a drive that runs out "
 "parks the frame at its checkpoint and resumes there later."
 msgstr ""
 
-#: src/core-concepts/async-model.md:135
+#: src/core-concepts/async-model.md:133
 msgid "Host futures: `pub host async fn`"
 msgstr ""
 
-#: src/core-concepts/async-model.md:137
+#: src/core-concepts/async-model.md:135
 msgid "Native code joins the same model. A declaration file spells the row:"
 msgstr ""
 
-#: src/core-concepts/async-model.md:145
+#: src/core-concepts/async-model.md:143
 msgid ""
 "and the embedder binds it with **one closure** that starts the work — the "
 "sugar mints the future's state cell (wired to the machine's wake cell) and "
 "hands it to the closure as its FIRST parameter:"
 msgstr ""
 
-#: src/core-concepts/async-model.md:150
+#: src/core-concepts/async-model.md:148
 msgid "\"http_host::stream::http_stream_next\""
 msgstr ""
 
-#: src/core-concepts/async-model.md:155
+#: src/core-concepts/async-model.md:153
 msgid "// settle from any thread\n"
 msgstr ""
 
-#: src/core-concepts/async-model.md:160
+#: src/core-concepts/async-model.md:158
 msgid ""
 "`Completer<T>` is a small shared cell: `complete(v)`/`fail(msg)` are "
 "callable from any thread (atomics plus a mutex — the VM stays "
@@ -6710,11 +6704,11 @@ msgid ""
 "enqueue back into the ready queue."
 msgstr ""
 
-#: src/core-concepts/async-model.md:173
+#: src/core-concepts/async-model.md:171
 msgid "Structured concurrency, honestly"
 msgstr ""
 
-#: src/core-concepts/async-model.md:175
+#: src/core-concepts/async-model.md:173
 msgid ""
 "The language today keeps the core vocabulary deliberately small: launch, "
 "abort, and await. Racing (`select2` / `select_all`) and the manually "
@@ -7107,7 +7101,7 @@ msgid "// an entry point\n"
 msgstr ""
 
 #: src/core-concepts/host-boundary.md:38
-msgid "// drive async work to idle\n"
+msgid "// idle or trap\n"
 msgstr ""
 
 #: src/core-concepts/host-boundary.md:41
@@ -7334,7 +7328,7 @@ msgstr ""
 msgid "// per-op budget\n"
 msgstr ""
 
-#: src/core-concepts/the-vm.md:20 src/core-concepts/the-vm.md:144
+#: src/core-concepts/the-vm.md:20 src/core-concepts/the-vm.md:149
 #: src/reference/resource-limits.md:12 src/reference/vm-core.md:17
 #: src/reference/vm-core.md:113
 msgid "// cadence field; nothing gates on it today\n"
@@ -7361,13 +7355,18 @@ msgstr ""
 #: src/core-concepts/the-vm.md:30
 msgid ""
 "A VM is single-threaded by construction (`!Send`). The host holds one and "
-"drives it with methods: `call` an entry point, `run_ready` to drain woken "
-"frames, `next_deadline` for the timer wheel, `drive` for a single "
-"resumption. See [the host boundary](host-boundary.md) for the embed loop and "
-"[the async model](async-model.md) for the queues' role in scheduling."
+"drives it with methods: `call` an entry point, then `run_until_idle(wait)` — "
+"the engine's driving loop to idle or trap — or, for a frame-per-tick event "
+"loop or a test, the raw doors (`run_ready` to drain woken frames, "
+"`next_deadline` for the timer wheel, `drive` for a single resumption). See "
+"[the host boundary](host-boundary.md) for the embed loop, [the async "
+"model](async-model.md) for the queues' role in scheduling, and [the "
+"embedder's driving "
+"contract](../reference/embedding.md#the-embedders-driving-contract) for the "
+"loop itself."
 msgstr ""
 
-#: src/core-concepts/the-vm.md:39
+#: src/core-concepts/the-vm.md:44
 msgid ""
 "The instruction set is register-based: operands are `u16` indices into a "
 "per-frame slot file, and **every register has a static type recorded in the "
@@ -7377,56 +7376,56 @@ msgid ""
 "for references, with no runtime tag checks."
 msgstr ""
 
-#: src/core-concepts/the-vm.md:46
+#: src/core-concepts/the-vm.md:51
 msgid ""
 "Ops are small and fixed-size, with variadic operand lists (call arguments, "
 "branch tables) living in per-function pools. A representative sample:"
 msgstr ""
 
-#: src/core-concepts/the-vm.md:64
+#: src/core-concepts/the-vm.md:69
 msgid "The type system also decides what is _not_ an op:"
 msgstr ""
 
-#: src/core-concepts/the-vm.md:66
+#: src/core-concepts/the-vm.md:71
 msgid ""
 "**Nothing static.** What the type table can answer at compile time becomes a "
 "constant — no \"get type id\" instruction, no length load for a fixed-size "
 "array."
 msgstr ""
 
-#: src/core-concepts/the-vm.md:69
+#: src/core-concepts/the-vm.md:74
 msgid ""
 "**Nothing polymorphic and nothing named.** An interface-typed receiver has "
 "exactly one op (the itable call); string concatenation is a native call, not "
 "an opcode."
 msgstr ""
 
-#: src/core-concepts/the-vm.md:72
+#: src/core-concepts/the-vm.md:77
 msgid ""
 "**Concrete memory, control flow, and two readbacks.** Ops touch memory only "
 "through compile-time-known layouts, plus the two reads reification needs: "
 "\"what is it\" (`tidof`) and the guarded payload extract behind a downcast."
 msgstr ""
 
-#: src/core-concepts/the-vm.md:77
+#: src/core-concepts/the-vm.md:82
 msgid "The module binary"
 msgstr ""
 
-#: src/core-concepts/the-vm.md:79
+#: src/core-concepts/the-vm.md:84
 msgid ""
 "Compilation produces a versioned, self-contained binary per module: types, "
 "constants, functions (with their typed register signatures), imports, and a "
 "symbol table for backtraces. Its properties matter more than its layout:"
 msgstr ""
 
-#: src/core-concepts/the-vm.md:84
+#: src/core-concepts/the-vm.md:89
 msgid ""
 "**Deterministic.** The same sources plus the same dependency versions "
 "produce byte-identical binaries, so artifacts are cacheable by content hash "
 "and shippable instead of sources."
 msgstr ""
 
-#: src/core-concepts/the-vm.md:87
+#: src/core-concepts/the-vm.md:92
 msgid ""
 "**Self-describing but strippable.** Names and source spans are retained for "
 "traces by default; a release build can strip them, and a sidecar map file "
@@ -7434,7 +7433,7 @@ msgid ""
 "on [diagnostics](../reference/diagnostics.md)."
 msgstr ""
 
-#: src/core-concepts/the-vm.md:92
+#: src/core-concepts/the-vm.md:97
 msgid ""
 "**Link-time identity.** Type ids are module-local at rest and rebased into "
 "the VM's global table at link, where the interface tables merge by name. "
@@ -7443,17 +7442,17 @@ msgid ""
 "dispatch](interfaces-and-dispatch.md) holds across module boundaries."
 msgstr ""
 
-#: src/core-concepts/the-vm.md:98
+#: src/core-concepts/the-vm.md:103
 msgid ""
 "**Little-endian everywhere**, by law — every serialized word, so artifacts "
 "are platform-independent by construction rather than by luck."
 msgstr ""
 
-#: src/core-concepts/the-vm.md:102
+#: src/core-concepts/the-vm.md:107
 msgid "Verification at load"
 msgstr ""
 
-#: src/core-concepts/the-vm.md:104
+#: src/core-concepts/the-vm.md:109
 msgid ""
 "Loading re-checks each function before anything executes: register operands "
 "against the signature, operand pools and jump targets in range, type "
@@ -7464,7 +7463,7 @@ msgid ""
 "rejected before any script runs."
 msgstr ""
 
-#: src/core-concepts/the-vm.md:112
+#: src/core-concepts/the-vm.md:117
 msgid ""
 "Module-level `let` initialization is folded at compile time: an `Int`, "
 "`Float`, `Str`, or `Bool` literal becomes a constant in the binary, and any "
@@ -7473,11 +7472,11 @@ msgid ""
 "loading a module runs nothing."
 msgstr ""
 
-#: src/core-concepts/the-vm.md:118
+#: src/core-concepts/the-vm.md:123
 msgid "The interpreter loop and traps"
 msgstr ""
 
-#: src/core-concepts/the-vm.md:120
+#: src/core-concepts/the-vm.md:125
 msgid ""
 "Execution is a decode-dispatch loop over frames. A frame is the function's "
 "code, a program counter, its typed register file, and (for async frames) the "
@@ -7486,7 +7485,7 @@ msgid ""
 "the itable."
 msgstr ""
 
-#: src/core-concepts/the-vm.md:126
+#: src/core-concepts/the-vm.md:131
 msgid ""
 "Failure is a **trap**, not an exception and not a Rust panic: integer "
 "overflow on the plain operators, a `nil` deref, an out-of-bounds index, a "
@@ -7497,26 +7496,26 @@ msgid ""
 "boundary](host-boundary.md))."
 msgstr ""
 
-#: src/core-concepts/the-vm.md:135 src/reference/vm-core.md:107
+#: src/core-concepts/the-vm.md:140 src/reference/vm-core.md:107
 msgid "Budgets"
 msgstr ""
 
-#: src/core-concepts/the-vm.md:137
+#: src/core-concepts/the-vm.md:142
 msgid ""
 "Two knobs make it safe to run third-party code: a **heap budget** and "
 "**fuel**. Both are set at construction, and fuel is the one live budget "
 "(`Vm::add_fuel`):"
 msgstr ""
 
-#: src/core-concepts/the-vm.md:142
+#: src/core-concepts/the-vm.md:147
 msgid "// one unit per op, counts down\n"
 msgstr ""
 
-#: src/core-concepts/the-vm.md:143
+#: src/core-concepts/the-vm.md:148
 msgid "// checked at every allocation\n"
 msgstr ""
 
-#: src/core-concepts/the-vm.md:147
+#: src/core-concepts/the-vm.md:152
 msgid ""
 "Fuel is a cheap per-op tick — one unit decremented and checked on every op — "
 "and the heap budget is charged per allocation. The heap limit has no live "
@@ -7527,7 +7526,7 @@ msgid ""
 "limits](../reference/resource-limits.md))."
 msgstr ""
 
-#: src/core-concepts/the-vm.md:155
+#: src/core-concepts/the-vm.md:160
 msgid ""
 "Exhaustion is **resumable**: the trap parks the frame exactly where it was — "
 "the frame _is_ the loop state — so the host can add fuel and resume; a heap "
@@ -7537,24 +7536,24 @@ msgid ""
 "proof."
 msgstr ""
 
-#: src/core-concepts/the-vm.md:161
+#: src/core-concepts/the-vm.md:166
 msgid ""
 "The heap check runs _before_ any write, so an out-of-memory failure leaves "
 "the heap byte-identical (see [memory](memory.md))."
 msgstr ""
 
-#: src/core-concepts/the-vm.md:164
+#: src/core-concepts/the-vm.md:169
 msgid ""
 "Native functions run outside the fuel budget — a hanging native is a host "
 "bug by contract, so keep native bodies non-blocking (there is no interrupt "
 "lane to preempt one)."
 msgstr ""
 
-#: src/core-concepts/the-vm.md:168
+#: src/core-concepts/the-vm.md:173
 msgid "Why no JIT is viable"
 msgstr ""
 
-#: src/core-concepts/the-vm.md:170
+#: src/core-concepts/the-vm.md:175
 msgid ""
 "A JS engine's speed is its JIT, and the JIT exists to speculate about "
 "polymorphic property loads. rut has no polymorphic loads: field access is by "
@@ -7568,7 +7567,7 @@ msgid ""
 "bytecode alone."
 msgstr ""
 
-#: src/core-concepts/the-vm.md:182
+#: src/core-concepts/the-vm.md:187
 msgid ""
 "The full tables and laws live in the reference: [typed "
 "bytecode](../reference/typed-bytecode.md), [the module binary and "
@@ -17284,7 +17283,9 @@ msgid "`abort()` flags the frame; the probe at its checkpoint runs the drop path
 msgstr ""
 
 #: src/reference/async.md:16
-msgid "the host polls the VM: `run_ready()`, `next_deadline()`"
+msgid ""
+"the engine drives: `run_until_idle(wait)`; raw doors stay public for "
+"hand-driving"
 msgstr ""
 
 #: src/reference/async.md:18
@@ -17575,107 +17576,128 @@ msgid ""
 msgstr ""
 
 #: src/reference/async.md:178
-msgid "The VM owns the queues; the **embedder owns the loop**:"
+msgid ""
+"The engine owns the loop. Build, call the entry, drive to idle, handle the "
+"trap — one door does the whole drive ([the embedder's driving "
+"contract](embedding.md#the-embedders-driving-contract)):"
 msgstr ""
 
-#: src/reference/async.md:180
+#: src/reference/async.md:183
+msgid "\"boot\""
+msgstr ""
+
+#: src/reference/async.md:185 src/reference/embedding.md:449
+msgid "// every frame retired\n"
+msgstr ""
+
+#: src/reference/async.md:186
+msgid "// Block never answers WouldBlock\n"
+msgstr ""
+
+#: src/reference/async.md:187 src/reference/embedding.md:451
+msgid "/* print and exit; other frames may stay pending */"
+msgstr ""
+
+#: src/reference/async.md:191
+msgid ""
+"Under `Wait::Block` (the native lane) the driving thread parks on the "
+"machine's wake cell whenever nothing but settling host futures remains — a "
+"worker that never completes hangs the run by law; `Wait::NonBlock` (the wasm "
+"lane) never parks and answers `Idle::WouldBlock`, and the embedder yields "
+"and re-enters. The raw doors under the protocol stay public for the two "
+"honest hand-driving uses — an embedder that owns an event loop (a frame per "
+"tick) and tests that want per-step control:"
+msgstr ""
+
+#: src/reference/async.md:199
 msgid "Engine API"
 msgstr ""
 
-#: src/reference/async.md:182
+#: src/reference/async.md:201
 msgid "`vm.launch(fut)`"
 msgstr ""
 
-#: src/reference/async.md:182
+#: src/reference/async.md:201
 msgid "enqueue a future (the queue owns one reference)"
 msgstr ""
 
-#: src/reference/async.md:183
+#: src/reference/async.md:202
 msgid "`vm.cancel(fut) -> bool`"
 msgstr ""
 
-#: src/reference/async.md:183
+#: src/reference/async.md:202
 msgid "flag cancellation + re-enqueue; `false` when already retired"
 msgstr ""
 
-#: src/reference/async.md:184
+#: src/reference/async.md:203
 msgid "`vm.drive(fut) -> Drive`"
 msgstr ""
 
-#: src/reference/async.md:184
+#: src/reference/async.md:203
 msgid ""
 "one drive step through the future's designated yield slot; reads the state "
 "field"
 msgstr ""
 
-#: src/reference/async.md:185
+#: src/reference/async.md:204
 msgid "`vm.arm_timer(deadline_ms, fut)`"
 msgstr ""
 
-#: src/reference/async.md:185
+#: src/reference/async.md:204
 msgid "arm a sleep deadline on the virtual clock"
 msgstr ""
 
-#: src/reference/async.md:186
+#: src/reference/async.md:205
 msgid "`vm.now_ms()` / `vm.set_now(t)`"
 msgstr ""
 
-#: src/reference/async.md:186
+#: src/reference/async.md:205
 msgid "read / advance the deterministic virtual clock"
 msgstr ""
 
-#: src/reference/async.md:187 src/reference/embedding.md:435
+#: src/reference/async.md:206 src/reference/embedding.md:435
 msgid "`vm.next_deadline() -> Option<u64>`"
 msgstr ""
 
-#: src/reference/async.md:187
+#: src/reference/async.md:206
 msgid ""
 "expire due timers into the ready queue; answer the earliest remaining "
 "deadline"
 msgstr ""
 
-#: src/reference/async.md:188
+#: src/reference/async.md:207
 msgid "`vm.run_ready() -> usize`"
 msgstr ""
 
-#: src/reference/async.md:188
+#: src/reference/async.md:207
 msgid ""
 "drain the ready queue, then poll parked host futures, until a spin produces "
 "no completion"
 msgstr ""
 
-#: src/reference/async.md:189 src/reference/embedding.md:437
+#: src/reference/async.md:208 src/reference/embedding.md:437
 msgid "`vm.pending_tasks() -> usize`"
 msgstr ""
 
-#: src/reference/async.md:189
+#: src/reference/async.md:208
 msgid "ready + armed timers + host futures parked on Completers — the idle test"
 msgstr ""
 
-#: src/reference/async.md:191
-msgid "Two embedder pumps:"
+#: src/reference/async.md:210
+msgid ""
+"The hand-drive test shape (deterministic; the engine loop is deterministic "
+"too when no host future is parked — pure timers fast-forward the virtual "
+"clock):"
 msgstr ""
 
-#: src/reference/async.md:194
-msgid "// wall-clock (a CLI or service): settle from real threads\n"
-msgstr ""
-
-#: src/reference/async.md:195
-msgid "\"boot\""
-msgstr ""
-
-#: src/reference/async.md:200
-msgid "// virtual clock (tests): fully deterministic\n"
-msgstr ""
-
-#: src/reference/async.md:208
+#: src/reference/async.md:221
 msgid ""
 "Fuel rides the existing per-op budget ([resource "
 "limits](resource-limits.md)): a drive that runs out parks the frame and "
 "propagates `OutOfFuel`; a re-drive re-enters at the frame's checkpoint."
 msgstr ""
 
-#: src/reference/async.md:213
+#: src/reference/async.md:226
 msgid ""
 "See [launched futures](launched-futures.md) for receipts, cancellation, and "
 "the race/completer tier (`select2` / `select_all` / `completer`); [the host "
@@ -18024,14 +18046,16 @@ msgstr ""
 #: src/reference/launched-futures.md:194
 msgid ""
 "`vm.pending_tasks()` counts ready frames, armed timers, and host futures "
-"parked on Completers — the embedder's idle test ([async and "
-"await](async.md))."
+"parked on Completers — the idle test behind the engine's driving loop "
+"([async and await](async.md), [the embedder's driving "
+"contract](embedding.md#the-embedders-driving-contract))."
 msgstr ""
 
-#: src/reference/launched-futures.md:197
+#: src/reference/launched-futures.md:199
 msgid ""
-"A trap inside a launched future propagates out of `run_ready()` / `drive()`; "
-"the frame is retired either way, and its locals ran their drop path."
+"A trap inside a launched future propagates out of the driving loop as "
+"`Err(Trap)`; the frame is retired either way, and its locals ran their drop "
+"path."
 msgstr ""
 
 #: src/reference/host-futures.md:3
@@ -18323,34 +18347,38 @@ msgid "The embedder's loop"
 msgstr ""
 
 #: src/reference/host-futures.md:118
-msgid "The engine polls every future parked on a completer:"
-msgstr ""
-
-#: src/reference/host-futures.md:123
-msgid "// drain + poll + drain\n"
+msgid ""
+"One door drives everything — the engine's protocol at the `Block` policy "
+"parks on the machine's wake cell until the completers answer, so idle and "
+"trap are the only exits ([the embedder's driving "
+"contract](embedding.md#the-embedders-driving-contract)):"
 msgstr ""
 
 #: src/reference/host-futures.md:128
 msgid ""
-"`run_ready()` drains the ready queue, polls the parked host futures (each "
-"poll runs the `__yield` probe; a ready one is driven through `__take` and "
-"its awaiter re-enqueued), then drains again — one pass settles a completed "
-"host future end to end. `vm.pending_tasks()` counts ready frames, armed "
-"timers, and the host-pending set, so a worker that never completes keeps the "
-"loop alive — the flip side of best-effort cancellation."
+"Inside each turn, `run_ready()` drains the ready queue, polls the parked "
+"host futures (each poll runs the `__yield` probe; a ready one is driven "
+"through `__take` and its awaiter re-enqueued), then drains again — one pass "
+"settles a completed host future end to end. `vm.pending_tasks()` counts "
+"ready frames, armed timers, and the host-pending set, so a worker that never "
+"completes keeps the machine busy forever — the flip side of best-effort "
+"cancellation, and the law under `Block`: no wall-clock budget, no hang "
+"guard. An event-loop host that cannot park hand-drives instead: one "
+"`run_ready()` pass per tick, or the `Wait::NonBlock` policy, which answers "
+"`Idle::WouldBlock` the moment only host-parked work remains."
 msgstr ""
 
-#: src/reference/host-futures.md:136
+#: src/reference/host-futures.md:140
 msgid ""
 "The virtual clock works here too: drive with finite fuel and `vm.set_now` "
 "for deterministic tests ([resource limits](resource-limits.md))."
 msgstr ""
 
-#: src/reference/host-futures.md:140
+#: src/reference/host-futures.md:144
 msgid "In-tree users"
 msgstr ""
 
-#: src/reference/host-futures.md:142
+#: src/reference/host-futures.md:146
 msgid ""
 "The standard HTTP lane is a `register_async!` client: `http_send` (living in "
 "the surface tree's `net/` mod), `http_body`, and `http_stream_next` (in "
@@ -18361,7 +18389,7 @@ msgid ""
 "viewer example](../examples/06-github-viewer-cli.md)."
 msgstr ""
 
-#: src/reference/host-futures.md:151
+#: src/reference/host-futures.md:155
 msgid ""
 "Plain `host fn` rows (synchronous, run to completion inside the crossing) "
 "are the other half of the boundary — see [embedding and native "
@@ -19534,16 +19562,8 @@ msgid ""
 "loop; the host names only its parking policy:"
 msgstr ""
 
-#: src/reference/embedding.md:449
-msgid "// every frame retired\n"
-msgstr ""
-
 #: src/reference/embedding.md:450
 msgid "// NonBlock only\n"
-msgstr ""
-
-#: src/reference/embedding.md:451
-msgid "/* print and exit; other frames may stay pending */"
 msgstr ""
 
 #: src/reference/embedding.md:455
@@ -25834,35 +25854,44 @@ msgstr ""
 
 #: src/reference/vm-core.md:152
 msgid ""
+"`run_until_idle(wait)` — the engine's driving loop over these parts: drain, "
+"expire-or-jump the clock to the next deadline, then park on the machine's "
+"wake cell under `Wait::Block` (or answer `WouldBlock` under "
+"`Wait::NonBlock`) until idle or trap ([the embedder's driving "
+"contract](embedding.md#the-embedders-driving-contract))."
+msgstr ""
+
+#: src/reference/vm-core.md:158
+msgid ""
 "`run_ready()` drains the ready queue one drive per entry; `next_deadline()` "
 "expires due timers into `ready` and answers the earliest remaining deadline; "
 "`pending_tasks()` is the idle test."
 msgstr ""
 
-#: src/reference/vm-core.md:155
+#: src/reference/vm-core.md:161
 msgid ""
 "The wake pair (awaiter edge on the awaited frame, pending edge on the "
 "awaiter) is one-directional and cleared on resume — no cycle forms."
 msgstr ""
 
-#: src/reference/vm-core.md:157
+#: src/reference/vm-core.md:163
 msgid ""
 "A completed drive re-enqueues the frame's awaiter edge. A parked async frame "
 "is simply not in `ready` until its wake edge or timer fires."
 msgstr ""
 
-#: src/reference/vm-core.md:160
+#: src/reference/vm-core.md:166
 msgid ""
 "The engine never owns a wall clock: sleeps are virtual-clock deadlines, and "
 "tests virtualize time by advancing the clock — full determinism ([Async and "
 "await](async.md), [Launched futures](launched-futures.md))."
 msgstr ""
 
-#: src/reference/vm-core.md:164
+#: src/reference/vm-core.md:170
 msgid "Heap integration"
 msgstr ""
 
-#: src/reference/vm-core.md:166
+#: src/reference/vm-core.md:172
 msgid ""
 "Allocation, retain, and release are inline loop work. There is **no "
 "collection pass at all**: destruction happens at release-to-zero, so nothing "
@@ -26122,88 +26151,102 @@ msgid "continue a parked frame after `add_fuel`"
 msgstr ""
 
 #: src/reference/loading.md:59
+msgid "`vm.run_until_idle(wait)`"
+msgstr ""
+
+#: src/reference/loading.md:59
+msgid ""
+"the driving protocol — the engine-owned loop: idle or trap are the only "
+"exits ([the embedder's driving "
+"contract](embedding.md#the-embedders-driving-contract))"
+msgstr ""
+
+#: src/reference/loading.md:60
 msgid ""
 "`vm.run_ready()`, `vm.next_deadline()`, `vm.pending_tasks()`, `vm.drive(fut)`"
 msgstr ""
 
-#: src/reference/loading.md:59
-msgid "the async driving verbs"
+#: src/reference/loading.md:60
+msgid "the raw driving doors — event-loop hosts and tests hand-drive with these"
 msgstr ""
 
-#: src/reference/loading.md:60
+#: src/reference/loading.md:61
 msgid "`vm.set_now(ms)`, `vm.arm_timer(deadline, fut)`"
 msgstr ""
 
-#: src/reference/loading.md:60
+#: src/reference/loading.md:61
 msgid "the virtual clock"
 msgstr ""
 
-#: src/reference/loading.md:61
+#: src/reference/loading.md:62
 msgid "`vm.add_fuel(n)`, `vm.fuel_used`, `vm.heap_usage()`"
 msgstr ""
 
-#: src/reference/loading.md:61
+#: src/reference/loading.md:62
 msgid "budgets and telemetry ([Resource limits and fuel](resource-limits.md))"
 msgstr ""
 
-#: src/reference/loading.md:62
+#: src/reference/loading.md:63
 msgid "`vm.call_host_row(row, args)`"
 msgstr ""
 
-#: src/reference/loading.md:62
+#: src/reference/loading.md:63
 msgid "invoke a registered host row directly (tests, tooling)"
 msgstr ""
 
-#: src/reference/loading.md:64
+#: src/reference/loading.md:65
 msgid ""
 "Errors are values (`Result`), bugs are traps, and the host is always in "
 "charge of time, I/O, and lifetime."
 msgstr ""
 
-#: src/reference/loading.md:67
+#: src/reference/loading.md:68
 msgid "The frame loop"
 msgstr ""
 
-#: src/reference/loading.md:69
+#: src/reference/loading.md:70
 msgid ""
 "An embedder that owns an event loop (a GUI, a game frame, a web page) runs "
 "one engine frame per tick:"
 msgstr ""
 
-#: src/reference/loading.md:74
+#: src/reference/loading.md:75
 msgid "// input, network, ...\n"
 msgstr ""
 
-#: src/reference/loading.md:75
-msgid "// drive ready frames to completion\n"
-msgstr ""
-
 #: src/reference/loading.md:76
-msgid "// earliest armed sleep\n"
+msgid "// one pass: drain ready + poll parked hosts\n"
 msgstr ""
 
 #: src/reference/loading.md:77
-msgid "// host parks until then,\n"
+msgid "// earliest armed sleep\n"
 msgstr ""
 
 #: src/reference/loading.md:78
+msgid "// host parks until then,\n"
+msgstr ""
+
+#: src/reference/loading.md:79
 msgid "// then advances the clock\n"
 msgstr ""
 
-#: src/reference/loading.md:83
+#: src/reference/loading.md:84
 msgid ""
 "`pending_tasks()` is the idle test — zero means the program has nothing "
-"runnable. There is no job executor inside the VM: parking, waking, and "
-"timing are these three verbs plus `set_now` ([Async and await](async.md)). A "
-"program whose world offers no async packages simply has no launcher; `await` "
-"stays cold-poll inline ([The async model](../core-concepts/async-model.md))."
+"runnable. A host that does NOT own an event loop does not hand-drive: the "
+"engine's `run_until_idle(wait)` is the whole loop, idle or trap ([the "
+"embedder's driving contract](embedding.md#the-embedders-driving-contract)). "
+"There is no job executor inside the VM: parking, waking, and timing are "
+"these raw doors plus `set_now` ([Async and await](async.md)). A program "
+"whose world offers no async packages simply has no launcher; `await` stays "
+"cold-poll inline ([The async model](../core-concepts/async-model.md))."
 msgstr ""
 
-#: src/reference/loading.md:90
+#: src/reference/loading.md:94
 msgid "The soft-fail law (the err channel)"
 msgstr ""
 
-#: src/reference/loading.md:92
+#: src/reference/loading.md:96
 msgid ""
 "An `entry fn -> (?T, err)` never produces `Err`. The pair decodes at "
 "`vm.call` as `Ok` — **with data in the pair**: a non-empty `err` string "
@@ -26212,13 +26255,13 @@ msgid ""
 "drift, exhausted fuel — the loud channel."
 msgstr ""
 
-#: src/reference/loading.md:98
+#: src/reference/loading.md:102
 msgid ""
 "The law for host event loops (**the pump pattern**): per queued event, call "
 "the turn entry, then —"
 msgstr ""
 
-#: src/reference/loading.md:101
+#: src/reference/loading.md:105
 msgid ""
 "**`Ok`**: decode the pair. A non-empty err is _reported_ (surfaced to the "
 "user/log, retained) and the loop **keeps draining**: the container survives, "
@@ -26226,13 +26269,13 @@ msgid ""
 "the container or kill the drain — it is data the host acts on."
 msgstr ""
 
-#: src/reference/loading.md:106
+#: src/reference/loading.md:110
 msgid ""
 "**`Err`**: the pump aborts **loud** — a trapped turn is a bug, not data. The "
 "`Vm` itself survives for the next good turn."
 msgstr ""
 
-#: src/reference/loading.md:109
+#: src/reference/loading.md:113
 msgid ""
 "On a raw JSON boundary (the wasm host), the envelope carries `\"err\"` "
 "beside `\"trap\"`: a soft-fail run reads `{\"trap\": null, \"err\": \"…\"}`, "
@@ -26241,11 +26284,11 @@ msgid ""
 "this."
 msgstr ""
 
-#: src/reference/loading.md:114
+#: src/reference/loading.md:118
 msgid "Parse-time robustness"
 msgstr ""
 
-#: src/reference/loading.md:116
+#: src/reference/loading.md:120
 msgid ""
 "The same embeddability pillar holds at the other end of the pipeline: the "
 "[frontend](frontend.md) is stack-bounded with explicit nesting budgets — "

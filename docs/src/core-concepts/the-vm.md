@@ -27,12 +27,17 @@ pub struct Vm {
 }
 ```
 
-A VM is single-threaded by construction (`!Send`). The host holds one and
-drives it with methods: `call` an entry point, `run_ready` to drain woken
-frames, `next_deadline` for the timer wheel, `drive` for a single
-resumption. See [the host boundary](host-boundary.md) for the embed
-loop and [the async model](async-model.md) for the queues' role in
-scheduling.
+A VM is single-threaded by construction (`!Send`). The host holds one
+and drives it with methods: `call` an entry point, then
+`run_until_idle(wait)` — the engine's driving loop to idle or trap —
+or, for a frame-per-tick event loop or a test, the raw doors
+(`run_ready` to drain woken frames, `next_deadline` for the timer
+wheel, `drive` for a single resumption). See [the host
+boundary](host-boundary.md) for the embed loop, [the async
+model](async-model.md) for the queues' role in scheduling, and [the
+embedder's driving
+contract](../reference/embedding.md#the-embedders-driving-contract)
+for the loop itself.
 
 ## Typed bytecode
 

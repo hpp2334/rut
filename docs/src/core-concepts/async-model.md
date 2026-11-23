@@ -109,23 +109,21 @@ object (see [memory](memory.md)); coroutine frames get no special case.
 
 ## The driving loop
 
-The VM owns the queues; the embedder owns the loop:
+The engine owns the loop: build, call the entry, ride
+`vm.run_until_idle(wait)` to idle or trap — the embedder never writes
+a pump ([the embedder's driving
+contract](../reference/embedding.md#the-embedders-driving-contract)):
 
 ```rust
-vm.call::<_, ()>("main", ())?;              // script boots, launches futures
-loop {
-    vm.run_ready()?;                        // one drive per ready frame
-    if let Some(d) = vm.next_deadline() {   // expire due timers into ready
-        sleep_until(d);                     // the wall-clock stand-in
-    }
-    if vm.pending_tasks() == 0 { break; }   // idle
-}
+vm.call::<_, ()>("main", ())?;                   // script boots, launches futures
+vm.run_until_idle(rut_vm::interp::Wait::Block)?; // idle or trap — the only exits
 ```
 
 - `sleep(ms)` arms a deadline on the VM's **virtual clock**
   (`vm.now_ms()` / `vm.set_now()`). A test host advances the clock by
   hand and gets fully deterministic schedules — a UI host just maps it
-  to wall time.
+  to wall time. The engine loop is deterministic too when no host
+  future is parked: pure timers fast-forward the virtual clock.
 - Each queue entry owns one reference; a completed drive re-enqueues
   the awaiting frame through a one-directional edge pair, so wake
   wiring never forms a cycle.

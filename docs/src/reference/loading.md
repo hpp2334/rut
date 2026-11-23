@@ -56,7 +56,8 @@ Everything the host needs is the chain plus a handful of `Vm` methods
 | `Vm::builder().compiled(c).limits(l).hosts(r).build()` | boot; joins every declared host fn to its binding (a declared-but-unbound fn is a construction error) |
 | `vm.call(export, args) -> Result<Value, Trap>` | sync entry — typed arg/ret adapters over the boundary |
 | `vm.resume()` | continue a parked frame after `add_fuel` |
-| `vm.run_ready()`, `vm.next_deadline()`, `vm.pending_tasks()`, `vm.drive(fut)` | the async driving verbs |
+| `vm.run_until_idle(wait)` | the driving protocol — the engine-owned loop: idle or trap are the only exits ([the embedder's driving contract](embedding.md#the-embedders-driving-contract)) |
+| `vm.run_ready()`, `vm.next_deadline()`, `vm.pending_tasks()`, `vm.drive(fut)` | the raw driving doors — event-loop hosts and tests hand-drive with these |
 | `vm.set_now(ms)`, `vm.arm_timer(deadline, fut)` | the virtual clock |
 | `vm.add_fuel(n)`, `vm.fuel_used`, `vm.heap_usage()` | budgets and telemetry ([Resource limits and fuel](resource-limits.md)) |
 | `vm.call_host_row(row, args)` | invoke a registered host row directly (tests, tooling) |
@@ -72,7 +73,7 @@ runs one engine frame per tick:
 ```rust
 fn on_vsync(&mut self) {
     self.process_host_events();                 // input, network, ...
-    self.rut.run_ready()?;                      // drive ready frames to completion
+    self.rut.run_ready()?;                      // one pass: drain ready + poll parked hosts
     if let Some(d) = self.rut.next_deadline() { // earliest armed sleep
         self.schedule_wake(d);                  // host parks until then,
     }                                           // then advances the clock
@@ -81,8 +82,11 @@ fn on_vsync(&mut self) {
 ```
 
 `pending_tasks()` is the idle test — zero means the program has nothing
-runnable. There is no job executor inside the VM: parking, waking, and
-timing are these three verbs plus `set_now`
+runnable. A host that does NOT own an event loop does not hand-drive:
+the engine's `run_until_idle(wait)` is the whole loop, idle or trap
+([the embedder's driving contract](embedding.md#the-embedders-driving-contract)).
+There is no job executor inside the VM: parking, waking, and timing
+are these raw doors plus `set_now`
 ([Async and await](async.md)). A program whose world offers no async
 packages simply has no launcher; `await` stays cold-poll inline
 ([The async model](../core-concepts/async-model.md)).

@@ -192,8 +192,10 @@ entry fn main() {
   next park or completion, so one greedy future cannot starve the
   queue. Priorities are not in the model.
 - `vm.pending_tasks()` counts ready frames, armed timers, and host
-  futures parked on Completers — the embedder's idle test
-  ([async and await](async.md)).
-- A trap inside a launched future propagates out of `run_ready()` /
-  `drive()`; the frame is retired either way, and its locals ran their
-  drop path.
+  futures parked on Completers — the idle test behind the engine's
+  driving loop ([async and await](async.md),
+  [the embedder's driving
+  contract](embedding.md#the-embedders-driving-contract)).
+- A trap inside a launched future propagates out of the driving loop
+  as `Err(Trap)`; the frame is retired either way, and its locals ran
+  their drop path.

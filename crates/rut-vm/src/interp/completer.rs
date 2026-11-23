@@ -20,11 +20,12 @@
 //! THREAD LAW: the VM stays single-threaded. Workers touch only the
 //! Completer's atomics + Mutex slot AND the machine's wake cell — a
 //! settle's `bump` (the condvar notify after the slot store) is the
-//! workers' one extra touch; a clone shares all three through one
-//! `Arc`, and the rut cells are minted by `__take`/`into_slot` on the
-//! VM thread. `std::thread` appears only in embedder closures, never
-//! here (this file's own `wakes_tests` play the embedder's worker —
-//! they are the exception, not machinery).
+//! workers' one extra touch. A clone shares the `Arc<Inner<T>>`, whose
+//! `wakes` field holds the machine's own `Arc<HostWakes>` — state and
+//! cell travel together; the rut cells are minted by `__take`/
+//! `into_slot` on the VM thread. `std::thread` appears only in
+//! embedder closures, never here (this file's own `wakes_tests` play
+//! the embedder's worker — they are the exception, not machinery).
 
 use std::sync::{Arc, Condvar, Mutex};
 use std::time::{Duration, Instant};

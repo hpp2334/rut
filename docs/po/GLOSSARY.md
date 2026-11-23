@@ -229,3 +229,9 @@ context; after that, use the zh-CN rendering alone.
 | park | 停放 | the parked pump → 停放的泵；park/resume → 停放/恢复；a parked frame → 停放的帧 |
 | last-write-wins | 后写者胜 | a double complete is NOT loud → 双重完成不会响；the second answer overwrites the slot → 第二个应答覆盖槽位 |
 | field dial | 字段拨盘 | the per-field visibility stamp（`FieldVis` stays code）riding the surface rows——每个被承载的类字段一行可见性（pub / pub(pkg) / pub(super) / private）；struct 字段在盖章处即为 `Pub`（总是公开的豁免）；cross-package 的门只认 `pub` → 跨包的门只认 `pub` |
+| driving protocol | 驱动协议 | `run_until_idle`/`Wait`/`Idle` stay code；drive to idle → 驱动到空闲；the parking policy → 停放策略（对照 park → 停放）；idle or trap are the only exits → 唯一的出口是空闲或陷阱 |
+| wake cell | 唤醒单元 | the machine's ONE wake cell（`HostWakes` stays code）→ 机器的唯一唤醒单元；a settle bumps the cell → 一次结算让单元计数前进；park on the cell → 停放在唤醒单元上 |
+| sugar (the mint-and-hand-in macro) | 糖宏 | `register_async!`/`pkg_async_fn!` stay code；the sugar mints the completer and hands it in → 糖宏铸造 completer 并交进来；the body never mints → 函数体绝不自行铸造 |
+| hang guard | 挂起守卫 | a never-completing host worker hangs the run by law — no budget, no hang guard → 永不完成的宿主 worker 依法让运行挂起——没有预算，也没有挂起守卫 |
+| raw door | 原始门 | the raw doors under the protocol → 协议之下的原始门（door → 门，同 mount door → 挂载门）；hand-drive → 手工驱动 |
+| the ONE mint | 唯一的铸造入口 | mint → 铸造（见 mint (verb)）；`Completer::with_wake` stays code |

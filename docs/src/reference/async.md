@@ -13,7 +13,7 @@ exactly one), one pender (`sleep`; an embedder may mount its own).
 | completion | pushes callbacks through a job queue | nobody drives ⇒ nobody pays |
 | allocation | promise + reactions per `then` | one hidden frame record per mint; locals are cell-backed |
 | cancellation | abort flag / never settles | `abort()` flags the frame; the probe at its checkpoint runs the drop path |
-| host integration | the host must drain a job queue | the host polls the VM: `run_ready()`, `next_deadline()` |
+| host integration | the host must drain a job queue | the engine drives: `run_until_idle(wait)`; raw doors stay public for hand-driving |
 
 ## `Future<T>` — the one async type
 
@@ -175,7 +175,26 @@ cycle forms.
 
 ## The driving loop
 
-The VM owns the queues; the **embedder owns the loop**:
+The engine owns the loop. Build, call the entry, drive to idle, handle
+the trap — one door does the whole drive
+([the embedder's driving contract](embedding.md#the-embedders-driving-contract)):
+
+```rust
+vm.call::<_, ()>("boot", (args,))?;
+match vm.run_until_idle(rut_vm::interp::Wait::Block) {
+    Ok(rut_vm::interp::Idle::Drained) => {},  // every frame retired
+    Ok(_) => unreachable!(),                  // Block never answers WouldBlock
+    Err(trap) => { /* print and exit; other frames may stay pending */ }
+}
+```
+
+Under `Wait::Block` (the native lane) the driving thread parks on the
+machine's wake cell whenever nothing but settling host futures remains
+— a worker that never completes hangs the run by law; `Wait::NonBlock`
+(the wasm lane) never parks and answers `Idle::WouldBlock`, and the
+embedder yields and re-enters. The raw doors under the protocol stay
+public for the two honest hand-driving uses — an embedder that owns an
+event loop (a frame per tick) and tests that want per-step control:
 
 | Engine API | Meaning |
 |---|---|
@@ -188,17 +207,11 @@ The VM owns the queues; the **embedder owns the loop**:
 | `vm.run_ready() -> usize` | drain the ready queue, then poll parked host futures, until a spin produces no completion |
 | `vm.pending_tasks() -> usize` | ready + armed timers + host futures parked on Completers — the idle test |
 
-Two embedder pumps:
+The hand-drive test shape (deterministic; the engine loop is
+deterministic too when no host future is parked — pure timers
+fast-forward the virtual clock):
 
 ```rust
-// wall-clock (a CLI or service): settle from real threads
-vm.call::<_, ()>("boot", (args,))?;
-while vm.pending_tasks() > 0 {
-    vm.run_ready()?;
-    std::thread::sleep(Duration::from_millis(2));
-}
-
-// virtual clock (tests): fully deterministic
 while vm.pending_tasks() > 0 {
     vm.run_ready()?;
     if let Some(d) = vm.next_deadline() { vm.set_now(d + 1); }

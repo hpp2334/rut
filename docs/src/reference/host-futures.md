@@ -115,23 +115,27 @@ entry fn main() {
 
 ## The embedder's loop
 
-The engine polls every future parked on a completer:
+One door drives everything — the engine's protocol at the `Block`
+policy parks on the machine's wake cell until the completers answer,
+so idle and trap are the only exits
+([the embedder's driving contract](embedding.md#the-embedders-driving-contract)):
 
 ```rust
 vm.call::<_, ()>("main", ())?;
-while vm.pending_tasks() > 0 {
-    vm.run_ready()?;                       // drain + poll + drain
-    std::thread::sleep(Duration::from_millis(2));
-}
+vm.run_until_idle(rut_vm::interp::Wait::Block)?;
 ```
 
-`run_ready()` drains the ready queue, polls the parked host futures
-(each poll runs the `__yield` probe; a ready one is driven through
-`__take` and its awaiter re-enqueued), then drains again — one pass
-settles a completed host future end to end. `vm.pending_tasks()` counts
-ready frames, armed timers, and the host-pending set, so a worker that
-never completes keeps the loop alive — the flip side of best-effort
-cancellation.
+Inside each turn, `run_ready()` drains the ready queue, polls the
+parked host futures (each poll runs the `__yield` probe; a ready one
+is driven through `__take` and its awaiter re-enqueued), then drains
+again — one pass settles a completed host future end to end.
+`vm.pending_tasks()` counts ready frames, armed timers, and the
+host-pending set, so a worker that never completes keeps the machine
+busy forever — the flip side of best-effort cancellation, and the law
+under `Block`: no wall-clock budget, no hang guard. An event-loop host
+that cannot park hand-drives instead: one `run_ready()` pass per tick,
+or the `Wait::NonBlock` policy, which answers `Idle::WouldBlock` the
+moment only host-parked work remains.
 
 The virtual clock works here too: drive with finite fuel and
 `vm.set_now` for deterministic tests
