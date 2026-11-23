@@ -216,48 +216,55 @@ impl RutEngine {
         // err here; every other shape (nil mains included) has none. A trap
         // NEVER fills err — the loud channel stays the loud channel.
         let out = vm.call::<_, RutValue>("main", ());
-        // the async driving loop: drain the ready
-        // queue, advance the virtual clock to the next sleep deadline — the
-        // CLI's own loop (`rut run`): run what's ready, then jump `now` to
-        // the earliest armed timer so sleep futures fire. When NO timer is
-        // armed the sync pump is done — what remains (host completers)
-        // waits outside this export, and [`net_waiting`] reads that as the
-        // NET park. Idle for programs that launch nothing. The fuel budget
-        // parks (OutOfFuel) still surface through `call`'s own result — a
-        // parked main takes the parked-slot path below, untouched. A
-        // trapped async task is the LOUD channel: the drive's trap
-        // surfaces on this envelope (the old loop swallowed it).
+        // the async driving loop, the engine's protocol at the
+        // NonBlock policy ([`drive_until_net_park`]): drain the ready
+        // queue, advance the virtual clock to the next sleep deadline,
+        // and answer the park verdict — Drained is idle, WouldBlock is
+        // the NET park (only host completers remain; they wait outside
+        // this export). The fuel budget parks (OutOfFuel) still
+        // surface through `call`'s own result — a parked main takes
+        // the parked-slot path below, untouched. A trapped async task
+        // is the LOUD channel: the drive's trap surfaces on this
+        // envelope (the pre-protocol loop swallowed it).
         let mut drive_trap: Option<rut_vm::Trap> = None;
+        let mut net_parked = false;
         if out.is_ok() && !vm.is_running() {
-            if let Err(t) = drive_until_net_park(&mut vm) {
-                drive_trap = Some(t);
+            match drive_until_net_park(&mut vm) {
+                Err(t) => drive_trap = Some(t),
+                // the verdict IS the net park — the envelope's
+                // `parked:true` rides it (the composition record on
+                // [`drive_until_net_park`])
+                Ok(parked) => net_parked = parked,
             }
         }
-        let (trap, net_parked, err) = match (out, drive_trap) {
+        let (trap, err) = match (out, drive_trap) {
             (_, Some(t)) => {
                 *self.net_err.borrow_mut() = None;
-                let parked = t.kind == rut_vm::TrapKind::OutOfFuel && vm.is_running();
-                (Some(t.name()), parked, None)
+                // the FUEL park: OutOfFuel beside a live frame
+                net_parked = t.kind == rut_vm::TrapKind::OutOfFuel && vm.is_running();
+                (Some(t.name()), None)
             }
             (Ok(v), None) => {
                 let e = err_of_value(&v);
-                if net_waiting(&mut vm) {
+                if net_parked {
                     // THE NET PARK: main retired, no timer armed, only
-                    // host completers pending. The machine moves to the
-                    // parked slot whole — the page's pump re-drives it
-                    // one macrotask per leg (`resume`), and the
-                    // envelope says parked:true beside a null trap.
+                    // host completers pending (the drive's WouldBlock
+                    // verdict). The machine moves to the parked slot
+                    // whole — the page's pump re-drives it one
+                    // macrotask per leg (`resume`), and the envelope
+                    // says parked:true beside a null trap. The
+                    // entry-err is stored for the legs (the carried
+                    // answer).
                     *self.net_err.borrow_mut() = Some(e.clone());
-                    (None, true, e)
                 } else {
                     *self.net_err.borrow_mut() = None;
-                    (None, false, e)
                 }
+                (None, e)
             }
             (Err(t), None) => {
                 *self.net_err.borrow_mut() = None;
-                let parked = t.kind == rut_vm::TrapKind::OutOfFuel && vm.is_running();
-                (Some(t.name()), parked, None)
+                net_parked = t.kind == rut_vm::TrapKind::OutOfFuel && vm.is_running();
+                (Some(t.name()), None)
             }
         };
         // read the counters BEFORE the machine moves into the parked slot
@@ -322,8 +329,8 @@ impl RutEngine {
                                 *self.net_err.borrow_mut() = None;
                                 trap = Some(t.name());
                             }
-                            Ok(()) => {
-                                if net_waiting(&mut vm) {
+                            Ok(net) => {
+                                if net {
                                     parked = true;
                                     *self.net_err.borrow_mut() = Some(err.clone());
                                 } else {
@@ -349,11 +356,11 @@ impl RutEngine {
                     parked = t.kind == rut_vm::TrapKind::OutOfFuel && vm.is_running();
                     trap = Some(t.name());
                 }
-                Ok(()) => {
+                Ok(net) => {
                     // the slot is Option<Option<String>>: outer None =
                     // not net-parked (never here), inner = the entry-err
                     err = (*self.net_err.borrow()).clone().unwrap_or(None);
-                    if net_waiting(&mut vm) {
+                    if net {
                         parked = true;
                     } else {
                         // the session is idle — the carried err has
@@ -758,48 +765,32 @@ fn compile_playground(
 
 // ---- the envelope writers (no serde on this path) ----
 
-/// The async driving loop, net-park flavor: drain the ready queue,
-/// advance the virtual clock to the next armed timer — and STOP when
-/// no timer is armed. Whatever remains then (host futures parked on
-/// their completers) waits OUTSIDE this synchronous export: a fetch
-/// completer lands from a JS microtask that can never settle while a
-/// wasm-bindgen call is on the stack. The old loop spun a million
-/// useless `run_ready` rounds on exactly that shape; this one stops
-/// at the first quiet round and lets the page's pump re-drive the
-/// machine on a macrotask. Capped, so a program that never idles
-/// fails loudly instead of hanging. A trapped async task surfaces
-/// through the `Err` arm — the loud channel (the old loop swallowed
-/// it and the envelope reported a clean main).
-fn drive_until_net_park(vm: &mut rut_vm::interp::Vm) -> Result<(), rut_vm::Trap> {
-    for _ in 0..1_000_000 {
-        vm.run_ready()?;
-        match vm.next_deadline() {
-            Some(d) => vm.set_now(d),
-            None => {
-                // no timer armed. But the expiry above may have JUST
-                // moved fired timers into the ready queue — one probe
-                // round answers which: progress means keep driving;
-                // a quiet round with no deadline means the pending set
-                // (host futures only) waits on completers outside this
-                // export — the net park.
-                if vm.pending_tasks() == 0 {
-                    return Ok(()); // idle
-                }
-                if vm.run_ready()? == 0 {
-                    return Ok(()); // quiet round: net waits remain
-                }
-            }
-        }
-    }
-    Ok(())
-}
-
-/// The net-park verdict after [`drive_until_net_park`]: no timer is
-/// armed and frames are still pending — the pending set can only be
-/// host futures parked on their completers (the loop drained the
-/// ready queue and every due timer), so only NETWORK waits remain.
-fn net_waiting(vm: &mut rut_vm::interp::Vm) -> bool {
-    vm.next_deadline().is_none() && vm.pending_tasks() > 0
+/// The async driving loop, the engine's protocol ([`Vm::run_until_idle`]
+/// at the [`Wait::NonBlock`] policy — the wasm lane's rule: a JS host
+/// can only settle OUTSIDE this synchronous export, so the door never
+/// parks; `Wait::Block`'s condvar wait would deadlock on wasm32, one
+/// thread, nobody to bump the cell). It drains the ready queue,
+/// advances the virtual clock to the next armed timer, and the answer
+/// is the verdict: `Ok(false)` — [`Idle::Drained`], every frame
+/// retired; `Ok(true)` — [`Idle::WouldBlock`], a quiet round with only
+/// host-parked work pending: THE NET PARK. The two are the same
+/// condition the retired `net_waiting` door re-read after the old
+/// hand-rolled loop returned (no deadline armed, tasks still pending) —
+/// the phase's recorded composition: the envelope's `parked:true`
+/// rides the VERDICT, and the check did not survive as a second door.
+///
+/// A fetch completer lands from a JS microtask that can never settle
+/// while this export is on the stack — the page's pump re-drives the
+/// parked machine one macrotask per leg through `resume`. The old
+/// loop spun a million useless `run_ready` rounds on exactly that
+/// shape (a million-iteration cap where the honest answer — WouldBlock
+/// — lives); the protocol stops at the first quiet round. A trapped
+/// async task surfaces through the `Err` arm — the loud channel (the
+/// pre-protocol loop swallowed it and the envelope reported a clean
+/// main).
+fn drive_until_net_park(vm: &mut rut_vm::interp::Vm) -> Result<bool, rut_vm::Trap> {
+    vm.run_until_idle(rut_vm::interp::Wait::NonBlock)
+        .map(|idle| idle == rut_vm::interp::Idle::WouldBlock)
 }
 
 fn json_escape(s: &str, out: &mut String) {

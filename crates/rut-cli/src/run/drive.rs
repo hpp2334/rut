@@ -1,8 +1,8 @@
-//! the VM drive: boot on the compiled run, call the entry, drive the
-//! async loop to idle.
+//! the VM drive: boot on the compiled run, call the entry, drive to
+//! idle through the engine's protocol.
 
-/// Boot the VM, call the designated entry fn, then run the async
-/// driving loop.
+/// Boot the VM, call the designated entry fn, then run the engine's
+/// driving protocol ([`rut_vm::interp::Vm::run_until_idle`]) to idle.
 pub(crate) fn run_entry(compiled: rut_driver::Compiled, entry: &str, fuel: Option<u64>) {
     let limits = rut_vm::interp::Limits {
         fuel,
@@ -31,22 +31,17 @@ pub(crate) fn run_entry(compiled: rut_driver::Compiled, entry: &str, fuel: Optio
             std::process::exit(1);
         }
     }
-    // the async driving loop: drain the ready
-    // queue, advance the virtual clock to the next sleep deadline,
-    // repeat — idle when no frames and no timers remain. Capped, so a
-    // program that never idles fails loudly instead of hanging.
-    for _ in 0..1_000_000 {
-        if let Err(t) = vm.run_ready() {
-            eprintln!("trap: {} — {}", t.name(), t.msg);
-            std::process::exit(1);
-        }
-        match vm.next_deadline() {
-            Some(d) => vm.set_now(d),
-            None => {
-                if vm.pending_tasks() == 0 {
-                    break;
-                }
-            }
-        }
+    // the async driving loop, the engine's protocol at the
+    // [`rut_vm::interp::Wait::Block`] policy — the native embedder's
+    // lane: drain the ready queue, advance the virtual clock to the
+    // next sleep deadline, and park on the wake cell while host
+    // futures settle on their workers. Idle is the honest return;
+    // under Block the only exits are idle or trap: a host future
+    // that never completes hangs the run by law (the wait-forever
+    // law — no budget, no hang guard; best-effort cancellation is
+    // the disclosed contract).
+    if let Err(t) = vm.run_until_idle(rut_vm::interp::Wait::Block) {
+        eprintln!("trap: {} — {}", t.name(), t.msg);
+        std::process::exit(1);
     }
 }
