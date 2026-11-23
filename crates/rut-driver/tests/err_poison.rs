@@ -313,3 +313,97 @@ fn real_method_with_poison_arg_stays_honest() {
     let ms = msgs(&ds);
     assert_eq!(ds.len(), 1, "the arg widens quietly: {ms:?}");
 }
+
+// ---- review round 1: the struct-literal dispatch tail ----
+
+/// The bare-generic literal: `Wrap { .. }` spells a generic head
+/// WITHOUT its arguments — the spelling fails honestly (one diag),
+/// the poison row it mints must not fall through the struct-literal
+/// dispatch into `` `<err>` is not a struct/class of this module ``
+/// (the extern-literal entry verdict quoting the poison). Exactly ONE
+/// diag, no `<err>` text anywhere.
+#[test]
+fn bare_generic_literal_mints_no_err_leak() {
+    let src = "class Wrap<T> { v: ?T = nil; }\n\
+               entry fn main() {\n\
+               \x20   let w = Wrap { v: 5 };\n\
+               }\n";
+    let ds = compile(src).diags;
+    let ms = msgs(&ds);
+    assert_eq!(
+        ds.len(),
+        1,
+        "the spelling failure, and nothing else: {ms:?}"
+    );
+    assert!(
+        ms[0].contains("type argument"),
+        "the generic-spelling failure diagnoses: {ms:?}"
+    );
+    assert!(
+        !ms.iter().any(|m| m.contains("<err>")),
+        "no poison text: {ms:?}"
+    );
+}
+
+/// The composite: the connector shape followed by the bare-generic
+/// literal — each site's own honest failure, still no `<err>` leak
+/// from the dispatch tail.
+#[test]
+fn connector_composite_stays_quiet() {
+    let src = "class Wrap<T> { v: ?T = nil; }\n\
+               entry fn main() {\n\
+               \x20   let x: Bogus = 5;\n\
+               \x20   let w = Wrap { v: 5 };\n\
+               }\n";
+    let ds = compile(src).diags;
+    let ms = msgs(&ds);
+    assert_eq!(
+        ds.len(),
+        2,
+        "two honest failures (the annotation + the spelling): {ms:?}"
+    );
+    assert!(
+        !ms.iter().any(|m| m.contains("<err>")),
+        "no poison text: {ms:?}"
+    );
+}
+
+/// The bounded-binder pin (review round 1's minor, now the guarded
+/// law): a poison argument bound to a `requires`-bounded generic
+/// defers admission — exactly ONE diag, no false
+/// "`<err>` does not satisfy".
+#[test]
+fn bounded_binder_defers_admission_on_a_poison_arg() {
+    let src = "interface Hash { fn hash(self) -> u64; }\n\
+               struct Token { v: i32 }\n\
+               impl Token { pub fn hash(self) -> u64 { return 9; } }\n\
+               fn p<T requires Hash>(x: T) -> u64 { return x.hash(); }\n\
+               entry fn main() {\n\
+               \x20   let x: Bogus = 5;\n\
+               \x20   let q = p(x);\n\
+               }\n";
+    let ds = compile(src).diags;
+    let ms = msgs(&ds);
+    assert_eq!(ds.len(), 1, "admission defers on `<err>`: {ms:?}");
+    assert_eq!(ms[0], "unknown type `Bogus`", "{ms:?}");
+}
+
+/// The same bound still rejects a REAL non-satisfying type — the
+/// deferral never over-silences.
+#[test]
+fn bounded_binder_still_rejects_a_real_non_satisfier() {
+    let src = "interface Hash { fn hash(self) -> u64; }\n\
+               struct Token { v: i32 }\n\
+               impl Token { pub fn hash(self) -> u64 { return 9; } }\n\
+               fn p<T requires Hash>(x: T) -> u64 { return x.hash(); }\n\
+               entry fn main() {\n\
+               \x20   let q = p(\"s\");\n\
+               }\n";
+    let ds = compile(src).diags;
+    let ms = msgs(&ds);
+    assert!(
+        ms.iter()
+            .any(|m| m.contains("`str` does not satisfy `Hash`")),
+        "the honest bound rejection fires: {ms:?}"
+    );
+}

@@ -878,16 +878,21 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                 }
                 // a foreign generic's mirror: the row IS the layout — its
                 // fields resolved under the caller's substitution at the
-                // instantiation, no declaring body in sight
+                // instantiation, no declaring body in sight. The
+                // quiet-audit law: a poison `sty` names no layout — the
+                // not-a-record verdict would mint a second diagnostic
+                // FROM the poison row (quoting `<err>`); silent skip.
                 None => {
                     let TyKind::Data { fields: desc } = self.ctx.types.kind(sty) else {
-                        self.ctx.err(
-                            sp,
-                            format!(
-                                "`{}` is not a record of this module",
-                                self.ctx.type_name(sty)
-                            ),
-                        );
+                        if !self.ctx.ty_is_err(sty) {
+                            self.ctx.err(
+                                sp,
+                                format!(
+                                    "`{}` is not a record of this module",
+                                    self.ctx.type_name(sty)
+                                ),
+                            );
+                        }
                         return Err(());
                     };
                     let desc = desc.clone();
@@ -1050,6 +1055,13 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
         fields: Vec<FieldInit>,
         sp: rut_lexer::span::Span,
     ) -> TcResult<TypeId> {
+        // the quiet-audit law: a poison `sty` names no layout — the
+        // entry verdict would mint a second diagnostic FROM the poison
+        // row (quoting `<err>`, e.g. the bare-generic literal
+        // `Wrap { .. }` whose spelling already failed). Silent skip.
+        if self.ctx.ty_is_err(sty) {
+            return Err(());
+        }
         let TyKind::Data { fields: desc } = self.ctx.types.kind(sty).clone() else {
             self.ctx.err(
                 sp,

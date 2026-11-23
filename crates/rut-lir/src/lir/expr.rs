@@ -460,15 +460,6 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                         // body ONCE for every T, and a baked fold would
                         // lie for all but one width.
                         if let TyKind::Prim(_) = self.ctx.types.kind(want) {
-                            if self.ctx.ty_is_err(rt) {
-                                // the quiet-audit law: a poison-bound
-                                // member folds to the quiet miss — the
-                                // per-member dispatch verdict would
-                                // read as a false second error
-                                self.emit(Op::ConstRaw { dst, bits: 0 }, sp.lo);
-                                self.mark_is_fold(dst, false);
-                                return Ok(TY_BOOL);
-                            }
                             if self.ctx.is_template_param(rt) {
                                 self.ctx.err(
                                     sp,

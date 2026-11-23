@@ -701,6 +701,16 @@ impl<'a> Ctx<'a> {
             if self.ty_is_placeholder(concrete) {
                 continue;
             }
+            // the quiet-audit law: a poison binder carries no member
+            // set — admission defers forever (its cause is already on
+            // the diag list). Today the poison row's surface answers
+            // Carried and the check early-outs; this guard makes the
+            // quietness the LAW, not an emergent surface shape — a
+            // `member_surface` change must never resurrect a false
+            // "`<err>` does not satisfy".
+            if self.ty_is_err(concrete) {
+                continue;
+            }
             let members = self.resolve_bound_members(*bnode, subst);
             if members.is_empty() {
                 continue; // unresolvable bound — already diagnosed
