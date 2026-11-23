@@ -15,7 +15,8 @@
 //!   never carry it (`Name(v)` already IS the construction — the
 //!   newtype mint keeps precedence), generics ride the ordinary
 //!   unification path;
-//! - resolution: a free fn named like the class wins; the no-ctor miss
+//! - resolution: a free fn named like the class is a duplicate-name
+//!   refusal (the one-name law, per file); the no-ctor miss
 //!   names the fix;
 //! - cross-module: the marker byte crosses the surface row, a used
 //!   class's `Point(..)` mints at a distance.
@@ -459,11 +460,18 @@ fn markers_outside_inherent_bodies_stay_parse_rejects() {
 
 // ---- resolution order ---------------------------------------------------
 
+// the one-name law retired the free-fn-wins precedence: a same-named
+// fn/class pair in one file refuses (the test above), so the ctor
+// fallback below answers only for a name the file binds to the class.
+
 #[test]
-fn a_free_fn_named_like_the_class_wins() {
-    // Law 6: the ctor fallback is LAST — a local fn-typed/free fn
-    // named `Point` answers the call
-    let v = run_returns(&format!(
+fn a_free_fn_named_like_the_class_refuses() {
+    // the one-name law (per file): a class and a free fn share ONE
+    // file-scope name — the second spelling refuses, citing the
+    // class. The old free-fn-wins precedence is gone; the ctor
+    // fallback no longer competes with a fn, because the pairing
+    // can no longer spell.
+    let ds = diags_of(&format!(
         "{POINT}\n\
          fn Point(tag: i32) -> i32 {{ return tag; }}\n\
          entry fn main() -> i32 {{\n\
@@ -471,9 +479,12 @@ fn a_free_fn_named_like_the_class_wins() {
              if (v != 7) {{ return 1; }}\n\
              return 0;\n\
          }}\n"
-    ))
-    .expect("runs");
-    assert_eq!(v, 0);
+    ));
+    assert!(
+        ds.iter().any(|d| d.contains("duplicate name `Point`")
+            && d.contains("the class already declares it in this file")),
+        "the fn second-spelling refuses citing the class: {ds:?}"
+    );
 }
 
 #[test]

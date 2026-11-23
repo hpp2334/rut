@@ -627,7 +627,7 @@ impl<'a> Ctx<'a> {
                     let msg = self
                         .not_in_core_scope(name)
                         .or_else(|| self.use_elsewhere_hint(name))
-                        .or_else(|| self.elsewhere_hint(name, "type"))
+                        .or_else(|| self.elsewhere_hint(name))
                         .unwrap_or_else(|| format!("unknown type `{}`", self.name(name)));
                     self.err(sp, msg);
                     TY_ERR
@@ -732,13 +732,17 @@ impl<'a> Ctx<'a> {
             || self.alias_in(m, name).is_some();
         if !found {
             let msg = match self.type_home(name) {
-                Some(home) => format!(
-                    "`{}` is not declared in module `{}` ({}) — it lives in module `{}`",
-                    self.name(name),
-                    m,
-                    ModInputs::display(m),
-                    home
-                ),
+                Some(home) => {
+                    let q = home.replace('/', "::");
+                    format!(
+                        "`{}` is not declared in module `{}` ({}) — it lives in module `{}` — bind it with `use {q}::{{ {} }}`",
+                        self.name(name),
+                        m,
+                        ModInputs::display(m),
+                        home,
+                        self.name(name)
+                    )
+                }
                 None => format!(
                     "`{}` is not declared in module `{}` ({})",
                     self.name(name),

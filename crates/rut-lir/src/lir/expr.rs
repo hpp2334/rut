@@ -861,15 +861,18 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
             // module let (load-time, M1: literals only)
             if let Some((_, ty_node, init, lvis)) = self.ctx.find_let(name).cloned() {
                 // a module let of ANOTHER module is not in scope bare
-                // (single names resolve in the current module only)
+                // (single names resolve in the current module only) —
+                // the use fix first (the law's spelling for a legal
+                // sibling name), the qualified spelling second
                 if self.ctx.mod_of(init.span(self.ctx.ast)) != self.ctx.cur_mod {
+                    let home = self.ctx.mod_of(init.span(self.ctx.ast)).to_string();
+                    let q = home.replace('/', "::");
                     self.ctx.err(
                         sp,
                         format!(
-                            "`{}` is declared in module `{}` — qualify it: `{}::{}`",
+                            "`{}` is declared in module `{home}` — bind it with `use {q}::{{ {} }}` (or qualify: `{q}::{}`)",
                             self.ctx.name(name),
-                            self.ctx.mod_of(init.span(self.ctx.ast)),
-                            self.ctx.mod_of(init.span(self.ctx.ast)),
+                            self.ctx.name(name),
                             self.ctx.name(name)
                         ),
                     );

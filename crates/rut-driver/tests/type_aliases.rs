@@ -378,24 +378,28 @@ fn alias_exports_transparently_across_modules() {
 #[test]
 fn alias_shadows_nothing_and_duplicate_names_diagnose() {
     // an alias colliding with a declared type is a duplicate name
+    // (the one-name law, per file): the second spelling errors,
+    // citing the first's kind
     let ds = diags_of(
         "struct S { v: i32 }\n\
          type S = i64;\n\
          entry fn main() -> i32 { return 0; }\n",
     );
     assert!(
-        ds.iter().any(|d| d.contains("duplicate type name `S`")),
+        ds.iter().any(|d| d.contains("duplicate name `S`")
+            && d.contains("the struct already declares it in this file")),
         "{ds:?}"
     );
 }
 
-// ---- the type-name-law batch (phase 1): one name = one type ----------
+// ---- the type-name-law batch (phase 1) → the one-name law ------------
 //
 // The alias-row form is repealed: the head admits no members (a
-// generic head is a parse error again), the concrete-shadows-generic
-// lift is gone from `declare_alias`, and the duplicate-type-name check
-// is the plain symmetric four-way — the probed five-kind x both-orders
-// matrix diagnoses uniformly.
+// generic head is a parse error again) and one name is one decl —
+// the per-file one-name registry now owns the duplicate diagnostics
+// (`duplicate name `X` — the <kind> already declares it in this
+// file`, cited at whichever spelling registered second). The probed
+// five-kind x both-orders matrix diagnoses uniformly.
 
 #[test]
 fn alias_head_params_are_a_parse_error_again() {
@@ -425,14 +429,17 @@ fn alias_head_params_are_a_parse_error_again() {
 fn one_name_one_decl_diagnoses_in_both_orders() {
     // alias-vs-class, both orders — the row-vs-class shape (silent in
     // the class-first order under the removed lift) cannot even parse
-    // now; a PLAIN alias colliding with a class diagnoses both ways
+    // now; a PLAIN alias colliding with a class diagnoses both ways,
+    // each order citing the OTHER decl's kind
     for src in [
         "class C { }\n type C = i64;\n entry fn main() -> i32 { return 0; }\n",
         "type C = i64;\n class C { }\n entry fn main() -> i32 { return 0; }\n",
     ] {
         let ds = diags_of(src);
         assert!(
-            ds.iter().any(|d| d.contains("duplicate type name `C`")),
+            ds.iter().any(|d| d.contains("duplicate name `C`")
+                && (d.contains("the class already declares it in this file")
+                    || d.contains("the alias already declares it in this file"))),
             "alias x class must diagnose both orders: {ds:?}"
         );
     }
@@ -443,25 +450,33 @@ fn one_name_one_decl_diagnoses_in_both_orders() {
     ] {
         let ds = diags_of(src);
         assert!(
-            ds.iter().any(|d| d.contains("duplicate type name `W`")),
+            ds.iter().any(|d| d.contains("duplicate name `W`")
+                && (d.contains("the struct already declares it in this file")
+                    || d.contains("the alias already declares it in this file"))),
             "alias x generic struct must diagnose both orders: {ds:?}"
         );
     }
     // alias-vs-alias (the row-vs-row family shape — two decls, one name)
     let ds = diags_of("type A = i64;\n type A = str;\n entry fn main() -> i32 { return 0; }\n");
     assert!(
-        ds.iter().any(|d| d.contains("duplicate type name `A`")),
+        ds.iter().any(
+            |d| d.contains("duplicate name `A`") && d.contains("the alias already declares it")
+        ),
         "two aliases, one name: {ds:?}"
     );
     // alias-vs-enum and alias-vs-interface (the legs that never had a lift)
     let ds = diags_of("enum E { M }\n type E = i64;\n entry fn main() -> i32 { return 0; }\n");
     assert!(
-        ds.iter().any(|d| d.contains("duplicate type name `E`")),
+        ds.iter().any(
+            |d| d.contains("duplicate name `E`") && d.contains("the enum already declares it")
+        ),
         "{ds:?}"
     );
     let ds = diags_of("interface T { }\n type T = i64;\n entry fn main() -> i32 { return 0; }\n");
     assert!(
-        ds.iter().any(|d| d.contains("duplicate type name `T`")),
+        ds.iter()
+            .any(|d| d.contains("duplicate name `T`")
+                && d.contains("the interface already declares it")),
         "{ds:?}"
     );
 }

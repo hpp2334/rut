@@ -193,9 +193,10 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                     self.ctx.err(
                         sp,
                         format!(
-                            "`{}` is declared in module `{home}` ({}) — qualify it: `{}{}::{}`(..)",
+                            "`{}` is declared in module `{home}` ({}) — bind it with `use {q}::{{ {} }}` (or qualify: `{}{}::{}`(..))",
                             self.ctx.name(base),
                             crate::check::ModInputs::display(&home),
+                            self.ctx.name(base),
                             prefix,
                             self.ctx.name(base),
                             self.ctx.name(member),
@@ -267,13 +268,22 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
         }
         let name = segs[0].name.ident;
         let generics = segs[0].generics.clone();
+        // THE LOCAL RUNG comes first (the layer law: local → file
+        // scope → ambient, inner wins). The engine's prelude/native
+        // spellings below are the AMBIENT layer — the fallback a file
+        // scope shadows (`fn panic` binds its own, and the call is
+        // the user's). A name the file declares can never be
+        // use-bound here (the one-name law refuses that pairing), so
+        // this rung reorders nothing else. Retired prelude spellings
+        // (`assert`, `print`, `i32(x)`, …) are ordinary identifiers:
+        // they fall to the resolution miss at the bottom and
+        // diagnose as the unknown names they are.
+        if self.ctx.fn_is_here(name) {
+            return self.compile_free_fn_call(name, generics, args, expected, sp);
+        }
         // core prelude functions: compiler-lowered, visible
         // only when the name was used from the core surface — the
-        // prelude is used, never ambient. A local fn of the same name
-        // wins when the use statement is absent (fallthrough below).
-        // Retired prelude spellings (`assert`, `print`, `i32(x)`, …)
-        // are ordinary identifiers: they fall to the resolution miss
-        // at the bottom and diagnose as the unknown names they are.
+        // prelude is used, never ambient.
         let core_fn = self.ctx.is_extern_native_fn(name);
         match name {
             sym::OPAQUE => {
@@ -509,12 +519,6 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                 return Ok(TY_STR);
             }
             _ => {}
-        }
-        // user free fn (monomorphized instantiation) — single names
-        // resolve in the CURRENT module (phase 3; flat packages gate
-        // identically: every fn is the root's)
-        if self.ctx.fn_is_here(name) {
-            return self.compile_free_fn_call(name, generics, args, expected, sp);
         }
         // an own-package use binding (the intra-package import): the
         // name resolves through the TARGET module's fn — names are
@@ -759,7 +763,7 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
             .not_in_core_scope(name)
             .or_else(|| self.ctx.use_elsewhere_hint(name))
             .or_else(|| self.ctx.unbound_hint(name))
-            .or_else(|| self.ctx.elsewhere_hint(name, "fn"))
+            .or_else(|| self.ctx.elsewhere_hint(name))
             .unwrap_or_else(|| format!("unknown function `{}`", self.ctx.name(name)));
         self.ctx.err(sp, msg);
         Err(())

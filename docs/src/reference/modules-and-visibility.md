@@ -175,10 +175,17 @@ name is a mounted export no use spells at all:
 `dup` is not bound — no `use` statement names it
 ```
 
-**One name, one leaf, per file.** The duplicate-name law is
-NAME-level, not package-level: a leaf name spelled by more than one
-use leaf in the same file — whatever the heads, including twice
-within one list — errors at the second spelling, citing the first:
+**One name, one leaf, per file.** The name law is NAME-level, not
+package-level, and it covers every module-scope binding — not just
+use leaves. A file's scope binds each name at most once, by a
+declaration of any kind (class, struct, enum, interface, alias, fn,
+module `let`, `mod` edge) or by a use leaf; the SECOND spelling of a
+name in the same file errors, citing the first:
+
+```text
+class Widget { }        // fine
+fn Widget() { }         // ERROR: duplicate name `Widget` — the class already declares it in this file
+```
 
 ```text
 use pkga::{ x };
@@ -187,7 +194,51 @@ use pkgb::{ x };
 ```
 
 `use pkga::{ x }; use pkga::{ y }` is fine — the name is the rule,
-never the package or the list.
+never the package, the kind, or the list.
+
+**The layer model.** A name resolves through three lexical layers,
+inner wins:
+
+1. **local** — the fn body (its params and locals); shadowing is
+   legal inside a body and is nobody else's business;
+2. **file scope** — the file's own module-scope declarations plus the
+   bindings its `use` lines wrote. This is the layer the one-name law
+   governs: uniqueness exactly where names meet;
+3. **ambient** — the engine's own names (the builtins below). The
+   fallback layer: shadowable, never colliding — `fn panic` in your
+   file is legal, and a call spells yours.
+
+**Siblings never meet.** The law is per FILE (module ↔ file is 1:1),
+so two sibling modules may share names freely — `a.rut`'s `fn Foo`
+and `b.rut`'s `class Foo` coexist, and each file resolves its own.
+Cross-module access stays explicit: qualified paths (`a::Foo`) or use
+bindings in the importing file. The miss hints point at the `use`
+fix:
+
+```text
+`Foo` is declared in module `math` (math/mod.rut) — bind it with `use math::{ Foo }` (or qualify: `math::Foo`)
+```
+
+**Not in the law.** Everything with its own narrower scope keeps its
+own checks, unchanged: enum members, fields, methods, impl-block
+methods (type-scoped), and params/locals (fn-scoped).
+
+**Two boundaries the mechanism still holds shut.** Two pairs keep a
+program-wide refusal beyond the per-file law, because the machinery
+below the checker keys them by name across the package: two `fn`s of
+one name in different modules (``duplicate fn `f` — already declared
+in module `a```) and two types of one name in different modules
+(``duplicate type name `T` — already declared in module `a```). A fn
+and a type of one name across sibling modules is legal — the
+collision the old precedence rule used to arbitrate cannot even
+spell.
+
+**`entry fn` by name.** The host calls entry fns BY NAME, so a
+program may spell many differently-named entries (a dispatcher's
+surface; the run lane picks with `--entry`, and without the flag
+several entries refuse to guess). What may not repeat is a NAME: two
+sibling modules both spelling `entry fn main` refuse at the second —
+the ambiguity the entry gate owns.
 
 **`pub use` — the re-export.** A use may carry the `pub` prefix, with
 the same scoped forms every declaration takes:

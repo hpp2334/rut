@@ -128,6 +128,7 @@ source text by design; a partially translated book is a valid book.
 | nameability | 可命名性 | the declaration-scoped use law → 可命名性按声明划定（nameability is declaration-scoped）：一个包只能 `use` 自己清单点名的头（`deps` ∪ 根上的 `dev-deps` ∪ `core`）；transitive mount ≠ nameable → 传递挂载不等于可命名；D5 stays code |
 | content identity | 内容标识 | a bundle group's dirname: `name@<16 hex>` — sha256 over the group's own rode source set (`rut.jsonc` + `mod.rut` + `mod.d.rut` + `rut.mods`, fixed order, absent skipped)，`name@<fp16>` stays code；同一源码 ⇒ 同一标识，同一标识只挂载一次（精确去重） |
 | coexistence | 共存 | 同名两个内容标识并肩挂载；多标识之下裸 `use` 头是响亮的歧义——用自己的 `deps` 行固定其一，或经作用域台账绑定 |
+| one-name law | 单一名字法则 | the per-file file-scope name law（modules-and-visibility）——一个文件的作用域里每个名字至多绑定一次（任何种类的声明或 use 叶子）；第二处拼写报错并引用第一处；second spelling → 第二处拼写；the layer model → 分层模型（local → 文件作用域 → ambient，内层优先）；file scope → 文件作用域；ambient → 环境性的（既有译名不变） |
 
 First mention of a glossary term in a chapter may carry the English in
 parentheses — 中文（English） — when the mapping is not obvious from

@@ -374,6 +374,39 @@ pub(crate) fn parent_of(path: &str) -> &str {
     }
 }
 
+/// The binder kinds the one-name registry distinguishes — the
+/// duplicate diagnostic's citation word (`the <word> already declares
+/// it in this file`).
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum NameKind {
+    Class,
+    Struct,
+    Enum,
+    Interface,
+    Alias,
+    Fn,
+    ModuleLet,
+    Mod,
+    Use,
+}
+
+impl NameKind {
+    /// The citation word in the decl-shape duplicate message.
+    pub fn word(self) -> &'static str {
+        match self {
+            NameKind::Class => "class",
+            NameKind::Struct => "struct",
+            NameKind::Enum => "enum",
+            NameKind::Interface => "interface",
+            NameKind::Alias => "alias",
+            NameKind::Fn => "fn",
+            NameKind::ModuleLet => "module let",
+            NameKind::Mod => "`mod` edge",
+            NameKind::Use => "use",
+        }
+    }
+}
+
 pub struct Ctx<'a> {
     pub ast: &'a Ast,
     /// the module's interner: a clone of the AST's at construction (so all
@@ -457,6 +490,11 @@ pub struct Ctx<'a> {
     pub lambda_sigs: std::collections::HashMap<u32, LambdaSig>,
     /// `entry fn` names: the host-callable surface
     pub entries: Vec<IdentId>,
+    /// the `entry fn` decl nodes (name, Fn node), index-aligned with
+    /// [`Ctx::entries`] — the uniqueness gate cites the first entry's
+    /// module from these (the name alone cannot: sibling same-name
+    /// entries share one IdentId)
+    pub entry_nodes: Vec<(IdentId, Handle<FnNode>)>,
     /// used functions, bound before body compilation:
     /// `(binding file mod path, name)` -> signature + the exporter's
     /// scope-qualified function id. Per-file (the per-file binding
@@ -632,10 +670,14 @@ pub struct Ctx<'a> {
     /// other packages). Empty = flat (the unit's own uses gate
     /// everything, exactly as before).
     pub use_sites: std::collections::HashMap<IdentId, Vec<String>>,
-    /// The first spelling of every use-bound `(file, name)`: the use
-    /// head's text + the use item's span — the duplicate-name law's
-    /// citation ("`use a::{ x }` already binds it in this file").
-    pub use_first_spell: std::collections::HashMap<(String, IdentId), (String, Span)>,
+    /// The FIRST spelling of every file-scope name — the one-name
+    /// registry (the per-file one-name law): `(mod path, name)` →
+    /// (the binding kind, the item's span, the use head when the
+    /// binder is a `use` leaf). Keyed per FILE (module ↔ file is 1:1),
+    /// so sibling modules never meet. Every collect pass writes it in
+    /// order (uses → types/`mod` edges → fns/lets); the SECOND
+    /// registration errors, citing the first.
+    pub one_name: std::collections::HashMap<(String, IdentId), (NameKind, Span, Option<String>)>,
     /// The packages this unit's `use` statements name — a qualified
     /// head that names one of these is the cross-package spelling the
     /// position grammar refuses, and the diagnostic names the use fix.
@@ -882,6 +924,7 @@ impl<'a> Ctx<'a> {
             lambda_info: std::collections::HashMap::new(),
             lambda_sigs: std::collections::HashMap::new(),
             entries: Vec::new(),
+            entry_nodes: Vec::new(),
             extern_fns: std::collections::HashMap::new(),
             host_async: std::collections::HashMap::new(),
             builtin_impls: std::collections::HashMap::new(),
@@ -926,7 +969,7 @@ impl<'a> Ctx<'a> {
             mods: ModInputs::flat(),
             cur_mod: String::new(),
             use_sites: std::collections::HashMap::new(),
-            use_first_spell: std::collections::HashMap::new(),
+            one_name: std::collections::HashMap::new(),
             used_pkgs: std::collections::HashSet::new(),
             own_uses: std::collections::HashMap::new(),
             extern_origins: std::collections::HashMap::new(),
@@ -1103,26 +1146,33 @@ impl<'a> Ctx<'a> {
     }
 
     /// The "declared elsewhere" hint for a bare name that missed the
-    /// current module: name the module and the qualified spelling.
-    pub(crate) fn elsewhere_hint(&self, name: IdentId, kind: &str) -> Option<String> {
+    /// current module: name the module, and point at the `use` fix
+    /// first (the law's spelling for a legal sibling name) with the
+    /// qualified spelling as the alternative.
+    pub(crate) fn elsewhere_hint(&self, name: IdentId) -> Option<String> {
         let home = self.decl_home(name)?;
         if home == self.cur_mod {
             return None;
         }
+        let n = self.name(name);
+        if home.is_empty() {
+            // the ROOT module: the use head is the package's own name
+            // (the only spelling that reaches the root — a scoped
+            // package is the only place this hint can fire)
+            let head = if self.own_spec.is_empty() {
+                String::new()
+            } else {
+                format!("`use {}::{{ {n} }}`", self.own_spec)
+            };
+            return Some(format!(
+                "`{n}` is declared in the root module ({}) — bind it with {head}",
+                ModInputs::display(&home),
+            ));
+        }
         let q = home.replace('/', "::");
-        let prefix = if q.is_empty() {
-            String::new()
-        } else {
-            format!("{q}::")
-        };
         Some(format!(
-            "`{}` is declared in module `{}` ({}) — qualify it: `{}{}` (a bare {} name resolves in the current module only)",
-            self.name(name),
-            home,
+            "`{n}` is declared in module `{home}` ({}) — bind it with `use {q}::{{ {n} }}` (or qualify: `{q}::{n}`)",
             ModInputs::display(&home),
-            prefix,
-            self.name(name),
-            kind,
         ))
     }
 
@@ -1228,7 +1278,8 @@ impl<'a> Ctx<'a> {
         None
     }
     /// The type-table home (enum/data/iface/alias only) — the
-    /// cross-module duplicate message's lookup.
+    /// conservative cross-module duplicate message's lookup, and the
+    /// qualified-leaf miss hint's "it lives in module X" clause.
     pub(crate) fn type_home(&self, name: IdentId) -> Option<String> {
         if let Some((_, d)) = self.datas.iter().find(|(n, _)| *n == name) {
             return Some(self.mod_of(d.node.span(self.ast)).to_string());
@@ -1245,18 +1296,47 @@ impl<'a> Ctx<'a> {
         None
     }
 
-    /// The duplicate-type-name diagnostic: same module keeps the plain
-    /// message (today's text, byte for byte); across modules it names
-    /// where the name already lives.
+    /// Is `name` declared as a TYPE (enum/data/iface/alias) in a module
+    /// OTHER than the current one? The conservative cross-module
+    /// duplicate gate's lookup: the type tables are NAME-keyed
+    /// unit-wide (the `TypeTable` rows intern/dedup on the name, the
+    /// instantiation ledger keys `InstTy` by it), so two same-named
+    /// type decls would share one row and one layout. The one-name law
+    /// scopes to the file for everything else; THIS pair keeps the
+    /// retired program-wide refusal until the type rows carry their
+    /// module.
+    pub(crate) fn type_declared_elsewhere(&self, name: IdentId) -> bool {
+        let here = self.cur_mod.clone();
+        self.enums
+            .iter()
+            .any(|(n, d)| *n == name && self.mod_of(d.node.span(self.ast)) != here)
+            || self
+                .datas
+                .iter()
+                .any(|(n, d)| *n == name && self.mod_of(d.node.span(self.ast)) != here)
+            || self
+                .iface_decls
+                .iter()
+                .any(|(n, d)| *n == name && self.mod_of(d.node.span(self.ast)) != here)
+            || self
+                .aliases
+                .iter()
+                .any(|a| a.name == name && self.mod_of(a.node.span(self.ast)) != here)
+    }
+
+    /// The conservative cross-module type-duplicate message (the
+    /// retired program-wide law's surviving half — see
+    /// [`Ctx::type_declared_elsewhere`]); the caller fires it only for
+    /// a decl in another module, so the home is always present.
     pub(crate) fn dup_type_msg(&self, name: IdentId) -> String {
         match self.type_home(name) {
-            Some(home) if home != self.cur_mod => format!(
+            Some(home) => format!(
                 "duplicate type name `{}` — already declared in module `{}` ({})",
                 self.name(name),
                 home,
                 ModInputs::display(&home)
             ),
-            _ => format!("duplicate type name `{}`", self.name(name)),
+            None => format!("duplicate type name `{}`", self.name(name)),
         }
     }
 
@@ -1549,6 +1629,35 @@ impl<'a> Ctx<'a> {
     ///: a bad surface is a source diagnostic with span and
     /// parameter name — never a runtime "cannot call" surprise.
     pub fn check_entries(&mut self) {
+        // THE ENTRY GATE (conservative on NAME, not count): the host
+        // calls entry fns BY NAME, so one program may spell many
+        // differently-named entries (the digest examples' dispatcher
+        // surface) — but a NAME spelled by two sibling modules'
+        // entries is ambiguous, and the old program-wide fn-duplicate
+        // law that used to catch it is gone. Every second spelling of
+        // an entry NAME errors at its own span, citing the first's
+        // module.
+        let mut seen: std::collections::HashMap<IdentId, (String, Span)> =
+            std::collections::HashMap::new();
+        let entries: Vec<(IdentId, Handle<FnNode>)> = self.entry_nodes.clone();
+        for (name, node) in entries {
+            let sp = node.span(self.ast);
+            let home = self.mod_of(sp).to_string();
+            match seen.get(&name).cloned() {
+                Some((first_mod, _)) => self.err(
+                    sp,
+                    format!(
+                        "duplicate `entry fn` `{}` — the entry fn in module `{}` ({}) already spells it; the host calls entry fns by name",
+                        self.name(name),
+                        first_mod,
+                        ModInputs::display(&first_mod),
+                    ),
+                ),
+                None => {
+                    seen.insert(name, (home, sp));
+                }
+            }
+        }
         let entries = self.entries.clone();
         for name in entries {
             let Some((_, node)) = self.fn_nodes.iter().find(|(n, _)| *n == name).cloned() else {

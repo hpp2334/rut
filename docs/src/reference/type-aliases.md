@@ -42,9 +42,11 @@ entry fn main() {
 - **Non-generic**: the head admits no members. `type Vec2<T> = Vec<T>;`
   is not expressible — a generic alias would be a type constructor, not
   a transparent name.
-- **One name = one type**: an alias may not share its name with an
-  alias, enum, struct, class, or interface in the same module — the
-  duplicate-name check is symmetric and fires in both orders.
+- **One name = one type**: an alias may not share its name with any
+  other module-scope binding of the same file — alias, enum, struct,
+  class, interface, fn, module `let`, `mod` edge, or use leaf (the
+  one-name law). The check is symmetric: the second spelling errors,
+  whichever order they spell, citing the first's kind.
 - Visibility: `pub`, `pub(super)`, `pub(pkg)` parse on
   `type` (see [Modules and visibility](modules-and-visibility.md)).
   Like every name, the alias is usable in a consumer only when the

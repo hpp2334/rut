@@ -156,9 +156,15 @@ p=(1, 2)
   constructs through its class methods (`Point::new(..)`) — mark one
   `[constructor]` to call the class itself". Arity is the member
   call's — the refusal names the member (`Point::from_xy`).
-- **Resolution order for `Name(args)`**: a local fn value, then free
-  fns, then the prelude, then the newtype mint, then the designated
-  constructor, then the error — a free fn named `Point` wins.
+- **Resolution order for `Name(args)`** is the layer model derived:
+  the local layer answers first (a fn body's own fns), then the file
+  scope, then the ambient prelude. A class's call form sits in the
+  file scope too — so a free fn named `Point` and a class `Point`
+  can no longer both spell: the one-name law refuses the second
+  spelling (``duplicate name `Point` — the class already declares it
+  in this file``). What remains is the ladder within one name: the
+  newtype mint first, then the designated constructor, then the
+  error.
 - **Generics ride the method-call path.** `Box(3)` infers exactly
   like `Box::of(3)` — the sugar IS the member call after resolution.
 - **Named constructors stay live.** `new`, `from_square`, `parse`,

@@ -10,11 +10,11 @@ impl<'a> Ctx<'a> {
 
     pub fn collect(&mut self) {
         let items = self.ast.root().items(self.ast).to_vec();
-        // pass 0: the use rows — `used`, `use_sites`, the first-spell
-        // citations, the duplicate-name law — recorded BEFORE anything
-        // resolves (a pass-1b field type may name a used generic, and
-        // the per-file gate reads these rows). Each row is keyed by the
-        // file whose `use` wrote it.
+        // pass 0: the use rows — `used`, `use_sites`, and the ONE-NAME
+        // REGISTRY's use claims — recorded BEFORE anything resolves (a
+        // pass-1b field type may name a used generic, and the per-file
+        // gate reads these rows). Each row is keyed by the file whose
+        // `use` wrote it.
         for it in &items {
             let ItemRef::Use(uh) = *it else {
                 continue;
@@ -22,35 +22,20 @@ impl<'a> Ctx<'a> {
             let d = uh.get(self.ast);
             let (path, names) = (d.path.clone(), d.names.clone());
             self.cur_mod = self.mod_of(it.span(self.ast)).to_string();
-            // THE PER-FILE DUPLICATE-NAME LAW: a leaf name
-            // spelled by MORE THAN ONE use leaf in the SAME
-            // file — regardless of head or package, including
-            // twice within one list — errors at the second
-            // spelling, which cites the first (`use a::{ x }`
-            // already binds it in this file). `use a::{x}; use
-            // a::{y}` is fine: the NAME is the rule, not the
-            // package.
+            // THE ONE-NAME LAW: the use leaf claims its file-scope
+            // name in the one registry — a SECOND spelling of the
+            // same name in the SAME file (a decl of any kind, or
+            // another use leaf, regardless of head or package,
+            // including twice within one list) errors at the second
+            // registration, citing the first. `use a::{x}; use
+            // a::{y}` is fine: the NAME is the rule, not the package.
             let sp = it.span(self.ast);
             let head = path
                 .first()
                 .map(|h| self.name(h.ident).to_string())
                 .unwrap_or_default();
             for n in &names {
-                let key = (self.cur_mod.clone(), n.ident);
-                if let Some((prev_head, _)) = self.use_first_spell.get(&key) {
-                    self.err(
-                        sp,
-                        format!(
-                            "duplicate name `{}` — `use {}::{{ {} }}` ({}) already binds it in this file",
-                            self.name(n.ident),
-                            prev_head,
-                            self.name(n.ident),
-                            ModInputs::display(&self.cur_mod),
-                        ),
-                    );
-                } else {
-                    self.use_first_spell.insert(key, (head.clone(), sp));
-                }
+                self.claim_one_name(n.ident, NameKind::Use, sp, Some(head.clone()));
             }
             // record what the module wrote — the binding gate for
             // used surfaces (used, never ambient). The binding is per
@@ -80,13 +65,21 @@ impl<'a> Ctx<'a> {
             }
         }
         // pass 1a: declare types (enums, structs, classes, ifaces,
-        // aliases) so every name is in scope before any field/signature
-        // is resolved
+        // aliases) and the `mod NAME;` file edges, so every name is in
+        // scope before any field/signature is resolved. Each arm
+        // claims its file-scope name in the one-name registry first.
         for it in &items {
             // each file's decls resolve in THEIR module (phase 3): the
             // item's span names its file
             self.cur_mod = self.mod_of(it.span(self.ast)).to_string();
             match *it {
+                ItemRef::ModDecl(h) => {
+                    // the `mod NAME;` file edge binds a file-scope name
+                    // like any decl (the loader mounts the body; the
+                    // name is the edge's)
+                    let d = h.get(self.ast);
+                    self.claim_one_name(d.name.ident, NameKind::Mod, it.span(self.ast), None);
+                }
                 ItemRef::Enum(h) => {
                     let d = h.get(self.ast);
                     let members: Vec<IdentId> = d
@@ -194,20 +187,38 @@ impl<'a> Ctx<'a> {
                 ItemRef::Fn(fh) => {
                     let f = fh.get(self.ast).clone();
                     let is_pub = f.vis() == Vis::Pub;
-                    if self.fn_index.contains(&f.name.ident) {
-                        let msg = match self.fn_nodes.iter().find(|(n, _)| *n == f.name.ident) {
-                            Some((_, node)) if self.mod_of(node.span(self.ast)) != self.cur_mod => {
-                                let home = self.mod_of(node.span(self.ast)).to_string();
-                                format!(
-                                    "duplicate fn `{}` — already declared in module `{}` ({})",
-                                    self.name(f.name.ident),
-                                    home,
-                                    ModInputs::display(&home)
-                                )
-                            }
-                            _ => format!("duplicate fn `{}`", self.name(f.name.ident)),
-                        };
-                        self.err(it.span(self.ast), msg);
+                    // THE ONE-NAME LAW, same file: the fn claims its
+                    // file-scope name (the flat fn↔fn duplicate law's
+                    // same-file half is the registry now).
+                    if self.claim_one_name(f.name.ident, NameKind::Fn, it.span(self.ast), None) {
+                        // THE CONSERVATIVE CROSS-MODULE GATE: two fns
+                        // of one name in DIFFERENT modules still
+                        // refuse — the compile keys (`FnKey::Free`,
+                        // the instantiation map, the link ledger's
+                        // `Free { name }` row) are name-keyed within
+                        // the owner package; a same-named pair would
+                        // share one compiled body. Same-file pairs
+                        // never reach here (the claim above reported
+                        // them).
+                        if self.fn_index.contains(&f.name.ident) {
+                            let msg = match self.fn_nodes.iter().find(|(n, _)| *n == f.name.ident) {
+                                Some((_, node))
+                                    if self.mod_of(node.span(self.ast)) != self.cur_mod =>
+                                {
+                                    let home = self.mod_of(node.span(self.ast)).to_string();
+                                    format!(
+                                        "duplicate fn `{}` — already declared in module `{}` ({})",
+                                        self.name(f.name.ident),
+                                        home,
+                                        ModInputs::display(&home)
+                                    )
+                                }
+                                _ => {
+                                    format!("duplicate fn `{}`", self.name(f.name.ident))
+                                }
+                            };
+                            self.err(it.span(self.ast), msg);
+                        }
                     }
                     self.fn_index.push(f.name.ident);
                     self.fn_nodes.push((f.name.ident, fh));
@@ -215,6 +226,7 @@ impl<'a> Ctx<'a> {
                     // signature checked against the crossing rule below
                     if f.entry() {
                         self.entries.push(f.name.ident);
+                        self.entry_nodes.push((f.name.ident, fh));
                     }
                     if is_pub {
                         // name recorded; the func id binds at finalize
@@ -223,11 +235,80 @@ impl<'a> Ctx<'a> {
                 }
                 ItemRef::ModuleLet(h) => {
                     let d = h.get(self.ast);
+                    // THE ONE-NAME LAW: the module let claims its
+                    // file-scope name. Cross-module let↔let needs no
+                    // gate: the let lane resolves per file (`let_in`).
+                    self.claim_one_name(d.name.ident, NameKind::ModuleLet, it.span(self.ast), None);
                     self.lets.push((d.name.ident, d.ty, d.init, d.vis()));
                 }
                 _ => {}
             }
         }
+    }
+
+    /// THE ONE-NAME LAW (per file): claim `(cur_mod, name)` for
+    /// `kind`. The FIRST spelling claims; the SECOND registration
+    /// errors at its own span, citing the first — the use-citation
+    /// shape when the first binder is a `use` leaf (`` `use
+    /// head::{ x }` already binds it in this file ``), the decl shape
+    /// otherwise (`the <kind> already declares it in this file`).
+    /// Uses register in pass 0, types/`mod` edges in 1a, fns/lets in
+    /// 2 — so a fn↔type collision always errors AT the fn citing the
+    /// type, and any use-involved pair cites the use. `false` = the
+    /// name was taken; the caller skips its decl.
+    fn claim_one_name(
+        &mut self,
+        name: IdentId,
+        kind: NameKind,
+        sp: Span,
+        head: Option<String>,
+    ) -> bool {
+        let key = (self.cur_mod.clone(), name);
+        if let Some((prev_kind, _, prev_head)) = self.one_name.get(&key).cloned() {
+            let msg = match prev_kind {
+                NameKind::Use => {
+                    let head = prev_head.unwrap_or_default();
+                    format!(
+                        "duplicate name `{}` — `use {}::{{ {} }}` ({}) already binds it in this file",
+                        self.name(name),
+                        head,
+                        self.name(name),
+                        ModInputs::display(&self.cur_mod),
+                    )
+                }
+                prev => format!(
+                    "duplicate name `{}` — the {} already declares it in this file",
+                    self.name(name),
+                    prev.word(),
+                ),
+            };
+            self.err(sp, msg);
+            return false;
+        }
+        self.one_name.insert(key, (kind, sp, head));
+        true
+    }
+
+    /// The type declare sites' one-name sequence: the same-file law
+    /// FIRST (a second same-file spelling errors at its own span,
+    /// citing the first — a `use`-bound name cites the use), then the
+    /// conservative cross-module gate ([`Ctx::type_declared_elsewhere`]
+    /// — the name-keyed type tables keep the retired program-wide
+    /// refusal), and only then the registry claim, so a conservatively
+    /// refused decl never claims the name (a later same-file spelling
+    /// cites what actually exists). `false` = the caller skips its
+    /// decl.
+    fn claim_type_name(&mut self, name: IdentId, kind: NameKind, sp: Span) -> bool {
+        let key = (self.cur_mod.clone(), name);
+        if self.one_name.contains_key(&key) {
+            self.claim_one_name(name, kind, sp, None);
+            return false;
+        }
+        if self.type_declared_elsewhere(name) {
+            self.err(sp, self.dup_type_msg(name));
+            return false;
+        }
+        self.claim_one_name(name, kind, sp, None)
     }
 
     pub(crate) fn collect_enum(
@@ -238,12 +319,7 @@ impl<'a> Ctx<'a> {
         members: &[IdentId],
     ) {
         let sp = node.span(self.ast);
-        if self.find_enum(name).is_some()
-            || self.find_data(name).is_some()
-            || self.find_iface(name).is_some()
-            || self.find_alias(name).is_some()
-        {
-            self.err(sp, self.dup_type_msg(name));
+        if !self.claim_type_name(name, NameKind::Enum, sp) {
             return;
         }
         // member values: sequential from 0
@@ -284,12 +360,11 @@ impl<'a> Ctx<'a> {
         methods: &[MethodRef],
     ) {
         let sp = node.span(self.ast);
-        if self.find_data(name).is_some()
-            || self.find_enum(name).is_some()
-            || self.find_iface(name).is_some()
-            || self.find_alias(name).is_some()
-        {
-            self.err(sp, self.dup_type_msg(name));
+        let name_kind = match kind {
+            DataKind::Struct => NameKind::Struct,
+            DataKind::Class => NameKind::Class,
+        };
+        if !self.claim_type_name(name, name_kind, sp) {
             return;
         }
         // the positional spelling rides the decl — the call
@@ -439,19 +514,15 @@ impl<'a> Ctx<'a> {
     /// Pass 1a — register a `type X = A;` / `type X = A | B;` alias,
     /// plain and union forms — one name, one decl: the
     /// alias head admits no members (a generic head is a parse error)
-    /// and the duplicate-type-name check is the plain symmetric
-    /// four-way, exactly like the enum/data/trait declare sites. The
+    /// and the name gate is the one-name sequence (same-file law,
+    /// then the conservative cross-module gate) exactly like the
+    /// enum/data/trait declare sites. The
     /// target validates in pass 1b (`validate_alias`), so forward
     /// references are legal.
     pub(crate) fn declare_alias(&mut self, node: ItemRef, h: &AliasNode) {
         let d = h;
         let sp = node.span(self.ast);
-        if self.find_alias(d.name.ident).is_some()
-            || self.find_data(d.name.ident).is_some()
-            || self.find_enum(d.name.ident).is_some()
-            || self.find_iface(d.name.ident).is_some()
-        {
-            self.err(sp, self.dup_type_msg(d.name.ident));
+        if !self.claim_type_name(d.name.ident, NameKind::Alias, sp) {
             return;
         }
         self.aliases.push(AliasDecl {
@@ -474,12 +545,7 @@ impl<'a> Ctx<'a> {
         _methods: &[MethodRef],
     ) {
         let sp = node.span(self.ast);
-        if self.find_iface(name).is_some()
-            || self.find_data(name).is_some()
-            || self.find_enum(name).is_some()
-            || self.find_alias(name).is_some()
-        {
-            self.err(sp, self.dup_type_msg(name));
+        if !self.claim_type_name(name, NameKind::Interface, sp) {
             return;
         }
         let id = if generics.is_empty() {
