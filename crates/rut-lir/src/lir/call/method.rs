@@ -79,6 +79,14 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                 self.deref_for_use(rt, rreg, sp.lo)
             }
         };
+        // receiver silence (the quiet-audit law): a method call on the
+        // poison row resolves NOTHING and diagnoses NOTHING — the
+        // failure that minted the row already diagnosed, so every
+        // downstream lane here (union capability, builtin impls, the
+        // prim contracts, the no-method residue) must never speak
+        if self.ctx.ty_is_err(rt) {
+            return Err(());
+        }
         // capability resolution through a union bound (native-fastpath
         // phase 1): a method call on a value whose
         // declared type is a union-bounded `K` requires EVERY member of
@@ -1025,6 +1033,12 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
     /// speak at their boundary (the instantiation's `admit_bounds`, the
     /// widening site's check) — this is the residue.
     pub(crate) fn no_method_error(&mut self, rt: TypeId, name: IdentId, sp: rut_lexer::span::Span) {
+        // the quiet-audit law (receiver silence): the poison row never
+        // reaches the residue — every caller lane is guarded upstream;
+        // this is the belt to the suspenders
+        if self.ctx.ty_is_err(rt) {
+            return;
+        }
         self.ctx.err(
             sp,
             format!(

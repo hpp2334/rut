@@ -49,6 +49,12 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                         let freg = self.last_reg;
                         return self.finish_call_fn(freg, args, expected, sp);
                     }
+                    _ if self.ctx.ty_is_err(ft) => {
+                        // the quiet-audit law: a poison-typed callee
+                        // calls nothing and diagnoses nothing — the
+                        // failed annotation already diagnosed
+                        return Err(());
+                    }
                     _ => {
                         self.ctx
                             .err(sp, format!("`{}` is not callable", self.ctx.type_name(ft)));
@@ -67,6 +73,11 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                 let freg = self.last_reg;
                 self.finish_call_fn(freg, args, expected, sp)
             }
+            _ if self.ctx.ty_is_err(ft) => {
+                // the quiet-audit law: a poison-typed callee is silent
+                // (see the local arm above)
+                Err(())
+            }
             _ => {
                 self.ctx
                     .err(sp, format!("`{}` is not callable", self.ctx.type_name(ft)));
@@ -84,6 +95,10 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
     ) -> TcResult<TypeId> {
         let (ptys, ret) = match self.ctx.types.kind(self.regs[freg as usize]).clone() {
             TyKind::Fn { params, ret } => (params, ret),
+            TyKind::Err => {
+                // the quiet-audit law: a poison-typed fn value is silent
+                return Err(());
+            }
             _ => {
                 self.ctx.err(sp, "not a function value");
                 return Err(());

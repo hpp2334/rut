@@ -385,7 +385,10 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
         // entry fns ride this same path and are covered.
         // fn bodies are always blocks (the body handle IS one)
         let body_is_block = true;
-        if body_is_block && !c.terminated && ret_ty != TY_NIL {
+        if body_is_block && !c.terminated && ret_ty != TY_NIL && !c.ctx.ty_is_err(ret_ty) {
+            // the quiet-audit law: a poison return type already
+            // diagnosed at its resolution — the missing-return verdict
+            // against `<err>` would read as a false second error
             // the AST carries no ident span — anchor at the `-> T` the
             // message quotes (the fn node otherwise)
             let sp = match ret {
@@ -572,8 +575,9 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
             // BLOCK form falls through exactly like a fn body when no
             // tail answers (the arrow-expression form returns its
             // expression — checked below); the fallback Ret still emits
-            // for IR well-formedness
-            if !c.terminated && ret_ty != TY_NIL {
+            // for IR well-formedness. The quiet-audit law: a poison
+            // return type already diagnosed at its resolution.
+            if !c.terminated && ret_ty != TY_NIL && !c.ctx.ty_is_err(ret_ty) {
                 c.ctx.err(
                     block.span(c.ctx.ast),
                     format!(
@@ -585,7 +589,9 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
             c.emit(Op::Ret { val: None }, 0);
         } else {
             let t = c.compile_expr(body, Some(ret_ty))?;
-            if t != ret_ty {
+            // the quiet-audit law: a poison body or return type skips
+            // the verdict
+            if t != ret_ty && !c.ctx.ty_is_err(t) && !c.ctx.ty_is_err(ret_ty) {
                 c.ctx.err(
                     body.span(c.ctx.ast),
                     format!(

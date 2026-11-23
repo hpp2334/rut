@@ -186,10 +186,15 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                 };
                 let rt = self.compile_expr(recv, None)?;
                 let rreg = self.last_reg;
-                // `p[i]` auto-derefs
+                // `p[i]` auto-derefs. The quiet-audit law: a poison
+                // indexee already diagnosed at its own failure — the
+                // sequence/index verdicts stay silent
                 let (rt, rreg) = self.deref_for_use(rt, rreg, sp.lo);
+                if self.ctx.ty_is_err(rt) {
+                    return Err(());
+                }
                 let it = self.compile_expr(idx, Some(TY_I32))?;
-                if it != TY_I32 {
+                if it != TY_I32 && !self.ctx.ty_is_err(it) {
                     self.ctx.err(
                         sp,
                         format!("index must be `i32`, found `{}`", self.ctx.type_name(it)),
@@ -232,6 +237,10 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                 // overwrites last_reg with the destination
                 let src = self.last_reg;
                 let dst = self.new_reg(t);
+                // the quiet-audit law: a poison operand already
+                // diagnosed at its own failure — the prim/bool verdicts
+                // stay silent (the op still lowers; the poison is inert)
+                let poison = self.ctx.ty_is_err(t);
                 match op {
                     Neg => {
                         let prim = if let TyKind::Prim(p) = self.ctx.types.kind(t) {
@@ -240,13 +249,16 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                             None
                         };
                         let Some(prim) = prim else {
-                            self.ctx.err(sp, "negation needs a number");
-                            return Err(());
+                            if !poison {
+                                self.ctx.err(sp, "negation needs a number");
+                                return Err(());
+                            }
+                            return Ok(t);
                         };
                         self.emit(negop(prim, dst, src), sp.lo);
                     }
                     Not => {
-                        if t != TY_BOOL {
+                        if t != TY_BOOL && !poison {
                             self.ctx.err(sp, "`!` needs a bool");
                         }
                         self.emit(Op::Not { dst, a: src }, sp.lo);
@@ -411,6 +423,29 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                         // itself (`v is Vec<i64>` resolves through the
                         // same instantiation the spelling mints)
                         let want = self.resolve_type_now(ty);
+                        // the quiet-audit law: a poison on either side
+                        // stays silent — a failing RHS resolution means
+                        // no row exists to test against (the quiet
+                        // miss: the fold answers false); a poison
+                        // RECEIVER means the static type is unknown but
+                        // the runtime value is real (the IsType test
+                        // answers honestly at runtime)
+                        if self.ctx.ty_is_err(want) || self.ctx.ty_is_err(rt) {
+                            if self.ctx.ty_is_err(want) {
+                                self.emit(Op::ConstRaw { dst, bits: 0 }, sp.lo);
+                                self.mark_is_fold(dst, false);
+                            } else {
+                                self.emit(
+                                    Op::IsType {
+                                        dst,
+                                        obj: recv,
+                                        want,
+                                    },
+                                    sp.lo,
+                                );
+                            }
+                            return Ok(TY_BOOL);
+                        }
                         // a primitive RHS folds — prims carry no
                         // identity bits, so the test is compile-time:
                         // true iff the receiver's (monomorphized) type
@@ -425,6 +460,15 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                         // body ONCE for every T, and a baked fold would
                         // lie for all but one width.
                         if let TyKind::Prim(_) = self.ctx.types.kind(want) {
+                            if self.ctx.ty_is_err(rt) {
+                                // the quiet-audit law: a poison-bound
+                                // member folds to the quiet miss — the
+                                // per-member dispatch verdict would
+                                // read as a false second error
+                                self.emit(Op::ConstRaw { dst, bits: 0 }, sp.lo);
+                                self.mark_is_fold(dst, false);
+                                return Ok(TY_BOOL);
+                            }
                             if self.ctx.is_template_param(rt) {
                                 self.ctx.err(
                                     sp,
@@ -516,6 +560,13 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                     }
                 }
                 let want = self.resolve_type_now(ty);
+                // the quiet-audit law: a poison cast side already
+                // diagnosed at its own failure — the numeric-prim
+                // verdicts against `<err>` stay silent (the cast cannot
+                // lower)
+                if self.ctx.ty_is_err(want) || self.ctx.ty_is_err(from) {
+                    return Err(());
+                }
                 let Some(to) = (if let TyKind::Prim(p) = self.ctx.types.kind(want) {
                     numeric_prim(*p).then_some(*p)
                 } else {

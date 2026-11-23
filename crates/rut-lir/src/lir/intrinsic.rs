@@ -102,6 +102,11 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
         sp: Span,
         who: &str,
     ) -> TcResult<(TypeId, PrimTy, u16, u16)> {
+        // the quiet-audit law: a poison receiver already diagnosed at
+        // its own failure — the integer-receiver verdict stays silent
+        if self.ctx.ty_is_err(recv_ty) {
+            return Err(());
+        }
         let prim = match self.ctx.types.kind(recv_ty) {
             TyKind::Prim(p) if p.is_int() => *p,
             _ => {
@@ -116,7 +121,9 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
             }
         };
         let t2 = self.compile_expr(rhs, Some(recv_ty))?;
-        if t2 != recv_ty {
+        // the quiet-audit law: a poison argument skips the same-type
+        // verdict
+        if t2 != recv_ty && !self.ctx.ty_is_err(t2) {
             self.ctx.err(
                 sp,
                 format!(

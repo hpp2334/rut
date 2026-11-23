@@ -218,7 +218,10 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
         let mut value: Option<TypeId> = None;
         match (t1, t2) {
             (Some(a), Some(b)) => {
-                if a != b {
+                // the quiet-audit law: a poison arm type already
+                // diagnosed at its own failure — the agreement verdict
+                // against `<err>` would read as a false second error
+                if a != b && !self.ctx.ty_is_err(a) && !self.ctx.ty_is_err(b) {
                     let sp = match els {
                         ElseBranch::Block(b) => b.span(self.ctx.ast),
                         ElseBranch::If(h) => h.span(self.ctx.ast),
@@ -385,7 +388,9 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
         // produce the nil value); a terminating arm contributes nothing
         let value: Option<TypeId> = match (t1, t2) {
             (Some(a), Some(b)) => {
-                if a != b {
+                // the quiet-audit law (see the statement form): a poison
+                // arm type skips the agreement verdict
+                if a != b && !self.ctx.ty_is_err(a) && !self.ctx.ty_is_err(b) {
                     let esp = match els {
                         Some(ElseBranch::Block(b)) => b.span(self.ctx.ast),
                         Some(ElseBranch::If(h)) => h.span(self.ctx.ast),
@@ -544,7 +549,10 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
             },
         };
         if tail_ty == TY_NIL {
-            if ret_ty != TY_NIL {
+            if ret_ty != TY_NIL && !self.ctx.ty_is_err(ret_ty) {
+                // the quiet-audit law: a poison return type already
+                // diagnosed at its resolution — the nil-tail verdict
+                // against `<err>` would read as a false second error
                 self.ctx.err(
                     rut_lexer::span::Span::new(sp_lo, sp_lo),
                     format!(
@@ -613,7 +621,7 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                     // ABI): the binding always holds a cell
                     self.widen_to_slot(t, e, sp.lo);
                 }
-                let ty = expected.unwrap_or(t);
+                let mut ty = expected.unwrap_or(t);
                 // origin counting: a trait-typed binding
                 // remembers its concrete origins — a widening let names
                 // the origin; a copy of another trait-typed binding takes
@@ -668,7 +676,17 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                     }
                     Some(names) => {
                         // `let (a, b) = ..`: each binding takes
-                        // the matching tuple field
+                        // the matching tuple field. A poisoned
+                        // annotation degrades to the INITIALIZER's own
+                        // shape (the quiet-audit law): the resolution
+                        // failure already diagnosed, the initializer
+                        // resolved — destructuring against the real
+                        // tuple keeps every binding honest, so no
+                        // "needs a tuple" verdict on `<err>` and no
+                        // poison cascade into the bound names.
+                        if self.ctx.ty_is_err(ty) {
+                            ty = t;
+                        }
                         let TyKind::Data { fields } = self.ctx.types.kind(ty).clone() else {
                             self.ctx.err(
                                 sp,
@@ -979,7 +997,11 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                         );
                     }
                     None => {
-                        if self.ret_ty != TY_NIL {
+                        // the quiet-audit law: a poison return type
+                        // already diagnosed at its resolution — the
+                        // missing-value verdict against `<err>` stays
+                        // silent
+                        if self.ret_ty != TY_NIL && !self.ctx.ty_is_err(self.ret_ty) {
                             self.ctx.err(sp, "missing return value");
                         }
                         self.emit(Op::Ret { val: None }, sp.lo);
@@ -1171,6 +1193,13 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
         let iter_reg = self.last_reg;
         // `for (v of p)` auto-derefs a pointer
         let (it, iter_reg) = self.deref_for_use(it, iter_reg, sp.lo);
+        // the quiet-audit law: a poison iterable already diagnosed at
+        // its own failure — the sequence verdict on `<err>` stays
+        // silent (the loop cannot lower; the loop var poisons for the
+        // body, its uses read the failed-let silence)
+        if self.ctx.ty_is_err(it) {
+            return Err(());
+        }
         // the builtin sequences (Vec, Array, str, bytes) keep their fused
         // loops; a user type iterates through its registered
         // a `[iterable]`-marked member (the designated slot)
@@ -1788,7 +1817,10 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
             all_terminate &= self.terminated;
             self.terminated = arm_saved;
             if result_ty != TY_NIL {
-                if bt != result_ty {
+                // the quiet-audit law: a poison arm or result type
+                // already diagnosed at its own failure — the agreement
+                // verdict against `<err>` stays silent
+                if bt != result_ty && !self.ctx.ty_is_err(bt) && !self.ctx.ty_is_err(result_ty) {
                     self.ctx.err(
                         body.span(self.ctx.ast),
                         format!(
@@ -1904,6 +1936,12 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
             }
         }
         if !has_else {
+            // the quiet-audit law: a poison scrutinee already diagnosed
+            // at its own failure — every verdict below consults the
+            // scrutinee's shape, and all of them stay silent on `<err>`
+            if self.ctx.ty_is_err(scrut_ty) {
+                return Ok(());
+            }
             if let TyKind::Enum { members } = self.ctx.types.kind(scrut_ty).clone() {
                 for (m, _v) in &members {
                     let mtext = self.ctx.name(*m);
@@ -1951,6 +1989,13 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
         scrut_reg: u16,
         sp: rut_lexer::span::Span,
     ) -> TcResult<u16> {
+        // the quiet-audit law: a poison scrutinee already diagnosed at
+        // its own failure — every pattern arm below consults the
+        // scrutinee's shape, and all of them stay silent on `<err>`
+        // (the test cannot lower; the arm's body never compiles)
+        if self.ctx.ty_is_err(scrut_ty) {
+            return Err(());
+        }
         match p {
             PatRef::Else(_) | PatRef::Wild(_) => {
                 let r = self.new_reg(TY_BOOL);

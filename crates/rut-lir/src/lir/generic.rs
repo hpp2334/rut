@@ -132,7 +132,16 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                 let name = segs[0].name.ident;
                 if decl_generics.contains(&name) {
                     if let Some(&(_, prev)) = subst.iter().find(|(n, _)| *n == name) {
-                        if prev != arg_ty {
+                        // the quiet-audit law: a poison argument carries
+                        // no identity — binding it never conflicts
+                        // (`prev != arg_ty` against `<err>` would read
+                        // as a false contradiction), and the poison
+                        // binder keeps every later check quiet through
+                        // the widens door
+                        if prev != arg_ty
+                            && !self.ctx.ty_is_err(prev)
+                            && !self.ctx.ty_is_err(arg_ty)
+                        {
                             self.ctx.err(
                                 sp,
                                 format!(
@@ -170,8 +179,14 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
             }
             TyRef::Array(ah) => {
                 // `[T]` against an array argument — unify element-wise
-                //: `fn f<T>(xs: [T])`
+                //: `fn f<T>(xs: [T])`. The quiet-audit law: a poison
+                // argument spells no shape — the array verdict stays
+                // silent (the call fails, the failure propagates
+                // quietly)
                 let elem = ah.get(self.ctx.ast).elem;
+                if self.ctx.ty_is_err(arg_ty) {
+                    return Err(());
+                }
                 let arg_kind = self.ctx.types.kind(arg_ty).clone();
                 if let TyKind::Array { elem: arg_elem } = arg_kind {
                     self.unify_generic(elem, arg_elem, decl_generics, subst, sp)
@@ -202,6 +217,11 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                 // `Future<nil>` binds `T := nil` structurally, no trait
                 // machinery anywhere
                 let arg_nodes = segs[0].generics.clone();
+                // the quiet-audit law: a poison argument spells no
+                // shape — the Future verdict stays silent
+                if self.ctx.ty_is_err(arg_ty) {
+                    return Err(());
+                }
                 let TyKind::Future { elem } = self.ctx.types.kind(arg_ty) else {
                     self.ctx.err(
                         sp,
@@ -255,6 +275,11 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                 // through its own instantiation's args.
                 let tname = segs[0].name.ident;
                 let arg_nodes = segs[0].generics.clone();
+                // the quiet-audit law: a poison argument spells no
+                // shape — both inference verdicts below stay silent
+                if self.ctx.ty_is_err(arg_ty) {
+                    return Err(());
+                }
                 let concrete: Vec<TypeId> = match self.ctx.types.kind(arg_ty).clone() {
                     TyKind::IfaceObj { iface_id } => {
                         let hit = self
@@ -331,11 +356,16 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                 }
             }
             TyRef::Fn(fh) => {
-                // fn(P1, P2) -> R against the arg's fn type
+                // fn(P1, P2) -> R against the arg's fn type. The
+                // quiet-audit law: a poison argument spells no shape —
+                // the fn-type verdict stays silent
                 let (params, ret) = {
                     let n = fh.get(self.ctx.ast);
                     (n.params.clone(), n.ret)
                 };
+                if self.ctx.ty_is_err(arg_ty) {
+                    return Err(());
+                }
                 let arg_kind = self.ctx.types.kind(arg_ty).clone();
                 if let TyKind::Fn {
                     params: aps,
@@ -363,7 +393,9 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
             }
             _ => {
                 let want = self.ctx.resolve_type(param_node, subst);
-                if want != arg_ty {
+                // the quiet-audit law: a poison argument skips the
+                // equality verdict
+                if want != arg_ty && !self.ctx.ty_is_err(arg_ty) && !self.ctx.ty_is_err(want) {
                     self.ctx.err(
                         sp,
                         format!(

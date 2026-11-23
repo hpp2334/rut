@@ -485,8 +485,14 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
             // inference: the wrapped argument against the template's
             // placeholder field (structural — the consumer's side of the
             // free-fn rule). The argument compiles once; the substituted
-            // slot check runs after the unification completed.
+            // slot check runs after the unification completed. The
+            // quiet-audit law: a poison wrapped value spells no shape —
+            // the construction fails silently (both verdicts below
+            // consult the argument's shape)
             let t = self.compile_expr(args[0], None)?;
+            if self.ctx.ty_is_err(t) {
+                return Err(());
+            }
             let mut subst: Vec<(IdentId, TypeId)> = Vec::new();
             if !self.unify_template_field(template_field, t, &g.params, &mut subst) {
                 self.ctx.err(
@@ -945,7 +951,9 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
             }
             let fty = field_list[fidx].1;
             let t = self.compile_expr(*v, Some(fty))?;
-            if t != fty {
+            // the quiet-audit law: a poison field (or a poison value)
+            // skips the verdict
+            if t != fty && !self.ctx.ty_is_err(t) && !self.ctx.ty_is_err(fty) {
                 self.ctx.err(
                     v.span(self.ctx.ast),
                     format!(
@@ -991,7 +999,9 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                         self.subst = saved_subst;
                         self.self_ty = saved_self;
                         let t = t?;
-                        if t != *fty {
+                        // the quiet-audit law: a poison field (or a
+                        // poison initializer) skips the verdict
+                        if t != *fty && !self.ctx.ty_is_err(t) && !self.ctx.ty_is_err(*fty) {
                             self.ctx
                                 .err(init.span(self.ctx.ast), "field initializer type mismatch");
                         }
@@ -1074,7 +1084,9 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
             };
             let fty = desc[fidx].ty;
             let t = self.compile_expr(*v, Some(fty))?;
-            if t != fty {
+            // the quiet-audit law: a poison field (or a poison value)
+            // skips the verdict
+            if t != fty && !self.ctx.ty_is_err(t) && !self.ctx.ty_is_err(fty) {
                 self.ctx.err(
                     v.span(self.ctx.ast),
                     format!(

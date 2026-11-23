@@ -774,6 +774,10 @@ pub(crate) fn compile_await(
     // Future).
     let elem = match c.ctx.types.kind(t) {
         TyKind::Future { elem } => *elem,
+        // the quiet-audit law: a poison operand already diagnosed at
+        // its own failure — the awaitable verdict on `<err>` stays
+        // silent
+        TyKind::Err => return Err(()),
         other => {
             let tn = c.ctx.type_name(t).to_string();
             if tn.starts_with("LaunchedFutureHandle") {
@@ -1162,12 +1166,17 @@ pub(crate) fn compile_async_block(
                 }
             }
             if let Some((a, b)) = bad {
-                c.ctx.err(sp, format!(
-                    "an async block's returns disagree — `{}` and `{}` (the answer is ONE type; annotate the binding to pin it)",
-                    c.ctx.type_name(a),
-                    c.ctx.type_name(b)
-                ));
-                return Err(());
+                // the quiet-audit law: a poison return already
+                // diagnosed at its own failure — the disagreement
+                // against `<err>` stays silent
+                if !c.ctx.ty_is_err(a) && !c.ctx.ty_is_err(b) {
+                    c.ctx.err(sp, format!(
+                        "an async block's returns disagree — `{}` and `{}` (the answer is ONE type; annotate the binding to pin it)",
+                        c.ctx.type_name(a),
+                        c.ctx.type_name(b)
+                    ));
+                    return Err(());
+                }
             }
             first.unwrap_or(TY_NIL)
         }

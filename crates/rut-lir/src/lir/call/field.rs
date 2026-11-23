@@ -20,6 +20,13 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
         // exactly the receiver law (`deref_for_use`); the postfix
         // `.` builds Field nodes now, so every `p.x` lands here
         let (rt, rreg) = self.deref_for_use(rt, rreg, sp.lo);
+        // receiver silence (the quiet-audit law): a member read on the
+        // poison row resolves NOTHING and diagnoses NOTHING — the
+        // annotation failure already diagnosed, and `"<err>` has no
+        // field ..." would read as a false error
+        if self.ctx.ty_is_err(rt) {
+            return Err(());
+        }
         if let TyKind::Data { fields } = self.ctx.types.kind(rt).clone() {
             if let Some(fidx) = fields.iter().position(|f| f.name == name) {
                 // the member-visibility law: a plain field is

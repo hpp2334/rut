@@ -83,7 +83,11 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                 }
             }
         }
-        if lt != rt_ {
+        // the quiet-audit law: a poison operand already diagnosed at
+        // its own failure — the equal-width verdict against `<err>`
+        // would read as a false second error (the poison is inert:
+        // either side skips the verdict)
+        if lt != rt_ && !self.ctx.ty_is_err(lt) && !self.ctx.ty_is_err(rt_) {
             self.ctx.err(
                 sp,
                 format!(
@@ -151,13 +155,17 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                     None
                 };
                 let Some(prim) = prim else {
-                    self.ctx.err(
-                        sp,
-                        format!(
-                            "ordering comparisons need numbers — `{}` has none",
-                            self.ctx.type_name(ty)
-                        ),
-                    );
+                    // the quiet-audit law: the poison row has no prims
+                    // to consult — silent
+                    if !self.ctx.ty_is_err(ty) {
+                        self.ctx.err(
+                            sp,
+                            format!(
+                                "ordering comparisons need numbers — `{}` has none",
+                                self.ctx.type_name(ty)
+                            ),
+                        );
+                    }
                     return Err(());
                 };
                 let cmp = match op {
@@ -177,13 +185,16 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                     None
                 };
                 let Some(prim) = prim.filter(|p| p.is_int() || p.is_float()) else {
-                    self.ctx.err(
-                        sp,
-                        format!(
-                            "arithmetic needs numbers — found `{}`",
-                            self.ctx.type_name(ty)
-                        ),
-                    );
+                    // the quiet-audit law: the poison row is silent
+                    if !self.ctx.ty_is_err(ty) {
+                        self.ctx.err(
+                            sp,
+                            format!(
+                                "arithmetic needs numbers — found `{}`",
+                                self.ctx.type_name(ty)
+                            ),
+                        );
+                    }
                     return Err(());
                 };
                 let aop = match op {
@@ -204,13 +215,16 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                     None
                 };
                 let Some(prim) = prim.filter(|p| p.is_int()) else {
-                    self.ctx.err(
-                        sp,
-                        format!(
-                            "bit operations need integers — found `{}`",
-                            self.ctx.type_name(ty)
-                        ),
-                    );
+                    // the quiet-audit law: the poison row is silent
+                    if !self.ctx.ty_is_err(ty) {
+                        self.ctx.err(
+                            sp,
+                            format!(
+                                "bit operations need integers — found `{}`",
+                                self.ctx.type_name(ty)
+                            ),
+                        );
+                    }
                     return Err(());
                 };
                 let bop = match op {
@@ -236,7 +250,8 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
         sp: rut_lexer::span::Span,
     ) -> TcResult<TypeId> {
         let lt = self.compile_expr(lhs, Some(TY_BOOL))?;
-        if lt != TY_BOOL {
+        if lt != TY_BOOL && !self.ctx.ty_is_err(lt) {
+            // the quiet-audit law: a poison operand skips the verdict
             self.ctx.err(
                 sp,
                 format!(
@@ -277,7 +292,8 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
         self.jmp(l_end);
         self.bind(l_rhs);
         let rt_ = self.compile_expr(rhs, Some(TY_BOOL))?;
-        if rt_ != TY_BOOL {
+        if rt_ != TY_BOOL && !self.ctx.ty_is_err(rt_) {
+            // the quiet-audit law: a poison operand skips the verdict
             self.ctx.err(
                 sp,
                 format!(
@@ -347,7 +363,13 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                             }
                             let TyKind::Data { fields } = self.ctx.types.kind(cur_ty).clone()
                             else {
-                                self.ctx.err(sp, "field assignment through a non-record");
+                                // the quiet-audit law: a poison chain
+                                // head (or a poison mid-chain field)
+                                // already diagnosed at its own failure —
+                                // the non-record verdict stays silent
+                                if !self.ctx.ty_is_err(cur_ty) {
+                                    self.ctx.err(sp, "field assignment through a non-record");
+                                }
                                 return Err(());
                             };
                             let Some(fidx) = fields.iter().position(|f| f.name == seg.name.ident)
@@ -383,7 +405,10 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                         }
                         let last = &segs[segs.len() - 1];
                         let TyKind::Data { fields } = self.ctx.types.kind(cur_ty).clone() else {
-                            self.ctx.err(sp, "field assignment through a non-record");
+                            // the quiet-audit law: a poison chain is silent
+                            if !self.ctx.ty_is_err(cur_ty) {
+                                self.ctx.err(sp, "field assignment through a non-record");
+                            }
                             return Err(());
                         };
                         let Some(fidx) = fields.iter().position(|f| f.name == last.name.ident)
@@ -409,7 +434,12 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                         match op {
                             None => {
                                 let t = self.compile_expr(value, Some(fty))?;
-                                if !self.same_ty(t, fty) {
+                                // the quiet-audit law: a poison field
+                                // (or a poison value) skips the verdict
+                                if !self.same_ty(t, fty)
+                                    && !self.ctx.ty_is_err(t)
+                                    && !self.ctx.ty_is_err(fty)
+                                {
                                     self.ctx.err(sp, "field assignment type mismatch");
                                 }
                                 self.emit(
@@ -437,7 +467,12 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                                 // accumulator derefs, the result re-boxes
                                 let (cty, cur_v) = self.deref_for_use(fty, cur_v, sp.lo);
                                 let t = self.compile_expr(value, Some(cty))?;
-                                if !self.same_ty(t, cty) {
+                                // the quiet-audit law: a poison field
+                                // (or a poison value) skips the verdict
+                                if !self.same_ty(t, cty)
+                                    && !self.ctx.ty_is_err(t)
+                                    && !self.ctx.ty_is_err(cty)
+                                {
                                     self.ctx.err(sp, "assignment type mismatch");
                                 }
                                 let val_reg = self.last_reg;
@@ -540,7 +575,10 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                         // through the write path
                         let cur = self.read_local(&l, sp.lo);
                         let t = self.compile_expr(value, Some(l.ty))?;
-                        if t != l.ty {
+                        // the quiet-audit law: a poison binding skips
+                        // the verdict (the plain form above rides the
+                        // widens door, already silent)
+                        if t != l.ty && !self.ctx.ty_is_err(t) && !self.ctx.ty_is_err(l.ty) {
                             self.ctx.err(
                                 sp,
                                 format!(
@@ -574,6 +612,11 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
             // `p.f = ..` through a nullable auto-derefs —
             // so does `arr[i].f = ..` when the elements are `?T`
             let (rt, rreg) = self.deref_for_use(rt, rreg, sp.lo);
+            // the quiet-audit law (receiver silence): a field WRITE on
+            // the poison row resolves nothing, diagnoses nothing
+            if self.ctx.ty_is_err(rt) {
+                return Err(());
+            }
             let TyKind::Data { fields } = self.ctx.types.kind(rt).clone() else {
                 self.ctx
                     .err(sp, "field assignment needs a struct/class receiver");
@@ -600,7 +643,9 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
             match op {
                 None => {
                     let t = self.compile_expr(value, Some(fty))?;
-                    if !self.same_ty(t, fty) {
+                    // the quiet-audit law: a poison field (or a poison
+                    // value) skips the verdict
+                    if !self.same_ty(t, fty) && !self.ctx.ty_is_err(t) && !self.ctx.ty_is_err(fty) {
                         self.ctx.err(sp, "field assignment type mismatch");
                     }
                     self.emit(
@@ -628,7 +673,9 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                     // accumulator derefs, the result re-boxes
                     let (cty, cur) = self.deref_for_use(fty, cur, sp.lo);
                     let t = self.compile_expr(value, Some(cty))?;
-                    if !self.same_ty(t, cty) {
+                    // the quiet-audit law: a poison field (or a poison
+                    // value) skips the verdict
+                    if !self.same_ty(t, cty) && !self.ctx.ty_is_err(t) && !self.ctx.ty_is_err(cty) {
                         self.ctx.err(sp, "assignment type mismatch");
                     }
                     let val_reg = self.last_reg;
@@ -656,6 +703,11 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
             let rreg = self.last_reg;
             // `xs[i] = ..` through a pointer auto-derefs
             let (rt, rreg) = self.deref_for_use(rt, rreg, sp.lo);
+            // the quiet-audit law: a poison indexee already diagnosed at
+            // its own failure — the sequence verdict stays silent
+            if self.ctx.ty_is_err(rt) {
+                return Err(());
+            }
             let Some(info) = self.slice_info(rt) else {
                 self.ctx
                     .err(sp, "index assignment needs a sequence (Vec or Array)");
@@ -663,14 +715,16 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
             };
             let elem = info.elem;
             let it = self.compile_expr(idx, Some(TY_I32))?;
-            if it != TY_I32 {
+            if it != TY_I32 && !self.ctx.ty_is_err(it) {
                 self.ctx.err(sp, "index must be i32");
             }
             let ireg = self.last_reg;
             match op {
                 None => {
                     let t = self.compile_expr(value, Some(elem))?;
-                    if !self.same_ty(t, elem) {
+                    // the quiet-audit law: a poison element skips the verdict
+                    if !self.same_ty(t, elem) && !self.ctx.ty_is_err(t) && !self.ctx.ty_is_err(elem)
+                    {
                         self.ctx.err(sp, "element assignment type mismatch");
                     }
                     let vreg = self.last_reg;
@@ -682,7 +736,8 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                     // accumulator derefs, the result re-boxes
                     let (cty, cur) = self.deref_for_use(elem, cur, sp.lo);
                     let t = self.compile_expr(value, Some(cty))?;
-                    if !self.same_ty(t, cty) {
+                    // the quiet-audit law: a poison element skips the verdict
+                    if !self.same_ty(t, cty) && !self.ctx.ty_is_err(t) && !self.ctx.ty_is_err(cty) {
                         self.ctx.err(sp, "element assignment type mismatch");
                     }
                     let val_reg = self.last_reg;
@@ -717,13 +772,16 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
         match bin {
             Add | Sub | Mul | Div | Mod => {
                 let Some(prim) = prim.filter(|p| p.is_int() || p.is_float()) else {
-                    self.ctx.err(
-                        sp,
-                        format!(
-                            "arithmetic needs numbers — found `{}`",
-                            self.ctx.type_name(ty)
-                        ),
-                    );
+                    // the quiet-audit law: the poison row is silent
+                    if !self.ctx.ty_is_err(ty) {
+                        self.ctx.err(
+                            sp,
+                            format!(
+                                "arithmetic needs numbers — found `{}`",
+                                self.ctx.type_name(ty)
+                            ),
+                        );
+                    }
                     return Err(());
                 };
                 let aop = match bin {
@@ -737,13 +795,16 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
             }
             BitAnd | BitOr | BitXor | Shl | Shr => {
                 let Some(prim) = prim.filter(|p| p.is_int()) else {
-                    self.ctx.err(
-                        sp,
-                        format!(
-                            "bit operations need integers — found `{}`",
-                            self.ctx.type_name(ty)
-                        ),
-                    );
+                    // the quiet-audit law: the poison row is silent
+                    if !self.ctx.ty_is_err(ty) {
+                        self.ctx.err(
+                            sp,
+                            format!(
+                                "bit operations need integers — found `{}`",
+                                self.ctx.type_name(ty)
+                            ),
+                        );
+                    }
                     return Err(());
                 };
                 let bop = match bin {
@@ -769,6 +830,11 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
         ty: TypeId,
         sp: rut_lexer::span::Span,
     ) -> TcResult<()> {
+        // the quiet-audit law: a poison interpolation already diagnosed
+        // at its own failure — the formattable verdict stays silent
+        if self.ctx.ty_is_err(ty) {
+            return Ok(());
+        }
         // Table: ints, floats, bool, char, string, enum
         match self.ctx.types.kind(ty) {
             TyKind::Prim(_) | TyKind::Str | TyKind::Enum { .. } => Ok(()),

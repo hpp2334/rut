@@ -1570,6 +1570,12 @@ impl<'a> Ctx<'a> {
                     continue;
                 };
                 let ty = self.resolve_type(t, &[]);
+                // the quiet-audit law: a failing signature already
+                // diagnosed at resolution — the crossing verdict on the
+                // poison row would read as a false second error
+                if self.ty_is_err(ty) {
+                    continue;
+                }
                 if !self.crosses_boundary(ty) {
                     self.err(
                         p.span(self.ast),
@@ -1583,6 +1589,11 @@ impl<'a> Ctx<'a> {
             }
             if let Some(r) = fd.ret {
                 let ty = self.resolve_type(r, &[]);
+                // the quiet-audit law (see the param lane): the poison
+                // signature skips the crossing verdict
+                if self.ty_is_err(ty) {
+                    continue;
+                }
                 if !self.crosses_boundary(ty) {
                     self.err(
                         r.span(self.ast),
@@ -1640,6 +1651,16 @@ impl<'a> Ctx<'a> {
     pub fn find_enum(&self, name: IdentId) -> Option<&EnumDecl> {
         self.enums.iter().find(|(n, _)| *n == name).map(|(_, d)| d)
     }
+    /// Is this type the poison row (`TyKind::Err`)? A failing type
+    /// resolution answers `TY_ERR` beside its diagnostic, so the cause
+    /// is ALWAYS already on the diag list when this answers true — the
+    /// quiet-audit law: every later lane that consults the type stays
+    /// SILENT (a second diagnostic touching an Err would read as a
+    /// false error, the poisoned-names law mirrored for types).
+    pub fn ty_is_err(&self, t: TypeId) -> bool {
+        matches!(self.types.kind(t), TyKind::Err)
+    }
+
     /// Is this type a generic parameter's placeholder row (the
     /// `#<param>` template law)? The engine's own `#frame@`/`#s` rows
     /// are excluded — they are minted values, never deferred
