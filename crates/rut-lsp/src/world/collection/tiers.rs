@@ -637,7 +637,9 @@ impl<'a> Chain<'a> {
                 }
             }
             for fv in f.fns() {
-                if fv.name() == name && fv.ambient() {
+                // impl methods are type-scoped, never file scope (the
+                // one-name law) — the ambient fn lane answers free fns
+                if fv.name() == name && fv.owner().is_none() && fv.ambient() {
                     fns.push((f, fv));
                 }
             }
@@ -707,6 +709,170 @@ impl<'a> Chain<'a> {
         }
         let picked = prefer_mounted(&flat);
         picked.into_iter().next()
+    }
+
+    // ---- the qualified path — the module namespace lane ----
+
+    /// the qualified-path lane — `head::…::tail` where the HEAD opens
+    /// a module the queried file binds. A qualified path is the other
+    /// explicit form of file-scope access (cross-module access is
+    /// qualified paths or use bindings), so the file scope answers
+    /// BOTH forms. Three head sources, each an established walk —
+    /// never a new rule:
+    /// - the OWN lane ([`resolve_position_head`]): the doc's own
+    ///   `mod` edge, an ancestor's edge, or the own-pkg name — any
+    ///   declared edge walks (the intra-package rule);
+    /// - the doc's own `mod NAME;` edge read off the DeclMap — the
+    ///   unstamped-doc shape ([`module_at`]'s unnamed-owner law);
+    /// - a use-bound module leaf (`use calc::{ math }`) — the
+    ///   cross-package `pub` walk ([`walk_use_mods`]; glob leaves
+    ///   bind no modules — a walkable child is a namespace segment,
+    ///   never a bound name).
+    ///
+    /// The interior segments walk the mounted mod tree edge by edge
+    /// (any declared edge intra-package, `pub`-gated cross-package);
+    /// the TAIL resolves in the walked module's own file scope
+    /// ([`Chain::file_scope`] over the reordered chain — the one
+    /// home, re-headed) with the leaves tier-gated by visibility:
+    /// [`vis_allows`] against the reading file intra-package,
+    /// `pub`-only cross-package, ambient rows passing. A head the
+    /// file does not bind answers NONE — never the flat sweep.
+    pub(crate) fn qualified_scope(
+        &self,
+        doc_mods: &DocMods,
+        segs: &[String],
+    ) -> Option<FileScope<'a>> {
+        let doc = self.head();
+        let (head, rest) = segs.split_first()?;
+        let (tail, middles) = rest.split_last()?;
+        let (mut cur, mut cross) = self.module_head(doc_mods, head)?;
+        (cur, cross) = self.module_walk(cur, cross, middles)?;
+        let sub = Chain::reordered(self, cur);
+        let mut scope = sub.file_scope(tail);
+        // the leaves tier-gate by visibility (the compiler's leaf
+        // rule — the phase-3 machinery's own law for exactly this
+        // position)
+        let from = crate::world::mods::mod_path_of(doc);
+        let def_mod = crate::world::mods::mod_path_of(cur);
+        let gate = |vis: Vis, ambient: bool| {
+            ambient
+                || if cross {
+                    vis == Vis::Pub
+                } else {
+                    crate::world::mods::vis_allows(from, def_mod, vis)
+                }
+        };
+        scope.types.retain(|t| gate(t.vis(), t.ambient()));
+        scope.fns.retain(|f| gate(f.vis(), f.ambient()));
+        scope.lets.retain(|l| gate(l.vis(), false));
+        Some(scope)
+    }
+
+    /// the module file a qualified path's PREFIX lands on — the
+    /// head-plus-interior walk where every spelled segment names a
+    /// module (the mid-segment hover's target)
+    pub(crate) fn qualified_module(
+        &self,
+        doc_mods: &DocMods,
+        segs: &[String],
+    ) -> Option<&'a MountedFile> {
+        let (head, rest) = segs.split_first()?;
+        let (cur, cross) = self.module_head(doc_mods, head)?;
+        let (file, _) = self.module_walk(cur, cross, rest)?;
+        Some(file)
+    }
+
+    /// the head's module file — the three sources (the own lane, the
+    /// DeclMap's own edge, the use-bound leaf), each answered through
+    /// its established walk; `cross` marks the use-bound source (its
+    /// walk and everything beyond stays `pub`-gated)
+    fn module_head(&self, doc_mods: &DocMods, head: &str) -> Option<(&'a MountedFile, bool)> {
+        let doc = self.head();
+        // 1. the own lane — the machinery's own walk (own/ancestor
+        //    edges + the own-pkg head; the doc's stamp keys it)
+        if let Some(p) = crate::world::mods::resolve_position_head(doc_mods, doc, self, head) {
+            if let Some(f) = self.module_at(doc_mods.pkg.as_deref(), &p) {
+                return Some((f, false));
+            }
+        }
+        // 2. the doc's own mod edge off the DeclMap — the
+        //    unstamped-doc shape (no doc context: the edge's own
+        //    record walks, the unnamed-owner law finds the child)
+        if doc.mods().iter().any(|m| m.name() == head) {
+            let child = crate::world::mods::child_path(crate::world::mods::mod_path_of(doc), head);
+            if let Some(f) = self.module_at(doc.mount.module.as_deref(), &child) {
+                return Some((f, false));
+            }
+        }
+        // 3. a use-bound module leaf — the cross-package pub walk
+        for u in doc.uses() {
+            if u.name() != head {
+                continue;
+            }
+            let pkg = u.pkg();
+            // the walk starts at the pkg root — the edge's interior
+            // (after the pkg head) rides ahead of the leaf
+            let mut walk: Vec<String> = u.path().into_iter().skip(1).collect();
+            walk.push(head.to_string());
+            if let Some(p) = crate::world::mods::walk_use_mods(self, pkg, &walk) {
+                if let Some(f) = self.module_at(Some(pkg), &p) {
+                    return Some((f, true));
+                }
+            }
+        }
+        None
+    }
+
+    /// the interior walk — each segment a declared edge of the module
+    /// the walk stands at, resolved to its mounted file
+    fn module_walk(
+        &self,
+        mut cur: &'a MountedFile,
+        cross: bool,
+        segs: &[String],
+    ) -> Option<(&'a MountedFile, bool)> {
+        for seg in segs {
+            if cross {
+                // the use walk's gate continues: only `pub` crosses
+                let pub_edge = cur
+                    .mods()
+                    .into_iter()
+                    .find(|m| m.name() == seg)
+                    .is_some_and(|m| m.vis() == Vis::Pub);
+                if !pub_edge {
+                    return None;
+                }
+            }
+            cur = self.module_hop(cur, seg)?;
+        }
+        Some((cur, cross))
+    }
+
+    /// one hop — the current module's declared edge `seg` (any vis —
+    /// the intra rule; the cross gate runs at the call site) and the
+    /// mounted file at the child's mod path
+    fn module_hop(&self, cur: &'a MountedFile, seg: &str) -> Option<&'a MountedFile> {
+        if !cur.mods().iter().any(|m| m.name() == seg) {
+            return None;
+        }
+        let child = crate::world::mods::child_path(crate::world::mods::mod_path_of(cur), seg);
+        self.module_at(cur.mount.module.as_deref(), &child)
+    }
+
+    /// the mounted file at `(pkg, path)` — the [`matches_mod`] law,
+    /// with the unnamed-owner fallback: a pkg-less owner answers any
+    /// chain file stamped at the path (the mounted_child law)
+    fn module_at(&self, pkg: Option<&str>, path: &str) -> Option<&'a MountedFile> {
+        self.iter()
+            .find(|f| crate::world::mods::matches_mod(f, pkg, path))
+            .or_else(|| {
+                (pkg.is_none())
+                    .then(|| {
+                        self.iter()
+                            .find(|f| crate::world::mods::mod_path_of(f) == path)
+                    })
+                    .flatten()
+            })
     }
 }
 

@@ -269,6 +269,17 @@ fn get_definition_targets(ctx: &Ctx, pos: u32) -> Vec<DefLocation> {
         }
     }
 
+    // 3b. the qualified-path lane — `m::…::x` where the head opens a
+    //     module the queried file binds: the walked module's own file
+    //     scope answers (the module namespace lane). AUTHORITATIVE
+    //     for a qualified TAIL: an unbound head is an empty answer,
+    //     and the bare-name layers below never read a qualified
+    //     spelling's tail (a qualified name is not the doc's own
+    //     bare name)
+    if let Some(locs) = qualified_tail_locations(ctx, ast, h, pos) {
+        return locs;
+    }
+
     // the name lanes key on the node's own recorded name — a path
     // segment, a param name, a local let's name
     let Some((name_id, _)) = node_name(ast, h, pos) else {
@@ -591,6 +602,92 @@ fn member_name_span(ast: &rut_ast::Ast, h: rut_ast::AnyHandle, pos: u32) -> Opti
         }
     }
     None
+}
+
+/// the qualified-path position — the cursor rides a MULTI-segment
+/// path (value paths and type-slot paths alike)
+struct QualifiedPos {
+    /// the segs as spelled
+    segs: Vec<String>,
+    /// the riding segment's index
+    k: usize,
+    /// a type-slot path (`x: a::B`) rather than a value path
+    is_ty: bool,
+}
+
+/// the qualified-path position of the cursor, if it rides one
+fn qualified_at(ast: &rut_ast::Ast, h: rut_ast::AnyHandle, pos: u32) -> Option<QualifiedPos> {
+    let path = h.downcast::<rut_ast::PathNode>().map(|p| {
+        let d = p.get(ast);
+        (
+            d.segs
+                .iter()
+                .map(|s| (ast.name(s.name.ident).to_string(), s.name.span))
+                .collect::<Vec<_>>(),
+            false,
+        )
+    });
+    let ty = h.downcast::<rut_ast::TyPathNode>().map(|t| {
+        let d = t.get(ast);
+        (
+            d.segs
+                .iter()
+                .map(|s| (ast.name(s.name.ident).to_string(), s.name.span))
+                .collect::<Vec<_>>(),
+            true,
+        )
+    });
+    let (segs, is_ty) = path.or(ty)?;
+    if segs.len() < 2 {
+        return None;
+    }
+    let k = segs.iter().position(|(_, sp)| on_name(*sp, pos))?;
+    Some(QualifiedPos {
+        segs: segs.into_iter().map(|(n, _)| n).collect(),
+        k,
+        is_ty,
+    })
+}
+
+/// the qualified tail's locations — `Some(vec![])` is the
+/// authoritative empty (an unbound head opens nothing; the bare-name
+/// layers never run on a qualified tail); `None` = not a qualified
+/// position (or a mid-segment cursor — those keep the pre-existing
+/// layers)
+fn qualified_tail_locations(
+    ctx: &Ctx,
+    ast: &rut_ast::Ast,
+    h: rut_ast::AnyHandle,
+    pos: u32,
+) -> Option<Vec<DefLocation>> {
+    let q = qualified_at(ast, h, pos)?;
+    if q.k + 1 != q.segs.len() {
+        return None; // a mid-segment cursor keeps the pre-existing layers
+    }
+    let Some(scope) = ctx.chain.qualified_scope(ctx.doc_mods, &q.segs) else {
+        return Some(Vec::new());
+    };
+    let mut hits: Vec<(&MountedFile, Span)> = Vec::new();
+    if q.is_ty {
+        for t in &scope.types {
+            hits.push((t.file, ty_span(t)));
+        }
+    } else {
+        for t in &scope.types {
+            hits.push((t.file, ty_span(t)));
+        }
+        for l in &scope.lets {
+            hits.push((l.file, l.name_span().unwrap_or(l.span())));
+        }
+        for f in &scope.fns {
+            hits.push((f.file, fn_span(f)));
+        }
+    }
+    Some(
+        hits.into_iter()
+            .map(|(f, sp)| loc_at(ctx.doc_uri, f, sp))
+            .collect(),
+    )
 }
 
 /// a type head's declaration location(s) — typeDefinition's

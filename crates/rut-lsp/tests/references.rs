@@ -350,3 +350,37 @@ fn misses_stay_empty() {
     let hits = s.refs_at("file:///t/main.rut", src, "mystery", 1, true);
     assert!(hits.is_empty(), "unknown names too: {hits:?}");
 }
+
+#[test]
+fn qualified_paths_reference_through_the_module_lane() {
+    // the qualified spelling's reference set rides the module lane
+    // (the matcher law: a reference iff definition lands on the
+    // target). The honest scan limit holds — the asking file and the
+    // declaring module are the candidates (a mod-edge-only world
+    // pulls no reverse edges), include_declaration adds the decl.
+    let mut s = S::boot();
+    let layout_src = "pub fn span() -> i32 { return 1; }\n";
+    s.index_mod_at(
+        "file:///ws/pkg/src/layout/mod.rut",
+        "pkg",
+        "layout",
+        layout_src,
+    );
+    let one = "mod layout;\nentry fn main() -> i32 { return layout::span(); }\n";
+    let uri = "file:///ws/pkg/src/mod.rut";
+    s.index_mod_at(uri, "pkg", "", one);
+    let hits = s.refs_in(uri, one, "layout::span()", 1, 9, false);
+    assert_eq!(
+        ref_offsets(one, uri, &hits),
+        vec![byte_of(one, "layout::span();", 1) + 8],
+        "the qualified call site is a reference: {hits:?}"
+    );
+    // include_declaration joins the module's declaring ident
+    let hits = s.refs_in(uri, one, "layout::span()", 1, 9, true);
+    assert_eq!(hits.len(), 2, "{hits:?}");
+    assert!(
+        hits.iter()
+            .any(|l| l["uri"] == "file:///ws/pkg/src/layout/mod.rut"),
+        "the module's decl ident joins: {hits:?}"
+    );
+}

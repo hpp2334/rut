@@ -1172,3 +1172,148 @@ fn member_hover_gates_the_foreign_privates() {
     let md = markdown(s.hover_in("file:///t/own.rut", own, "self.hidden", 1, 5));
     assert!(md.contains("hidden"), "own privates still hover: {md}");
 }
+
+// ---- qualified paths: the module namespace lane ----
+
+/// the layout pkg tree — the driver's mixed-tree shape (compiles with
+/// bare `mod` edges and qualified access from the root): the root
+/// stamps as the pkg's own, the children ride their mod paths
+fn mount_layout_pkg(s: &mut S) {
+    s.index_mod_at(
+        "file:///ws/pkg/src/layout/mod.rut",
+        "pkg",
+        "layout",
+        "mod grid;\npub fn span() -> i32 { return 1; }\npub struct Point {\n    x: i32;\n}\n",
+    );
+    s.index_mod_at(
+        "file:///ws/pkg/src/layout/grid.rut",
+        "pkg",
+        "layout/grid",
+        "pub fn cell() -> i32 { return 2; }\n",
+    );
+}
+
+#[test]
+fn qualified_path_through_own_mod_edge_hovers() {
+    // `layout::span()` with only `mod layout;` — the compiler resolves
+    // it (the mixed-tree pin), so the file scope's module namespace
+    // lane answers the walked module's own decl: the verbatim
+    // signature + the declaring module's provenance
+    let mut s = S::boot();
+    mount_layout_pkg(&mut s);
+    let doc = "mod layout;\nentry fn main() -> i32 { return layout::span(); }\n";
+    let uri = "file:///ws/pkg/src/mod.rut";
+    s.index_mod_at(uri, "pkg", "", doc);
+    let md = markdown(s.hover_in(uri, doc, "layout::span()", 1, 9));
+    assert!(md.contains("pub fn span() -> i32"), "{md}");
+    assert!(
+        md.contains("layout/mod.rut"),
+        "the module's provenance: {md}"
+    );
+    // the qualified path's own HEAD segment renders the module (the
+    // mid-segment cursor rides the lane's target)
+    let md = markdown(s.hover_in(uri, doc, "layout::span()", 1, 3));
+    assert!(md.contains("file module"), "{md}");
+    assert!(md.contains("layout/mod.rut"), "{md}");
+}
+
+#[test]
+fn qualified_path_hovers_from_an_unstamped_doc() {
+    // the open scratch-file shape: no stamped twin — the doc's own
+    // `mod layout;` edge reads off the DeclMap and the unnamed-owner
+    // law finds the mounted child
+    let mut s = S::boot();
+    mount_layout_pkg(&mut s);
+    let doc = "mod layout;\nentry fn main() -> i32 { return layout::span(); }\n";
+    let md = markdown(s.hover_in("file:///t/scratch.rut", doc, "layout::span()", 1, 9));
+    assert!(md.contains("pub fn span() -> i32"), "{md}");
+}
+
+#[test]
+fn qualified_type_position_answers_through_the_lane() {
+    // the grammar admits qualified TYPE paths (`let p: layout::Point`)
+    // — the same lane answers type positions
+    let mut s = S::boot();
+    mount_layout_pkg(&mut s);
+    let doc = "mod layout;\nentry fn main() -> nil { let p: layout::Point = nil; }\n";
+    let md = markdown(s.hover_in("file:///ws/pkg/src/mod.rut", doc, "layout::Point", 1, 12));
+    assert!(md.contains("pub struct Point"), "{md}");
+}
+
+#[test]
+fn qualified_path_through_use_bound_module_hovers() {
+    // `math::sqrt(x)` with only `use calc::{ math };` — the use-bound
+    // module opens its namespace (the cross-package pub walk gates)
+    let mut s = S::boot();
+    s.index_mod_at(
+        "file:///deps/calc/src/mod.rut",
+        "calc",
+        "",
+        "pub mod math;\n",
+    );
+    s.index_mod_at(
+        "file:///deps/calc/src/math.rut",
+        "calc",
+        "math",
+        "pub fn sqrt(x: f64) -> f64 { return x; }\npub let PI: f64 = 3.14;\n",
+    );
+    let doc = "use calc::{ math };\nfn go(x: f64) -> f64 {\n    return math::sqrt(x);\n}\n";
+    let md = markdown(s.hover_in("file:///t/main.rut", doc, "math::sqrt", 1, 9));
+    assert!(md.contains("pub fn sqrt(x: f64) -> f64"), "{md}");
+    assert!(md.contains("math.rut"), "the module's provenance: {md}");
+    // the module's pub let rides the lane's let layer
+    let doc2 = "use calc::{ math };\nfn go() -> f64 {\n    return math::PI;\n}\n";
+    let md = markdown(s.hover_in("file:///t/main2.rut", doc2, "math::PI", 1, 7));
+    assert!(md.contains("pub let PI"), "{md}");
+}
+
+#[test]
+fn qualified_path_walks_nested_modules() {
+    // `layout::grid::cell()` — the walk crosses both mod edges and
+    // answers in the deepest module's file scope
+    let mut s = S::boot();
+    mount_layout_pkg(&mut s);
+    let doc = "mod layout;\nentry fn main() -> i32 { return layout::grid::cell(); }\n";
+    let uri = "file:///ws/pkg/src/mod.rut";
+    s.index_mod_at(uri, "pkg", "", doc);
+    let md = markdown(s.hover_in(uri, doc, "layout::grid::cell", 1, 15));
+    assert!(md.contains("pub fn cell() -> i32"), "{md}");
+    assert!(md.contains("grid.rut"), "{md}");
+}
+
+#[test]
+fn qualified_path_through_the_own_pkg_head_hovers() {
+    // the stamped doc's own package name opens its root module — the
+    // own lane's pkg-head rule (`pkg::layout::span()`)
+    let mut s = S::boot();
+    mount_layout_pkg(&mut s);
+    let doc = "mod layout;\nentry fn main() -> i32 { return pkg::layout::span(); }\n";
+    let uri = "file:///ws/pkg/src/mod.rut";
+    s.index_mod_at(uri, "pkg", "", doc);
+    let md = markdown(s.hover_in(uri, doc, "pkg::layout::span", 1, 15));
+    assert!(md.contains("pub fn span() -> i32"), "{md}");
+}
+
+#[test]
+fn qualified_path_without_the_binding_answers_nothing() {
+    // scope-true: the file binds no `layout` (no mod edge, no use) —
+    // the qualified spelling answers NOTHING, and a same-named fn in
+    // an unrelated sibling module never leaks in
+    let mut s = S::boot();
+    s.index_mod_at(
+        "file:///ws/pkg/src/layout/mod.rut",
+        "pkg",
+        "layout",
+        "pub fn span() -> i32 { return 1; }\n",
+    );
+    s.index_file(
+        "file:///ws/other/lib.rut",
+        "pub fn span() -> i32 { return 9; }\n",
+    );
+    let doc = "entry fn main() -> i32 { return layout::span(); }\n";
+    let h = s.hover_in("file:///t/scratch.rut", doc, "layout::span()", 1, 9);
+    assert!(
+        no_hover(&h),
+        "an unbound qualified head answers nothing: {h}"
+    );
+}

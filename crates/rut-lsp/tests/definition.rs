@@ -707,3 +707,88 @@ fn member_definition_gates_the_foreign_privates() {
     let hits = s.def_in("file:///t/own.rut", own, "self.hidden", 1, 5);
     assert_eq!(hits.len(), 1, "own privates still jump: {hits:?}");
 }
+
+#[test]
+fn qualified_paths_resolve_through_the_module_lane() {
+    // the qualified spelling is one of the two explicit forms of
+    // file-scope access: `layout::span()` over a bare `mod layout;`
+    // edge, `math::sqrt` over `use calc::{ math }`, and the nested
+    // walk each land EXACTLY on the module's decl ident; an unbound
+    // head is no jump (scope-true)
+    let mut s = S::boot();
+    // the own mod edge (the mixed-tree shape)
+    s.index_mod_at(
+        "file:///ws/pkg/src/layout/mod.rut",
+        "pkg",
+        "layout",
+        "mod grid;\npub fn span() -> i32 { return 1; }\n",
+    );
+    s.index_mod_at(
+        "file:///ws/pkg/src/layout/grid.rut",
+        "pkg",
+        "layout/grid",
+        "pub fn cell() -> i32 { return 2; }\n",
+    );
+    let layout_src = "mod grid;\npub fn span() -> i32 { return 1; }\n";
+    let grid_src = "pub fn cell() -> i32 { return 2; }\n";
+    let doc = "mod layout;\nentry fn main() -> i32 { return layout::span(); }\n";
+    let uri = "file:///ws/pkg/src/mod.rut";
+    s.index_mod_at(uri, "pkg", "", doc);
+    let hits = s.def_in(uri, doc, "layout::span()", 1, 9);
+    assert_eq!(hits.len(), 1, "{hits:?}");
+    assert_eq!(hits[0]["uri"], "file:///ws/pkg/src/layout/mod.rut");
+    assert_target(
+        layout_src,
+        &hits[0],
+        "span()",
+        1,
+        4,
+        "the module's decl ident",
+    );
+    // the nested walk
+    let nested = "mod layout;\nentry fn main() -> i32 { return layout::grid::cell(); }\n";
+    let hits = s.def_in(uri, nested, "layout::grid::cell", 1, 15);
+    assert_eq!(hits.len(), 1, "{hits:?}");
+    assert_eq!(hits[0]["uri"], "file:///ws/pkg/src/layout/grid.rut");
+    assert_target(
+        grid_src,
+        &hits[0],
+        "cell()",
+        1,
+        4,
+        "the deepest module's ident",
+    );
+    // the use-bound module
+    s.index_mod_at(
+        "file:///deps/calc/src/mod.rut",
+        "calc",
+        "",
+        "pub mod math;\n",
+    );
+    let math_src = "pub fn sqrt(x: f64) -> f64 { return x; }\n";
+    s.index_mod_at("file:///deps/calc/src/math.rut", "calc", "math", math_src);
+    let calc_doc = "use calc::{ math };\nfn go(x: f64) -> f64 {\n    return math::sqrt(x);\n}\n";
+    let hits = s.def_in("file:///t/main.rut", calc_doc, "math::sqrt", 1, 9);
+    assert_eq!(hits.len(), 1, "{hits:?}");
+    assert_eq!(hits[0]["uri"], "file:///deps/calc/src/math.rut");
+    assert_target(
+        math_src,
+        &hits[0],
+        "sqrt(x",
+        1,
+        4,
+        "the use-bound module's ident",
+    );
+    // the own pkg head
+    let pkgdoc = "mod layout;\nentry fn main() -> i32 { return pkg::layout::span(); }\n";
+    let hits = s.def_in(uri, pkgdoc, "pkg::layout::span", 1, 15);
+    assert_eq!(hits.len(), 1, "{hits:?}");
+    assert_eq!(hits[0]["uri"], "file:///ws/pkg/src/layout/mod.rut");
+    // the negative: no binding → empty, never the flat sweep
+    let ghost = "entry fn main() -> i32 { return layout::span(); }\n";
+    let hits = s.def_in("file:///t/ghost.rut", ghost, "layout::span()", 1, 9);
+    assert!(
+        hits.is_empty(),
+        "an unbound qualified head is no jump: {hits:?}"
+    );
+}

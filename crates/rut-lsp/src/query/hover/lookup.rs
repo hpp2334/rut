@@ -119,6 +119,18 @@ pub fn hover(chain: &Chain, doc: &DocMods, pos: u32) -> Option<HoverOut> {
         }
     }
 
+    // the qualified-path lane — `m::…::x` where the head opens a
+    // module the queried file binds: the walked module's own file
+    // scope answers (the module namespace lane). AUTHORITATIVE for a
+    // qualified TAIL: an unbound head answers nothing here, and the
+    // bare-name lanes below never read a qualified spelling's tail
+    // (a qualified name is not the doc's own bare name). A
+    // mid-segment cursor renders the module the walk lands at; a
+    // walk that fails keeps the pre-existing fall-through there.
+    if let Some(answer) = qualified_path_hover(chain, doc, ast, h, pos) {
+        return answer.map(|(md, span)| HoverOut { markdown: md, span });
+    }
+
     // the name lanes key on the node's own recorded name — a path
     // segment, a param name, a local let's name. The (id, span) pair
     // threads through: the span the lanes decorate IS the mapped name
@@ -331,6 +343,94 @@ fn member_position(ast: &rut_ast::Ast, h: AnyHandle, pos: u32) -> bool {
         }
     }
     false
+}
+
+/// the qualified-path position — the cursor rides a MULTI-segment
+/// path (value paths and type-slot paths alike): the segs as spelled
+/// (name + span each), the riding index, and the type-position flag
+struct QualifiedPos {
+    segs: Vec<(String, Span)>,
+    k: usize,
+    is_ty: bool,
+}
+
+/// the qualified-path position of the cursor, if it rides one
+fn qualified_at(ast: &rut_ast::Ast, h: AnyHandle, pos: u32) -> Option<QualifiedPos> {
+    let path = h.downcast::<PathNode>().map(|p| {
+        let d = p.get(ast);
+        (
+            d.segs
+                .iter()
+                .map(|s| (ast.name(s.name.ident).to_string(), s.name.span))
+                .collect::<Vec<_>>(),
+            false,
+        )
+    });
+    let ty = h.downcast::<rut_ast::TyPathNode>().map(|t| {
+        let d = t.get(ast);
+        (
+            d.segs
+                .iter()
+                .map(|s| (ast.name(s.name.ident).to_string(), s.name.span))
+                .collect::<Vec<_>>(),
+            true,
+        )
+    });
+    let (segs, is_ty) = path.or(ty)?;
+    if segs.len() < 2 {
+        return None;
+    }
+    let k = segs.iter().position(|(_, sp)| on_name(*sp, pos))?;
+    Some(QualifiedPos { segs, k, is_ty })
+}
+
+/// the qualified path's hover answer — `None` = not a qualified
+/// position (the flow falls through); `Some(None)` = a qualified
+/// position with no answer (authoritative — the bare lanes never
+/// run); `Some(Some(md, span))` = the lane's render. The TAIL
+/// resolves through the module namespace lane (types only in a type
+/// position); a mid-segment cursor renders the module the walk lands
+/// at, decorating the ridden segment.
+fn qualified_path_hover(
+    chain: &Chain<'_>,
+    doc_mods: &DocMods,
+    ast: &rut_ast::Ast,
+    h: AnyHandle,
+    pos: u32,
+) -> Option<Option<(String, Span)>> {
+    let q = qualified_at(ast, h, pos)?;
+    let (_, span) = q.segs[q.k].clone();
+    if q.k + 1 != q.segs.len() {
+        // a mid-segment cursor — the module the walk lands at
+        let names: Vec<String> = q.segs[..=q.k].iter().map(|(n, _)| n.clone()).collect();
+        let target = chain.qualified_module(doc_mods, &names)?;
+        let md = render_module_target(target, crate::world::mods::mod_path_of(target));
+        return Some(Some((md, span)));
+    }
+    let names: Vec<String> = q.segs.iter().map(|(n, _)| n.clone()).collect();
+    let Some(scope) = chain.qualified_scope(doc_mods, &names) else {
+        return Some(None); // an unbound head opens nothing
+    };
+    // hover's layer order — types in a type position; type → let →
+    // fn in a value position
+    let md = if q.is_ty {
+        scope.types.first().map(|t| render_ty(t))
+    } else {
+        scope
+            .types
+            .first()
+            .map(|t| render_ty(t))
+            .or_else(|| match scope.lets.as_slice() {
+                [one] => Some(render_let(one)),
+                _ => None,
+            })
+            .or_else(|| match scope.fns.as_slice() {
+                [] => None,
+                [one] => Some(render_fn_hits(one)),
+                many => Some(render_candidates(many)),
+            })
+    };
+    Some(md.map(|md| (md, span)))
 }
 
 /// a local binding's hover — the shadow-correct resolve, the type
