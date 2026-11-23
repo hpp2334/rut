@@ -1280,17 +1280,19 @@ impl Vm {
     ///   `Wait::NonBlock` skips the park (it never parks — the wasm
     ///   lane: a JS host can only settle OUTSIDE this call, so a park
     ///   there is a pure stall) and lets the clock lane run;
-    /// - no deadline, [`Wait::Block`]: park until a host future
-    ///   settles — forever, by law (no wall-clock budget, no hang
-    ///   guard; a worker that never completes hangs the run, the
-    ///   disclosed best-effort-cancellation contract);
-    /// - no deadline, [`Wait::NonBlock`]: one probe drain
-    ///   ([`Vm::run_ready`]) — the expiry above may have JUST moved
-    ///   fired timers into the ready queue, so a driven round loops
-    ///   and a quiet round answers [`Idle::WouldBlock`] (only
-    ///   host-parked work remains and the policy forbids parking —
-    ///   the verdict's honest shape; the embedder yields and
-    ///   re-enters).
+    /// - no deadline: one probe drain ([`Vm::run_ready`]) first — the
+    ///   expiry above may have JUST moved fired timers into the ready
+    ///   queue, and a forever park there would hang them (the wake
+    ///   cell moves on host settles only). A driven round loops (the
+    ///   clock lane continues — the expired frames get their drain); a
+    ///   quiet round means only host-parked work remains — under
+    ///   [`Wait::Block`], park until a host future settles — forever,
+    ///   by law (no wall-clock budget, no hang guard; a worker that
+    ///   never completes hangs the run, the disclosed
+    ///   best-effort-cancellation contract) — under
+    ///   [`Wait::NonBlock`], answer [`Idle::WouldBlock`] (host-parked
+    ///   work remains and the policy forbids parking — the verdict's
+    ///   honest shape; the embedder yields and re-enters).
     ///
     /// until nothing is pending ([`Idle::Drained`]). The first trap
     /// propagates (`Err`) — other frames may stay pending; the
@@ -1318,24 +1320,28 @@ impl Vm {
                     }
                     self.set_now(d);
                 }
-                None => match wait {
-                    Wait::Block => {
-                        self.wait_hosts(None);
-                    }
-                    Wait::NonBlock => {
-                        // the expiry may have JUST moved fired timers
-                        // into the ready queue (next_deadline's side
-                        // effect) — one probe round answers which: a
-                        // driven round loops (the clock lane
-                        // continues), a quiet round means only host
-                        // parks remain (the WouldBlock verdict's
-                        // honest shape — the consumer's "one probe
-                        // round", folded into the door)
-                        if self.run_ready()? == 0 {
-                            return Ok(Idle::WouldBlock);
+                None => {
+                    // the expiry may have JUST moved fired timers into
+                    // the ready queue (next_deadline's side effect) —
+                    // one probe round answers which, BOTH policies: a
+                    // driven round loops (the clock lane continues —
+                    // the expired frames get their drain; a forever
+                    // park here would hang them, the wake cell moves
+                    // on host settles only), a quiet round means only
+                    // host parks remain — Block parks until a settle
+                    // (the wait-forever law), NonBlock answers
+                    // WouldBlock (the verdict's honest shape — the
+                    // consumer's "one probe round", folded into the
+                    // door)
+                    if self.run_ready()? == 0 {
+                        match wait {
+                            Wait::Block => {
+                                self.wait_hosts(None);
+                            }
+                            Wait::NonBlock => return Ok(Idle::WouldBlock),
                         }
                     }
-                },
+                }
             }
         }
     }
@@ -2347,9 +2353,17 @@ mod tests {
                     c.complete(42);
                 })
             };
+            let t0 = Instant::now();
             let idle = m.vm.run_until_idle(Wait::Block).expect("clean run");
             worker.join().expect("the worker thread");
             assert_eq!(idle, Idle::Drained);
+            // the park is real: the run lasted until the settle (a
+            // spin-out would have returned Drained before the worker
+            // ever completed — the pre-lane bug's exact shape)
+            assert!(
+                t0.elapsed() >= Duration::from_millis(25),
+                "Block parked until the settle; it did not return early"
+            );
             assert!(
                 m.vm.first_host_pending().is_none(),
                 "the settled frame left the poll set"
@@ -2485,6 +2499,165 @@ mod tests {
                     .expect_err("the failed settle traps at the take marshal");
             worker.join().expect("the worker thread");
             assert!(err.msg.contains("kaboom"), "{}", err.msg);
+        }
+
+        /// Mixed ordering, the wake-first half of
+        /// [`run_until_idle_jumps_the_clock_while_host_work_parks`]:
+        /// the host settle lands BEFORE the deadline — the bounded
+        /// park returns on the settle (the either-first contract), the
+        /// probe frame retires, and the timer still fires after (the
+        /// clock jumps the rest of the way). The wall clock says which
+        /// lane ran first: the run ends well inside the deadline
+        /// window.
+        #[test]
+        fn run_until_idle_wakes_before_the_deadline_and_the_timer_still_fires() {
+            let mut m = HostMachine::launched();
+            let sleep_frame = m.launch_mini_sleep(80);
+            let worker = {
+                let c = m.cell.clone();
+                std::thread::spawn(move || {
+                    std::thread::sleep(Duration::from_millis(30));
+                    c.complete(42);
+                })
+            };
+            let t0 = Instant::now();
+            let idle = m.vm.run_until_idle(Wait::Block).expect("clean run");
+            worker.join().expect("the worker thread");
+            assert_eq!(idle, Idle::Drained);
+            assert!(
+                t0.elapsed() < Duration::from_millis(70),
+                "the settle woke the bounded park before the deadline"
+            );
+            assert_eq!(
+                m.vm.now_ms(),
+                80,
+                "the timer lane still ran — the clock jumped the rest of the way"
+            );
+            assert_eq!(m.vm.pending_tasks(), 0, "both lots emptied");
+            let st =
+                m.vm.record_field(sleep_frame, af::STATE_FIELD as usize)
+                    .expect("the sleep frame's state lane");
+            assert!(
+                unsafe { st.r.is_null() },
+                "the sleep frame fired after the early host wake"
+            );
+            let answer =
+                m.vm.record_field(m.frame, af::HOST_ANSWER_FIELD as usize)
+                    .expect("the answer lane");
+            assert_eq!(unsafe { answer.i }, 42, "the probe's answer landed");
+        }
+
+        /// Spurious-wakeup tolerance: a bump with NO settle behind it
+        /// (the condvar fires, the re-poll finds the frame still
+        /// parked) must not end the run — the protocol re-polls, finds
+        /// nothing, re-parks, and the REAL settle finishes the drain.
+        /// The floor proves the run lasted until the real settle (a
+        /// protocol that answered the spurious wake would return
+        /// before the answer existed); the answer proves the re-poll
+        /// saw it.
+        #[test]
+        fn run_until_idle_tolerates_a_spurious_wake_and_re_parks() {
+            let mut m = HostMachine::launched();
+            let wakes = m.vm.host_wakes();
+            let worker = {
+                let c = m.cell.clone();
+                std::thread::spawn(move || {
+                    std::thread::sleep(Duration::from_millis(15));
+                    wakes.bump(); // spurious: the generation moves, nothing settled
+                    std::thread::sleep(Duration::from_millis(40));
+                    c.complete(42);
+                })
+            };
+            let t0 = Instant::now();
+            let idle = m.vm.run_until_idle(Wait::Block).expect("clean run");
+            worker.join().expect("the worker thread");
+            assert_eq!(idle, Idle::Drained);
+            assert!(
+                t0.elapsed() >= Duration::from_millis(45),
+                "the spurious wake did not end the run — the re-park waited out the settle"
+            );
+            assert!(
+                m.vm.first_host_pending().is_none(),
+                "the settle emptied the poll set"
+            );
+            let answer =
+                m.vm.record_field(m.frame, af::HOST_ANSWER_FIELD as usize)
+                    .expect("the answer lane");
+            assert_eq!(
+                unsafe { answer.i },
+                42,
+                "the re-poll delivered the real settle"
+            );
+        }
+
+        /// The trap-in-a-detached-future edge: the launched (never
+        /// awaited) probe frame's failed settle traps out of
+        /// `run_until_idle` even though an unrelated timer is still
+        /// armed — the first trap propagates and the embedder exits;
+        /// the other frames stay pending, every reference where it
+        /// belongs (the poll walk's trap law).
+        #[test]
+        fn run_until_idle_propagates_a_detached_trap_leaving_other_frames_pending() {
+            let mut m = HostMachine::launched();
+            let sleep_frame = m.launch_mini_sleep(80);
+            let worker = {
+                let c = m.cell.clone();
+                std::thread::spawn(move || {
+                    std::thread::sleep(Duration::from_millis(30));
+                    c.fail("kaboom".to_string());
+                })
+            };
+            let err =
+                m.vm.run_until_idle(Wait::Block)
+                    .expect_err("the detached frame's failed settle traps");
+            worker.join().expect("the worker thread");
+            assert!(err.msg.contains("kaboom"), "{}", err.msg);
+            assert!(
+                m.vm.pending_tasks() > 0,
+                "the trap exits with other frames pending — the embedder exits, the lots keep them"
+            );
+            let st =
+                m.vm.record_field(sleep_frame, af::STATE_FIELD as usize)
+                    .expect("the sleep frame's state lane");
+            assert!(
+                !unsafe { st.r.is_null() },
+                "the unrelated timer stays armed behind the propagated trap"
+            );
+        }
+
+        /// Post-abort accounting: `cancel` flags the frame and
+        /// re-enqueues; the re-drive runs the cancel probe (the cx
+        /// `cancelled()` data path), the abort row fires, the frame
+        /// retires — out of the ready queue AND the poll set — and
+        /// `run_until_idle` reaches Drained on the emptying lots
+        /// alone. The worker NEVER settles: the residual armed
+        /// completer is the disclosed wait-forever law; retirement is
+        /// the accounting's job (a broken accounting here parks the
+        /// Block run forever — the hang IS the loud failure). A
+        /// retired frame answers `false` to a second cancel.
+        #[test]
+        fn cancel_retires_the_frame_and_idle_arrives_when_the_lots_empty() {
+            let mut m = HostMachine::launched();
+            assert_eq!(
+                m.vm.run_until_idle(Wait::NonBlock).expect("clean run"),
+                Idle::WouldBlock,
+                "the frame parks in the poll set first"
+            );
+            assert!(m.vm.first_host_pending().is_some(), "parked");
+            assert!(m.vm.cancel(m.frame), "the cancel flags a live frame");
+            let idle = m.vm.run_until_idle(Wait::Block).expect("clean run");
+            assert_eq!(
+                idle,
+                Idle::Drained,
+                "idle on the emptying lots — no settle needed"
+            );
+            assert_eq!(m.vm.pending_tasks(), 0, "every lot empty");
+            assert!(m.vm.first_host_pending().is_none(), "the poll set emptied");
+            let st =
+                m.vm.record_field(m.frame, af::STATE_FIELD as usize)
+                    .expect("the state lane");
+            assert!(unsafe { st.r.is_null() }, "the cancelled frame retired");
+            assert!(!m.vm.cancel(m.frame), "a retired frame does not re-cancel");
         }
     }
 }

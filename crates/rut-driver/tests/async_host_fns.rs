@@ -749,3 +749,185 @@ entry fn main() -> nil {
         "the worker thread's completion woke the await through the poll lane"
     );
 }
+
+// ---- the run-waits lane: the driving protocol over REAL workers ----
+//
+// `entry fn main() { launch_future(work()); }` with a delayed
+// `register_async!` row — the user's bug shape. The pre-lane consumer
+// loop (a capped non-parking spin) burned out and exited 0 with the
+// output missing; `run_until_idle(Block)` parks on the machine's wake
+// cell until the worker's settle, so the output lands and the run
+// reports idle. (Verified against the pre-lane parent: the same
+// program over the old loop shape lost the output — the scratch
+// worktree check in this commit's body.)
+
+/// The threaded session the run-waits tests ride (the wall test's
+/// hand build, shared): ink_host + a ONE-row fixture surface (`slow`
+/// — a real worker that sleeps ~100 ms of wall time before
+/// completing), the logger sink, and the same limits the fixture
+/// harness uses. The test calls `main`; the drive to idle is the
+/// protocol's own door ([`rut_vm::interp::Wait::Block`] — the CLI
+/// consumer's exact path).
+fn threaded_session(app: &str) -> (Vm, Rc<RefCell<Vec<String>>>) {
+    let ink_host = lower_decl_module(INK_HOST_DECL, &BTreeMap::new(), "ink_host.d.rut")
+        .expect("ink_host")
+        .named("ink_host");
+    let fixture = lower_decl_module(
+        "pub host async fn slow(u: str) -> str;\n",
+        &BTreeMap::new(),
+        "fixture.d.rut",
+    )
+    .expect("fixture")
+    .named("fixture");
+    let mut pkgs = rut_native::dir_pkgs(
+        &std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../rut/futures"),
+    )
+    .expect("the async pair walks")
+    .pkgs;
+    pkgs.push(ink_host);
+    pkgs.push(fixture);
+    // the root declares its heads (the D5 law — a hand root that names
+    // an undeclared mounted pkg refuses); `async_host` rides with the
+    // futures pair
+    pkgs.push(
+        rut_driver::Mounted::source("app", app).manifest(rut_driver::Manifest::lib(
+            "app",
+            &["ink_host", "futures", "async_host", "fixture"],
+        )),
+    );
+    let compiled = rut_driver::Walk {
+        pkgs: pkgs.clone(),
+        root: String::new(),
+    }
+    .pkgs
+    .iter()
+    .fold(rut_driver::RutRun::new(), |r, p| r.mount(p.clone()))
+    .entrypoint("app")
+    .compile()
+    .unwrap();
+    assert!(
+        compiled.graph.diags.is_empty(),
+        "diags: {:?}",
+        compiled.graph.diags
+    );
+    let prog = compiled.graph.program.expect("linked program");
+    let flat = rut_core::link::flatten(prog);
+    rut_vm::verify::verify(&flat).expect("verify");
+    let sink = Rc::new(RefCell::new(Vec::<String>::new()));
+    let sink2 = sink.clone();
+    let ctx = rut_driver::host_pkg_ctx(&pkgs);
+    let mut hosts = HostRegistry::new();
+    hosts.install_host_pkg(
+        &ctx,
+        rut_std::logger::pkg(move |m| sink2.borrow_mut().push(m.to_string())),
+    );
+    hosts.install_host_pkg(&ctx, rut_std::async_host::pkg());
+    // the delayed row: a REAL worker thread sleeps ~100 ms of wall
+    // time, then completes — long enough that the pre-lane burnout
+    // loop (no park) could never catch it
+    rut_vm::register_async!(hosts, "fixture::slow", (String,) -> String,
+    move |c: Completer<String>, u: String| {
+        let w = c.clone();
+        std::thread::spawn(move || {
+            std::thread::sleep(std::time::Duration::from_millis(100));
+            w.complete(format!("slow:{u}"));
+        });
+    });
+    hosts.verify_against(&ctx.flatten());
+    let limits = Limits {
+        fuel: Some(4_000_000),
+        heap_limit_bytes: Some(16 * 1024 * 1024),
+        interrupt_every: 1024,
+    };
+    let vm = Vm::builder()
+        .program(Rc::new(flat))
+        .limits(limits)
+        .hosts(hosts)
+        .build()
+        .expect("vm");
+    (vm, sink)
+}
+
+/// The regression of record: the program shaped exactly like the
+/// user's `mod.rut` — `entry fn main() { launch_future(work()); }`
+/// with `work` awaiting the delayed row and writing observable
+/// output. The output must LAND and the run must report idle. This
+/// test FAILS on the pre-lane code: the old consumer loop never
+/// parked, burned out its cap, and exited 0 with `slow:after` never
+/// logged.
+#[test]
+fn the_run_waits_for_a_delayed_worker_and_reports_idle() {
+    let app = r#"
+use ink_host::{ create_logger, logger_log };
+use futures::launch_future;
+use fixture::slow;
+
+async fn work(log: opaque, u: str) -> nil {
+    logger_log(log, 2, f"slow:before:{u}");
+    await slow(u);
+    logger_log(log, 2, f"slow:after:{u}");
+}
+
+entry fn main() -> nil {
+    let log = create_logger("t");
+    launch_future(work(log, "t"));
+}
+"#;
+    let (mut vm, sink) = threaded_session(app);
+    vm.call::<_, ()>("main", ()).expect("main");
+    let idle = vm
+        .run_until_idle(rut_vm::interp::Wait::Block)
+        .expect("clean run");
+    assert_eq!(idle, rut_vm::interp::Idle::Drained, "the run reports idle");
+    assert_eq!(
+        *sink.borrow(),
+        vec!["slow:before:t", "slow:after:t"],
+        "the output lands — the protocol waited out the real worker"
+    );
+}
+
+/// The nested edge: a completion whose awaiter launches ANOTHER
+/// future — derived work re-populates the lots mid-run, and Drained
+/// arrives only after the whole chain settles. The log names the
+/// order: the first await's continuation, the derived launch's first
+/// segment, its await's continuation.
+#[test]
+fn a_derived_launch_settles_before_idle() {
+    let app = r#"
+use ink_host::{ create_logger, logger_log };
+use futures::launch_future;
+use fixture::slow;
+
+async fn second(log: opaque) -> nil {
+    logger_log(log, 2, "chain:second");
+    await slow("2nd");
+    logger_log(log, 2, "chain:second:after");
+}
+
+async fn work(log: opaque) -> nil {
+    await slow("1st");
+    logger_log(log, 2, "chain:first");
+    launch_future(second(log));
+}
+
+entry fn main() -> nil {
+    let log = create_logger("t");
+    launch_future(work(log));
+}
+"#;
+    let (mut vm, sink) = threaded_session(app);
+    vm.call::<_, ()>("main", ()).expect("main");
+    let idle = vm
+        .run_until_idle(rut_vm::interp::Wait::Block)
+        .expect("clean run");
+    assert_eq!(
+        idle,
+        rut_vm::interp::Idle::Drained,
+        "idle only after the chain settles"
+    );
+    assert_eq!(
+        *sink.borrow(),
+        vec!["chain:first", "chain:second", "chain:second:after"],
+        "the derived launch ran to ITS idle, inside the same run"
+    );
+}
