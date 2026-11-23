@@ -16,6 +16,14 @@
 //! binding (member calls, field reads), poison annotations in closure
 //! params / cast wants / `is` tests / entry signatures — each is
 //! quiet beyond the one unknown-type diag.
+//!
+//! The Step-4 closer completes the plan's family list: the unknown fn
+//! RET annotation (no "tail type mismatch" follow-on), the tuple's
+//! no-collapse regression (one poison elem — the tuple keeps its
+//! shape and still destructures), the unknown container head (the
+//! failure cascades nowhere — args and uses stay quiet), and the
+//! pack gate (a diag-carrying unit refuses the pack — no `Err` ever
+//! encodes into bundle bytes).
 
 use rut_ast::parser::Mode;
 use rut_lexer::diag::Diag;
@@ -124,22 +132,31 @@ fn poisoned_binding_method_call_is_silent() {
 }
 
 /// A poison annotation in a closure param: the annotation diagnoses
-/// once, the param binds the poison row, the body and the lambda's
-/// own shape checks stay silent.
+/// once, the param binds the poison row, and the body, the lambda's
+/// own shape checks, AND the call with args (the callable verdict and
+/// the argument unification against the poison param) stay silent.
 #[test]
 fn poisoned_closure_param_is_quiet() {
     let src = "entry fn main() {\n\
                \x20   let f = fn (x: Bogus) { x };\n\
+               \x20   let r = f(1);\n\
                }\n";
     let ds = compile(src).diags;
     let ms = msgs(&ds);
-    assert_eq!(ds.len(), 1, "one diag, no follow-on: {ms:?}");
+    assert_eq!(
+        ds.len(),
+        1,
+        "one diag, no follow-on — the call with args included: {ms:?}"
+    );
     assert_eq!(ms[0], "unknown type `Bogus`", "{ms:?}");
 }
 
-/// A poison `as`-cast: both the operand (a poison-typed binding) and
-/// the want (a failing annotation spelling) stay silent — the numeric
-/// verdicts against `<err>` never fire.
+/// A poison `as`-cast: the operand (a poison-typed binding) rides the
+/// numeric cast silently — the numeric verdicts against `<err>` never
+/// fire. (The `as` grammar accepts only the ten numeric primitive
+/// names as its want — `crates/rut-ast/src/parser/expr.rs`'s
+/// `is_numeric_prim` — so a cast WANT can never itself be an unknown
+/// spelling; the unknown-want quietness is the `is`-test's pin below.)
 #[test]
 fn poisoned_cast_is_quiet() {
     let src = "entry fn main() {\n\
@@ -152,10 +169,11 @@ fn poisoned_cast_is_quiet() {
     assert_eq!(ms[0], "unknown type `Bogus`", "{ms:?}");
 }
 
-/// A poison `is`-test: a poison receiver rides the runtime identity
-/// test (quiet), a failing RHS spelling folds to the quiet miss —
-/// neither the by-value verdict nor the per-member dispatch verdict
-/// fires on `<err>`.
+/// A poison `is`-test, both sides of the family: a poison receiver
+/// rides the runtime identity test (quiet); an unknown WANT spelling
+/// on a real receiver folds to the quiet miss. Neither the by-value
+/// verdict nor the per-member dispatch verdict fires — the want's own
+/// resolution failure is the one diag.
 #[test]
 fn poisoned_is_test_is_quiet() {
     let src = "entry fn main() {\n\
@@ -167,6 +185,23 @@ fn poisoned_is_test_is_quiet() {
     let ds = compile(src).diags;
     let ms = msgs(&ds);
     assert_eq!(ds.len(), 1, "the `is` on `<err>` is silent: {ms:?}");
+    assert_eq!(ms[0], "unknown type `Bogus`", "{ms:?}");
+    // the unknown WANT: the receiver is real, the spelling fails —
+    // the test folds to the quiet miss, the failure itself is the one
+    // diag
+    let src = "entry fn main() {\n\
+               \x20   let y = 5;\n\
+               \x20   if (y is Bogus) {\n\
+               \x20       let z = 1;\n\
+               \x20   }\n\
+               }\n";
+    let ds = compile(src).diags;
+    let ms = msgs(&ds);
+    assert_eq!(
+        ds.len(),
+        1,
+        "the unknown want folds to the quiet miss: {ms:?}"
+    );
     assert_eq!(ms[0], "unknown type `Bogus`", "{ms:?}");
 }
 
@@ -405,5 +440,109 @@ fn bounded_binder_still_rejects_a_real_non_satisfier() {
         ms.iter()
             .any(|m| m.contains("`str` does not satisfy `Hash`")),
         "the honest bound rejection fires: {ms:?}"
+    );
+}
+
+// ---- the Step-4 closer: the family's remaining shapes ----
+
+/// The unknown fn RET annotation (the plan's tail lane): the return
+/// spelling fails once per site, and BOTH tail lanes stay silent —
+/// the nil-tail verdict is guarded, the value tail rides `widens` on
+/// `<err>`. No "tail type mismatch" follow-on exists.
+#[test]
+fn unknown_fn_ret_annotation_mints_no_tail_follow_on() {
+    let src = "fn f() -> Bogus { return 1; }\n\
+               fn g() -> Bogus { }\n\
+               entry fn main() {\n\
+               \x20   let x = f();\n\
+               \x20   let y = g();\n\
+               }\n";
+    let ds = compile(src).diags;
+    let ms = msgs(&ds);
+    assert_eq!(
+        ds.len(),
+        2,
+        "one resolution failure per spelling, nothing from the tails: {ms:?}"
+    );
+    assert!(
+        ms.iter().all(|m| m == "unknown type `Bogus`"),
+        "only the annotations diagnose: {ms:?}"
+    );
+    assert!(
+        !ms.iter().any(|m| m.contains("tail type mismatch")),
+        "no tail follow-on: {ms:?}"
+    );
+}
+
+/// The no-collapse law's regression (the plan's tuple shape): a tuple
+/// EXPRESSION with one poison element keeps its structure — the type
+/// is `(err, i32)`, poison at the leaf — and STILL destructures: the
+/// bindings are real, the uses compile honestly. Exactly the one
+/// unknown-type diag, no poison text anywhere.
+#[test]
+fn poisoned_tuple_expr_still_destructures() {
+    let src = "entry fn main() -> i64 {\n\
+               \x20   let x: Bogus = 5;\n\
+               \x20   let t = (x, 2);\n\
+               \x20   let (a, b) = t;\n\
+               \x20   return a + b;\n\
+               }\n";
+    let ds = compile(src).diags;
+    let ms = msgs(&ds);
+    assert_eq!(
+        ds.len(),
+        1,
+        "the tuple keeps its shape and destructures: {ms:?}"
+    );
+    assert_eq!(ms[0], "unknown type `Bogus`", "{ms:?}");
+    assert!(
+        !ms.iter().any(|m| m.contains("<err>")),
+        "no poison text: {ms:?}"
+    );
+}
+
+/// The plan's `Vec<Bogus>` spelling, in THIS harness (no std `Vec`
+/// mounts here): the HEAD is the unresolvable name — one diag names
+/// it, and the failure cascades NOWHERE. The generic args stay
+/// undiagnosed (no second `unknown type` for the elem spelling), the
+/// binding is poison, and its uses stay silent.
+#[test]
+fn unknown_container_head_cascades_nowhere() {
+    let src = "entry fn main() {\n\
+               \x20   let v: Vec<Bogus> = nil;\n\
+               \x20   let a = v;\n\
+               }\n";
+    let ds = compile(src).diags;
+    let ms = msgs(&ds);
+    assert_eq!(ds.len(), 1, "the head's failure, and nothing else: {ms:?}");
+    assert_eq!(ms[0], "unknown type `Vec`", "{ms:?}");
+    assert!(
+        !ms.iter().any(|m| m.contains("Bogus")),
+        "the args stay quiet — no cascade into the elem: {ms:?}"
+    );
+}
+
+/// The pack/export gate (the no-`Err`-encodes law): a unit carrying
+/// any diagnostic refuses the pack — the poison row can never reach
+/// bundle bytes. The gate is the compile arm in the pack lane
+/// (`crates/rut-driver/src/pack/mod.rs`):
+/// `!units.diags.is_empty()` answers the refusal before any binary
+/// is emitted.
+#[test]
+fn pack_refuses_a_diag_carrying_unit() {
+    let d = std::env::temp_dir().join(format!("rut-err-poison-pack-{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&d);
+    std::fs::create_dir_all(d.join("src")).unwrap();
+    std::fs::write(d.join("rut.jsonc"), r#"{"name": "poison"}"#).unwrap();
+    std::fs::write(
+        d.join("src/mod.rut"),
+        "entry fn main() {\n    let n: Bogus = 10;\n}\n",
+    )
+    .unwrap();
+    let err = rut_native::pack_dir(&d).expect_err("a diag-carrying unit refuses the pack");
+    let text = err.to_string();
+    assert!(
+        text.contains("pack: unknown type `Bogus`"),
+        "the refusal names the unit's diag: {text}"
     );
 }

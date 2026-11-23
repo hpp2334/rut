@@ -285,6 +285,9 @@ impl<'a> Ctx<'a> {
                     sp,
                     "a union type is bound-only — unions are legal only in `requires` bounds and union aliases",
                 );
+                // the poison law: TY_ERR beside its diag — quiet in
+                // every lane, never checked as a real type (the
+                // TcResult law's in-table half)
                 TY_ERR
             }
             TyRef::Self_(_) => {

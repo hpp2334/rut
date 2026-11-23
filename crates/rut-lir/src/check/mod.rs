@@ -841,8 +841,13 @@ pub(crate) fn bound_ty_str(ctx: &Ctx, node: TyRef) -> String {
 }
 
 /// The compiler-pass result: `Err(())` means a diag has already been
-/// recorded in the shared table — the unit is the contract, not a
-/// missing error type (the errors ARE the diags).
+/// recorded in the shared table — the diags ARE the report; the unit
+/// is the contract, never a missing error type. `TyKind::Err` rides
+/// beside them as the in-table poison: minted by every failing type
+/// resolution (the failure's own diag emitted at the mint), quiet in
+/// every later lane — no diagnostic is ever minted FROM it — and
+/// never checked as a real type (`widens` accepts it unconditionally,
+/// the verdict lanes skip it).
 pub type TcResult<T> = Result<T, ()>;
 
 impl<'a> Ctx<'a> {
