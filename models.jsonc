@@ -3,7 +3,7 @@
 // balance = watch subagents + the monitor session.
 {
   "main": {
-    "complex": "zai-coding-plan/glm-5.3",
+    "complex": "zai-coding-plan/glm-5.4",
     "balance": "zai-coding-plan/glm-5.3-flash"
   }
 }
