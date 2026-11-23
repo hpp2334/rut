@@ -220,6 +220,13 @@ pub const WELL_KNOWN: &[&str] = &[
     // recovery whose mismatch is the bad-cast trap (downcast is the
     // checked `?T` recovery).
     "unopaque", // UNOPAQUE
+    // the poison type's row name (the tykind-err lane): the boot row's
+    // label for a type annotation that failed to resolve. Never a
+    // surface word — no source spelling resolves to it, user code
+    // cannot name it; the checker mints the id directly (the next
+    // lane's swap). Appended at the END: interner ids are wire
+    // vocabulary — append-only, never renumbered.
+    "<err>", // ERR
 ];
 
 /// The well-known symbols — ids into [`WELL_KNOWN`], meaningful in every
@@ -343,6 +350,9 @@ pub const CX: IdentId = IdentId(81);
 pub const CONSTRUCTOR_MARKER: IdentId = IdentId(82);
 // the erasure box's inverse
 pub const UNOPAQUE: IdentId = IdentId(83);
+// the poison type's row name (the boot row's label — never a surface
+// spelling; see the WELL_KNOWN tail)
+pub const ERR: IdentId = IdentId(84);
 
 /// The text of a well-known id, if it is one — the bridge back to text at
 /// host-facing boundaries (e.g. mounting `core` into a `Session`).
@@ -471,6 +481,8 @@ mod tests {
             ("constructor", CONSTRUCTOR_MARKER),
             // the erasure box's inverse
             ("unopaque", UNOPAQUE),
+            // the poison type's row name
+            ("<err>", ERR),
         ];
         for (text, id) in cases {
             assert_eq!(WELL_KNOWN.get(id.0 as usize), Some(text), "id {id:?}");

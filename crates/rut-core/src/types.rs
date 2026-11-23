@@ -188,6 +188,12 @@ impl Repr {
 /// SETs to `OptPrimRaw` (same payload prim — the verifier accepts the
 /// refinement, never a payload change).
 pub fn arr_elem_repr(table: &TypeTable, elem: TypeId) -> Repr {
+    // the poison element (unreachable in clean runs — nothing mints
+    // `Err` yet): no array backing to resolve, the honest degrade is
+    // the `Any` fallback
+    if matches!(table.kind(elem), TyKind::Err) {
+        return Repr::Any;
+    }
     if let TyKind::Opt { elem: inner } = table.kind(elem) {
         if let TyKind::Prim(p) = table.kind(*inner) {
             return Repr::OptPrim(*p);
@@ -326,6 +332,15 @@ pub enum TyKind {
         params: Vec<TypeId>,
         ret: TypeId,
     },
+    /// the poison type (rustc's `Ty::new_error` model): the row the
+    /// checker mints when a type annotation fails to resolve, so the
+    /// failure is a REAL type downstream checks answer honestly instead
+    /// of masquerading as a placeholder prim (the false
+    /// follow-on-diagnostic bug this lane fixes). Closed vocabulary —
+    /// every exhaustive match site carries a deliberate arm. Nothing in
+    /// a clean compile mints it; no source spelling resolves to it (the
+    /// row's name is the non-surface `"<err>"`).
+    Err,
 }
 
 #[derive(Clone, Debug, PartialEq)]
@@ -383,6 +398,9 @@ pub const TY_OPT_BYTES: TypeId = 17;
 pub const TY_OPT_OPAQUE: TypeId = 18;
 /// the `DisposalContext` builtin class (the disposal surface)
 pub const TY_DISPOSAL_CONTEXT: TypeId = 19;
+/// the poison type — the row an unresolvable type annotation mints
+/// (the tykind-err lane). Next free boot id, after `TY_DISPOSAL_CONTEXT`.
+pub const TY_ERR: TypeId = 20;
 /// A host payload box's runtime type as `TidOf` reports it:
 /// the payload is Rust, so no rut type describes it. Type ids are type-table
 /// indices, which can never reach this value — `downcast<T>` therefore
@@ -440,6 +458,9 @@ impl TypeTable {
         // the disposal drain's context cell (the disposal surface): the
         // engine mints one per `dispose` call; nothing constructs it
         push(sym::DISPOSAL_CONTEXT, TyKind::DisposalContext);
+        // the poison type (the tykind-err lane): APPENDED LAST — dense
+        // ids are positional, every earlier id must stay where it is
+        push(sym::ERR, TyKind::Err);
         t.boot_len = t.types.len() as u32;
         t.scope_base = vec![0; scope as usize + 1];
         if packed {
@@ -704,7 +725,13 @@ impl TypeTable {
     pub fn is_ref(&self, id: TypeId) -> bool {
         !matches!(
             self.kind(id),
-            TyKind::Nil | TyKind::Prim(_) | TyKind::Fn { .. }
+            TyKind::Nil
+                | TyKind::Prim(_)
+                // the poison type answers not-a-cell (unreachable in
+                // clean runs — nothing mints `Err` yet): the honest
+                // degrade pairs with `repr_of`'s `Any`
+                | TyKind::Err
+                | TyKind::Fn { .. }
         )
     }
 
@@ -715,6 +742,10 @@ impl TypeTable {
             // nil is a zero slot; fn values are closure cells the compiler
             // owns (v1 captures by value), so neither takes RC traffic
             TyKind::Nil | TyKind::Fn { .. } => Repr::Any,
+            // the poison type (unreachable in clean runs — nothing mints
+            // `Err` yet): no real representation to bake, the honest
+            // degrade is the conservative `Any` fallback
+            TyKind::Err => Repr::Any,
             _ => Repr::Ref,
         }
     }
@@ -730,6 +761,10 @@ impl TypeTable {
     pub fn crosses_boundary(&self, names: &sym::Interner, id: TypeId) -> bool {
         match self.kind(id) {
             TyKind::Nil | TyKind::Prim(_) | TyKind::Str | TyKind::Bytes | TyKind::Opaque => true,
+            // the poison type (unreachable in clean runs — nothing mints
+            // `Err` yet): a failed resolution never crosses the host
+            // boundary — the honest degrade is `false`
+            TyKind::Err => false,
             // `?T` crosses nil-flattened when T crosses (the
             // promise: optionals cross as the tuples they are always
             // spelled as — the implementation only predates the text).
@@ -746,5 +781,54 @@ impl TypeTable {
             }
             _ => false,
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::sym::Interner;
+
+    /// The poison row's boot facts: the id, the kind, the name, and the
+    /// dense-prefix position (APPENDED LAST — every earlier boot id
+    /// must stay where it is).
+    #[test]
+    fn boot_table_carries_the_err_row_last() {
+        let t = TypeTable::boot();
+        assert_eq!(TY_ERR, 20, "next free id, after TY_DISPOSAL_CONTEXT");
+        assert_eq!(
+            t.boot_len,
+            TY_ERR + 1,
+            "the Err row is the boot prefix's last"
+        );
+        assert_eq!(t.kind(TY_ERR), &TyKind::Err);
+        assert_eq!(t.type_at(TY_ERR).name, sym::ERR);
+        assert_eq!(sym::text(sym::ERR), Some("<err>"));
+        // the row appended last: the id right below is the disposal context
+        assert_eq!(t.kind(TY_DISPOSAL_CONTEXT), &TyKind::DisposalContext);
+    }
+
+    /// The poison name renders through the program's own tables — the
+    /// row name is the vocabulary, `type_name` is the join.
+    #[test]
+    fn type_name_renders_the_err_row() {
+        let p = crate::binary::Program {
+            interner: Interner::new(),
+            types: TypeTable::boot(),
+            ..crate::binary::Program::default()
+        };
+        assert_eq!(p.type_name(TY_ERR), "<err>");
+    }
+
+    /// Every rut-core door answers the poison row without panicking —
+    /// the honest degrades (no cell, the `Any` repr, never crosses).
+    #[test]
+    fn doors_answer_the_err_row() {
+        let t = TypeTable::boot();
+        let i = Interner::new();
+        assert!(!t.is_ref(TY_ERR), "the poison type is not a cell");
+        assert_eq!(t.repr_of(TY_ERR), Repr::Any);
+        assert!(!t.crosses_boundary(&i, TY_ERR));
+        assert_eq!(arr_elem_repr(&t, TY_ERR), Repr::Any);
     }
 }

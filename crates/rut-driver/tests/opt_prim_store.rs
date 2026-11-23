@@ -192,8 +192,12 @@ fn reference_elements_keep_the_cell_backing() {
         dump.contains("makeopt"),
         "a `?str` element boxes (the Ref law — cell backing):\n{dump}"
     );
+    // the op-level repr annotations ride as ` :NN` (space-anchored): the
+    // bare `:NN` form also matches the regs header's `rN:NN` type ids,
+    // and the boot-row append (the tykind-err cut) shifted every
+    // non-boot id up one
     assert!(
-        !dump.contains(":33") && !dump.contains(":45") && !dump.contains(":21"),
+        !dump.contains(" :33") && !dump.contains(" :45") && !dump.contains(" :21"),
         "a `?str` store must not bake the opt-prim forms:\n{dump}"
     );
 }
@@ -671,8 +675,12 @@ fn version_gate_rejects_stale_artifacts() {
     // surface section drops the namespace head's filler byte; v24 is
     // the field dial — every `Data` row's fields gain one vis tag byte
     // (the member-vis field plan's Act 1: the carried rows answer the
-    // `.field` gate for a record this unit holds no decl for)
-    assert_eq!(VERSION, 24, "the field-dial cut owns this VERSION bump");
+    // `.field` gate for a record this unit holds no decl for); v25 is
+    // the poison type's boot row — `TyKind::Err` at boot id 20 (the
+    // tykind-err lane): the boot prefix rides the wire, so the extra
+    // row shifts every non-boot dense id and stale v24 artifacts
+    // misalign under the new boot line
+    assert_eq!(VERSION, 25, "the tykind-err cut owns this VERSION bump");
     let out = rut_driver::compile_module(
         "entry fn main() -> i64 { let a: [?i64] = [nil; 2]; a[0] = 1; let x = a[0]; return x; }",
         rut_ast::parser::Mode::Impl,

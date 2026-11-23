@@ -294,6 +294,10 @@ pub fn strip_programs(groups: &mut [(String, &mut Program)]) -> Result<SymbolMap
         {
             for t in prog.types.types.iter().skip(own_base as usize) {
                 keep.insert(prog.interner.name(t.name).to_string());
+                // a poison row (`TyKind::Err`, unreachable in clean runs
+                // — nothing mints it yet) skips honestly: no `Data`
+                // fields exist to keep, the row's own name above is the
+                // whole keep-set
                 if let crate::types::TyKind::Data { fields } = &t.kind {
                     for f in fields {
                         keep.insert(prog.interner.name(f.name).to_string());

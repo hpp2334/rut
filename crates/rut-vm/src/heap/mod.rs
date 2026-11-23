@@ -606,6 +606,10 @@ impl Heap {
             | TyKind::Fn { .. }
             | TyKind::Opt { .. }
             | TyKind::Future { .. } => Ok(s),
+            // the poison type (unreachable at runtime — nothing mints
+            // `Err` yet, no value of it can exist): no cell semantics to
+            // clone, the bare slot passes through
+            TyKind::Err => Ok(s),
             TyKind::Str => {
                 let cell = cell_of(s);
                 self.alloc_str_bytes(cell.as_bytes().to_vec())

@@ -1378,6 +1378,9 @@ fn remap_kind_scope(
         | rut_core::types::TyKind::Opaque
         | rut_core::types::TyKind::Trace
         | rut_core::types::TyKind::DisposalContext => {}
+        // the poison row (unreachable in clean runs — nothing mints
+        // `Err` yet): carries no ids, nothing to rebase
+        rut_core::types::TyKind::Err => {}
         rut_core::types::TyKind::Array { elem }
         | rut_core::types::TyKind::Opt { elem }
         | rut_core::types::TyKind::Weak { elem }

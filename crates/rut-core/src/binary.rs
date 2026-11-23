@@ -780,7 +780,12 @@ pub const MAGIC: &[u8; 4] = b"RUTC";
 /// artifacts misparse the first tagged field row — refused with the
 /// standard version error; the recipe is re-pack + re-tag + `rut
 /// install` re-pin.
-pub const VERSION: u32 = 24;
+/// v25: the poison type's boot row (the tykind-err lane) — `TyKind::Err`
+/// at boot id 20 (kind tag 19). The boot prefix rides the wire, so the
+/// extra row shifts every non-boot dense id: a v24 artifact's type table
+/// misaligns under the new boot line — refused with the standard version
+/// error; the recipe is re-pack + re-tag + `rut install` re-pin.
+pub const VERSION: u32 = 25;
 
 pub fn encode(prog: &Program) -> Vec<u8> {
     let mut e = Enc::default();
@@ -1240,6 +1245,11 @@ fn encode_kind(e: &mut Enc, k: &TyKind) {
             e.u8(18);
             e.u32(*elem);
         }
+        // the poison type (the tykind-err lane): a CLEAN compile never
+        // mints `Err`, so this arm never fires on real artifacts — it
+        // exists so the closed vocabulary encodes if a poison row ever
+        // rides the wire deliberately.
+        TyKind::Err => e.u8(19),
     }
 }
 
@@ -1987,6 +1997,8 @@ fn decode_kind(d: &mut Dec) -> Result<TyKind, String> {
         17 => TyKind::DisposalContext,
         // v20: the `Future<T>` closed builtin class (the async handle)
         18 => TyKind::Future { elem: d.u32()? },
+        // the poison type (the tykind-err lane) — see `encode_kind`'s arm
+        19 => TyKind::Err,
         t => return Err(format!("bad type kind tag {t}")),
     })
 }
@@ -3147,7 +3159,7 @@ impl<'a> Dec<'a> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::types::{TY_F64, TY_I32, TY_NIL, TY_STR};
+    use crate::types::{TY_ERR, TY_F64, TY_I32, TY_NIL, TY_STR};
 
     fn sample() -> Program {
         let mut p = Program {
@@ -3230,6 +3242,18 @@ mod tests {
         let a = encode(&sample());
         let b = encode(&sample());
         assert_eq!(a, b);
+    }
+
+    #[test]
+    fn err_kind_tag_round_trips() {
+        // the poison type's boot row rides the wire (the whole type
+        // table encodes): kind tag 19 out, `TyKind::Err` back in. A
+        // CLEAN compile never mints an `Err` row — this exercises the
+        // tag arms directly through the boot prefix.
+        let p = sample();
+        let q = decode(&encode(&p)).expect("decode");
+        assert_eq!(q.types.kind(TY_ERR), &TyKind::Err);
+        assert_eq!(q.type_name(TY_ERR), "<err>");
     }
 
     #[test]

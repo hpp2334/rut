@@ -261,6 +261,10 @@ pub fn ty_text(prog: &Program, t: TypeId) -> String {
         | TyKind::IfaceObj { .. }
         | TyKind::Trace
         | TyKind::DisposalContext => name(t),
+        // the poison row (unreachable in clean runs — nothing mints
+        // `Err` yet): the honest degrade is the row's own label —
+        // `"<err>"`, never a misrendered real type
+        TyKind::Err => name(t),
         TyKind::Opaque => "opaque".to_string(),
         TyKind::Opt { elem } => format!("?{}", ty_text(prog, *elem)),
         TyKind::Weak { elem } => format!("Weak<{}>", ty_text(prog, *elem)),

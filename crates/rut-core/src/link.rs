@@ -82,6 +82,9 @@ fn walk_type_ids(prog: &Program, f: &mut impl FnMut(TypeId)) {
             | TyKind::DisposalContext
             | TyKind::Enum { .. }
             | TyKind::IfaceObj { .. } => {}
+            // the poison row (unreachable in clean runs — nothing mints
+            // `Err` yet): carries no ids, nothing to walk
+            TyKind::Err => {}
             TyKind::Array { elem }
             | TyKind::Weak { elem }
             | TyKind::Opt { elem }
@@ -1269,6 +1272,9 @@ fn remap_kind(
         TyKind::Trace => TyKind::Trace,
         // the disposal context carries no type ids — the boot type is global
         TyKind::DisposalContext => TyKind::DisposalContext,
+        // the poison row (unreachable in clean runs — nothing mints
+        // `Err` yet): carries no ids or names, it rides the rebase verbatim
+        TyKind::Err => TyKind::Err,
     }
 }
 
