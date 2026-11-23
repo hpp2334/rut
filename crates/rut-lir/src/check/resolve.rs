@@ -285,20 +285,20 @@ impl<'a> Ctx<'a> {
                     sp,
                     "a union type is bound-only — unions are legal only in `requires` bounds and union aliases",
                 );
-                TY_I32
+                TY_ERR
             }
             TyRef::Self_(_) => {
                 // the sig lane binds `Self` (resolve_sig_ty_deep); reaching
                 // the ordinary resolver means no enclosing type — the
                 // old SELF_TY-path diagnostic stands
                 self.err(sp, "`Self` is only valid inside a type body");
-                TY_I32
+                TY_ERR
             }
             TyRef::Error(_) => {
                 // a broken tree never lowers — the compile lanes refuse
                 // on !ast.is_clean() first; unreachable in practice
                 self.err(sp, "malformed type");
-                TY_I32
+                TY_ERR
             }
             TyRef::Path(h) => {
                 let segs = h.get(self.ast).segs.clone();
@@ -348,12 +348,12 @@ impl<'a> Ctx<'a> {
                         (rut_core::binary::NativeTy::Opaque, []) => TY_OPAQUE,
                         (rut_core::binary::NativeTy::Opaque, _) => {
                             self.err(sp, "`opaque` takes no type arguments");
-                            TY_I32
+                            TY_ERR
                         }
                         (rut_core::binary::NativeTy::StackTrace, []) => TY_STACK_TRACE,
                         (rut_core::binary::NativeTy::StackTrace, _) => {
                             self.err(sp, "`StackTrace` takes no type arguments");
-                            TY_I32
+                            TY_ERR
                         }
                         // the disposal drain's context cell: the engine mints
                         // it — the name resolves in type position (a
@@ -362,7 +362,7 @@ impl<'a> Ctx<'a> {
                         (rut_core::binary::NativeTy::DisposalContext, []) => TY_DISPOSAL_CONTEXT,
                         (rut_core::binary::NativeTy::DisposalContext, _) => {
                             self.err(sp, "`DisposalContext` takes no type arguments");
-                            TY_I32
+                            TY_ERR
                         }
                         // the TWO generic builtins — `Weak<T>` and (v20)
                         // the closed `Future<T>` — intern per
@@ -374,7 +374,7 @@ impl<'a> Ctx<'a> {
                         }
                         (rut_core::binary::NativeTy::Weak, _) => {
                             self.err(sp, "`Weak<T>` takes exactly one type parameter — the weak-referenced type");
-                            TY_I32
+                            TY_ERR
                         }
                         (rut_core::binary::NativeTy::Future, [g]) => {
                             let elem = self.resolve_type(*g, env);
@@ -385,7 +385,7 @@ impl<'a> Ctx<'a> {
                                 sp,
                                 "`Future<T>` takes exactly one type parameter — the answer type",
                             );
-                            TY_I32
+                            TY_ERR
                         }
                         // the cx class: the surface name IS the
                         // engine-minted record — the weave injects it as
@@ -393,7 +393,7 @@ impl<'a> Ctx<'a> {
                         (rut_core::binary::NativeTy::RunContext, []) => self.run_context_ty(),
                         (rut_core::binary::NativeTy::RunContext, _) => {
                             self.err(sp, "`RunContext` takes no type arguments");
-                            TY_I32
+                            TY_ERR
                         }
                     };
                 }
@@ -430,7 +430,7 @@ impl<'a> Ctx<'a> {
                                     seg.generics.len()
                                 ),
                             );
-                            return TY_I32;
+                            return TY_ERR;
                         }
                         let args: Vec<TypeId> = seg
                             .generics
@@ -459,7 +459,7 @@ impl<'a> Ctx<'a> {
                     if name == sym::ITERABLE || name == sym::DISPOSAL {
                         if let Some(msg) = self.engine_contract_head_error(name) {
                             self.err(sp, msg);
-                            return TY_I32;
+                            return TY_ERR;
                         }
                     }
                     if let Some(t) = self.iface_here(name) {
@@ -472,7 +472,7 @@ impl<'a> Ctx<'a> {
                                         self.name(name),
                                         self.name(name)
                                     ));
-                                return TY_I32;
+                                return TY_ERR;
                             }
                             return self.mk_iface_obj(t.id);
                         }
@@ -486,7 +486,7 @@ impl<'a> Ctx<'a> {
                                     seg.generics.len()
                                 ),
                             );
-                            return TY_I32;
+                            return TY_ERR;
                         }
                         let args: Vec<TypeId> = seg
                             .generics
@@ -521,7 +521,7 @@ impl<'a> Ctx<'a> {
                                     self.name(name)
                                 ),
                                 );
-                                return TY_I32;
+                                return TY_ERR;
                             }
                             if seg.generics.len() != ext.generics {
                                 self.err(
@@ -533,7 +533,7 @@ impl<'a> Ctx<'a> {
                                         seg.generics.len()
                                     ),
                                 );
-                                return TY_I32;
+                                return TY_ERR;
                             }
                             let args: Vec<TypeId> = seg
                                 .generics
@@ -567,7 +567,7 @@ impl<'a> Ctx<'a> {
                                         seg.generics.len()
                                     ),
                                 );
-                                return TY_I32;
+                                return TY_ERR;
                             }
                             let args: Vec<TypeId> = seg
                                 .generics
@@ -612,14 +612,14 @@ impl<'a> Ctx<'a> {
                                         "`{}` is a union alias — unions are bound-only, legal only in `requires` bounds",
                                         self.name(name)
                                     ));
-                                TY_I32
+                                TY_ERR
                             }
-                            _ => TY_I32,
+                            _ => TY_ERR,
                         };
                     }
                     if name == sym::SELF_TY {
                         self.err(sp, "`Self` is only valid inside a type body");
-                        return TY_I32;
+                        return TY_ERR;
                     }
                     let msg = self
                         .not_in_core_scope(name)
@@ -627,7 +627,7 @@ impl<'a> Ctx<'a> {
                         .or_else(|| self.elsewhere_hint(name, "type"))
                         .unwrap_or_else(|| format!("unknown type `{}`", self.name(name)));
                     self.err(sp, msg);
-                    TY_I32
+                    TY_ERR
                 }
             }
         }
@@ -657,7 +657,7 @@ impl<'a> Ctx<'a> {
             .any(|s| !s.generics.is_empty())
         {
             self.err(sp, "type arguments are not valid on a module segment");
-            return TY_I32;
+            return TY_ERR;
         }
         let from = self.cur_mod.clone();
         if let Some(head_mod) = self.resolve_mod_head(&from, head) {
@@ -679,7 +679,7 @@ impl<'a> Ctx<'a> {
                             at
                         ),
                     );
-                    return TY_I32;
+                    return TY_ERR;
                 }
             }
         }
@@ -701,10 +701,10 @@ impl<'a> Ctx<'a> {
                     leaf
                 ),
             );
-            return TY_I32;
+            return TY_ERR;
         }
         self.err(sp, format!("unknown type `{}`", seg_str(self, segs)));
-        TY_I32
+        TY_ERR
     }
 
     /// The leaf of a qualified type path: a decl of module `m` (the
@@ -744,7 +744,7 @@ impl<'a> Ctx<'a> {
                 ),
             };
             self.err(sp, msg);
-            return TY_I32;
+            return TY_ERR;
         }
         // the crossing predicate: the decl's tier vs the requester
         let (vis, home) = if let Some(e) = self.enum_in(m, name) {
@@ -763,7 +763,7 @@ impl<'a> Ctx<'a> {
             let n = self.name(name);
             let hint = self.vis_hint(name, from, &home, vis);
             self.err(sp, format!("`{m}::{n}` — {hint}"));
-            return TY_I32;
+            return TY_ERR;
         }
         // resolve per kind — the same arms the bare ladder runs
         if let Some(e) = self.enum_in(m, name) {
@@ -792,7 +792,7 @@ impl<'a> Ctx<'a> {
                         generics.len()
                     ),
                 );
-                return TY_I32;
+                return TY_ERR;
             }
             let args: Vec<TypeId> = generics
                 .iter()
@@ -812,7 +812,7 @@ impl<'a> Ctx<'a> {
                             self.name(name)
                         ),
                     );
-                    return TY_I32;
+                    return TY_ERR;
                 }
                 return self.mk_iface_obj(t.id);
             }
@@ -826,7 +826,7 @@ impl<'a> Ctx<'a> {
                         generics.len()
                     ),
                 );
-                return TY_I32;
+                return TY_ERR;
             }
             let args: Vec<TypeId> = generics
                 .iter()
@@ -858,9 +858,9 @@ impl<'a> Ctx<'a> {
                         "`{}` is a union alias — unions are bound-only, legal only in `requires` bounds",
                         self.name(name)
                     ));
-                    TY_I32
+                    TY_ERR
                 }
-                _ => TY_I32,
+                _ => TY_ERR,
             };
         }
         unreachable!("leaf found above but no arm took it")

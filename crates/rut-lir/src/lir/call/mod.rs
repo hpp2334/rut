@@ -1155,6 +1155,16 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
         if from == to {
             return true;
         }
+        // the poison law: a failing resolution answers `TY_ERR` (the
+        // row minted beside its diagnostic), and its cause is already
+        // on the diag list — the poison widens from and to anything,
+        // so the failure diagnoses once instead of cascading a false
+        // mismatch at every boundary it touches
+        if matches!(self.ctx.types.kind(from), TyKind::Err)
+            || matches!(self.ctx.types.kind(to), TyKind::Err)
+        {
+            return true;
+        }
         // the template law (v22): two `#<param>` placeholder rows of the
         // same spelling are ONE parameter — the template window's compile
         // resolves the same generic through several envs, and equal
@@ -1212,6 +1222,14 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
     /// path carries its binding's origins.
     pub(crate) fn widens_val(&mut self, node: ExprRef, from: TypeId, to: TypeId) -> bool {
         if from == to {
+            return true;
+        }
+        // the poison law (see `widens`): one honest failure, never a
+        // cascade — checked before the boxed pass so a poison side
+        // never runs a satisfaction check of its own
+        if matches!(self.ctx.types.kind(from), TyKind::Err)
+            || matches!(self.ctx.types.kind(to), TyKind::Err)
+        {
             return true;
         }
         if self.same_template_row(from, to) {

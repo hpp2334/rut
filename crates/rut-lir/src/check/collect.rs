@@ -707,10 +707,10 @@ impl<'a> Ctx<'a> {
             if let Some(g) = self.extern_generics.get(&data).cloned() {
                 return self.mk_extern_data_inst(data, &g, args);
             }
-            return TY_I32;
+            return TY_ERR;
         }
         let Some(decl) = self.find_data(data).cloned() else {
-            return TY_I32;
+            return TY_ERR;
         };
         let name = self.intern(&format!(
             "{}<{}>",
@@ -814,7 +814,7 @@ impl<'a> Ctx<'a> {
             env.insert(format!("#{}", self.name(*p)), a);
         }
         let TyKind::Data { fields: template } = self.types.kind(g.template) else {
-            return TY_I32;
+            return TY_ERR;
         };
         let template = template.clone();
         let fields: Vec<FieldInfo> = template
