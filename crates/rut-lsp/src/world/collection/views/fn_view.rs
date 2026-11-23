@@ -1,7 +1,7 @@
 //! [`FnView`] — a fn view: a free fn, a surface fn, or an impl-block
 //! method (the owner derives from the parent impl's target).
 
-use rut_ast::{AnyHandle, Ast, FnNode, ImplNode, MethodDeclNode, SurfaceFnNode, Vis};
+use rut_ast::{AnyHandle, Ast, FnNode, ImplNode, MethodDeclNode, ParamRef, SurfaceFnNode, Vis};
 
 use super::{doc_lines, param_names, sig_src};
 use crate::world::collection::MountedFile;
@@ -80,13 +80,13 @@ impl<'a> FnView<'a> {
     /// `owner()` — the receiver's own type, the builder-chain law
     /// (every std builder rung is `-> Self` style); a free fn's `Self`
     /// names nothing (owner is `None`) and renders the written word.
-    /// Surface rows never record a ret (the v1 shape — inference does
-    /// not ride the host boundary).
+    /// Surface rows answer like every other decl — the v1 "inference
+    /// does not ride the host boundary" ruling is REVERSED (the
+    /// written ret is the crossing's contract; `src()` already
+    /// rendered it verbatim in hovers, and the Future family types
+    /// through it).
     pub(crate) fn ret(&self) -> Option<String> {
         let ast = self.ast();
-        if self.h.is::<SurfaceFnNode>() {
-            return None;
-        }
         if let Some(d) = self.h.downcast::<MethodDeclNode>() {
             let d = d.get(ast);
             if matches!(&d.ret, Some(r) if r.is_self()) {
@@ -94,9 +94,100 @@ impl<'a> FnView<'a> {
             }
             return d.ret.map(|r| ty_src(ast, r));
         }
-        if let Some(d) = self.h.downcast::<FnNode>() {
-            return d.get(ast).ret.map(|r| ty_src(ast, r));
+        macro_rules! wr {
+            ($t:ty) => {
+                if let Some(d) = self.h.downcast::<$t>() {
+                    return d.get(ast).ret.map(|r| ty_src(ast, r));
+                }
+            };
         }
+        wr!(FnNode);
+        wr!(SurfaceFnNode);
+        unreachable!("a fn view addresses a fn node")
+    }
+
+    /// spelled `async`? — the call lanes' Future-wrap rule keys on it
+    /// (the engine's sugar law: a call to an `async` fn answers
+    /// `Future<R>`, an `async { }` block mints `Future<T>`)
+    pub(crate) fn is_async(&self) -> bool {
+        let ast = self.ast();
+        macro_rules! ay {
+            ($t:ty) => {
+                if let Some(d) = self.h.downcast::<$t>() {
+                    return d.get(ast).is_async();
+                }
+            };
+        }
+        ay!(FnNode);
+        ay!(SurfaceFnNode);
+        ay!(MethodDeclNode);
+        unreachable!("a fn view addresses a fn node")
+    }
+
+    /// the declared generic parameters, in order (`T`, `U` in
+    /// `fn f<T, U>(..)`) — the call-site substitution's variable list
+    pub(crate) fn generics(&self) -> Vec<String> {
+        let ast = self.ast();
+        macro_rules! gs {
+            ($t:ty) => {
+                if let Some(d) = self.h.downcast::<$t>() {
+                    return d
+                        .get(ast)
+                        .generics
+                        .iter()
+                        .map(|&g| ast.name(g).to_string())
+                        .collect();
+                }
+            };
+        }
+        gs!(FnNode);
+        gs!(SurfaceFnNode);
+        gs!(MethodDeclNode);
+        unreachable!("a fn view addresses a fn node")
+    }
+
+    /// does the callee take a `self` receiver? Its `param_tys` slot is
+    /// the leading `None` a call site's zip rides out (the args never
+    /// include the receiver)
+    pub(crate) fn takes_self(&self) -> bool {
+        let ast = self.ast();
+        macro_rules! sf {
+            ($t:ty) => {
+                if let Some(d) = self.h.downcast::<$t>() {
+                    return matches!(d.get(ast).params.first(), Some(ParamRef::SelfParam(_)));
+                }
+            };
+        }
+        sf!(FnNode);
+        sf!(SurfaceFnNode);
+        sf!(MethodDeclNode);
+        unreachable!("a fn view addresses a fn node")
+    }
+
+    /// the declared parameter types, positional (`self` renders `None`
+    /// — it types as the receiver, never a substitutable text; an
+    /// undeclared param renders `None` too). The call-site lanes zip
+    /// these against the args' inferred texts
+    pub(crate) fn param_tys(&self) -> Vec<Option<String>> {
+        let ast = self.ast();
+        macro_rules! pt {
+            ($t:ty) => {
+                if let Some(d) = self.h.downcast::<$t>() {
+                    return d
+                        .get(ast)
+                        .params
+                        .iter()
+                        .map(|p| match p {
+                            ParamRef::Param(ph) => ph.get(ast).ty.map(|t| ty_src(ast, t)),
+                            _ => None, // `self` / `mut self` / a damaged slot
+                        })
+                        .collect();
+                }
+            };
+        }
+        pt!(FnNode);
+        pt!(SurfaceFnNode);
+        pt!(MethodDeclNode);
         unreachable!("a fn view addresses a fn node")
     }
 

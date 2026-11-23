@@ -8,11 +8,26 @@
 //! through `Doc::bindings()` (read internally — callers never run the
 //! pass); an un-annotated binding's type consults its recorded init.
 //! A miss is `None` — never wrong text.
+//!
+//! The Future family types here too, text-level rules mirroring the
+//! engine's own laws (real typing stays rut-lir's lane): a call to an
+//! `async` fn answers `Future<R>` (`R` = written ret, `nil` when
+//! unwritten — the sugar law), an `async { }` block mints
+//! `Future<T>` (T from the body's valued returns, the weave's founds
+//! law), and `await e` unwraps a head that is EXACTLY `Future` (the
+//! `compile_await` law — no `?` peel, an optional future is not
+//! awaitable). Call sites price the ret through a first-order
+//! text-level substitution (spelled generics + declared-vs-inferred
+//! argument matching); residual type variables are silence, never
+//! `: T` text.
 
 use crate::semantic::IntSuffix;
-use rut_ast::{Ast, BinOp, Binding, ExprRef, Lit, PathSeg, SelfNode, TyRef};
+use rut_ast::{
+    Ast, BinOp, Binding, BlockNode, ElseBranch, ExprRef, Handle, Lit, PathSeg, SelfNode, StmtRef,
+    TyRef,
+};
 
-use super::collection::MountedFile;
+use super::collection::{FnView, MountedFile};
 use super::types::{head_of_ty, ty_src, TyForm};
 
 /// the type an expression suggests, as display text. `home` is the
@@ -47,7 +62,7 @@ pub(crate) fn expr_ty(home: &MountedFile, idxs: &[&MountedFile], e: ExprRef) -> 
         }
         ExprRef::Call(h) => {
             let d = h.get(ast);
-            call_ty(home, idxs, ast, d.callee)
+            call_ty(home, idxs, ast, d.callee, &d.args)
         }
         ExprRef::Method(h) => {
             let d = h.get(ast);
@@ -64,7 +79,15 @@ pub(crate) fn expr_ty(home: &MountedFile, idxs: &[&MountedFile], e: ExprRef) -> 
                 return None;
             }
             let ty = expr_ty(home, idxs, d.recv)?;
-            member_ret(idxs, &head_of_ty(&ty), ast.name(name))
+            member_ret(
+                home,
+                idxs,
+                ast,
+                &head_of_ty(&ty),
+                ast.name(name),
+                &d.generics,
+                &d.args,
+            )
         }
         ExprRef::Field(h) => {
             let d = h.get(ast);
@@ -108,6 +131,33 @@ pub(crate) fn expr_ty(home: &MountedFile, idxs: &[&MountedFile], e: ExprRef) -> 
                 // same-type arithmetic; the left operand decides
                 _ => expr_ty(home, idxs, d.lhs).or_else(|| expr_ty(home, idxs, d.rhs)),
             }
+        }
+        // `await e` = unwrap: e's type head EXACTLY `Future` → the
+        // first generic argument (the engine's `compile_await` law).
+        // STRICT: the head is read WITHOUT the `?` peel — the engine
+        // rejects awaiting an optional future, so `?Future<..>` stays
+        // a miss; a non-Future is a miss too (never wrong text)
+        ExprRef::Await(h) => {
+            let t = expr_ty(home, idxs, h.get(ast).expr)?;
+            if head_strict(&t) != "Future" {
+                return None;
+            }
+            first_generic_arg(&t)
+        }
+        // `async { .. }` mints `Future<T>` — the engine's
+        // `compile_async_block` law. T is the body's answer: the first
+        // valued `return` (the weave records each return's found type
+        // and unifies them), else the tail expression, else `nil` (the
+        // unwritten-answer law)
+        ExprRef::AsyncBlock(h) => {
+            let d = h.get(ast);
+            let t = first_return(ast, d.body)
+                .or(d.body.get(ast).tail)
+                .and_then(|e| expr_ty(home, idxs, e));
+            Some(format!(
+                "Future<{}>",
+                t.unwrap_or_else(|| "nil".to_string())
+            ))
         }
         _ => None,
     }
@@ -174,6 +224,7 @@ fn call_ty(
     idxs: &[&MountedFile],
     ast: &Ast,
     callee: ExprRef,
+    args: &[ExprRef],
 ) -> Option<String> {
     if let ExprRef::Path(h) = callee {
         let segs = &h.get(ast).segs;
@@ -185,7 +236,7 @@ fn call_ty(
                 .filter(|f| f.name() == name && f.owner().is_none())
                 .collect();
             if let [one] = hits.as_slice() {
-                return one.ret();
+                return call_ret(home, idxs, ast, one, &segs[0].generics, args);
             }
             // `Logger(..)` — the constructor call. Only an INDEXED
             // class/struct answers: a capitalized name with no type
@@ -241,25 +292,247 @@ fn generic_name(home: &MountedFile, ast: &Ast, name: &str, args: &[TyRef]) -> St
     format!("{name}<{rendered}>")
 }
 
-/// a member's declared type on `ty_name`: own-surface methods and
-/// fields, then inherent impl-block methods — per file, the same
-/// order the old window walk kept. Interface members stay out — the
-/// use-gate is the member door's call to make with the full answer;
-/// inference stays conservative
-fn member_ret(idxs: &[&MountedFile], ty_name: &str, member: &str) -> Option<String> {
+/// a member call's ret on `ty_name` — the impl-fn lane over the
+/// window: [`find_member_fn`]'s answer priced by [`call_ret`] (the
+/// substitution, then the async wrap). `None` when no impl fn
+/// answers — an own-surface member is FINAL with no recorded fn
+/// (never a same-named impl fn from another file leaks through: the
+/// member law's gate)
+fn member_ret(
+    home: &MountedFile,
+    idxs: &[&MountedFile],
+    ast: &Ast,
+    ty_name: &str,
+    member: &str,
+    written: &[TyRef],
+    args: &[ExprRef],
+) -> Option<String> {
+    find_member_fn(idxs, ty_name, member).and_then(|f| call_ret(home, idxs, ast, &f, written, args))
+}
+
+/// a member's impl fn on `ty_name` — the callee's method half over
+/// the inference window (the chain's `impl_method_fn` law, spelled
+/// over idxs): per file, a same-named own-surface member answers
+/// FINAL with no fn, then the impl fn whose owner is the target
+fn find_member_fn<'a>(idxs: &[&'a MountedFile], ty_name: &str, member: &str) -> Option<FnView<'a>> {
     for i in idxs.iter() {
         if let Some(t) = i.ty(ty_name) {
-            if let Some(m) = t.methods().into_iter().find(|m| m.name() == member) {
-                return m.ty();
+            if t.methods().iter().any(|m| m.name() == member) {
+                return None;
             }
         }
         for f in i.fns() {
             if f.name() == member && f.owner().as_deref() == Some(ty_name) {
-                return f.ret();
+                return Some(f);
             }
         }
     }
     None
+}
+
+/// a callee fn view's ret at a call site — the written ret priced for
+/// display. First-order text-level substitution over the call site:
+///
+/// (a) the spelled call-site generics zip the decl's parameters
+///     (`make<i32>()` names `T := i32`);
+/// (b) each declared param whose type mentions a variable
+///     structurally matches the arg's inferred text — heads equal,
+///     generic arity equal, non-var text equal (`Future<T>` vs
+///     `Future<str>` → `T := str`; `[Future<T>]` vs `[Future<str>]` →
+///     `T := str`; `?X` peels like `[X]`).
+///
+/// The ret substitutes under the map, then the RESIDUAL rule: a
+/// variable still standing is silence — never `: T` text. Last the
+/// async wrap: a call to an `async` fn answers `Future<R>` with `R`
+/// the written ret, `nil` unwritten (the engine's sugar law); a plain
+/// callee answers `R` (unwritten = a miss, nothing derives)
+fn call_ret(
+    home: &MountedFile,
+    idxs: &[&MountedFile],
+    ast: &Ast,
+    f: &FnView,
+    written: &[TyRef],
+    args: &[ExprRef],
+) -> Option<String> {
+    let vars = f.generics();
+    let mut map: Vec<(String, String)> = Vec::new();
+    for (v, w) in vars.iter().zip(written.iter()) {
+        // the call site's own spelling — the HOME doc's verbatim slice
+        let text = home.doc.text(w.span(ast)).trim().to_string();
+        if !text.is_empty() {
+            bind_var(&mut map, v.clone(), text);
+        }
+    }
+    // argument-driven matching: the receiver slot rides out (the args
+    // never include `self`)
+    let params = f.param_tys();
+    let aligned = params.iter().skip(usize::from(f.takes_self()));
+    for (p, a) in aligned.zip(args.iter()) {
+        let Some(declared) = p else {
+            continue;
+        };
+        if !mentions_var(declared, &vars) {
+            continue;
+        }
+        let Some(inferred) = expr_ty(home, idxs, *a) else {
+            continue;
+        };
+        unify(declared, &inferred, &vars, &mut map);
+    }
+    let Some(ret) = f.ret() else {
+        // unwritten = `nil` (the engine's law) — only an async callee
+        // answers it
+        return f.is_async().then(|| "Future<nil>".to_string());
+    };
+    let priced = apply_subst(&ret, &map);
+    if mentions_var(&priced, &vars) {
+        return None;
+    }
+    Some(if f.is_async() {
+        format!("Future<{priced}>")
+    } else {
+        priced
+    })
+}
+
+// ---- the text-level substitution ----
+
+/// first binding wins — a variable already bound keeps its first text
+fn bind_var(map: &mut Vec<(String, String)>, var: String, text: String) {
+    if !map.iter().any(|(v, _)| *v == var) {
+        map.push((var, text));
+    }
+}
+
+/// the maximal identifier runs of a type text — the boundary scan the
+/// substitution's application and its residual check share
+fn idents(text: &str) -> Vec<&str> {
+    let mut out = Vec::new();
+    let mut run: Option<usize> = None;
+    for (i, c) in text.char_indices() {
+        if c.is_alphanumeric() || c == '_' {
+            if run.is_none() {
+                run = Some(i);
+            }
+        } else if let Some(s) = run.take() {
+            out.push(&text[s..i]);
+        }
+    }
+    if let Some(s) = run {
+        out.push(&text[s..]);
+    }
+    out
+}
+
+/// does any of `vars` occur as a whole identifier in `text`?
+fn mentions_var(text: &str, vars: &[String]) -> bool {
+    idents(text).iter().any(|w| vars.iter().any(|v| v == w))
+}
+
+/// ident-boundary substitution: each whole-identifier occurrence of a
+/// bound variable swaps to its text (`Vec<T>` with `T := i32` →
+/// `Vec<i32>`); a variable inside a longer ident never fires
+fn apply_subst(text: &str, map: &[(String, String)]) -> String {
+    if map.is_empty() {
+        return text.to_string();
+    }
+    let mut out = String::with_capacity(text.len());
+    let mut run: Option<usize> = None;
+    for (i, c) in text.char_indices().chain([(text.len(), '\0')]) {
+        if c.is_alphanumeric() || c == '_' {
+            if run.is_none() {
+                run = Some(i);
+            }
+            continue;
+        }
+        if let Some(s) = run.take() {
+            let word = &text[s..i];
+            out.push_str(
+                map.iter()
+                    .find(|(v, _)| v == word)
+                    .map(|(_, t)| t.as_str())
+                    .unwrap_or(word),
+            );
+        }
+        if i < text.len() {
+            out.push(c);
+        }
+    }
+    out
+}
+
+/// one first-order structural match: heads equal, generic arity
+/// equal, non-var text equal. A bare variable binds whatever the arg
+/// inferred; later occurrences of a bound variable don't re-check —
+/// the honesty rides the residual rule
+fn unify(declared: &str, inferred: &str, vars: &[String], map: &mut Vec<(String, String)>) {
+    let d = declared.trim_start_matches('?').trim();
+    let i = inferred.trim_start_matches('?').trim();
+    if vars.iter().any(|v| v == d) {
+        bind_var(map, d.to_string(), i.to_string());
+        return;
+    }
+    if d.starts_with('[') && d.ends_with(']') && i.starts_with('[') && i.ends_with(']') {
+        unify(&d[1..d.len() - 1], &i[1..i.len() - 1], vars, map);
+        return;
+    }
+    let (dh, ih) = (head_strict(d), head_strict(i));
+    if dh.is_empty() || dh != ih {
+        return;
+    }
+    if let (Some(ds), Some(is)) = (generic_args(d), generic_args(i)) {
+        if ds.len() == is.len() {
+            for (a, b) in ds.iter().zip(is.iter()) {
+                unify(a, b, vars, map);
+            }
+        }
+    }
+}
+
+/// an async body's first valued `return`, source order — the engine's
+/// weave records EVERY return's found type and unifies them into the
+/// answer (display answers with the first; disagreeing returns are
+/// already the check lane's diagnosis). A lambda's returns are the
+/// lambda's own — the scan stops at its body
+fn first_return(ast: &Ast, body: Handle<BlockNode>) -> Option<ExprRef> {
+    body.get(ast)
+        .stmts
+        .iter()
+        .find_map(|&s| stmt_return(ast, s))
+}
+
+fn stmt_return(ast: &Ast, s: StmtRef) -> Option<ExprRef> {
+    match s {
+        StmtRef::Return(h) => h.get(ast).value,
+        StmtRef::If(h) => {
+            let d = h.get(ast);
+            first_return(ast, d.then).or_else(|| match d.els {
+                Some(ElseBranch::Block(b)) => first_return(ast, b),
+                Some(ElseBranch::If(i)) => stmt_return(ast, StmtRef::If(i)),
+                None => None,
+            })
+        }
+        StmtRef::While(h) => first_return(ast, h.get(ast).body),
+        StmtRef::ForOf(h) => first_return(ast, h.get(ast).body),
+        StmtRef::ForC(h) => first_return(ast, h.get(ast).body),
+        StmtRef::When(h) => h
+            .get(ast)
+            .arms
+            .iter()
+            .find_map(|a| expr_return(ast, a.get(ast).body)),
+        StmtRef::Expr(e) => expr_return(ast, e),
+        _ => None,
+    }
+}
+
+fn expr_return(ast: &Ast, e: ExprRef) -> Option<ExprRef> {
+    match e {
+        ExprRef::Block(b) => first_return(ast, b),
+        ExprRef::Lambda(_) => None,
+        _ => rut_ast::expr_children(ast, e)
+            .into_iter()
+            .find_map(|c| expr_return(ast, c)),
+    }
 }
 
 /// a field's written type — the first file that declares it
@@ -300,21 +573,51 @@ pub(crate) fn elem_ty(text: &str) -> Option<String> {
     if t.starts_with('[') && t.ends_with(']') {
         return Some(t[1..t.len() - 1].trim().to_string());
     }
-    let open = t.find('<')?;
-    if !t.ends_with('>') {
+    first_generic_arg(t)
+}
+
+/// the type text's head WITHOUT the `?` peel — the strict head the
+/// await unwrap keys on (`head_of_ty` strips by design for member
+/// lookup; the engine rejects awaiting an optional future)
+fn head_strict(text: &str) -> &str {
+    match text.find('<') {
+        Some(i) if text.ends_with('>') => &text[..i],
+        _ => text,
+    }
+}
+
+/// a type text's `<..>` arguments, split at depth-0 commas —
+/// `Future<Vec<str>, i32>` → [`Vec<str>`, `i32`]; `None` when the
+/// text spells no generic region
+fn generic_args(text: &str) -> Option<Vec<String>> {
+    let open = text.find('<')?;
+    if !text.ends_with('>') {
         return None;
     }
-    let inner = &t[open + 1..t.len() - 1];
+    let inner = &text[open + 1..text.len() - 1];
+    let mut out = Vec::new();
     let mut depth = 0i32;
+    let mut start = 0usize;
     for (i, c) in inner.char_indices() {
         match c {
             '<' => depth += 1,
             '>' => depth -= 1,
-            ',' if depth == 0 => return Some(inner[..i].trim().to_string()),
+            ',' if depth == 0 => {
+                out.push(inner[start..i].trim().to_string());
+                start = i + 1;
+            }
             _ => {}
         }
     }
-    Some(inner.trim().to_string())
+    out.push(inner[start..].trim().to_string());
+    Some(out)
+}
+
+/// the first generic argument of a `<..>` spelling — the depth-aware
+/// cut (`Future<Vec<str>>` → `Vec<str>`); `None` when the text spells
+/// no generic region
+fn first_generic_arg(text: &str) -> Option<String> {
+    generic_args(text)?.into_iter().next()
 }
 
 pub(crate) fn is_cap(s: &str) -> bool {

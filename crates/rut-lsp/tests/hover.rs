@@ -1018,6 +1018,38 @@ fn member_hovers_decorate_the_member_token() {
 }
 
 #[test]
+fn await_unwrap_hover_agrees_with_the_hint() {
+    // the one-source law over the Future family: the hint's `: bytes`
+    // IS the hover's binding line (the tooltip renders the markdown)
+    let mut s = S::boot();
+    let src = "class Response {\nn: i32;\n}\nimpl Response {\npub fn body(self) -> Future<bytes> { return nil; }\n}\n\
+               async fn work(r: Response) -> bytes {\nconst b = await r.body();\nreturn b;\n}\n";
+    let uri = "file:///t/hov.rut";
+    let md = markdown(s.hover_in(uri, src, "const b = await", 1, 6));
+    assert!(md.contains("const b: bytes"), "{md}");
+    assert!(md.contains("type inferred"), "{md}");
+    // the use site answers the same text
+    let md = markdown(s.hover_in(uri, src, "return b;", 1, 7));
+    assert!(md.contains("const b: bytes"), "{md}");
+}
+
+#[test]
+fn the_async_family_hovers_engine_true_texts() {
+    // an unawaited async fn call, an async block's returns, and the
+    // chained await — each hover types the binding the way the engine
+    // values it
+    let mut s = S::boot();
+    let src = "async fn get() -> i32 { return 1; }\nentry fn main() -> nil {\nconst f = get();\nconst g = async { return 5; };\nconst v = await f;\n}\n";
+    let uri = "file:///t/hov.rut";
+    let md = markdown(s.hover_in(uri, src, "const f = get", 1, 6));
+    assert!(md.contains("const f: Future<i32>"), "{md}");
+    let md = markdown(s.hover_in(uri, src, "const g = async", 1, 6));
+    assert!(md.contains("const g: Future<i32>"), "{md}");
+    let md = markdown(s.hover_in(uri, src, "const v = await", 1, 6));
+    assert!(md.contains("const v: i32"), "{md}");
+}
+
+#[test]
 fn member_hover_gates_the_foreign_privates() {
     // the member-vis law on hover: a foreign class's private field is
     // a MISS (the compile refuses it — Act 1), the pub impl method

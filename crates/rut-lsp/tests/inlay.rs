@@ -219,6 +219,169 @@ fn bare_constructor_stays_bare() {
     assert_eq!(labels(&hs), [": Logger"], "{hs:?}");
 }
 
+// ---- the Future family ----
+
+#[test]
+fn await_unwraps_a_future_method_ret() {
+    // the repro: `const b = await resp.body();` — the impl method
+    // answers `Future<bytes>`, the await unwraps to `bytes` (one
+    // source: the hint's label is the hover's binding line)
+    let mut s = S::boot();
+    let src = "class Client {\nn: i32;\n}\nimpl Client {\npub fn send(self) -> Future<Response> { return nil; }\n}\n\
+               class Response {\nn: i32;\n}\nimpl Response {\npub fn body(self) -> Future<bytes> { return nil; }\n}\n\
+               async fn work(r: Client) -> bytes {\n    const resp: Response = await r.send();\n    const b = await resp.body();\n    return b;\n}\n";
+    let uri = "file:///t/main.rut";
+    let hs = s.inlay_all(uri, src);
+    assert_eq!(labels(&hs), [": bytes"], "{hs:?}");
+    assert_eq!(pos(&hs[0]), end_of(src, "const b", 1), "{}", hs[0]);
+    assert!(
+        tooltip(&hs[0]).contains("const b: bytes"),
+        "{:?}",
+        tooltip(&hs[0])
+    );
+    assert!(
+        tooltip(&hs[0]).contains("type inferred"),
+        "{:?}",
+        tooltip(&hs[0])
+    );
+}
+
+#[test]
+fn nested_future_generics_unwrap_to_the_inner_text() {
+    // `Future<Vec<str>>` → `Vec<str>` — the depth-aware first-argument
+    // cut keeps nesting whole
+    let mut s = S::boot();
+    let src = "class Buf {\nn: i32;\n}\nimpl Buf {\npub fn lines(self) -> Future<Vec<str>> { return nil; }\n}\n\
+               fn go(b: Buf) -> nil {\n    const ls = await b.lines();\n}\n";
+    let hs = s.inlay_all("file:///t/main.rut", src);
+    assert_eq!(labels(&hs), [": Vec<str>"], "{hs:?}");
+}
+
+#[test]
+fn non_future_await_stays_silent() {
+    // the unwrap is strict: `await` on a non-Future is a miss, never
+    // a wrong type
+    let mut s = S::boot();
+    let src =
+        "fn n() -> i32 { return 1; }\nentry fn main() -> nil {\n    const x = await n();\n}\n";
+    let hs = s.inlay_all("file:///t/main.rut", src);
+    assert!(hs.is_empty(), "{:?}", labels(&hs));
+}
+
+#[test]
+fn awaiting_an_optional_future_stays_silent() {
+    // strictness: the head is read WITHOUT the `?` peel — the engine
+    // rejects awaiting an optional future, so `?Future<..>` misses
+    let mut s = S::boot();
+    let src = "fn f() -> ?Future<i32> { return nil; }\nentry fn main() -> nil {\n    const g = f();\n    const x = await g;\n}\n";
+    let hs = s.inlay_all("file:///t/main.rut", src);
+    // the operand itself still types; only the await stays silent
+    assert_eq!(labels(&hs), [": ?Future<i32>"], "{hs:?}");
+}
+
+#[test]
+fn an_async_fn_call_types_future_and_awaits_to_the_ret() {
+    // the engine's sugar law: a call to an `async` fn answers
+    // `Future<R>` even unawaited (the engine value is the frame)
+    let mut s = S::boot();
+    let src = "async fn get() -> i32 { return 1; }\nentry fn main() -> nil {\n    const v = await get();\n    const f = get();\n}\n";
+    let hs = s.inlay_all("file:///t/main.rut", src);
+    assert_eq!(labels(&hs), [": i32", ": Future<i32>"], "{hs:?}");
+}
+
+#[test]
+fn unwritten_async_ret_answers_future_nil() {
+    // the engine's ret default: an unwritten async ret means `nil`,
+    // so the call answers `Future<nil>` (the bare written ret used to
+    // leak `: nil`)
+    let mut s = S::boot();
+    let src = "async fn job() { }\nentry fn main() -> nil {\n    const f = job();\n}\n";
+    let hs = s.inlay_all("file:///t/main.rut", src);
+    assert_eq!(labels(&hs), [": Future<nil>"], "{hs:?}");
+}
+
+#[test]
+fn an_async_block_types_its_returns_and_the_awaits_chain() {
+    // the weave's founds law: the answer is the body's valued return
+    // (`return 5;` — no tail), wrapped `Future<i32>`; the chained
+    // await unwraps it
+    let mut s = S::boot();
+    let src =
+        "entry fn main() -> nil {\n    const f = async { return 5; };\n    const b = await f;\n}\n";
+    let uri = "file:///t/main.rut";
+    let hs = s.inlay_all(uri, src);
+    assert_eq!(labels(&hs), [": Future<i32>", ": i32"], "{hs:?}");
+    // the hover counterpart rides the same binding_ty — one source
+    let md = markdown(s.hover_in(uri, src, "const b = await", 1, 6));
+    assert!(md.contains("const b: i32"), "{md}");
+}
+
+#[test]
+fn await_through_a_local_unwraps() {
+    let mut s = S::boot();
+    let src = "class Response {\nn: i32;\n}\nimpl Response {\npub fn body(self) -> Future<bytes> { return nil; }\n}\n\
+               fn go(r: Response) -> nil {\n    const fut = r.body();\n    const b = await fut;\n}\n";
+    let hs = s.inlay_all("file:///t/main.rut", src);
+    assert_eq!(labels(&hs), [": Future<bytes>", ": bytes"], "{hs:?}");
+}
+
+#[test]
+fn spelled_call_site_generics_substitute() {
+    // `make<i32>()` names `T := i32` — the ret prices under the map,
+    // the async wrap rides after (`Future<i32>` → await → `i32`)
+    let mut s = S::boot();
+    let src = "async fn make<T>() -> T { return nil; }\nentry fn main() -> nil {\n    const v = await make<i32>();\n}\n";
+    let hs = s.inlay_all("file:///t/main.rut", src);
+    assert_eq!(labels(&hs), [": i32"], "{hs:?}");
+}
+
+#[test]
+fn argument_driven_substitution_matches_structurally() {
+    // `sleep_like()` infers `Future<str>`; the declared `Future<T>`
+    // param matches it — heads equal, generic arity equal — binding
+    // `T := str`; the ret prices to the arg's element text
+    let mut s = S::boot();
+    let src = "async fn sleep_like() -> str { return \"\"; }\n\
+               async fn drive<T>(f: Future<T>) -> T { return await f; }\n\
+               entry fn main() -> nil {\n    const s = await drive(sleep_like());\n}\n";
+    let hs = s.inlay_all("file:///t/main.rut", src);
+    // the substituted ret (`: str`) plus the call's own param hint
+    // (`f:`) — the arity match rides along
+    assert_eq!(labels(&hs), [": str", "f:"], "{hs:?}");
+}
+
+#[test]
+fn residual_type_vars_stay_silent() {
+    // the never-wrong law, enforced: an unsolvable generic ret is
+    // silence — the old leak rendered `: T`
+    let mut s = S::boot();
+    let src =
+        "fn lazy<T>() -> T { return nil; }\nentry fn main() -> nil {\n    const v = lazy();\n}\n";
+    let hs = s.inlay_all("file:///t/main.rut", src);
+    assert!(hs.is_empty(), "{:?}", labels(&hs));
+}
+
+#[test]
+fn host_surface_async_fn_types_future_and_awaits() {
+    // the reversed v1 ruling: a surface fn's written ret IS the
+    // crossing's contract — `probe(x)` answers `Future<bytes>`,
+    // `await probe(x)` answers `bytes`
+    let mut s = S::boot();
+    s.index_file(
+        "file:///t/host.d.rut",
+        "pub host async fn probe(r: opaque) -> bytes;\n",
+    );
+    let src = "fn go() -> nil {\n    const p = probe(opaque(0));\n    const b = await probe(opaque(0));\n}\n";
+    let hs = s.inlay_all("file:///t/main.rut", src);
+    // the type texts, plus each call's own `r:` param hint (the
+    // surface fn records its params; the arity match rides along)
+    assert_eq!(
+        labels(&hs),
+        [": Future<bytes>", "r:", ": bytes", "r:"],
+        "{hs:?}"
+    );
+}
+
 // ---- PARAMETER hints ----
 
 #[test]
