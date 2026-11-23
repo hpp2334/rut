@@ -30,7 +30,7 @@ mod util;
 
 pub use boundary::{rut_box_payload, CallArg, CallArgs, Ret};
 pub use builder::{IntoVmParts, VmBuilder, VmError, VmParts};
-pub use completer::{Completer, FAILED, PENDING, READY};
+pub use completer::{Completer, HostWakes, HostWakesHandle, FAILED, PENDING, READY};
 use host::HostSlot;
 pub use host::{ExpectedHostFns, HostPkg, HostPkgContext, HostRegistry};
 
@@ -182,6 +182,12 @@ pub struct Vm {
     /// poll drives each once per spin, releases on completion, and
     /// keeps pending entries for the next spin.
     host_pending: Vec<Slot>,
+    /// the machine's ONE wake cell — the registry's Arc, carried over
+    /// by the boot join. Every host future's settle bumps it
+    /// (`Completer::complete`/`fail` → `HostWakes::bump`), so a
+    /// driving loop parked on it wakes exactly when a settle lands.
+    /// One cell per machine, shared by every host future in it.
+    host_wakes: HostWakesHandle,
     /// the engine-minted cx record type (found by name; None when the
     /// program never mentions async)
     cx_ty: Option<TypeId>,
@@ -244,6 +250,10 @@ impl Vm {
         limits: &Limits,
         mut registry: HostRegistry,
     ) -> Result<Vm, Trap> {
+        // the machine's ONE wake cell — the registry mints it, the
+        // builder carries it here (the identity law: the registry's
+        // Arc and the Vm's are the same object)
+        let host_wakes = registry.wakes();
         // ---- the host join ----
         // Resolve every host thunk's binding NOW; slots are dense by
         // func idx, one row each: the adapter code pointer, the boxed
@@ -422,8 +432,19 @@ impl Vm {
             future_yield_slots,
             host_frames,
             host_pending: Vec::new(),
+            host_wakes,
             cx_ty,
         })
+    }
+
+    /// The machine's ONE wake cell (a clone of the Arc the boot join
+    /// carried over from the registry) — the sugars mint every host
+    /// future's [`Completer`](crate::Completer) against it, and the
+    /// driving loop's park lane (a later phase) waits on it. Every
+    /// settle bumps the generation; a waiter that parked before it
+    /// wakes.
+    pub fn host_wakes(&self) -> HostWakesHandle {
+        self.host_wakes.clone()
     }
 
     pub fn heap_usage(&self) -> u64 {

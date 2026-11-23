@@ -16,6 +16,7 @@ use std::collections::{BTreeMap, HashMap};
 use rut_core::types::TypeId;
 
 use super::boundary::HostHandler;
+use super::completer::{HostWakes, HostWakesHandle};
 use super::Vm;
 use crate::heap::Slot;
 
@@ -109,6 +110,12 @@ pub struct HostRegistry {
     /// installer per pkg; a second `install_host_pkg` for the same
     /// scope is a wiring bug and panics
     installed_scopes: std::collections::HashSet<String>,
+    /// the machine's ONE wake cell — minted HERE (the registry is
+    /// built before the Vm), carried onto the machine by the boot
+    /// join. Every host future's [`Completer`] settles bump it, so a
+    /// driving loop parked on it wakes exactly when a settle lands
+    /// (the run-waits-host-futures lane's substrate).
+    wakes: HostWakesHandle,
 }
 
 /// One host pkg's binding set. Rows register under UNPREFIXED names —
@@ -179,7 +186,17 @@ impl HostRegistry {
         HostRegistry {
             fns: HashMap::new(),
             installed_scopes: std::collections::HashSet::new(),
+            wakes: HostWakes::shared(),
         }
+    }
+
+    /// The machine's ONE wake cell (a clone of the ONE Arc — identity
+    /// with what the boot join carries onto the Vm). Embedders and
+    /// tests read it to park a waiter or assert the identity; the
+    /// sugars mint through `Vm::host_wakes` (the machine's copy) so a
+    /// row always wires against the machine it runs on.
+    pub fn wakes(&self) -> HostWakesHandle {
+        self.wakes.clone()
     }
 }
 
@@ -349,7 +366,11 @@ macro_rules! pkg_fn {
 /// (`<name>` trap, `__start`, `__yield`, `__take`, `__cancel`), all
 /// registered under bare row names — or the scope-relative path
 /// spelling (`"net::connect"` → `net::connect__start` et al); the
-/// scope prefixes at the merge.
+/// scope prefixes at the merge. As with `register_async!`, the start
+/// closure's FIRST parameter is the future's
+/// [`Completer`](crate::Completer) — minted by the row through
+/// `Vm::host_wakes` (the machine's ONE wake cell) and handed in; the
+/// body never mints.
 #[macro_export]
 macro_rules! pkg_async_fn {
     ($pkg:expr, $name:literal, ($($t:ty),* $(,)?) -> $ret:ty, $start:expr $(,)?) => {
@@ -586,10 +607,8 @@ mod host_pkg_tests {
         ctx.declare("nmap_host", "probe__cancel", vec![TY_OPAQUE], TY_NIL);
 
         let mut pkg = HostPkg::new("nmap_host");
-        crate::pkg_async_fn!(pkg, "probe", (i64,) -> i64, move |x: i64| {
-            let c = Completer::<i64>::new();
+        crate::pkg_async_fn!(pkg, "probe", (i64,) -> i64, move |c: Completer<i64>, x: i64| {
             c.complete(x);
-            c
         });
         let mut hosts = HostRegistry::new();
         hosts.install_host_pkg(&ctx, pkg.build());
@@ -606,9 +625,10 @@ mod host_pkg_tests {
     // clones share it, distinct cells never collide
     #[test]
     fn the_completer_id_is_clone_shared_and_cell_distinct() {
-        let a = crate::Completer::<i64>::new();
+        let wakes = crate::HostWakes::shared();
+        let a = crate::Completer::<i64>::with_wake(wakes.clone());
         let a2 = a.clone();
-        let b = crate::Completer::<i64>::new();
+        let b = crate::Completer::<i64>::with_wake(wakes);
         assert_eq!(a.id(), a2.id(), "a clone is the same cell");
         assert_ne!(a.id(), b.id(), "two cells are two identities");
     }
@@ -632,10 +652,8 @@ mod host_pkg_tests {
 
         let mut pkg = HostPkg::new("nmap_host");
         crate::pkg_async_fn!(pkg, "probe", (i64,) -> i64,
-            move |x: i64| {
-                let c = Completer::<i64>::new();
+            move |c: Completer<i64>, x: i64| {
                 c.complete(x);
-                c
             },
             move |_c: Completer<i64>| {});
         let mut hosts = HostRegistry::new();
@@ -686,10 +704,8 @@ mod host_pkg_tests {
         ctx.declare("myhost", "net::probe__take", vec![TY_OPAQUE], TY_I64);
         ctx.declare("myhost", "net::probe__cancel", vec![TY_OPAQUE], TY_NIL);
         let mut pkg = HostPkg::new("myhost");
-        crate::pkg_async_fn!(pkg, "net::probe", (i64,) -> i64, move |x: i64| {
-            let c = Completer::<i64>::new();
+        crate::pkg_async_fn!(pkg, "net::probe", (i64,) -> i64, move |c: Completer<i64>, x: i64| {
             c.complete(x);
-            c
         });
         let mut hosts = HostRegistry::new();
         hosts.install_host_pkg(&ctx, pkg.build());

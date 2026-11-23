@@ -11,5 +11,6 @@ pub(crate) mod arena;
 pub use heap::{HostPayload, Opaque, OpaqueRef, Slot, Trap, TrapKind, ValSlot, Value};
 pub use interp::{
     builder::{IntoVmParts, VmBuilder, VmError, VmParts},
-    rut_box_payload, Completer, HostPkg, HostPkgContext, FAILED, PENDING, READY,
+    rut_box_payload, Completer, HostPkg, HostPkgContext, HostWakes, HostWakesHandle, FAILED,
+    PENDING, READY,
 };

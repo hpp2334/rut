@@ -578,9 +578,8 @@ fn install_read_rows(pkg: &mut HostPkg, reg: &CancelReg) {
     // transport-failed response, a second taker (body twice, or body
     // after a stream mint) degrade to EMPTY — the disclosed law.
     let reg_start = reg.clone();
-    let start_body = move |r: Opaque<HttpResponse>| -> CompleterOf<Vec<u8>> {
+    let start_body = move |comp: CompleterOf<Vec<u8>>, r: Opaque<HttpResponse>| {
         let reg = reg_start.clone();
-        let comp = CompleterOf::new();
         let mut immediate: Option<Vec<u8>> = None;
         // did this call TAKE the body lane (vs degrade)? only a
         // take stands the budget gate down
@@ -632,7 +631,6 @@ fn install_read_rows(pkg: &mut HostPkg, reg: &CancelReg) {
         if let Some(bytes) = immediate {
             comp.complete(bytes);
         }
-        comp
     };
     let abort_body = {
         let reg = reg.clone();
@@ -651,9 +649,8 @@ fn install_read_rows(pkg: &mut HostPkg, reg: &CancelReg) {
     // ONE POLL PER AWAIT: exactly one pop here — the consumer's pace
     // is the pump's pace (the pop notifies the parked pump).
     let reg_start = reg.clone();
-    let start_next = move |s: Opaque<HttpStream>| -> CompleterOf<Option<Vec<u8>>> {
+    let start_next = move |comp: CompleterOf<Option<Vec<u8>>>, s: Opaque<HttpStream>| {
         let reg = reg_start.clone();
-        let comp = CompleterOf::new();
         let mut immediate: Option<Option<Vec<u8>>> = None;
         let mut popped = false;
         let mut parked = false;
@@ -699,7 +696,6 @@ fn install_read_rows(pkg: &mut HostPkg, reg: &CancelReg) {
         if let Some(ans) = immediate {
             comp.complete(ans);
         }
-        comp
     };
     let abort_next = {
         let reg = reg.clone();
@@ -787,10 +783,12 @@ where
         pkg,
         "net::http_send",
         (OpaqueRef, String, String, String, Vec<u8>) -> HttpResponse,
-        move |c: OpaqueRef, method: String, url: String, headers: String, body: Vec<u8>|
-              -> CompleterOf<HttpResponse> {
-            let _ = c;
-            let comp = CompleterOf::new();
+        move |comp: CompleterOf<HttpResponse>,
+              _cx: OpaqueRef,
+              method: String,
+              url: String,
+              headers: String,
+              body: Vec<u8>| {
             send(
                 &HttpRequest {
                     method,
@@ -800,7 +798,6 @@ where
                 },
                 comp.clone(),
             );
-            comp
         },
         abort_send,
     );

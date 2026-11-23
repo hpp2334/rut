@@ -91,23 +91,17 @@ fn split_arg(u: &str) -> (String, u64) {
 }
 
 impl Fixture {
-    fn probe_start(&self, u: String) -> Completer<String> {
+    fn probe_start(&self, c: Completer<String>, u: String) {
         let (key, ms) = split_arg(&u);
-        let c = Completer::new();
-        self.dues.borrow_mut().push((ms, key, c.clone()));
-        c
+        self.dues.borrow_mut().push((ms, key, c));
     }
-    fn boom_start(&self, u: String) -> Completer<String> {
+    fn boom_start(&self, c: Completer<String>, u: String) {
         let (key, ms) = split_arg(&u);
-        let c = Completer::new();
         let msg = format!("kaboom:{key}");
-        self.fail_dues.borrow_mut().push((ms, msg, c.clone()));
-        c
+        self.fail_dues.borrow_mut().push((ms, msg, c));
     }
-    fn hang_start(&self, _u: String) -> Completer<String> {
-        let c = Completer::new();
-        self.hung.borrow_mut().push(c.clone());
-        c
+    fn hang_start(&self, c: Completer<String>, _u: String) {
+        self.hung.borrow_mut().push(c);
     }
     fn bump_cancel(&self) {
         self.cancels.set(self.cancels.get() + 1);
@@ -214,14 +208,14 @@ fn setup(src: &str) -> (Vm, Rc<RefCell<Vec<String>>>, Rc<Fixture>) {
     let fx = Rc::new(Fixture::default());
     let fx2 = fx.clone();
     rut_vm::register_async!(hosts, "fixture::probe", (String,) -> String,
-        move |u: String| -> Completer<String> { fx2.probe_start(u) });
+        move |c: Completer<String>, u: String| { fx2.probe_start(c, u) });
     let fx3 = fx.clone();
     rut_vm::register_async!(hosts, "fixture::boom", (String,) -> String,
-        move |u: String| -> Completer<String> { fx3.boom_start(u) });
+        move |c: Completer<String>, u: String| { fx3.boom_start(c, u) });
     let fx4 = fx.clone();
     let fx5 = fx.clone();
     rut_vm::register_async!(hosts, "fixture::hang", (String,) -> String,
-        move |u: String| -> Completer<String> { fx4.hang_start(u) },
+        move |c: Completer<String>, u: String| { fx4.hang_start(c, u) },
         move |_c: Completer<String>| { fx5.bump_cancel() });
     // the boot join over the EXPANDED expectations — the decl
     // grammar spells one row, the embedder binds five bodies
@@ -712,22 +706,20 @@ entry fn main() -> nil {
     let fx = Rc::new(Fixture::default());
     let fx2 = fx.clone();
     rut_vm::register_async!(hosts, "fixture::probe", (String,) -> String,
-        move |u: String| -> Completer<String> { fx2.probe_start(u) });
+        move |c: Completer<String>, u: String| { fx2.probe_start(c, u) });
     let fx3 = fx.clone();
     rut_vm::register_async!(hosts, "fixture::boom", (String,) -> String,
-        move |u: String| -> Completer<String> { fx3.boom_start(u) });
+        move |c: Completer<String>, u: String| { fx3.boom_start(c, u) });
     let fx4 = fx.clone();
     rut_vm::register_async!(hosts, "fixture::hang", (String,) -> String,
-        move |u: String| -> Completer<String> { fx4.hang_start(u) });
+        move |c: Completer<String>, u: String| { fx4.hang_start(c, u) });
     rut_vm::register_async!(hosts, "fixture::wall", (String,) -> String,
-    move |u: String| -> Completer<String> {
-        let c = Completer::new();
+    move |c: Completer<String>, u: String| {
         let w = c.clone();
         std::thread::spawn(move || {
             std::thread::sleep(std::time::Duration::from_millis(30));
             w.complete(format!("walled:{u}"));
         });
-        c
     });
     hosts.verify_against(&ctx.flatten());
     let limits = Limits {
