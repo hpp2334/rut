@@ -227,11 +227,13 @@ pub fn type_definition_on(
 pub fn inlay_hints_on(
     doc: &crate::semantic::Document,
     chain: &Chain,
+    dm: &crate::world::mods::DocMods,
     range: Range,
 ) -> Vec<InlayHint> {
     let ctx = inlay::Ctx {
         doc: chain.head(),
         chain,
+        doc_mods: dm,
     };
     let index = doc.lines();
     let lo = index.byte(doc.src(), range.start.line, range.start.character);
@@ -267,9 +269,17 @@ pub fn references_on(
 /// signature renders verbatim, the active parameter comes from the
 /// comma/paren depth at the request position. Ambiguity or arity
 /// mismatch → no help, never wrong help.
-pub fn signature_help_on(chain: &Chain, line: u32, ch: u32) -> Option<SignatureHelp> {
+pub fn signature_help_on(
+    chain: &Chain,
+    dm: &crate::world::mods::DocMods,
+    line: u32,
+    ch: u32,
+) -> Option<SignatureHelp> {
     let head = chain.head();
-    let ctx = signature_help::Ctx { chain };
+    let ctx = signature_help::Ctx {
+        chain,
+        doc_mods: dm,
+    };
     signature_help::signature_help(&ctx, head.doc.lines().byte(head.doc.src(), line, ch))
 }
 

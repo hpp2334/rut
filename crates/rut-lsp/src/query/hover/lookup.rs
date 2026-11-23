@@ -403,7 +403,7 @@ fn qualified_path_hover(
     if q.k + 1 != q.segs.len() {
         // a mid-segment cursor — the module the walk lands at
         let names: Vec<String> = q.segs[..=q.k].iter().map(|(n, _)| n.clone()).collect();
-        let target = chain.qualified_module(doc_mods, &names)?;
+        let target = chain.qualified_module(doc_mods, &names, q.is_ty)?;
         let md = render_module_target(target, crate::world::mods::mod_path_of(target));
         return Some(Some((md, span)));
     }

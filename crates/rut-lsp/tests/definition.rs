@@ -834,3 +834,35 @@ fn pkg_rooted_dep_names_resolve() {
     let hits = s.def_in("file:///t/flat.rut", flatdoc, "flatdep::top", 1, 10);
     assert!(hits.is_empty(), "a flat dep roots nothing: {hits:?}");
 }
+
+#[test]
+fn qualified_annotation_receiver_resolves_members() {
+    // the member face of the receiver-inference law: the annotated
+    // qualified shape's `.bump` jumps to exactly the module's impl fn
+    let mut s = S::boot();
+    let m_src = "pub struct Counter {\n    n: i32;\n}\nimpl Counter {\n    pub fn bump(self) -> i32 { return self.n + 1; }\n}\npub fn mk(n: i32) -> Counter { return Counter { n: n }; }\n";
+    s.index_mod_at("file:///ws/pkg/src/m.rut", "pkg", "m", m_src);
+    let doc = "mod m;\nentry fn main() -> i32 {\n    let c: m::Counter = m::mk(41);\n    return c.bump();\n}\n";
+    let uri = "file:///ws/pkg/src/mod.rut";
+    s.index_mod_at(uri, "pkg", "", doc);
+    let hits = s.def_in(uri, doc, "c.bump();", 1, 2);
+    assert_eq!(hits.len(), 1, "{hits:?}");
+    assert_eq!(hits[0]["uri"], "file:///ws/pkg/src/m.rut");
+    assert_target(m_src, &hits[0], "bump(self)", 1, 4, "the module's impl fn");
+    // the let cell behind a dep head: no jump (module lets cross no
+    // package boundary qualified)
+    let math_src = "pub fn sqrt(x: f64) -> f64 { return x; }\npub let PI2: f64 = 6.28;\n";
+    s.index_mod_at(
+        "file:///deps/calc/src/mod.rut",
+        "calc",
+        "",
+        "pub mod math;\n",
+    );
+    s.index_mod_at("file:///deps/calc/src/math.rut", "calc", "math", math_src);
+    let doc3 = "entry fn main() -> f64 {\n    return calc::math::PI2;\n}\n";
+    let hits = s.def_in(uri, doc3, "calc::math::PI2", 1, 13);
+    assert!(
+        hits.is_empty(),
+        "a module let is no jump behind a dep head: {hits:?}"
+    );
+}

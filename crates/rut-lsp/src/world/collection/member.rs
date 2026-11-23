@@ -12,6 +12,7 @@ use rut_ast::{AnyHandle, ExprRef, FieldNode, IdentId, Lit, MethodNode, PathNode,
 use super::{Chain, FnView, MemberView, MountedFile, TyView};
 use crate::semantic::Span;
 use crate::world::bindings::{BindKind, Binding};
+use crate::world::infer::QualHit;
 use crate::world::mods::{self, DocMods};
 use crate::world::types::TyForm;
 
@@ -41,7 +42,7 @@ impl<'a> Chain<'a> {
     /// signature-help lane rides [`Chain::impl_method_fn`] UNGATED: a
     /// call site spelling a refused member is already a panel error.
     pub(crate) fn member(&self, pos: u32, node: AnyHandle, doc: &DocMods) -> MemberHit<'a> {
-        match self.member_hit(pos, node) {
+        match self.member_hit(pos, node, doc) {
             // the member-vis gate: a resolved target the site cannot
             // see is a MISS — hover/definition agree with the compile
             MemberHit::Found(target) if !self.target_visible(&target, doc) => MemberHit::None,
@@ -51,7 +52,7 @@ impl<'a> Chain<'a> {
 
     /// the ungated resolve — the member law's walk (the gated
     /// [`Chain::member`] wraps this)
-    fn member_hit(&self, pos: u32, node: AnyHandle) -> MemberHit<'a> {
+    fn member_hit(&self, pos: u32, node: AnyHandle, doc: &DocMods) -> MemberHit<'a> {
         let ast = self.head().doc.ast();
         // the member + the receiver, from the node itself — the
         // cursor's own segment decides for a path (the head segment is
@@ -66,7 +67,16 @@ impl<'a> Chain<'a> {
             return MemberHit::UnknownReceiver;
         };
         let member_text = ast.name(member);
-        let Some(ty_name) = self.recv_ty_name(pos, recv) else {
+        // the receiver's type head: the bindings' resolve, else the
+        // expression door (a chained receiver — `m::mk(41).bump()` —
+        // types through its call's written ret, the same door the
+        // completion tier rides)
+        let Some(ty_name) = self.recv_ty_name(doc, pos, recv).or_else(|| match recv {
+            RecvNode::Expr(e) => self
+                .expr_ty(self.head(), e)
+                .map(|t| crate::world::types::head_of_ty(&t)),
+            _ => None,
+        }) else {
             return MemberHit::UnknownReceiver;
         };
         // an interface receiver: the declared signatures ARE the members —
@@ -242,7 +252,7 @@ impl<'a> Chain<'a> {
     /// (capitalized and primitive names spell themselves, locals ride
     /// the bindings — read internally, never a caller-run pass — then
     /// module lets)
-    pub(crate) fn recv_ty_name(&self, pos: u32, recv: RecvNode) -> Option<String> {
+    pub(crate) fn recv_ty_name(&self, doc: &DocMods, pos: u32, recv: RecvNode) -> Option<String> {
         let ast = self.head().doc.ast();
         match recv {
             RecvNode::Expr(e) => match e {
@@ -259,7 +269,7 @@ impl<'a> Chain<'a> {
                     if segs.len() != 1 {
                         return None;
                     }
-                    self.named_recv(pos, segs[0].name.ident)
+                    self.named_recv(doc, pos, segs[0].name.ident)
                 }
                 ExprRef::Lit(h) => match h.get(ast).lit {
                     // every string-literal form is a `str` receiver
@@ -269,14 +279,18 @@ impl<'a> Chain<'a> {
                 ExprRef::FStr(_) => Some("str".to_string()),
                 _ => None,
             },
-            RecvNode::Seg(id) => self.named_recv(pos, id),
+            RecvNode::Seg(id) => self.named_recv(doc, pos, id),
         }
     }
 
     /// a plain name receiver — capitalized and primitive spellings
     /// name themselves; anything else is the bindings' resolve (the
-    /// declared-or-inferred head) then the module lets
-    pub(crate) fn named_recv(&self, pos: u32, id: IdentId) -> Option<String> {
+    /// declared-or-inferred head) then the module lets. A QUALIFIED
+    /// annotation (`c: m::Counter`) resolves through the TYPE
+    /// ladder's qualified lane to its declaring view; the view's bare
+    /// name then reaches the type through the computed-head lane
+    /// ([`Chain::type_via_imports`])
+    pub(crate) fn named_recv(&self, doc: &DocMods, pos: u32, id: IdentId) -> Option<String> {
         let ast = self.head().doc.ast();
         let text = ast.name(id);
         if crate::world::infer::is_cap(text) || crate::semantic::is_primitive_ty(text) {
@@ -284,8 +298,35 @@ impl<'a> Chain<'a> {
         }
         let b = rut_ast::resolve_binding(self.head().doc.bindings(), pos, id)?;
         self.binding_ty(b)
-            .map(|t| crate::world::types::head_of_ty(&t))
+            .map(|t| {
+                self.qualified_ty_name(doc, &t)
+                    .unwrap_or_else(|| crate::world::types::head_of_ty(&t))
+            })
             .or_else(|| crate::world::infer::module_let_ty(self.iter(), text))
+    }
+
+    /// a qualified TYPE annotation's resolution — `m::Counter` as
+    /// written resolves through the TYPE ladder's qualified lane (the
+    /// own family — `resolve_qualified_ty`'s law) to its declaring
+    /// view; the view's bare name is the type head the member lane
+    /// then resolves. `None` when the spelling is unqualified or the
+    /// lane misses — `head_of_ty` keeps the old shape then.
+    pub(crate) fn qualified_ty_name(&self, doc: &DocMods, text: &str) -> Option<String> {
+        if !text.contains("::") {
+            return None;
+        }
+        let mut segs: Vec<String> = text.split("::").map(|s| s.trim().to_string()).collect();
+        // the tail's generic args ride the substitution, not the walk
+        // — the lane matches the DECLARED name
+        if let Some(last) = segs.last_mut() {
+            if let Some(i) = last.find('<') {
+                *last = last[..i].to_string();
+            }
+        }
+        self.qualified_scope(doc, &segs, true)?
+            .types
+            .first()
+            .map(|t| t.name().to_string())
     }
 
     /// a binding row's type — declared-or-inferred, the chain as the
@@ -317,10 +358,24 @@ impl<'a> Chain<'a> {
     /// of `e`, the chain as the file window (the receiver resolver
     /// generalized: literals → primitives, paths → the bindings (read
     /// internally) and module lets, calls → the callee's written ret,
-    /// member chains → the member lanes)
+    /// member chains → the member lanes). A module-QUALIFIED callee
+    /// (`m::mk(..)`) resolves through the module-namespace lane (the
+    /// one home — [`Chain::qualified_scope`]) to its fn, the written
+    /// ret pricing the call; the hook rides the value ladder with the
+    /// doc's place unknown (the references-scan's own-lane-off
+    /// default — the ancestor/pkg-head heads stay off, never wrong)
     pub(crate) fn expr_ty(&self, home: &MountedFile, e: ExprRef) -> Option<String> {
         let files: Vec<&MountedFile> = self.iter().collect();
-        crate::world::infer::expr_ty(home, &files, e)
+        let doc = DocMods::default();
+        let qual = |segs: &[String], is_ty: bool| -> Option<QualHit<'a>> {
+            let scope = self.qualified_scope(&doc, segs, is_ty)?;
+            Some(if is_ty {
+                QualHit::Ty(scope.types.first()?.name().to_string())
+            } else {
+                QualHit::Fn(scope.fns.into_iter().next()?)
+            })
+        };
+        crate::world::infer::expr_ty(home, &files, e, &qual)
     }
 
     /// the inherent impl-block fn `impl ty_name { fn member(..) }` —

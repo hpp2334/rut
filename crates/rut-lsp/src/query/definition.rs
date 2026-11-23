@@ -54,6 +54,7 @@ use std::collections::HashMap;
 
 use crate::semantic::Span;
 use crate::world::collection::{Chain, MemberHit, MemberTarget, MountedFile};
+use crate::world::infer::QualHit;
 use crate::world::mods::DocMods;
 use crate::world::pkg::{import_map, matches_pkg};
 use crate::world::types::head_of_ty;
@@ -399,7 +400,15 @@ fn get_type_definition_targets(ctx: &Ctx, pos: u32) -> Vec<DefLocation> {
     // locals / module lets — their type head's declaration
     if let Some(b) = rut_ast::resolve_binding(doc.doc.bindings(), pos, name_id) {
         let files: Vec<&MountedFile> = chain.iter().collect();
-        return crate::world::infer::binding_ty(doc, &files, b)
+        let qual = |segs: &[String], is_ty: bool| -> Option<QualHit> {
+            let scope = chain.qualified_scope(ctx.doc_mods, segs, is_ty)?;
+            Some(if is_ty {
+                QualHit::Ty(scope.types.first()?.name().to_string())
+            } else {
+                QualHit::Fn(scope.fns.into_iter().next()?)
+            })
+        };
+        return crate::world::infer::binding_ty(doc, &files, b, &qual)
             .as_deref()
             .map(head_of_ty)
             .and_then(|head| ty_name_locations(ctx, chain, &imported, &head))

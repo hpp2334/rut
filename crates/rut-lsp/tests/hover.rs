@@ -1261,10 +1261,14 @@ fn qualified_path_through_use_bound_module_hovers() {
     let md = markdown(s.hover_in("file:///t/main.rut", doc, "math::sqrt", 1, 9));
     assert!(md.contains("pub fn sqrt(x: f64) -> f64"), "{md}");
     assert!(md.contains("math.rut"), "the module's provenance: {md}");
-    // the module's pub let rides the lane's let layer
+    // the module's pub let: silent behind a use-bound module head
+    // (module lets cross no package boundary through a qualified path)
     let doc2 = "use calc::{ math };\nfn go() -> f64 {\n    return math::PI;\n}\n";
-    let md = markdown(s.hover_in("file:///t/main2.rut", doc2, "math::PI", 1, 7));
-    assert!(md.contains("pub let PI"), "{md}");
+    let h = s.hover_in("file:///t/main2.rut", doc2, "math::PI", 1, 7);
+    assert!(
+        no_hover(&h),
+        "a module let is silent behind a use-bound head: {h}"
+    );
 }
 
 #[test]
@@ -1347,10 +1351,15 @@ fn pkg_rooted_dep_name_answers_through_the_lane() {
     let md = markdown(s.hover_in(uri, doc, "calc::math::sqrt", 1, 13));
     assert!(md.contains("pub fn sqrt(x: f64) -> f64"), "{md}");
     assert!(md.contains("math.rut"), "the module's provenance: {md}");
-    // the let cell
+    // the let cell: module lets cross NO package boundary through a
+    // qualified path (the compiler refuses `mathkit::advanced::SCALE`
+    // and the use-bound `advanced::SCALE` in every lane) — silent
     let doc3 = "entry fn main() -> f64 {\n    return calc::math::PI2;\n}\n";
-    let md = markdown(s.hover_in(uri, doc3, "calc::math::PI2", 1, 13));
-    assert!(md.contains("pub let PI2"), "{md}");
+    let h = s.hover_in(uri, doc3, "calc::math::PI2", 1, 13);
+    assert!(
+        no_hover(&h),
+        "a module let is silent behind a dep head: {h}"
+    );
     // the type cell: the type ladder takes no dep head
     let doc2 = "entry fn main() -> i32 {\n    let a: calc::math::Angle = nil;\n    return 0;\n}\n";
     let h = s.hover_in(uri, doc2, "calc::math::Angle", 1, 14);
@@ -1512,4 +1521,175 @@ fn qualified_path_through_an_ancestor_edge_hovers() {
     );
     let h = s.hover_in(deep_uri, deep, "other::thing", 1, 9);
     assert!(no_hover(&h), "a sibling's private leaf is silent: {h}");
+}
+
+/// the counter module world — the receiver-inference shapes' fixture
+/// (the driver's D2 world: the compiler accepts every shape probed)
+fn mount_counter_pkg(s: &mut S) {
+    s.index_mod_at(
+        "file:///ws/pkg/src/m.rut",
+        "pkg",
+        "m",
+        "pub struct Counter {\n    n: i32;\n}\nimpl Counter {\n    pub fn bump(self) -> i32 { return self.n + 1; }\n}\npub fn mk(n: i32) -> Counter { return Counter { n: n }; }\n",
+    );
+}
+
+#[test]
+fn qualified_annotation_receiver_resolves_members() {
+    // `let c: m::Counter = m::mk(41); c.bump()` — the annotation
+    // resolves through the type ladder's qualified lane to the
+    // declaring view, the bare name rides the computed-head lane,
+    // and the member answers (the compiler compiles the shape)
+    let mut s = S::boot();
+    mount_counter_pkg(&mut s);
+    let doc = "mod m;\nentry fn main() -> i32 {\n    let c: m::Counter = m::mk(41);\n    return c.bump();\n}\n";
+    let uri = "file:///ws/pkg/src/mod.rut";
+    s.index_mod_at(uri, "pkg", "", doc);
+    let md = markdown(s.hover_in(uri, doc, "c.bump();", 1, 2));
+    assert!(md.contains("pub fn bump(self) -> i32"), "{md}");
+    assert!(md.contains("in `Counter`"), "the owner: {md}");
+}
+
+#[test]
+fn qualified_inferred_receiver_resolves_members() {
+    // `let c = m::mk(41); c.bump()` — the qualified callee's written
+    // ret types the binding (`Counter`), the member answers
+    let mut s = S::boot();
+    mount_counter_pkg(&mut s);
+    let doc = "mod m;\nentry fn main() -> i32 {\n    let c = m::mk(41);\n    return c.bump();\n}\n";
+    let uri = "file:///ws/pkg/src/mod.rut";
+    s.index_mod_at(uri, "pkg", "", doc);
+    // the binding itself types as Counter
+    let md = markdown(s.hover_in(uri, doc, "let c = m::mk", 1, 4));
+    assert!(md.contains("let c: Counter"), "{md}");
+    assert!(md.contains("type inferred"), "{md}");
+    // the member rides the same resolution
+    let md = markdown(s.hover_in(uri, doc, "c.bump();", 1, 2));
+    assert!(md.contains("pub fn bump(self) -> i32"), "{md}");
+    assert!(md.contains("in `Counter`"), "{md}");
+}
+
+#[test]
+fn qualified_chained_receiver_resolves_members() {
+    // `m::mk(41).bump()` — the chained callee's ret drives the member
+    let mut s = S::boot();
+    mount_counter_pkg(&mut s);
+    let doc = "mod m;\nentry fn main() -> i32 {\n    return m::mk(41).bump();\n}\n";
+    let uri = "file:///ws/pkg/src/mod.rut";
+    s.index_mod_at(uri, "pkg", "", doc);
+    let md = markdown(s.hover_in(uri, doc, ".bump();", 1, 1));
+    assert!(md.contains("pub fn bump(self) -> i32"), "{md}");
+    assert!(md.contains("in `Counter`"), "{md}");
+}
+
+#[test]
+fn use_bound_bare_call_receiver_resolves_members() {
+    // `use m::{ mk }; let c = mk(41); c.bump()` — the bare callee's
+    // ret is a sibling-module type; the member answers through the
+    // computed-head lane
+    let mut s = S::boot();
+    mount_counter_pkg(&mut s);
+    let doc = "mod m;\nuse m::{ mk };\nentry fn main() -> i32 {\n    let c = mk(41);\n    return c.bump();\n}\n";
+    let uri = "file:///ws/pkg/src/mod.rut";
+    s.index_mod_at(uri, "pkg", "", doc);
+    let md = markdown(s.hover_in(uri, doc, "c.bump();", 1, 2));
+    assert!(md.contains("pub fn bump(self) -> i32"), "{md}");
+    assert!(md.contains("in `Counter`"), "{md}");
+}
+
+#[test]
+fn unknown_member_on_a_resolved_receiver_stays_silent() {
+    // the negative: the receiver resolves, the member does not exist
+    // — the member lane's None is FINAL (never the bare-name lanes)
+    let mut s = S::boot();
+    mount_counter_pkg(&mut s);
+    let doc = "mod m;\nentry fn main() -> i32 {\n    let c: m::Counter = m::mk(41);\n    return c.nonexist();\n}\n";
+    let uri = "file:///ws/pkg/src/mod.rut";
+    s.index_mod_at(uri, "pkg", "", doc);
+    let h = s.hover_in(uri, doc, "c.nonexist();", 1, 2);
+    assert!(no_hover(&h), "an unknown member is silent: {h}");
+    let hits = s.def_in(uri, doc, "c.nonexist();", 1, 2);
+    assert!(hits.is_empty(), "no jump: {hits:?}");
+}
+
+#[test]
+fn field_typed_receiver_with_a_sibling_module_type_resolves_members() {
+    // the field row: a qualified FIELD annotation (`c: m::Counter`)
+    // types the field through the type ladder's qualified lane — the
+    // compiler compiles the shape, the member answers
+    let mut s = S::boot();
+    s.index_mod_at(
+        "file:///ws/pkg/src/m.rut",
+        "pkg",
+        "m",
+        "pub struct Counter {\n    n: i32;\n}\nimpl Counter {\n    pub fn bump(self) -> i32 { return self.n + 1; }\n}\npub fn mk(n: i32) -> Counter { return Counter { n: n }; }\n",
+    );
+    let doc = "mod m;\nstruct Holder {\n    c: m::Counter;\n}\nentry fn main() -> i32 {\n    let h = Holder { c: m::mk(1) };\n    return h.c.bump();\n}\n";
+    let uri = "file:///ws/pkg/src/mod.rut";
+    s.index_mod_at(uri, "pkg", "", doc);
+    let md = markdown(s.hover_in(uri, doc, "h.c.bump();", 1, 4));
+    assert!(md.contains("pub fn bump(self) -> i32"), "{md}");
+    assert!(md.contains("in `Counter`"), "{md}");
+}
+
+#[test]
+fn is_cast_narrowed_receiver_resolves_members() {
+    // the is-cast row (the cast's type operand is a SPELLING: the
+    // bare `Counter` must be bound — the compiler refuses the
+    // unbound shape). The member rides the binding's type.
+    let mut s = S::boot();
+    mount_counter_pkg(&mut s);
+    let doc = "mod m;\nuse m::{ Counter };\nentry fn main() -> i32 {\n    let q = m::mk(41);\n    if (q is Counter) { return q.bump(); }\n    return 0;\n}\n";
+    let uri = "file:///ws/pkg/src/mod.rut";
+    s.index_mod_at(uri, "pkg", "", doc);
+    let md = markdown(s.hover_in(uri, doc, "q.bump();", 1, 2));
+    assert!(md.contains("pub fn bump(self) -> i32"), "{md}");
+    assert!(md.contains("in `Counter`"), "{md}");
+}
+
+#[test]
+fn generic_qualified_receiver_resolves_members() {
+    // the generic row: a qualified generic annotation
+    // (`b: m::Box2<i32>`) and a qualified generic call — the member
+    // rides the substituted ret
+    let mut s = S::boot();
+    s.index_mod_at(
+        "file:///ws/pkg/src/m.rut",
+        "pkg",
+        "m",
+        "pub struct Box2<T> {\n    v: T;\n}\nimpl<T> Box2<T> {\n    pub fn get(self) -> T { return self.v; }\n}\npub fn mk_box<T>(v: T) -> Box2<T> { return Box2 { v: v }; }\n",
+    );
+    let doc = "mod m;\nentry fn main() -> i32 {\n    let b: m::Box2<i32> = m::mk_box(41);\n    return b.get();\n}\n";
+    let uri = "file:///ws/pkg/src/mod.rut";
+    s.index_mod_at(uri, "pkg", "", doc);
+    let md = markdown(s.hover_in(uri, doc, "b.get();", 1, 2));
+    assert!(md.contains("pub fn get(self) -> T"), "{md}");
+    assert!(md.contains("in `Box2`"), "{md}");
+}
+
+#[test]
+fn intra_package_module_let_answers_through_the_lane() {
+    // the LET cell behind the own edge: module lets cross no package
+    // boundary qualified, but INTRA-package heads answer them (the
+    // compiler compiles `a::LIMIT`)
+    let mut s = S::boot();
+    s.index_mod_at(
+        "file:///deps/gadgets/src/gadgets.rut",
+        "gadgets",
+        "",
+        "pub mod core_mod;\n",
+    );
+    s.index_mod_at(
+        "file:///deps/gadgets/src/core_mod.rut",
+        "gadgets",
+        "core_mod",
+        "pub let LIMIT: i32 = 9;\npub fn tag() -> i32 { return LIMIT; }\n",
+    );
+    let doc = "mod core_mod;\nentry fn main() -> i32 {\n    return core_mod::LIMIT;\n}\n";
+    let uri = "file:///t/main.rut";
+    let md = markdown(s.hover_in(uri, doc, "core_mod::LIMIT", 1, 13));
+    assert!(md.contains("pub let LIMIT: i32 = 9"), "{md}");
+    let hits = s.def_in(uri, doc, "core_mod::LIMIT", 1, 13);
+    assert_eq!(hits.len(), 1, "{hits:?}");
+    assert_eq!(hits[0]["uri"], "file:///deps/gadgets/src/core_mod.rut");
 }

@@ -53,7 +53,7 @@ impl<'a> LetView<'a> {
             .get(ast);
         match d.ty {
             Some(t) => Some(ty_src(ast, t)),
-            None => infer::expr_ty(self.file, &[self.file], d.init),
+            None => infer::expr_ty(self.file, &[self.file], d.init, &|_, _| None),
         }
     }
 

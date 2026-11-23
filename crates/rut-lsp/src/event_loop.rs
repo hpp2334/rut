@@ -478,9 +478,11 @@ fn dispatch(l: &mut Loop, cmd: Cmd) {
                 None => "null".to_string(),
                 Some(chain) => {
                     let doc = &chain.head().doc;
+                    let dm = l.state.doc_mods_of(&uri);
                     let hints = crate::query::analysis::inlay_hints_on(
                         doc,
                         &chain,
+                        &dm,
                         ls_types::Range {
                             start: ls_types::Position {
                                 line: start_line,
@@ -538,7 +540,8 @@ fn dispatch(l: &mut Loop, cmd: Cmd) {
             let answer = match l.state.chain(&uri) {
                 None => "null".to_string(),
                 Some(chain) => {
-                    let out = crate::query::analysis::signature_help_on(&chain, line, ch);
+                    let dm = l.state.doc_mods_of(&uri);
+                    let out = crate::query::analysis::signature_help_on(&chain, &dm, line, ch);
                     json_envelope(serde_json::json!(out))
                 }
             };

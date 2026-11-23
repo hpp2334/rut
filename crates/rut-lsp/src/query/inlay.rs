@@ -45,6 +45,9 @@ pub struct Ctx<'a> {
     pub doc: &'a MountedFile,
     /// the lookup chain: the open document first, then the prelude + workspace
     pub chain: &'a Chain<'a>,
+    /// the doc's file-module context (the stamped twin's pair) — the
+    /// receiver resolution's own-lane key
+    pub doc_mods: &'a crate::world::mods::DocMods,
 }
 
 impl Ctx<'_> {
@@ -330,7 +333,7 @@ impl CallCx<'_> {
         let head = match recv {
             ExprRef::Path(ph) if ph.get(ast).segs.len() == 1 => {
                 let id = ph.get(ast).segs[0].name.ident;
-                self.ctx.chain.named_recv(pos, id)
+                self.ctx.chain.named_recv(self.ctx.doc_mods, pos, id)
             }
             _ => self
                 .ctx

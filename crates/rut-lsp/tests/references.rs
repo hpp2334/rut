@@ -413,3 +413,30 @@ fn qualified_leaves_never_leak_through_use_rows() {
         "a use-row leaf has no references: {hits:?}"
     );
 }
+
+#[test]
+fn cross_package_module_lets_have_no_references() {
+    // the references face of the lets rule: a module let behind a
+    // cross-package head resolves to nothing, so its reference set is
+    // empty (the compiler refuses the spelling)
+    let mut s = S::boot();
+    s.index_mod_at(
+        "file:///deps/calc/src/mod.rut",
+        "calc",
+        "",
+        "pub mod math;\n",
+    );
+    s.index_mod_at(
+        "file:///deps/calc/src/math.rut",
+        "calc",
+        "math",
+        "pub let PI2: f64 = 6.28;\npub fn half() -> f64 { return 1.0; }\n",
+    );
+    let doc = "entry fn main() -> f64 {\n    return calc::math::PI2;\n}\n";
+    let uri = "file:///t/main.rut";
+    let hits = s.refs_in(uri, doc, "calc::math::PI2", 1, 13, true);
+    assert!(
+        hits.is_empty(),
+        "a cross-package module let has no references: {hits:?}"
+    );
+}

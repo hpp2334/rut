@@ -42,6 +42,9 @@ use crate::world::collection::Chain;
 pub struct Ctx<'a> {
     /// the lookup chain: the open document first, then the prelude + workspace
     pub chain: &'a Chain<'a>,
+    /// the doc's file-module context (the stamped twin's pair) — the
+    /// receiver resolution's own-lane key
+    pub doc_mods: &'a crate::world::mods::DocMods,
 }
 
 /// `textDocument/signatureHelp` at an LSP position (already converted to
@@ -109,7 +112,7 @@ pub fn signature_help(ctx: &Ctx, pos: u32) -> Option<SignatureHelp> {
         if crate::semantic::is_keyword(recv_text) {
             return None;
         }
-        let ty_name = ctx.chain.named_recv(pos, recv_id)?;
+        let ty_name = ctx.chain.named_recv(ctx.doc_mods, pos, recv_id)?;
         // own-surface finality: `None` here is FINAL — no help, never
         // a same-named impl fn's signature
         let f = ctx.chain.impl_method_fn(&ty_name, ast.name(name))?;

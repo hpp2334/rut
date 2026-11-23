@@ -33,7 +33,22 @@ use super::types::{head_of_ty, ty_src, TyForm};
 /// the type an expression suggests, as display text. `home` is the
 /// document whose bindings resolve the walk's names (the doc the expr
 /// lives in); `idxs` the file window the member/module-let lanes read.
-pub(crate) fn expr_ty(home: &MountedFile, idxs: &[&MountedFile], e: ExprRef) -> Option<String> {
+/// one qualified-lane hit — the module-namespace lane's answer keyed
+/// by ladder: a VALUE ladder query answers the callee fn view (`m::mk`
+/// prices the call through its written ret); a TYPE ladder query
+/// answers the declaring view's bare name (`m::Counter` names the
+/// type the member chain resolves)
+pub(crate) enum QualHit<'a> {
+    Fn(crate::world::collection::FnView<'a>),
+    Ty(String),
+}
+
+pub(crate) fn expr_ty<'a>(
+    home: &MountedFile,
+    idxs: &[&'a MountedFile],
+    e: ExprRef,
+    qual: &impl Fn(&[String], bool) -> Option<QualHit<'a>>,
+) -> Option<String> {
     let ast = home.doc.ast();
     match e {
         // the literal defaults are the engine's own law
@@ -58,11 +73,11 @@ pub(crate) fn expr_ty(home: &MountedFile, idxs: &[&MountedFile], e: ExprRef) -> 
         }
         ExprRef::Path(h) => {
             let segs = &h.get(ast).segs;
-            path_ty(home, idxs, h.span(ast).lo, segs)
+            path_ty(home, idxs, h.span(ast).lo, segs, qual)
         }
         ExprRef::Call(h) => {
             let d = h.get(ast);
-            call_ty(home, idxs, ast, d.callee, &d.args)
+            call_ty(home, idxs, ast, d.callee, &d.args, qual)
         }
         ExprRef::Method(h) => {
             let d = h.get(ast);
@@ -78,7 +93,7 @@ pub(crate) fn expr_ty(home: &MountedFile, idxs: &[&MountedFile], e: ExprRef) -> 
                 }
                 return None;
             }
-            let ty = expr_ty(home, idxs, d.recv)?;
+            let ty = expr_ty(home, idxs, d.recv, qual)?;
             member_ret(
                 home,
                 idxs,
@@ -87,33 +102,52 @@ pub(crate) fn expr_ty(home: &MountedFile, idxs: &[&MountedFile], e: ExprRef) -> 
                 ast.name(name),
                 &d.generics,
                 &d.args,
+                qual,
             )
         }
         ExprRef::Field(h) => {
             let d = h.get(ast);
-            let ty = expr_ty(home, idxs, d.recv)?;
-            field_ty(idxs, &head_of_ty(&ty), ast.name(d.name.ident))
+            let ty = expr_ty(home, idxs, d.recv, qual)?;
+            let text = field_ty(idxs, &head_of_ty(&ty), ast.name(d.name.ident))?;
+            // a QUALIFIED field type (`c: m::Counter`): the type
+            // ladder's qualified lane names the declaring view — the
+            // bare name the member chain then resolves
+            if text.contains("::") {
+                let mut segs: Vec<String> =
+                    text.split("::").map(|s| s.trim().to_string()).collect();
+                if let Some(last) = segs.last_mut() {
+                    if let Some(i) = last.find('<') {
+                        *last = last[..i].to_string();
+                    }
+                }
+                if let Some(QualHit::Ty(name)) = qual(&segs, true) {
+                    return Some(name);
+                }
+            }
+            Some(text)
         }
         ExprRef::Index(h) => {
             let d = h.get(ast);
-            expr_ty(home, idxs, d.recv).and_then(|t| elem_ty(&t))
+            expr_ty(home, idxs, d.recv, qual).and_then(|t| elem_ty(&t))
         }
         ExprRef::Struct(h) => Some(ty_src(ast, h.get(ast).ty)),
         ExprRef::Tuple(h) => {
             let elems = &h.get(ast).elems;
-            let parts: Option<Vec<String>> =
-                elems.iter().map(|&e| expr_ty(home, idxs, e)).collect();
+            let parts: Option<Vec<String>> = elems
+                .iter()
+                .map(|&e| expr_ty(home, idxs, e, qual))
+                .collect();
             parts.map(|p| format!("({})", p.join(", ")))
         }
         ExprRef::ArrayLit(h) => h
             .get(ast)
             .elems
             .first()
-            .and_then(|&e| expr_ty(home, idxs, e))
+            .and_then(|&e| expr_ty(home, idxs, e, qual))
             .map(|t| format!("[{t}]")),
         ExprRef::ArrayRepeat(h) => {
             let d = h.get(ast);
-            expr_ty(home, idxs, d.value).map(|t| format!("[{t}]"))
+            expr_ty(home, idxs, d.value, qual).map(|t| format!("[{t}]"))
         }
         ExprRef::Cast(h) => Some(ty_src(ast, h.get(ast).ty)),
         ExprRef::Is(_) => Some("bool".to_string()),
@@ -129,7 +163,7 @@ pub(crate) fn expr_ty(home: &MountedFile, idxs: &[&MountedFile], e: ExprRef) -> 
                 | BinOp::And
                 | BinOp::Or => Some("bool".to_string()),
                 // same-type arithmetic; the left operand decides
-                _ => expr_ty(home, idxs, d.lhs).or_else(|| expr_ty(home, idxs, d.rhs)),
+                _ => expr_ty(home, idxs, d.lhs, qual).or_else(|| expr_ty(home, idxs, d.rhs, qual)),
             }
         }
         // `await e` = unwrap: e's type head EXACTLY `Future` → the
@@ -138,7 +172,7 @@ pub(crate) fn expr_ty(home: &MountedFile, idxs: &[&MountedFile], e: ExprRef) -> 
         // rejects awaiting an optional future, so `?Future<..>` stays
         // a miss; a non-Future is a miss too (never wrong text)
         ExprRef::Await(h) => {
-            let t = expr_ty(home, idxs, h.get(ast).expr)?;
+            let t = expr_ty(home, idxs, h.get(ast).expr, qual)?;
             if head_strict(&t) != "Future" {
                 return None;
             }
@@ -152,7 +186,7 @@ pub(crate) fn expr_ty(home: &MountedFile, idxs: &[&MountedFile], e: ExprRef) -> 
         // answer-field write), so a tail-only block answers
         // `Future<nil>` exactly like the engine
         ExprRef::AsyncBlock(h) => {
-            let t = first_return(ast, h.get(ast).body).and_then(|e| expr_ty(home, idxs, e));
+            let t = first_return(ast, h.get(ast).body).and_then(|e| expr_ty(home, idxs, e, qual));
             Some(format!(
                 "Future<{}>",
                 t.unwrap_or_else(|| "nil".to_string())
@@ -167,11 +201,16 @@ pub(crate) fn expr_ty(home: &MountedFile, idxs: &[&MountedFile], e: ExprRef) -> 
 /// resolver over `idxs` (the window the caller rides — the old pass
 /// inferred against the whole chain). `None` when nothing derives —
 /// never wrong text.
-pub(crate) fn binding_ty(home: &MountedFile, idxs: &[&MountedFile], b: &Binding) -> Option<String> {
+pub(crate) fn binding_ty<'a>(
+    home: &MountedFile,
+    idxs: &[&'a MountedFile],
+    b: &Binding,
+    qual: &impl Fn(&[String], bool) -> Option<QualHit<'a>>,
+) -> Option<String> {
     if let Some(sp) = b.ty_span {
         return Some(home.doc.text(sp).to_string());
     }
-    b.init.and_then(|init| expr_ty(home, idxs, init))
+    b.init.and_then(|init| expr_ty(home, idxs, init, qual))
 }
 
 /// a `::` path names a module-qualified member: an enum-member value
@@ -180,11 +219,12 @@ pub(crate) fn binding_ty(home: &MountedFile, idxs: &[&MountedFile], b: &Binding)
 /// plain local read (the lone-seg tail). Value access after `.` rides
 /// `ExprRef::Field` — those resolve as field-of-field reads through
 /// the bindings, never here
-fn path_ty(
+fn path_ty<'a>(
     home: &MountedFile,
-    idxs: &[&MountedFile],
+    idxs: &[&'a MountedFile],
     pos: u32,
     segs: &[PathSeg],
+    qual: &impl Fn(&[String], bool) -> Option<QualHit<'a>>,
 ) -> Option<String> {
     let ast = home.doc.ast();
     let head = segs.first()?.name.ident;
@@ -194,7 +234,7 @@ fn path_ty(
         // is not a name-resolution shape (locals are not namespaces),
         // so this answers only when the head really binds a type text
         let head_ty = rut_ast::resolve_binding(home.doc.bindings(), pos, head)
-            .and_then(|b| binding_ty(home, idxs, b))
+            .and_then(|b| binding_ty(home, idxs, b, qual))
             .or_else(|| {
                 // a capitalized head is the type itself (`Color::Red`)
                 is_cap(text).then(|| text.to_string())
@@ -209,7 +249,7 @@ fn path_ty(
         return None;
     }
     let own = rut_ast::resolve_binding(home.doc.bindings(), pos, head)
-        .and_then(|b| binding_ty(home, idxs, b));
+        .and_then(|b| binding_ty(home, idxs, b, qual));
     own.or_else(|| module_let_ty(idxs.iter().copied(), text))
 }
 
@@ -218,12 +258,13 @@ fn path_ty(
 /// CAPITALIZED path segment the index knows as a class/struct — is the
 /// type itself (`let log = Logger("hello");` types `log` as `Logger`,
 /// the positional shape of the `Type::new(..)` arm below)
-fn call_ty(
+fn call_ty<'a>(
     home: &MountedFile,
-    idxs: &[&MountedFile],
+    idxs: &[&'a MountedFile],
     ast: &Ast,
     callee: ExprRef,
     args: &[ExprRef],
+    qual: &impl Fn(&[String], bool) -> Option<QualHit<'a>>,
 ) -> Option<String> {
     if let ExprRef::Path(h) = callee {
         let segs = &h.get(ast).segs;
@@ -235,7 +276,7 @@ fn call_ty(
                 .filter(|f| f.name() == name && f.owner().is_none())
                 .collect();
             if let [one] = hits.as_slice() {
-                return call_ret(home, idxs, ast, one, &segs[0].generics, args);
+                return call_ret(home, idxs, ast, one, &segs[0].generics, args, qual);
             }
             // `Logger(..)` — the constructor call. Only an INDEXED
             // class/struct answers: a capitalized name with no type
@@ -273,6 +314,25 @@ fn call_ty(
                     .unwrap_or_else(|| name.to_string()),
             );
         }
+        // `m::mk(..)` — a module-qualified callee: the namespace lane
+        // resolves it (the ONE home — [`Chain::qualified_scope`]), the
+        // written ret prices the call (the async/Self handling rides
+        // [`call_ret`])
+        let seg_names: Vec<String> = segs
+            .iter()
+            .map(|s| ast.name(s.name.ident).to_string())
+            .collect();
+        if let Some(QualHit::Fn(fv)) = qual(&seg_names, false) {
+            return call_ret(
+                home,
+                idxs,
+                ast,
+                &fv,
+                &segs.last().expect("path has segments").generics,
+                args,
+                qual,
+            );
+        }
         return None;
     }
     None
@@ -297,16 +357,19 @@ fn generic_name(home: &MountedFile, ast: &Ast, name: &str, args: &[TyRef]) -> St
 /// answers — an own-surface member is FINAL with no recorded fn
 /// (never a same-named impl fn from another file leaks through: the
 /// member law's gate)
-fn member_ret(
+#[allow(clippy::too_many_arguments)] // the arity IS the resolver's shape — plumbing, not an API to nest
+fn member_ret<'a>(
     home: &MountedFile,
-    idxs: &[&MountedFile],
+    idxs: &[&'a MountedFile],
     ast: &Ast,
     ty_name: &str,
     member: &str,
     written: &[TyRef],
     args: &[ExprRef],
+    qual: &impl Fn(&[String], bool) -> Option<QualHit<'a>>,
 ) -> Option<String> {
-    find_member_fn(idxs, ty_name, member).and_then(|f| call_ret(home, idxs, ast, &f, written, args))
+    find_member_fn(idxs, ty_name, member)
+        .and_then(|f| call_ret(home, idxs, ast, &f, written, args, qual))
 }
 
 /// a member's impl fn on `ty_name` — the callee's method half over
@@ -345,13 +408,14 @@ fn find_member_fn<'a>(idxs: &[&'a MountedFile], ty_name: &str, member: &str) -> 
 /// async wrap: a call to an `async` fn answers `Future<R>` with `R`
 /// the written ret, `nil` unwritten (the engine's sugar law); a plain
 /// callee answers `R` (unwritten = a miss, nothing derives)
-fn call_ret(
+fn call_ret<'a>(
     home: &MountedFile,
-    idxs: &[&MountedFile],
+    idxs: &[&'a MountedFile],
     ast: &Ast,
     f: &FnView,
     written: &[TyRef],
     args: &[ExprRef],
+    qual: &impl Fn(&[String], bool) -> Option<QualHit<'a>>,
 ) -> Option<String> {
     let vars = f.generics();
     let mut map: Vec<(String, String)> = Vec::new();
@@ -373,7 +437,7 @@ fn call_ret(
         if !mentions_var(declared, &vars) {
             continue;
         }
-        let Some(inferred) = expr_ty(home, idxs, *a) else {
+        let Some(inferred) = expr_ty(home, idxs, *a, qual) else {
             continue;
         };
         unify(declared, &inferred, &vars, &mut map);

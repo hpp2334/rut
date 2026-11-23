@@ -135,7 +135,7 @@ impl<'a> Chain<'a> {
         recv: RecvNode,
         doc: &DocMods,
     ) -> Option<Vec<MemberRow<'a>>> {
-        let ty_name = self.recv_ty_name(pos, recv).or_else(|| match recv {
+        let ty_name = self.recv_ty_name(doc, pos, recv).or_else(|| match recv {
             RecvNode::Expr(e) => self
                 .expr_ty(self.head(), e)
                 .map(|t| crate::world::types::head_of_ty(&t)),
@@ -771,20 +771,30 @@ impl<'a> Chain<'a> {
         };
         scope.types.retain(|t| gate(t.vis(), t.ambient()));
         scope.fns.retain(|f| gate(f.vis(), f.ambient()));
-        scope.lets.retain(|l| gate(l.vis(), false));
+        // module lets cross NO package boundary through a qualified
+        // path (the compiler refuses `mathkit::advanced::SCALE` and
+        // the use-bound `advanced::SCALE` in every lane probed) —
+        // intra-package heads only
+        if cross {
+            scope.lets.clear();
+        } else {
+            scope.lets.retain(|l| gate(l.vis(), false));
+        }
         Some(scope)
     }
 
     /// the module file a qualified path's PREFIX lands on — the
     /// head-plus-interior walk where every spelled segment names a
-    /// module (the mid-segment hover's target)
+    /// module (the mid-segment hover's target; each ladder renders
+    /// its own heads — the flag threads through)
     pub(crate) fn qualified_module(
         &self,
         doc_mods: &DocMods,
         segs: &[String],
+        is_ty: bool,
     ) -> Option<&'a MountedFile> {
         let (head, rest) = segs.split_first()?;
-        let (cur, cross) = self.module_head(doc_mods, head, false)?;
+        let (cur, cross) = self.module_head(doc_mods, head, is_ty)?;
         let (file, _) = self.module_walk(cur, cross, rest)?;
         Some(file)
     }
