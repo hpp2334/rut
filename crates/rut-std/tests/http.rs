@@ -29,7 +29,7 @@ use ink_host::{ create_logger, logger_log };
 
 async fn probe(log: opaque, url: str) -> nil {
     let client = HttpClient::new();
-    let resp = await client.post(url, "hi".encode()).build().send();
+    let resp = await client.post(url).body("hi".encode()).build().send();
     logger_log(log, 2, f"status={resp.status()}");
     // the readbacks are ?str — nil-check, then deref, then log (the
     // rgh deref pattern; a ?str never interpolates)
@@ -537,9 +537,9 @@ use ink_host::{ create_logger, logger_log };
 async fn probe(log: opaque) -> nil {
     let client = HttpClient::new();
     let _ = await client.get("fixture://get").build().send();
-    let _ = await client.post("fixture://post", "p".encode()).build().send();
-    let _ = await client.put("fixture://put", "p".encode()).build().send();
-    let _ = await client.patch("fixture://patch", "p".encode()).build().send();
+    let _ = await client.post("fixture://post").body("p".encode()).build().send();
+    let _ = await client.put("fixture://put").body("p".encode()).build().send();
+    let _ = await client.patch("fixture://patch").body("p".encode()).build().send();
     let _ = await client.del("fixture://delete").build().send();
     let _ = await client.request()
         .method(ClientQueryMethod::Put)

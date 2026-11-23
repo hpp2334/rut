@@ -69,14 +69,14 @@ impl HttpClient {
     pub fn get(self, url: str) -> RequestBuilder {
         return self.request().url(url);
     }
-    pub fn post(self, url: str, body: bytes) -> RequestBuilder {
-        return self.request().method(ClientQueryMethod::Post).url(url).body(body);
+    pub fn post(self, url: str) -> RequestBuilder {
+        return self.request().method(ClientQueryMethod::Post).url(url);
     }
-    pub fn put(self, url: str, body: bytes) -> RequestBuilder {
-        return self.request().method(ClientQueryMethod::Put).url(url).body(body);
+    pub fn put(self, url: str) -> RequestBuilder {
+        return self.request().method(ClientQueryMethod::Put).url(url);
     }
-    pub fn patch(self, url: str, body: bytes) -> RequestBuilder {
-        return self.request().method(ClientQueryMethod::Patch).url(url).body(body);
+    pub fn patch(self, url: str) -> RequestBuilder {
+        return self.request().method(ClientQueryMethod::Patch).url(url);
     }
     /// the DELETE verb — spelled `del` for brevity at the call site: the
     /// same crossing under a short name, the wire still sees the

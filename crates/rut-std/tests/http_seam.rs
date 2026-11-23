@@ -42,7 +42,7 @@ use ink_host::{ create_logger, logger_log };
 
 async fn probe(log: opaque, url: str) -> nil {
     let client = HttpClient::new();
-    let resp = await client.post(url, "hi".encode()).build().send();
+    let resp = await client.post(url).body("hi".encode()).build().send();
     logger_log(log, 2, f"status={resp.status()}");
     let terr = resp.transport_error();
     if (terr == nil) {
