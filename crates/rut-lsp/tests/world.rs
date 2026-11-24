@@ -189,30 +189,32 @@ fn definition_answers_nothing_on_a_middle_path_segment() {
 
 both_uri_shapes! {
 #[test]
-fn the_own_package_head_answers_inside_a_flat_package() {
+fn a_flat_packages_own_name_is_not_a_head() {
     let uri = "file:///ws/flat/mod.rut";
     let doc = "pub fn x() -> i32 { return 1; }\nuse flat::{ x };\nentry fn main() -> nil {\n    let a = x();\n}\n";
     let mut s = S::boot();
     s.index_mod_at(uri, "flat", "", "pub fn x() -> i32 { return 1; }\n");
-    assert!(markdown(s.hover_in(uri, doc, "use flat::", 1, 4)).contains("file module")); // Act 2: no hover
-    let head = s.def_in(uri, doc, "use flat::", 1, 4);
-    assert_eq!(head.len(), 1, "{head:?}"); // Act 2: empty
-    assert_eq!(pos_pair(&head[0]["range"]["start"]), (0, 0));
-    // recorded drift: the use leaf answers NOTHING at HEAD. The plan's
-    // Before had one hit here and the plan's delta-7 After kept one hit
-    // ("still resolves through the cross-package lane"); d9cd1f00's
-    // identity exclusion dropped the open doc from the cross-package
-    // sweep, and this scenario's only `flat` file IS the doc (a sibling
-    // file does not help — the leaf's name lives in the doc). Act 2
-    // rewrites this pin.
+    // delta 7: the compiler's law wins — a flat package (no `mod` rows
+    // anywhere) has no tree, and `mod_head`'s own-spec arm refuses a
+    // flat tree, so the package's own name is no head: hover and
+    // definition answer nothing (the LSP's hand copy had no flat gate)
+    assert!(no_hover(&s.hover_in(uri, doc, "use flat::", 1, 4))); // Act 2: was "file module"
+    assert!(s.def_in(uri, doc, "use flat::", 1, 4).is_empty()); // Act 2: was 1 hit (0, 0)
+    // the leaf, UNCHANGED from HEAD: the doc binds `x` twice (its own
+    // `pub fn x` + the use edge) — the compiler's one-name law refuses
+    // the file, the use line jumps nowhere (HEAD answered [] here and
+    // answers [] after; the same law, one home)
     let leaf = s.def_in(uri, doc, "{ x }", 1, 2);
     assert!(leaf.is_empty(), "{leaf:?}");
     let typing = "pub fn x() -> i32 { return 1; }\nuse flat::\nentry fn main() -> nil {\n}\n";
     let items = s.complete_at(uri, typing, "use flat::", 1);
     let ls = labels(&items);
-    for want in ["entry", "main", "x"] {
-        assert!(ls.contains(&want), "{ls:?}"); // Act 2: only `x`
-    }
+    // delta 7: the head no longer resolves, so the visible-members
+    // tier never opens — the plan's guess was `x` only; the compiler
+    // is the judge (the completion note carries the proof)
+    assert!(ls.contains(&"x"), "{ls:?}"); // Act 2: the actual answer, probed
+    assert!(!ls.contains(&"entry"), "{ls:?}"); // Act 2: was offered
+    assert!(!ls.contains(&"main"), "{ls:?}"); // Act 2: was offered
 }
 }
 

@@ -367,11 +367,119 @@ pub fn vis_crosses(from: &str, def_mod: &str, vis: Vis) -> bool {
 }
 
 /// A mod path's parent (`"a/b"` → `"a"`, `""`/`"a"` → `""`).
-pub(crate) fn parent_of(path: &str) -> &str {
+pub fn parent_of(path: &str) -> &str {
     match path.rsplit_once('/') {
         Some((p, _)) => p,
         None => "",
     }
+}
+
+/// A child's full mod path (`""` + `layout` → `"layout"`,
+/// `"layout"` + `grid` → `"layout/grid"`).
+pub fn child_path(parent: &str, name: &str) -> String {
+    if parent.is_empty() {
+        name.to_string()
+    } else {
+        format!("{parent}/{name}")
+    }
+}
+
+/// One scope row per mounted child path, each edge implied by its
+/// path — the tree a mounted package or a mod-path-keyed file table
+/// spells. The root path `""` contributes no edge (a root has no
+/// parent segment to hang one on); an empty iterator is the flat
+/// tree, where every module-aware lookup answers the root module.
+pub fn mod_tree_from<'a>(children: impl Iterator<Item = (&'a str, Vis)>) -> ModInputs {
+    let mut inputs = ModInputs::default();
+    for (path, vis) in children {
+        if path.is_empty() {
+            continue; // the root's own row — no edge implies it
+        }
+        let (parent, name) = match path.rsplit_once('/') {
+            Some((p, n)) => (p.to_string(), n.to_string()),
+            None => (String::new(), path.to_string()),
+        };
+        inputs
+            .scopes
+            .entry(parent.clone())
+            .or_default()
+            .children
+            .insert(name, (path.to_string(), vis));
+        inputs.scopes.entry(path.to_string()).or_default().parent = parent;
+    }
+    inputs
+}
+
+/// `head` must be a `mod` child of the module `from` or of one of its
+/// ancestors, nearest scope first; else the package's own name names
+/// the root — never in a flat tree, never for an empty `own_pkg`.
+/// Answers the child's mod path.
+pub fn mod_head(tree: &ModInputs, own_pkg: &str, from: &str, head: &str) -> Option<String> {
+    let mut cur = from.to_string();
+    while let Some(scope) = tree.scopes.get(&cur) {
+        if let Some((path, _vis)) = scope.children.get(head) {
+            return Some(path.clone());
+        }
+        if scope.parent == cur {
+            break;
+        }
+        cur = scope.parent.clone();
+    }
+    // the own-package head: the root module (a flat tree has no
+    // children, so this only fires where it can mean something —
+    // and never in a flat tree, where `pkg.name` was never a legal
+    // spelling)
+    if !tree.is_flat() && !own_pkg.is_empty() && head == own_pkg {
+        return Some(String::new());
+    }
+    None
+}
+
+/// Each of `segs` must be a declared `mod` child of the module the
+/// previous segment resolved to. `Err` carries the first failing
+/// index and the path walked.
+pub fn mod_walk(tree: &ModInputs, start: &str, segs: &[&str]) -> Result<String, (usize, String)> {
+    let mut cur = start.to_string();
+    for (i, seg) in segs.iter().enumerate() {
+        let Some(scope) = tree.scopes.get(&cur) else {
+            return Err((i, cur));
+        };
+        match scope.children.get(*seg) {
+            Some((path, _vis)) => cur = path.clone(),
+            None => return Err((i, cur)),
+        }
+    }
+    Ok(cur)
+}
+
+/// Why a cross-package walk refused an edge — the diagnostic's fork.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum PubMiss {
+    /// the walked module has no such child
+    NotModule,
+    /// the child is there but not `pub`
+    NotPub,
+}
+
+/// The cross-package use walk: as [`mod_walk`], and every edge must
+/// be `pub`.
+pub fn mod_walk_pub(
+    tree: &ModInputs,
+    start: &str,
+    segs: &[&str],
+) -> Result<String, (usize, PubMiss)> {
+    let mut cur = start.to_string();
+    for (i, seg) in segs.iter().enumerate() {
+        let Some(scope) = tree.scopes.get(&cur) else {
+            return Err((i, PubMiss::NotModule));
+        };
+        match scope.children.get(*seg) {
+            Some((path, vis)) if *vis == Vis::Pub => cur = path.clone(),
+            Some(_) => return Err((i, PubMiss::NotPub)),
+            None => return Err((i, PubMiss::NotModule)),
+        }
+    }
+    Ok(cur)
 }
 
 /// The binder kinds the one-name registry distinguishes — the
@@ -1035,48 +1143,26 @@ impl<'a> Ctx<'a> {
     /// Answers the child's mod path. One extra law: the unit's OWN pkg
     /// name names the root module (the only spelling that reaches the
     /// root's decls from a child — `pkg::helper` from `pkg/grid`).
+    /// The shared law [`mod_head`] is the one home; this reads the
+    /// ctx's tree and spec into it.
     pub(crate) fn resolve_mod_head(&self, from: &str, name: IdentId) -> Option<String> {
-        let mut cur = from.to_string();
-        while let Some(scope) = self.mods.scopes.get(&cur) {
-            if let Some((path, _vis)) = scope.children.get(self.name(name)) {
-                return Some(path.clone());
-            }
-            if scope.parent == cur {
-                break;
-            }
-            cur = scope.parent.clone();
-        }
-        // the own-package head: the root module (a flat package has no
-        // children, so this only fires where it can mean something —
-        // and never in a flat package, where `pkg.name` was never a
-        // legal spelling)
-        if !self.mods.is_flat() && !self.own_spec.is_empty() && self.name(name) == self.own_spec {
-            return Some(String::new());
-        }
-        None
+        mod_head(&self.mods, &self.own_spec, from, self.name(name))
     }
 
     /// Walk a qualified path's INTERIOR segments as child mods: each
     /// must be a `mod` child of the module the previous segment
     /// resolved to. Answers the final module; `Err` names the first
     /// segment that is not a module there, with the path walked so far
-    /// (the error's "under" spelling).
+    /// (the error's "under" spelling). The shared law [`mod_walk`] is
+    /// the one home; this reads the ctx's tree into it and maps the
+    /// failing index back to its identifier.
     pub(crate) fn walk_mod_path(
         &self,
         start: &str,
         segs: &[PathSeg],
     ) -> Result<String, (IdentId, String)> {
-        let mut cur = start.to_string();
-        for seg in segs {
-            let Some(scope) = self.mods.scopes.get(&cur) else {
-                return Err((seg.name.ident, cur.clone()));
-            };
-            match scope.children.get(self.name(seg.name.ident)) {
-                Some((path, _vis)) => cur = path.clone(),
-                None => return Err((seg.name.ident, cur.clone())),
-            }
-        }
-        Ok(cur)
+        let segs_txt: Vec<&str> = segs.iter().map(|s| self.name(s.name.ident)).collect();
+        mod_walk(&self.mods, start, &segs_txt).map_err(|(i, cur)| (segs[i].name.ident, cur))
     }
 
     /// Is the name use-bound by the CURRENT file? The STRICT per-file

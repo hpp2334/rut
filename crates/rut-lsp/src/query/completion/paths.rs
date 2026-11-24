@@ -4,8 +4,8 @@
 
 use super::rows::{push_item, CompletionOut};
 use super::CompletionKind;
+use crate::resolve::mods;
 use crate::world::collection::{self, FileScope};
-use crate::world::mods;
 use crate::world::types::TyForm;
 use crate::world::{FileId, World};
 
@@ -220,12 +220,12 @@ pub(super) fn position_path_completions(
 ) -> Option<Vec<CompletionOut>> {
     let (head, rest) = segs.split_first()?;
     let doc_file = w.file(file);
-    let (pkg, start) = match mods::resolve_position_head(w, file, head) {
+    let (pkg, start) = match mods::position_head(w, file, head) {
         Some(start) => (doc_file.stamp.module.clone().unwrap_or_default(), start),
         None => use_bound_dep_module(w, file, head)?,
     };
     let pkg = pkg.as_str();
-    let path = mods::walk_position_mods(w, Some(pkg), &start, rest)?;
+    let path = mods::position_walk(w, Some(pkg), file, &start, rest)?;
     let from = doc_file.stamp.mod_path.as_deref().unwrap_or("");
     let Some(scope) = scope_index(w, file, Some(pkg), &path) else {
         return Some(Vec::new());
@@ -234,7 +234,7 @@ pub(super) fn position_path_completions(
     let mut out: Vec<CompletionOut> = Vec::new();
     // the walkable children — any declared edge (intra-package)
     for m in scope_file.mods() {
-        let child = mods::child_path(&path, m.name());
+        let child = rut_lir::check::child_path(&path, m.name());
         push_item(
             &mut out,
             CompletionOut::plain(
@@ -246,7 +246,7 @@ pub(super) fn position_path_completions(
         );
     }
     for t in scope_file.types() {
-        if !mods::vis_allows(from, &path, t.vis()) {
+        if !rut_lir::check::vis_crosses(from, &path, t.vis()) {
             continue;
         }
         push_item(
@@ -263,7 +263,7 @@ pub(super) fn position_path_completions(
         );
     }
     for f in scope_file.fns() {
-        if f.owner().is_some() || !mods::vis_allows(from, &path, f.vis()) {
+        if f.owner().is_some() || !rut_lir::check::vis_crosses(from, &path, f.vis()) {
             continue;
         }
         push_item(
@@ -277,7 +277,7 @@ pub(super) fn position_path_completions(
         );
     }
     for l in scope_file.lets() {
-        if !mods::vis_allows(from, &path, l.vis()) {
+        if !rut_lir::check::vis_crosses(from, &path, l.vis()) {
             continue;
         }
         push_item(
@@ -296,7 +296,7 @@ pub(super) fn position_path_completions(
     // The cap law picks the icon until real resolution (same as the
     // use classifier)
     for u in scope_file.uses() {
-        if !mods::vis_allows(from, &path, u.vis()) {
+        if !rut_lir::check::vis_crosses(from, &path, u.vis()) {
             continue;
         }
         let src = u.path().join("::");

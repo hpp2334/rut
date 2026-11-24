@@ -184,9 +184,9 @@ pub(crate) fn member_dial_allows(w: &World, site: FileId, decl_file: &File, vis:
             return vis == Vis::Pub;
         }
     }
-    crate::world::mods::vis_allows(
+    rut_lir::check::vis_crosses(
         w.file(site).stamp.mod_path.as_deref().unwrap_or(""),
-        crate::world::mods::mod_path_of(decl_file),
+        crate::resolve::mods::mod_path_of(decl_file),
         vis,
     )
 }

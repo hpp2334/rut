@@ -137,6 +137,12 @@ pub mod env;
 mod prelude;
 mod semantic;
 
+// ---- the shared mod laws — the LSP's adapters over rut-lir's pure
+// walks (the one home; the mirrors are gone). The queries spell
+// `crate::resolve::…` from wherever they live today; Act 6 owns the
+// final downward layering. ----
+mod resolve;
+
 // ---- the mounted world — the session's accumulated language facts,
 // the decl layer + the binding pass every query reads (see the
 // module's own doc). One-way layering: `query` spells `world`, never

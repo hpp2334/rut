@@ -836,30 +836,20 @@ fn file_display(module: &crate::session::Mounted, path: &str) -> String {
 
 /// The file-module inputs a compilation resolves against (phase 3):
 /// the concatenated text's file ranges plus the scope tree built from
-/// the pkg's mounted module set (each child's parent segment implies
-/// the edge; `mod` vs `pub mod` rides the edge's vis).
+/// the pkg's mounted module set — [`rut_lir::check::mod_tree_from`] is
+/// the one law (each child's parent segment implies the edge; `mod`
+/// vs `pub mod` rides the edge's vis).
 pub(crate) fn mod_inputs_of(
     module: &crate::session::Mounted,
     files: Vec<(u32, String)>,
 ) -> rut_lir::check::ModInputs {
-    let mut inputs = rut_lir::check::ModInputs {
+    rut_lir::check::ModInputs {
         files,
-        scopes: std::collections::BTreeMap::new(),
-    };
-    for (path, m) in &module.mods {
-        let (parent, name) = match path.rsplit_once('/') {
-            Some((p, n)) => (p.to_string(), n.to_string()),
-            None => (String::new(), path.clone()),
-        };
-        inputs
-            .scopes
-            .entry(parent.clone())
-            .or_default()
-            .children
-            .insert(name, (path.clone(), m.vis));
-        inputs.scopes.entry(path.clone()).or_default().parent = parent;
+        scopes: rut_lir::check::mod_tree_from(
+            module.mods.iter().map(|(path, m)| (path.as_str(), m.vis)),
+        )
+        .scopes,
     }
-    inputs
 }
 
 /// Tag + rebase a compile's diags at the unit-append boundary: the
@@ -988,43 +978,37 @@ impl GraphCompiler<'_> {
             }
             let Some(pkg) = dep else {
                 // ---- the own-package lane ----
-                let mut at = own_head.expect("own lane checked above");
-                // the interior segments walk child mods (`walk_mod_path`
-                // semantics — edges are intra-package namespaces; the
-                // LEAF visibility-gates)
-                let mut walked = true;
-                for seg in &path[1..] {
-                    let seg_text = ast.name(seg.ident);
-                    match layout
-                        .scopes
-                        .get(&at)
-                        .and_then(|s| s.children.get(seg_text))
-                    {
-                        Some((child, _vis)) => at = child.clone(),
-                        None => {
-                            // attributed like every compile diag: the
-                            // arrow names the use line
-                            self.diags.extend(attribute_diags(
-                                vec![Diag::new(
-                                    span,
-                                    format!(
-                                        "`{seg_text}` is not a module under `{}` — only `mod` children \
-                                         extend a qualified path",
-                                        if at.is_empty() { head_text.as_str() } else { at.as_str() },
-                                    ),
-                                )],
-                                spec,
-                                layout,
-                            ));
-                            walked = false;
-                            break;
-                        }
+                // the interior segments walk child mods (`mod_walk` —
+                // the compiler's own qualified walk; edges are
+                // intra-package namespaces, the LEAF visibility-gates)
+                let start = own_head.expect("own lane checked above");
+                let segs_txt: Vec<&str> = path[1..].iter().map(|seg| ast.name(seg.ident)).collect();
+                let at = match rut_lir::check::mod_walk(layout, &start, &segs_txt) {
+                    Ok(at) => at,
+                    Err((i, cur)) => {
+                        // attributed like every compile diag: the
+                        // arrow names the use line
+                        self.diags.extend(attribute_diags(
+                            vec![Diag::new(
+                                span,
+                                format!(
+                                    "`{}` is not a module under `{}` — only `mod` children \
+                                     extend a qualified path",
+                                    segs_txt[i],
+                                    if cur.is_empty() {
+                                        head_text.as_str()
+                                    } else {
+                                        cur.as_str()
+                                    },
+                                ),
+                            )],
+                            spec,
+                            layout,
+                        ));
+                        ok = false;
+                        continue;
                     }
-                }
-                if !walked {
-                    ok = false;
-                    continue;
-                }
+                };
                 // the leaves: decls of the walked module, visible from
                 // the importing file under the crossing predicate. The
                 // texts spell the fix: a miss reads the walked module
@@ -1176,56 +1160,53 @@ impl GraphCompiler<'_> {
                     format!("{at}/{child_file}")
                 }
             };
-            // walk the mod path, one `pub mod` edge per segment
-            let mut at = String::new();
-            let mut walked = true;
-            for seg in &path[1..] {
-                let seg_text = ast.name(seg.ident);
-                let child = if at.is_empty() {
-                    seg_text.to_string()
-                } else {
-                    format!("{at}/{seg_text}")
-                };
-                let Some(edge) = pkg.mods.get(&child) else {
-                    if pkg.mods.is_empty() {
-                        self.diags.push(Diag::new(
-                            Span::new(0, 0),
-                            format!(
-                                "`{seg_text}` is not a module of `{dep_name}` — `{dep_name}` is a flat package; \
-                                 its names bind flat: `use {dep_name}::{{ .. }}`"
-                            ),
-                        ));
-                    } else {
-                        self.diags.push(Diag::new(
-                            Span::new(0, 0),
-                            format!(
-                                "`{seg_text}` is not a module of `{dep_name}` — no `mod {seg_text};` under {} \
-                                 (`use {dep_name}::..` walks the dep's mounted `mod` tree)",
-                                at_file(&at),
-                            ),
-                        ));
+            // walk the mod path, one `pub mod` edge per segment — the
+            // shared law [`rut_lir::check::mod_walk_pub`] is the one
+            // home (the dep's scope tree rides in; `Err` names the
+            // failing index and WHY, the walked path rebuilding from
+            // the segments before it)
+            let dep_tree = crate::graph::mod_inputs_of(pkg, Vec::new());
+            let segs_txt: Vec<&str> = path[1..].iter().map(|seg| ast.name(seg.ident)).collect();
+            let at = match rut_lir::check::mod_walk_pub(&dep_tree, "", &segs_txt) {
+                Ok(at) => at,
+                Err((i, miss)) => {
+                    let seg_text = segs_txt[i];
+                    let walked = segs_txt[..i].join("/");
+                    match miss {
+                        rut_lir::check::PubMiss::NotModule if dep_tree.is_flat() => {
+                            self.diags.push(Diag::new(
+                                Span::new(0, 0),
+                                format!(
+                                    "`{seg_text}` is not a module of `{dep_name}` — `{dep_name}` is a flat package; \
+                                     its names bind flat: `use {dep_name}::{{ .. }}`"
+                                ),
+                            ));
+                        }
+                        rut_lir::check::PubMiss::NotModule => {
+                            self.diags.push(Diag::new(
+                                Span::new(0, 0),
+                                format!(
+                                    "`{seg_text}` is not a module of `{dep_name}` — no `mod {seg_text};` under {} \
+                                     (`use {dep_name}::..` walks the dep's mounted `mod` tree)",
+                                    at_file(&walked),
+                                ),
+                            ));
+                        }
+                        rut_lir::check::PubMiss::NotPub => {
+                            self.diags.push(Diag::new(
+                                Span::new(0, 0),
+                                format!(
+                                    "`{seg_text}` is not visible from outside the package (`mod`, not `pub mod`) — \
+                                     spell `pub mod {seg_text};` in `{dep_name}`'s {} to widen it",
+                                    at_file(&walked),
+                                ),
+                            ));
+                        }
                     }
-                    walked = false;
-                    break;
-                };
-                if edge.vis != Vis::Pub {
-                    self.diags.push(Diag::new(
-                        Span::new(0, 0),
-                        format!(
-                            "`{seg_text}` is not visible from outside the package (`mod`, not `pub mod`) — \
-                             spell `pub mod {seg_text};` in `{dep_name}`'s {} to widen it",
-                            at_file(&at),
-                        ),
-                    ));
-                    walked = false;
-                    break;
+                    ok = false;
+                    continue;
                 }
-                at = child;
-            }
-            if !walked {
-                ok = false;
-                continue;
-            }
+            };
             // the leaf names: each must be a `pub` decl of the walked
             // module (when the dep's rows are readable — a source body
             // and a host surface both carry their text; a compiled

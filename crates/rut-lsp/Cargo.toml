@@ -24,10 +24,13 @@ path = "src/lib.rs"
 # spells the parser lane only inside semantic/doc.rs; the corpus tests
 # pin the same grammar through the public door, tests/corpus.rs).
 # rut-driver carries the manifest/bundle bytes; rut-core the checker's
-# run chain.
+# run chain. rut-lir is the mod laws' one home (`check::{mod_head,
+# mod_walk, mod_walk_pub, vis_crosses, mod_tree_from}`) — the resolve
+# adapters call the shared laws, no walk is spelled twice here.
 rut-lexer = { path = "../rut-lexer" }
 rut-ast = { path = "../rut-ast" }
 rut-core = { path = "../rut-core" }
+rut-lir = { path = "../rut-lir" }
 # the manifest/bundle bridge (`deps`): parse_manifest + the STORE-only
 # zip reader live here, and the crate is wasm32-clean (rut-wasm already
 # builds it for the shim) — pure bytes in, values out

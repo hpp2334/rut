@@ -179,32 +179,17 @@ impl Session {
     /// naming the root module. The walk ignores edge visibility: mod
     /// edges are intra-package namespaces, the LEAF gate decides what
     /// crosses. A flat package (no mod children) claims nothing — its
-    /// own name was never a legal use head there.
+    /// own name was never a legal use head there. The shared law
+    /// [`rut_lir::check::mod_head`] is the one home: the pkg's scope
+    /// tree rides in, the pkg's spec answers the own-package arm.
     pub(crate) fn own_use_head(&self, consumer: &str, head: &str, from: &str) -> Option<String> {
         let pkg = self.resolve(consumer).ok()?;
-        let mut cur = from.to_string();
-        loop {
-            let child = if cur.is_empty() {
-                head.to_string()
-            } else {
-                format!("{cur}/{head}")
-            };
-            if pkg.mods.contains_key(&child) {
-                return Some(child);
-            }
-            let parent = match cur.rsplit_once('/') {
-                Some((p, _)) => p.to_string(),
-                None => String::new(),
-            };
-            if parent == cur {
-                break;
-            }
-            cur = parent;
-        }
-        if !pkg.mods.is_empty() && head == pkg.spec {
-            return Some(String::new());
-        }
-        None
+        rut_lir::check::mod_head(
+            &crate::graph::mod_inputs_of(pkg, Vec::new()),
+            &pkg.spec,
+            from,
+            head,
+        )
     }
 
     /// The nameability allowlist: the heads `consumer` may `use` — its

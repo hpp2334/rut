@@ -470,7 +470,7 @@ fn qualified_path_hover(
         let target = crate::world::collection::qualified_module(w, file, &names, q.is_ty)?;
         let md = render_module_target(
             w.file(target),
-            crate::world::mods::mod_path_of(w.file(target)),
+            crate::resolve::mods::mod_path_of(w.file(target)),
         );
         return Some(Some((md, span)));
     }
@@ -578,8 +578,8 @@ fn decl_site_hover(w: &World, file: FileId, h: AnyHandle, pos: u32) -> Option<(S
         let md_node = mh.get(ast);
         if on_name(md_node.name.span, pos) {
             let m = ModView { file: d, h };
-            let child = crate::world::mods::child_path(
-                crate::world::mods::mod_path_of(d),
+            let child = rut_lir::check::child_path(
+                crate::resolve::mods::mod_path_of(d),
                 ast.name(md_node.name.ident),
             );
             let mounted = mounted_child(w, file, &child);
@@ -587,7 +587,7 @@ fn decl_site_hover(w: &World, file: FileId, h: AnyHandle, pos: u32) -> Option<(S
                 render_mod(
                     d,
                     &m,
-                    &crate::world::mods::display_of(w, d.stamp.module.as_deref(), &child),
+                    &crate::resolve::mods::display_of(w, d.stamp.module.as_deref(), &child),
                     mounted.map(|c| w.file(c).mods().len()),
                 ),
                 md_node.name.span,
@@ -618,11 +618,11 @@ fn decl_site_hover(w: &World, file: FileId, h: AnyHandle, pos: u32) -> Option<(S
 /// workspace file) answers any file stamped at the child's mod path
 /// (the dep walk's stamps — display only: the child count)
 fn mounted_child(w: &World, owner: FileId, child: &str) -> Option<FileId> {
-    match crate::world::mods::find_mod(w, w.file(owner).stamp.module.as_deref(), child) {
+    match crate::resolve::mods::find_mod(w, w.file(owner).stamp.module.as_deref(), child) {
         Some(c) => Some(c),
         None if w.file(owner).stamp.module.is_none() => w
             .chain(owner)
-            .find(|id| crate::world::mods::mod_path_of(w.file(*id)) == child),
+            .find(|id| crate::resolve::mods::mod_path_of(w.file(*id)) == child),
         None => None,
     }
 }
@@ -655,13 +655,14 @@ fn use_segment_hover(w: &World, file: FileId, h: AnyHandle, pos: u32) -> Option<
         // the OWN lane — committed once the head speaks for the
         // doc's own package: `k == 0` answers the resolved start
         // module, deeper segments walk intra-package
-        if let Some(start) = crate::world::mods::resolve_position_head(w, file, &pkg) {
+        if let Some(start) = crate::resolve::mods::position_head(w, file, &pkg) {
             let path = if k == 0 {
                 start
             } else {
-                crate::world::mods::walk_position_mods(
+                crate::resolve::mods::position_walk(
                     w,
                     doc_stamp.module.as_deref(),
+                    file,
                     &start,
                     &segs[1..=k],
                 )?
@@ -669,20 +670,20 @@ fn use_segment_hover(w: &World, file: FileId, h: AnyHandle, pos: u32) -> Option<
             let target: FileId = if doc_stamp.mod_path.as_deref() == Some(path.as_str()) {
                 file
             } else {
-                crate::world::mods::find_mod(w, doc_stamp.module.as_deref(), &path)?
+                crate::resolve::mods::find_mod(w, doc_stamp.module.as_deref(), &path)?
             };
             return Some((render_module_target(w.file(target), &path), seg.span));
         }
         let walked = if k == 0 {
             Some(String::new())
         } else {
-            crate::world::mods::walk_use_mods(w, &pkg, &segs[1..=k])
+            crate::resolve::mods::use_walk(w, &pkg, file, &segs[1..=k])
         };
         let path = walked?;
         let target = if path.is_empty() {
-            crate::world::mods::pkg_root_file(w, file, &pkg)?
+            crate::resolve::mods::pkg_root_file(w, file, &pkg)?
         } else {
-            crate::world::mods::find_mod(w, Some(&pkg), &path)?
+            crate::resolve::mods::find_mod(w, Some(&pkg), &path)?
         };
         return Some((render_module_target(w.file(target), &path), seg.span));
     }
@@ -695,16 +696,16 @@ fn use_segment_hover(w: &World, file: FileId, h: AnyHandle, pos: u32) -> Option<
             continue;
         }
         let pkg = segs[0].clone();
-        if crate::world::mods::resolve_position_head(w, file, &pkg).is_some() {
+        if crate::resolve::mods::position_head(w, file, &pkg).is_some() {
             return None;
         }
         let path = if u_node.path.len() == 1 {
             String::new()
         } else {
-            crate::world::mods::walk_use_mods(w, &pkg, &segs[1..])?
+            crate::resolve::mods::use_walk(w, &pkg, file, &segs[1..])?
         };
         let (target, child) =
-            crate::world::mods::use_module_leaf(w, &pkg, &path, ast.name(n.ident))?;
+            crate::resolve::mods::use_module_leaf(w, &pkg, &path, ast.name(n.ident))?;
         return Some((render_module_target(w.file(target), &child), n.span));
     }
     None

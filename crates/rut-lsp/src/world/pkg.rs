@@ -18,7 +18,7 @@ use crate::world::{File, FileId, World};
 /// (…/gadgets/lib.rut for pkg `gadgets`). This is the FLAT sweeps'
 /// question ("which unnamed files answer for this package name") —
 /// never a mod-tree lookup's: a package-scoped module lookup keys on
-/// the stamp ([`crate::world::mods::matches_mod`]), so an unstamped
+/// the stamp ([`crate::resolve::mods::matches_mod`]), so an unstamped
 /// file cannot land a package's root because its path happens to name
 /// the package.
 pub fn matches_pkg(f: &File, pkg: &str) -> bool {

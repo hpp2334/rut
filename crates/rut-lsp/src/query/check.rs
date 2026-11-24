@@ -124,7 +124,8 @@ fn edge_vis(w: &World, module: &str, path: &str) -> Vis {
     };
     for id in w.files() {
         let f = w.file(id);
-        if f.stamp.module.as_deref() == Some(module) && crate::world::mods::mod_path_of(f) == parent
+        if f.stamp.module.as_deref() == Some(module)
+            && crate::resolve::mods::mod_path_of(f) == parent
         {
             if let Some(e) = f.mods().into_iter().find(|m| m.name() == name) {
                 return e.vis();
@@ -297,8 +298,9 @@ fn degraded_diags(group: &PkgFiles, doc_pkg: &str) -> Option<Vec<Diag>> {
 
 /// One file's degraded parse copy: every `use` naming a head the
 /// degraded world cannot offer — not `core` (the engine auto-offers
-/// the real prelude), not the doc's own claim ([`own_head_claim`]) —
-/// is blanked: its bytes become spaces, newlines kept. Byte-preserving
+/// the real prelude), not a head the doc's own package claims (the
+/// shared law `rut_lir::check::mod_head` over the group's mod-path
+/// table) — is blanked: its bytes become spaces, newlines kept. Byte-preserving
 /// by construction, so every span the degraded run reports indexes the
 /// same offsets the mapping table's ORIGINAL texts hold — never a
 /// misplaced squiggle.
@@ -320,7 +322,15 @@ fn blank_dangling_heads(
             continue; // the incomplete shape — no head to dangle
         };
         let head = ast.name(head.ident);
-        if head == "core" || own_head_claim(group, path, head) {
+        if head == "core"
+            || rut_lir::check::mod_head(
+                &rut_lir::check::mod_tree_from(group.files.keys().map(|p| (p.as_str(), Vis::Pub))),
+                &group.module,
+                path,
+                head,
+            )
+            .is_some()
+        {
             continue; // the degraded world offers it — the statement stands
         }
         let (lo, hi) = (u.span.lo as usize, u.span.hi as usize);
@@ -334,36 +344,6 @@ fn blank_dangling_heads(
         }
     }
     String::from_utf8(bytes).expect("blanking writes ASCII spaces only — the copy stays UTF-8")
-}
-
-/// The doc's own-package answer for a use head — the driver's own-lane
-/// walk (`Session::own_use_head`), mirrored over the group's file set:
-/// a `mod` edge walked from `from` (the importing file's mod path; the
-/// current module first, then the ancestors, nearest wins), or the
-/// doc's OWN spec naming the root module — a non-empty mod tree only
-/// (a flat package's own name was never a legal use head there).
-fn own_head_claim(group: &PkgFiles, from: &str, head: &str) -> bool {
-    let mut cur = from.to_string();
-    loop {
-        let child = if cur.is_empty() {
-            head.to_string()
-        } else {
-            format!("{cur}/{head}")
-        };
-        if group.files.contains_key(&child) {
-            return true;
-        }
-        let parent = match cur.rsplit_once('/') {
-            Some((p, _)) => p.to_string(),
-            None => String::new(),
-        };
-        if parent == cur {
-            break;
-        }
-        cur = parent;
-    }
-    let has_mods = group.files.keys().any(|p| !p.is_empty());
-    has_mods && head == group.module
 }
 
 /// The world's pkgs: a lib body mounts as `Mounted::source` + its mod tree;

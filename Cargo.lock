@@ -1245,6 +1245,7 @@ dependencies = [
  "rut-core",
  "rut-driver",
  "rut-lexer",
+ "rut-lir",
  "serde",
  "serde_json",
  "sha2",

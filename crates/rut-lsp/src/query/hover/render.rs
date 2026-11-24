@@ -312,7 +312,7 @@ pub(crate) fn render_let(l: &LetView) -> String {
 /// name for a single-file module — the origin's basename), the child
 /// count, provenance
 pub(crate) fn render_module_target(f: &File, path: &str) -> String {
-    let file = crate::world::mods::display_of_single(f, path);
+    let file = crate::resolve::mods::display_of_single(f, path);
     let mut out = code_block(&file);
     out.push_str("\nfile module");
     match f.mods().len() {

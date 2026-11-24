@@ -378,7 +378,7 @@ fn walked_surface_in<'a>(
     let walked = if interior.is_empty() {
         Some(String::new())
     } else {
-        crate::world::mods::walk_use_mods(w, pkg, interior)
+        crate::resolve::mods::use_walk(w, pkg, file, interior)
     };
     let Some(path) = walked else {
         return (String::new(), Vec::new());
@@ -400,7 +400,7 @@ fn walked_surface_in<'a>(
     let scope: Vec<FileId> = if carrying {
         scoped
             .into_iter()
-            .filter(|id| member(*id) && crate::world::mods::mod_path_of(w.file(*id)) == path)
+            .filter(|id| member(*id) && crate::resolve::mods::mod_path_of(w.file(*id)) == path)
             .collect()
     } else {
         scoped.into_iter().filter(|id| member(*id)).collect()
@@ -413,7 +413,7 @@ fn walked_surface_in<'a>(
             if m.vis() != Vis::Pub {
                 continue;
             }
-            let child = crate::world::mods::child_path(&path, m.name());
+            let child = rut_lir::check::child_path(&path, m.name());
             rows.push(ExportRow::Mod(m, child));
         }
         for t in f.types() {
@@ -731,7 +731,7 @@ pub(crate) fn one_name_refused(w: &World, file: FileId, name: &str) -> bool {
 /// the head of a use path speaks for the doc's OWN package — the
 /// intra-package import. Two sources, the qualified lane's own
 /// family mirrored: the stamped own lane
-/// ([`crate::world::mods::resolve_position_head`]
+/// ([`crate::resolve::mods::position_head`]
 /// — the doc's own `mod` edge, an ancestor's edge, or the own-pkg
 /// name naming the root; answers the START mod path), and the
 /// unstamped document's shape (its own `mod NAME;` edge off the
@@ -739,30 +739,30 @@ pub(crate) fn one_name_refused(w: &World, file: FileId, name: &str) -> bool {
 /// foreign head: the caller rides the cross-package lane.
 fn own_use_head(w: &World, file: FileId, head: &str) -> Option<String> {
     let doc = w.file(file);
-    if let Some(p) = crate::world::mods::resolve_position_head(w, file, head) {
+    if let Some(p) = crate::resolve::mods::position_head(w, file, head) {
         return Some(p);
     }
     doc.mods()
         .iter()
         .any(|m| m.name() == head)
-        .then(|| crate::world::mods::child_path(crate::world::mods::mod_path_of(doc), head))
+        .then(|| rut_lir::check::child_path(crate::resolve::mods::mod_path_of(doc), head))
 }
 
 /// the module an intra-package use path lands on: the start module
 /// (the head's answer) walked through the path's interior segments
 /// — any declared edge walks
-/// ([`crate::world::mods::walk_position_mods`], the compiler's
+/// ([`crate::resolve::mods::position_walk`], the compiler's
 /// own-use walk), the LEAF visibility-gates at the caller
 fn own_module(w: &World, file: FileId, start: &str, interior: &[String]) -> Option<FileId> {
     let pkg = w.file(file).stamp.module.as_deref();
-    let path = crate::world::mods::walk_position_mods(w, pkg, start, interior)?;
+    let path = crate::resolve::mods::position_walk(w, pkg, file, start, interior)?;
     module_at(w, file, pkg, &path)
 }
 
 /// one EXPLICIT use leaf's resolve: an own-package head lands on
 /// the walked module and binds its OWN declaration of the name —
 /// a fn, a type, or a module let, visible from the importing file
-/// ([`crate::world::mods::vis_allows`] — `import is no visibility bypass`; the
+/// ([`rut_lir::check::vis_crosses`] — `import is no visibility bypass`; the
 /// compiler's own-use binding reads the TARGET module's decl
 /// tables: `fn_in`/`let_in`/`resolve_qualified_leaf_ty`). A `pub
 /// use` row of that module is NOT followed (the compiler's binding
@@ -788,9 +788,9 @@ fn leaf_scope<'a>(
         return;
     };
     let from = w.file(file).stamp.mod_path.as_deref().unwrap_or("");
-    let def_mod = crate::world::mods::mod_path_of(w.file(cur));
+    let def_mod = crate::resolve::mods::mod_path_of(w.file(cur));
     out.extend(decl_rows_visible(w.file(cur), name, |vis| {
-        crate::world::mods::vis_allows(from, def_mod, vis)
+        rut_lir::check::vis_crosses(from, def_mod, vis)
     }));
 }
 
@@ -812,8 +812,8 @@ fn glob_scope<'a>(w: &'a World, file: FileId, g: &GlobUse<'a>) -> FileScope<'a> 
     if let Some(start) = own_use_head(w, file, g.pkg) {
         if let Some(cur) = own_module(w, file, &start, &g.interior) {
             let from = w.file(file).stamp.mod_path.as_deref().unwrap_or("");
-            let def_mod = crate::world::mods::mod_path_of(w.file(cur));
-            let allows = |vis: Vis| crate::world::mods::vis_allows(from, def_mod, vis);
+            let def_mod = crate::resolve::mods::mod_path_of(w.file(cur));
+            let allows = |vis: Vis| rut_lir::check::vis_crosses(from, def_mod, vis);
             out.types
                 .extend(w.file(cur).types().into_iter().filter(|t| allows(t.vis())));
             out.fns.extend(
@@ -843,7 +843,7 @@ fn glob_scope<'a>(w: &'a World, file: FileId, g: &GlobUse<'a>) -> FileScope<'a> 
 /// `pub` names cross packages" — a `pub(pkg)` row, a private, and
 /// the module's own private imports never bind). The interior walk
 /// rides the use tier's own machinery
-/// ([`crate::world::mods::walk_use_mods`]); the walk's
+/// ([`crate::resolve::mods::use_walk`]); the walk's
 /// own carrying law (the use tier's): a mod-carrying package
 /// scopes the flat spelling to its root, a flat package's whole
 /// world answers. The body-over-decl preference rides inside
@@ -861,7 +861,7 @@ fn use_bound<'a>(
     let walked = if interior.is_empty() {
         Some(String::new())
     } else {
-        crate::world::mods::walk_use_mods(w, pkg, interior)
+        crate::resolve::mods::use_walk(w, pkg, file, interior)
     };
     // the walk's own carrying law (the use tier's): a mod-carrying
     // package scopes the flat spelling to its root; a flat
@@ -874,7 +874,7 @@ fn use_bound<'a>(
             .chain(file)
             .filter(|id| {
                 crate::world::pkg::matches_pkg(w.file(*id), pkg)
-                    && crate::world::mods::mod_path_of(w.file(*id)) == p
+                    && crate::resolve::mods::mod_path_of(w.file(*id)) == p
             })
             .collect(),
         _ => w
@@ -1025,14 +1025,14 @@ pub(crate) fn type_via_imports<'a>(w: &'a World, file: FileId, name: &str) -> Op
 /// qualified paths or use bindings), so the file scope answers
 /// BOTH forms. Four head sources, each an established walk —
 /// never a new rule:
-/// - the OWN lane ([`crate::world::mods::resolve_position_head`]): the doc's own
+/// - the OWN lane ([`crate::resolve::mods::position_head`]): the doc's own
 ///   `mod` edge, an ancestor's edge, or the own-pkg name — any
 ///   declared edge walks (the intra-package rule);
 /// - the doc's own `mod NAME;` edge read off the DeclMap — the
 ///   unstamped-doc shape ([`module_at`]'s unnamed-owner
 ///   law);
 /// - a use-bound module leaf (`use calc::{ math }`) — the
-///   cross-package `pub` walk ([`crate::world::mods::walk_use_mods`]; glob leaves
+///   cross-package `pub` walk ([`crate::resolve::mods::use_walk`]; glob leaves
 ///   bind no modules — a walkable child is a namespace segment,
 ///   never a bound name);
 /// - a pkg-rooted DEP name (`calc::math::…`, the dep merely
@@ -1047,7 +1047,7 @@ pub(crate) fn type_via_imports<'a>(w: &'a World, file: FileId, name: &str) -> Op
 ///   only door).
 ///
 /// The TYPE ladder walks the own family ONLY
-/// ([`crate::world::mods::resolve_position_head`] — `resolve_qualified_ty`'s law: a
+/// ([`crate::resolve::mods::position_head`] — `resolve_qualified_ty`'s law: a
 /// used package's name in a type position refuses, "uses are the
 /// only cross-package door"); the value ladder adds the two
 /// cross-package heads. The interior segments walk the mounted
@@ -1057,7 +1057,7 @@ pub(crate) fn type_via_imports<'a>(w: &'a World, file: FileId, name: &str) -> Op
 /// compiler's qualified leaf is decls-only:
 /// `fn_in`/`data_in`/`enum_in`/`let_in` read the module's own
 /// tables, so a use row never joins, `pub use` included) with the
-/// leaves tier-gated by visibility: [`crate::world::mods::vis_allows`] against the
+/// leaves tier-gated by visibility: [`rut_lir::check::vis_crosses`] against the
 /// reading file intra-package, `pub`-only cross-package, ambient
 /// rows passing. A head the file does not bind answers NONE —
 /// never the flat sweep.
@@ -1086,14 +1086,14 @@ pub(crate) fn qualified_scope<'a>(
     // rule — the phase-3 machinery's own law for exactly this
     // position); the READER is the queried file — its true mod
     // path is its own stamp
-    let from = crate::world::mods::mod_path_of(w.file(file));
-    let def_mod = crate::world::mods::mod_path_of(w.file(cur));
+    let from = crate::resolve::mods::mod_path_of(w.file(file));
+    let def_mod = crate::resolve::mods::mod_path_of(w.file(cur));
     let gate = |vis: Vis, ambient: bool| {
         ambient
             || if cross {
                 vis == Vis::Pub
             } else {
-                crate::world::mods::vis_allows(from, def_mod, vis)
+                rut_lir::check::vis_crosses(from, def_mod, vis)
             }
     };
     scope.types.retain(|t| gate(t.vis(), t.ambient()));
@@ -1134,7 +1134,7 @@ fn module_head(w: &World, file: FileId, head: &str, is_ty: bool) -> Option<(File
     let doc = w.file(file);
     // 1. the own lane — the machinery's own walk (own/ancestor
     //    edges + the own-pkg head; the doc's stamp keys it)
-    if let Some(p) = crate::world::mods::resolve_position_head(w, file, head) {
+    if let Some(p) = crate::resolve::mods::position_head(w, file, head) {
         if let Some(f) = module_at(w, file, doc.stamp.module.as_deref(), &p) {
             return Some((f, HeadSrc::Own));
         }
@@ -1143,7 +1143,7 @@ fn module_head(w: &World, file: FileId, head: &str, is_ty: bool) -> Option<(File
     //    unstamped-doc shape (no doc context: the edge's own
     //    record walks, the unnamed-owner law finds the child)
     if doc.mods().iter().any(|m| m.name() == head) {
-        let child = crate::world::mods::child_path(crate::world::mods::mod_path_of(doc), head);
+        let child = rut_lir::check::child_path(crate::resolve::mods::mod_path_of(doc), head);
         if let Some(f) = module_at(w, file, doc.stamp.module.as_deref(), &child) {
             return Some((f, HeadSrc::Own));
         }
@@ -1164,7 +1164,7 @@ fn module_head(w: &World, file: FileId, head: &str, is_ty: bool) -> Option<(File
         // (after the pkg head) rides ahead of the leaf
         let mut walk: Vec<String> = u.path().into_iter().skip(1).collect();
         walk.push(head.to_string());
-        if let Some(p) = crate::world::mods::walk_use_mods(w, pkg, &walk) {
+        if let Some(p) = crate::resolve::mods::use_walk(w, pkg, file, &walk) {
             if let Some(f) = module_at(w, file, Some(pkg), &p) {
                 return Some((f, HeadSrc::UseBound));
             }
@@ -1179,13 +1179,13 @@ fn module_head(w: &World, file: FileId, head: &str, is_ty: bool) -> Option<(File
     //    the dep must carry a module tree ("a flat dep — no
     //    module path can root inside").
     let named = |f: &File| {
-        f.stamp.module.as_deref() == Some(head) && crate::world::mods::mod_path_of(f).is_empty()
+        f.stamp.module.as_deref() == Some(head) && crate::resolve::mods::mod_path_of(f).is_empty()
     };
     let tree_carrying = |f: &File| {
         !f.mods().is_empty()
             || w.chain(file).any(|x| {
                 w.file(x).stamp.module.as_deref() == Some(head)
-                    && !crate::world::mods::mod_path_of(w.file(x)).is_empty()
+                    && !crate::resolve::mods::mod_path_of(w.file(x)).is_empty()
             })
     };
     let root = w
@@ -1232,12 +1232,12 @@ fn module_hop(w: &World, file: FileId, cur: FileId, seg: &str) -> Option<FileId>
     if !w.file(cur).mods().iter().any(|m| m.name() == seg) {
         return None;
     }
-    let child = crate::world::mods::child_path(crate::world::mods::mod_path_of(w.file(cur)), seg);
+    let child = rut_lir::check::child_path(crate::resolve::mods::mod_path_of(w.file(cur)), seg);
     module_at(w, file, w.file(cur).stamp.module.as_deref(), &child)
 }
 
 /// the mounted file at `(pkg, path)` — the
-/// [`crate::world::mods::matches_mod`] law (the STAMP: a package's root is its
+/// [`crate::resolve::mods::matches_mod`] law (the STAMP: a package's root is its
 /// stamped root, never a file by a path coincidence), with two
 /// doors ahead of it: the queried file IS the module when its
 /// stamp says so (its own entry carries the freshest decls — the
@@ -1249,11 +1249,11 @@ fn module_at(w: &World, file: FileId, pkg: Option<&str>, path: &str) -> Option<F
     if doc.stamp.module.as_deref() == pkg && doc.stamp.mod_path.as_deref() == Some(path) {
         return Some(file);
     }
-    crate::world::mods::find_mod(w, pkg, path).or_else(|| {
+    crate::resolve::mods::find_mod(w, pkg, path).or_else(|| {
         (pkg.is_none())
             .then(|| {
                 w.files()
-                    .find(|id| crate::world::mods::mod_path_of(w.file(*id)) == path)
+                    .find(|id| crate::resolve::mods::mod_path_of(w.file(*id)) == path)
             })
             .flatten()
     })

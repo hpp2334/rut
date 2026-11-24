@@ -6,8 +6,8 @@
 
 use super::rows::{filtered, push_item, BindRow, CompletionOut, Row};
 use super::{CompletionKind, DocFile};
+use crate::resolve::mods;
 use crate::world::collection;
-use crate::world::mods;
 use crate::world::{FileId, World};
 use rut_ast::AnyHandle;
 

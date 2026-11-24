@@ -698,7 +698,7 @@ fn qualified_tail_locations(
 fn module_segment_target(ctx: &Ctx, segs: &[String], is_ty: bool) -> Option<Vec<DefLocation>> {
     let w = ctx.w;
     let target = crate::world::collection::qualified_module(w, ctx.file, segs, is_ty)?;
-    let path = crate::world::mods::mod_path_of(w.file(target));
+    let path = crate::resolve::mods::mod_path_of(w.file(target));
     if path.is_empty() {
         // the package's own name — the root module, at its file top
         // (`Span::new(0, 0)`, the pkg-head convention)
@@ -708,14 +708,14 @@ fn module_segment_target(ctx: &Ctx, segs: &[String], is_ty: bool) -> Option<Vec<
     // TARGET's own package (the queried file's own entry when the
     // parent is the open document)
     let name = path.rsplit('/').next()?;
-    let parent_path = crate::world::mods::parent_of(path);
+    let parent_path = rut_lir::check::parent_of(path);
     let parent = if w.file(ctx.file).stamp.module.as_deref()
         == w.file(target).stamp.module.as_deref()
         && w.file(ctx.file).stamp.mod_path.as_deref() == Some(parent_path)
     {
         ctx.file
     } else {
-        crate::world::mods::find_mod(w, w.file(target).stamp.module.as_deref(), parent_path)?
+        crate::resolve::mods::find_mod(w, w.file(target).stamp.module.as_deref(), parent_path)?
     };
     let edge = w
         .file(parent)
@@ -777,7 +777,7 @@ fn use_graph_targets<'a>(
                 .chain(file)
                 .filter(|id| {
                     matches_pkg(w.file(*id), pkg)
-                        && crate::world::mods::mod_path_of(w.file(*id)) == p
+                        && crate::resolve::mods::mod_path_of(w.file(*id)) == p
                 })
                 .collect();
             if scoped.is_empty() {
@@ -843,7 +843,7 @@ fn pkg_root_index(w: &World, file: FileId, pkg: &str) -> Option<FileId> {
         .filter(|id| {
             *id != file
                 && matches_pkg(w.file(*id), pkg)
-                && crate::world::mods::mod_path_of(w.file(*id)).is_empty()
+                && crate::resolve::mods::mod_path_of(w.file(*id)).is_empty()
         })
         .collect();
     roots.sort_by_key(|id| {
@@ -894,9 +894,10 @@ fn use_site_targets(ctx: &Ctx, h: rut_ast::AnyHandle, pos: u32) -> Option<Vec<De
         // the OWN lane — the walk is the intra-package one (any
         // declared edge; the doc's own rows read for its own scope)
         if let Some(start) = own_lane_start(ctx, &pkg) {
-            let walked = crate::world::mods::walk_position_mods(
+            let walked = crate::resolve::mods::position_walk(
                 w,
                 w.file(file).stamp.module.as_deref(),
+                file,
                 &start,
                 &segs[1..],
             );
@@ -908,7 +909,7 @@ fn use_site_targets(ctx: &Ctx, h: rut_ast::AnyHandle, pos: u32) -> Option<Vec<De
         let walked = if u_node.path.len() == 1 {
             Some(String::new())
         } else {
-            crate::world::mods::walk_use_mods(w, &pkg, &segs[1..])
+            crate::resolve::mods::use_walk(w, &pkg, file, &segs[1..])
         };
         let targets = use_graph_targets(w, file, &pkg, walked.as_deref(), name);
         if !targets.is_empty() {
@@ -917,7 +918,7 @@ fn use_site_targets(ctx: &Ctx, h: rut_ast::AnyHandle, pos: u32) -> Option<Vec<De
         // a MODULE leaf (`use calc::{ math }`): the walked module's
         // `pub` child opens at its file top — the pkg-head convention
         if let Some(p) = walked {
-            if let Some((child, _)) = crate::world::mods::use_module_leaf(w, &pkg, &p, name) {
+            if let Some((child, _)) = crate::resolve::mods::use_module_leaf(w, &pkg, &p, name) {
                 return Some(vec![loc_at(w.file(child), Span::new(0, 0))]);
             }
         }
@@ -941,9 +942,10 @@ fn use_site_targets(ctx: &Ctx, h: rut_ast::AnyHandle, pos: u32) -> Option<Vec<De
                     None => Vec::new(),
                 }
             } else {
-                match crate::world::mods::walk_position_mods(
+                match crate::resolve::mods::position_walk(
                     w,
                     w.file(file).stamp.module.as_deref(),
+                    file,
                     &start,
                     &segs[1..=k],
                 ) {
@@ -961,9 +963,9 @@ fn use_site_targets(ctx: &Ctx, h: rut_ast::AnyHandle, pos: u32) -> Option<Vec<De
                     .unwrap_or_default(),
             );
         }
-        let walked = crate::world::mods::walk_use_mods(w, &pkg, &segs[1..=k])?;
+        let walked = crate::resolve::mods::use_walk(w, &pkg, file, &segs[1..=k])?;
         let parent =
-            crate::world::mods::find_mod(w, Some(&pkg), crate::world::mods::parent_of(&walked))?;
+            crate::resolve::mods::find_mod(w, Some(&pkg), rut_lir::check::parent_of(&walked))?;
         let edge_name = ast.name(u_node.path[k].ident);
         let edge = w
             .file(parent)
@@ -985,7 +987,7 @@ fn use_site_targets(ctx: &Ctx, h: rut_ast::AnyHandle, pos: u32) -> Option<Vec<De
 /// the compiler's bare-head law). `None` = a foreign head; the caller
 /// rides the cross-package lanes.
 fn own_lane_start(ctx: &Ctx, head: &str) -> Option<String> {
-    crate::world::mods::resolve_position_head(ctx.w, ctx.file, head)
+    crate::resolve::mods::position_head(ctx.w, ctx.file, head)
 }
 
 /// the scope file for a resolved own mod path — the queried file's
@@ -997,13 +999,14 @@ fn own_scope(ctx: &Ctx, walked: &str) -> Option<FileId> {
     if w.file(ctx.file).stamp.mod_path.as_deref() == Some(walked) {
         return Some(ctx.file);
     }
-    crate::world::mods::find_mod(w, w.file(ctx.file).stamp.module.as_deref(), walked)
+    crate::resolve::mods::find_mod(w, w.file(ctx.file).stamp.module.as_deref(), walked)
 }
 
 /// the own-lane leaf: the walked mod path's scope answers the
 /// declaring type / module-let / free-fn spans (the use-graph's
 /// collector, scoped to the one module) — each row VISIBLE from the
-/// importing file (`vis_allows`: "import is no visibility bypass" —
+/// importing file (`rut_lir::check::vis_crosses`: "import is no
+/// visibility bypass" —
 /// a leaf the use line refuses jumps nowhere), the module's `pub use`
 /// rows never followed (the compiler's binding refuses a re-export
 /// import)
@@ -1013,7 +1016,7 @@ fn own_leaf_targets(ctx: &Ctx, walked: &str, name: &str) -> Vec<DefLocation> {
     };
     let w = ctx.w;
     let from = w.file(ctx.file).stamp.mod_path.as_deref().unwrap_or("");
-    let allows = |vis: rut_ast::Vis| crate::world::mods::vis_allows(from, walked, vis);
+    let allows = |vis: rut_ast::Vis| rut_lir::check::vis_crosses(from, walked, vis);
     let mut hits: Vec<(&File, Span)> = Vec::new();
     let scope = w.file(f);
     if let Some(t) = scope.ty(name).filter(|t| allows(t.vis())) {
@@ -1040,7 +1043,7 @@ fn own_leaf_targets(ctx: &Ctx, walked: &str, name: &str) -> Vec<DefLocation> {
 /// NAME;` edge in the parent module's file — the foreign lane's
 /// target law, keyed on the own package
 fn own_edge_target(ctx: &Ctx, walked: &str) -> Option<DefLocation> {
-    let parent_path = crate::world::mods::parent_of(walked);
+    let parent_path = rut_lir::check::parent_of(walked);
     let name = walked.rsplit('/').next()?;
     let parent = own_scope(ctx, parent_path)?;
     let edge = ctx
@@ -1071,9 +1074,9 @@ fn mod_edge_target(ctx: &Ctx, h: rut_ast::AnyHandle, pos: u32) -> Option<DefLoca
     on_name(m.name.span, pos).then_some(())?;
     let name = ast.name(m.name.ident);
     let from = w.file(ctx.file).stamp.mod_path.as_deref()?;
-    let child = crate::world::mods::child_path(from, name);
+    let child = rut_lir::check::child_path(from, name);
     let mounted =
-        crate::world::mods::find_mod(w, w.file(ctx.file).stamp.module.as_deref(), &child)?;
+        crate::resolve::mods::find_mod(w, w.file(ctx.file).stamp.module.as_deref(), &child)?;
     Some(loc_at(w.file(mounted), Span::new(0, 0)))
 }
 

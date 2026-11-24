@@ -20,15 +20,15 @@
 //! `decls`, `types` (the shared vocabulary — TyForm, type text) →
 //! `collection` (the resolver family in `member`, completion's tier
 //! doors in `tiers`, the per-node views in `views/`) → `bindings` +
-//! `infer` (what's under the cursor) → `mods` (the file-module
-//! namespace walk) + `pkg` (package identity and the doc's import
-//! table). The queries above spell this layer — never the reverse.
+//! `infer` (what's under the cursor) + `pkg` (package identity and the
+//! doc's import table); the file-module namespace walk lives in
+//! `resolve::mods` — the adapters over rut-lir's pure laws. The
+//! queries above spell this layer — never the reverse.
 
 pub mod bindings;
 pub(crate) mod collection;
 pub(crate) mod decls;
 pub(crate) mod infer;
-pub(crate) mod mods;
 pub(crate) mod pkg;
 pub(crate) mod types;
 
