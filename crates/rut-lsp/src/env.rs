@@ -33,7 +33,7 @@
 //! the same door the face's `set_env` posts its `JsEnv` through. The
 //! capability has TWO readers, both pure reads: the dep walk
 //! (`crate::walk`) and the mod-name slot's disk probe
-//! (`walk::list_child_mods`).
+//! (`crate::query::completion::file_dir`).
 //!
 //! # The clock (machinery, the one addition)
 //!

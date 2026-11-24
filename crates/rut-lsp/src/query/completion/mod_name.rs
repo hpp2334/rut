@@ -32,7 +32,7 @@ pub(crate) fn file_dir(uri: &str) -> Option<String> {
 /// the mod-name slot's disk probe — the module files beside the
 /// current file, exactly the user's rule: the ONE directory probed is
 /// the open document's own directory, and a candidate is what the
-/// LOADER mounts there ([`mount_child_mod`]'s spellings, the one
+/// LOADER mounts there ([`rut_driver::mount_edges`]'s spellings, the one
 /// home of that law): a folder containing the document flavor's
 /// module file (`mod.d.rut` for a `.d.rut` doc, else `mod.rut`), or —
 /// Impl flavor only — the single-file `NAME.rut` twin. Nothing else:
