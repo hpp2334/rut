@@ -1,4 +1,5 @@
-//! The read-only dep walk's gate (`crate::walk` — the extension's
+//! The read-only dep walk's gate (`crate::load::dep_walk` — the
+//! extension's
 //! manifest walk moved into the crate), driven through the public ABI
 //! over `spawn_native` with a RECORDING fs-backed env: every law the
 //! old walk carried (the lock feed, budgets, first-mount-wins,

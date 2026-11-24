@@ -11,10 +11,12 @@
 //!
 //! The laws this buys (the plan's structural wins):
 //!
-//! - **Handlers are sync fns over the loop** — today's entry bodies,
-//!   moved verbatim into [`dispatch`]'s match (plus the stored
-//!   read-only host env, `crate::env`). They cannot await, so the
-//!   borrow-across-await class of bug is unwritable.
+//! - **Handlers are sync fns over the loop** — every business arm is
+//!   one call into the session (`reply(tx,
+//!   l.session.<method>(..))`, or `done(tx)` for the void entries;
+//!   the session's bodies carry the stored read-only host env,
+//!   `crate::env`). They cannot await, so the borrow-across-await
+//!   class of bug is unwritable.
 //! - **A handler gets NO sender to the loop** — the reply oneshot
 //!   rides IN the command, so a handler can answer but never post; the
 //!   self-RPC deadlock class is unwritable. The posters are the

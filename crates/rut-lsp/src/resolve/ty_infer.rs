@@ -25,6 +25,7 @@
 //! matching over the shape); residual type variables are silence,
 //! never `: T` text.
 
+use crate::doc::is_cap;
 use crate::doc::IntSuffix;
 use rut_ast::{
     Ast, BinOp, Binding, BlockNode, ElseBranch, ExprRef, Handle, Lit, PathSeg, SelfNode, StmtRef,
@@ -575,10 +576,6 @@ where
         [one] => one.clone(),
         _ => None,
     }
-}
-
-pub(crate) fn is_cap(s: &str) -> bool {
-    s.chars().next().is_some_and(|c| c.is_uppercase())
 }
 
 fn int_suffix(sfx: IntSuffix) -> &'static str {

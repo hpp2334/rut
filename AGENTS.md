@@ -106,9 +106,9 @@ pipeline lives in the `Doc`.
   lives on `Ast` (`node_at`/`parent`/`span_of`/`ancestors`/
   `is_incomplete` over `AnyHandle`); position questions walk the
   generic machinery (`node_at` → `ancestors` → `downcast`) — there is
-  no `context_at` and no position-verdict enum (the `Ctx` rows in
-  rut-lsp's `feature/` are chain+mods bundles a query needs, not
-  verdicts). The editor's one classification of a caret is rut-lsp
+  no `context_at` and no position-verdict enum: a feature is asked of
+  a `(World, FileId)` pair — context, never a verdict. The editor's
+  one classification of a caret is rut-lsp
   `resolve::Cursor` — a consumer of that geometry, not a second one.
 - **Scoped token lane**: `name_at` is the fence residue, `tokens_in`
   the classifier's window — no other token interpretation crosses
@@ -184,7 +184,7 @@ pipeline lives in the `Doc`.
   (a `Vec`, not a row), `member`/`members` the member law,
   `use_exports` the mod-walk gates, `bare` the
   locals+ambient+auto-import merge — and `prefer_bodies` the
-  body-over-decl preference. The feature doors (`get_definition`,
+  body-over-decl preference. The feature doors (`definition`,
   `references` in `feature/`) consume the world; the plan's
   `get_declaration` is consciously ABSENT — the wire spells no
   declaration request, and `prefer_bodies`' single decision point
@@ -198,7 +198,7 @@ pipeline lives in the `Doc`.
   world's stamped files INTO the pure walks; they never re-spell a
   law beside it.
 - **One caret, one answer**: the editor classifies a caret exactly
-  once — `resolve::cursor` derives the `Cursor`; `resolve::resolve`
+  once — `resolve::cursor` derives the `Cursor`; `resolve::walk::resolve`
   walks it to declarations answering the typed `resolve::Def`; a
   feature (hover, definition, references) classifies, resolves, and
   renders — it never walks on its own.
