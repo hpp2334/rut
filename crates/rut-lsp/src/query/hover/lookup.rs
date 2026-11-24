@@ -9,8 +9,9 @@
 //! here.
 
 use super::render::{
-    binding_markdown, render_candidates, render_fn_hits, render_let, render_member, render_mod,
-    render_module_target, render_primitive, render_ty,
+    binding_markdown, render_candidates, render_ctor_section, render_fn_hits, render_let,
+    render_member, render_mod, render_module_target, render_newtype_mint, render_primitive,
+    render_ty,
 };
 use crate::semantic::Span;
 use crate::world::collection::{
@@ -21,8 +22,8 @@ use crate::world::infer::is_cap;
 use crate::world::mods::DocMods;
 use crate::world::types::TyForm;
 use rut_ast::{
-    AnyHandle, EnumMemberNode, FieldDeclNode, FieldNode, MethodNode, ModDeclNode, ModuleLetNode,
-    ParamNode, PathNode, SelfNode, SelfTyNode, UseNode,
+    AnyHandle, CallNode, EnumMemberNode, ExprRef, FieldDeclNode, FieldNode, MethodNode,
+    ModDeclNode, ModuleLetNode, ParamNode, PathNode, SelfNode, SelfTyNode, UseNode,
 };
 
 /// the name-position convention the old token scan kept: a name ends
@@ -146,8 +147,10 @@ pub fn hover(chain: &Chain, doc: &DocMods, pos: u32) -> Option<HoverOut> {
         // binds answers nothing below, never a foreign decl
         if is_cap(name) || crate::semantic::is_primitive_ty(name) {
             if let Some(ty) = chain.type_decl(name) {
+                let mut md = render_ty(&ty);
+                append_ctor_section(chain, ast, h, &ty, &mut md);
                 return Some(HoverOut {
-                    markdown: render_ty(&ty),
+                    markdown: md,
                     span: name_span,
                 });
             }
@@ -367,6 +370,54 @@ fn member_position(ast: &rut_ast::Ast, h: AnyHandle, pos: u32) -> bool {
     false
 }
 
+/// is the cursor's node the CALLEE of its parent call? The identity
+/// discriminator: `h` must be the very path node the parent
+/// [`CallNode`]'s `callee` slot records — an ARGUMENT path shares the
+/// same parent CallNode and never matches (`AnyHandle: PartialEq` is
+/// the slot's identity), a type slot rides a `TyPathNode` (a
+/// different kind, never this parent), and a `a::b(..)` tail is the
+/// whole path node that IS the callee.
+fn ctor_callee_position(ast: &rut_ast::Ast, h: AnyHandle) -> bool {
+    let Some(parent) = ast.parent(h) else {
+        return false;
+    };
+    let Some(cd) = parent.downcast::<CallNode>() else {
+        return false;
+    };
+    matches!(cd.get(ast).callee, ExprRef::Path(ph) if ph.any() == h)
+}
+
+/// the class callee's constructor section — the append's ONE home
+/// (the class block stays primary; the section rides after
+/// `render_ty`'s output). A class callee answers with the designated
+/// ctor's verbatim impl slice; a NEWTYPE answers through the mint arm
+/// — never through the marker sweep (the engine's `Ctx::class_ctors`
+/// law: a newtype never registers). Every other shape — a non-class,
+/// a no-ctor class, a cursor that is not a callee (type position,
+/// decl site, argument path, `Logger::new` tail) — appends nothing.
+fn append_ctor_section(
+    chain: &Chain<'_>,
+    ast: &rut_ast::Ast,
+    h: AnyHandle,
+    ty: &TyView,
+    out: &mut String,
+) {
+    if !ctor_callee_position(ast, h) || ty.form() != TyForm::Class {
+        return;
+    }
+    if ty.is_newtype() {
+        if let Some(mint) = render_newtype_mint(ty) {
+            out.push_str("\n\n");
+            out.push_str(&mint);
+        }
+        return;
+    }
+    if let Some(ctor) = chain.constructor_of(ty.name()) {
+        out.push_str("\n\n");
+        out.push_str(&render_ctor_section(ty, &ctor));
+    }
+}
+
 /// the qualified-path position — the cursor rides a MULTI-segment
 /// path (value paths and type-slot paths alike): the segs as spelled
 /// (name + span each), the riding index, and the type-position flag
@@ -441,7 +492,14 @@ fn qualified_path_hover(
         scope
             .types
             .first()
-            .map(|t| render_ty(t))
+            .map(|t| {
+                // a qualified ctor callee (`m::Logger(..)`) — the class
+                // block stays primary, the ctor section appends (the
+                // same one home the bare callee lane rides)
+                let mut md = render_ty(t);
+                append_ctor_section(chain, ast, h, t, &mut md);
+                md
+            })
             .or_else(|| match scope.lets.as_slice() {
                 [one] => Some(render_let(one)),
                 _ => None,

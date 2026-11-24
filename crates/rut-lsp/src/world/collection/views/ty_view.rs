@@ -96,6 +96,48 @@ impl<'a> TyView<'a> {
         unreachable!("a type view addresses a type decl node")
     }
 
+    /// the positional newtype spelling (`class Meters(f64);`) — the
+    /// mint-line arm's gate: a newtype's only constructor is the
+    /// compiler-provided mint, never a designated `[constructor]`
+    /// member (the checker refuses one — its call surface already IS
+    /// the construction)
+    pub(crate) fn is_newtype(&self) -> bool {
+        self.h
+            .downcast::<ClassNode>()
+            .is_some_and(|c| c.get(self.ast()).newtype)
+    }
+
+    /// the synthesized mint signature — `Meters(inner: f64) ->
+    /// Meters`: the positional newtype's compiler-provided constructor
+    /// (`compile_newtype_ctor`: exactly one wrapped value, the wrapper
+    /// back). The desugar names the field `inner` (the parser's
+    /// synthesized shape — no source token spells it), the wrapped
+    /// type joins over the OWNING document as written. Source-less BY
+    /// DESIGN: no ctor decl exists to slice (the LSP verbatim law
+    /// renders inferred/semantic facts). `None` when the decl carries
+    /// no field — a damaged shape mints no line, never a wrong one.
+    pub(crate) fn mint_sig(&self) -> Option<String> {
+        let f = self.fields().into_iter().next()?;
+        Some(format!(
+            "{}({}: {}) -> {}",
+            self.name(),
+            f.name(),
+            f.ty()?,
+            self.name()
+        ))
+    }
+
+    /// the mint's parameter names — the desugared `inner` field (the
+    /// sig-help pieces' alignment check rides it, one truth with
+    /// [`TyView::mint_sig`])
+    pub(crate) fn mint_params(&self) -> Vec<String> {
+        self.fields()
+            .into_iter()
+            .next()
+            .map(|f| vec![f.name().to_string()])
+            .unwrap_or_default()
+    }
+
     /// the decl head as WRITTEN — the verbatim `span × src` slice from
     /// the item's first token cut at the body's `{`; an alias slices
     /// through its own terminator

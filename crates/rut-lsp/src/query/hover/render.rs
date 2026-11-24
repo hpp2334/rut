@@ -113,6 +113,36 @@ pub(crate) fn render_fn_hits(one: &FnView) -> String {
     out
 }
 
+/// the designated constructor's section — appended to the class block
+/// when the hover rides a class callee: the label, the verbatim impl
+/// slice (`[constructor] pub fn new(..) -> Self` whole), then the
+/// impl's provenance + doc lines when it lives in ANOTHER file (the
+/// queried file's own block above already carries its provenance and
+/// doc).
+pub(crate) fn render_ctor_section(ty: &TyView, ctor: &FnView) -> String {
+    let mut out = format!("constructor:\n{}", code_block(&ctor.src()));
+    if !ctor.file.same_file(ty.file) {
+        let origin = &ctor.file.mount.origin;
+        if !origin.is_empty() {
+            out.push_str(&format!("\n{}", provenance(origin, ctor.line())));
+        }
+        for d in ctor.doc_lines() {
+            out.push_str(&format!("\n\n{d}"));
+        }
+    }
+    out
+}
+
+/// the newtype's synthesized mint line — a positional newtype's only
+/// constructor is the compiler-provided mint, source-less BY DESIGN
+/// (no ctor decl exists to slice; the LSP verbatim law renders
+/// inferred/semantic facts). `None` when the decl carries no field —
+/// a damaged shape renders no mint, never a wrong one.
+pub(crate) fn render_newtype_mint(t: &TyView) -> Option<String> {
+    t.mint_sig()
+        .map(|sig| format!("constructor — the newtype mint: {sig}"))
+}
+
 /// the candidate list — one bullet per binding: the verbatim decl
 /// (source-less only for a leaf that binds nothing), its kind, the
 /// use edge it rode when one bound it, and the owning file's

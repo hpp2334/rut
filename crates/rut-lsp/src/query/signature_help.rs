@@ -14,7 +14,14 @@
 //!   inherent impl fn via the shared `impl_method_fn` rule;
 //!   own-surface hits (interface bodies, builtin/primitive surfaces) are
 //!   FINAL with no recorded params → no help, so a same-named impl fn's
-//!   signature can never leak through (the known-receiver-is-final law).
+//!   signature can never leak through (the known-receiver-is-final law);
+//! * a capitalized single-seg callee misses the free-fn lane into the
+//!   CTOR fallback: the class's designated constructor answers with its
+//!   verbatim impl signature (`is_method = false` — a ctor takes no
+//!   receiver, its params ARE the call's args), a positional newtype
+//!   with its synthesized mint label (`TyView::mint_sig`, the hover's
+//!   mint line's spelling). Anything else stays a miss — no help, never
+//!   wrong help.
 //!
 //! The signature renders verbatim (the fn view's own slice — the fn
 //! name and params as written, the hover render's source). The
@@ -143,7 +150,32 @@ pub fn signature_help(ctx: &Ctx, pos: u32) -> Option<SignatureHelp> {
                 cd.args.clone(),
                 false,
             ),
-            _ => return None,
+            // the ctor fallback lane — a single capitalized callee
+            // names a class in call position. The newtype answers
+            // through the mint arm (never the marker sweep — the
+            // engine's `Ctx::class_ctors` law: a newtype never
+            // registers; the synthesized label mentions the param
+            // name so the alignment check holds); a designated ctor
+            // answers with its verbatim impl signature, `is_method =
+            // false` (a ctor takes no receiver — its params ARE the
+            // call's args). Anything else stays a miss — no help,
+            // never wrong help.
+            _ => {
+                if !crate::world::infer::is_cap(name) {
+                    return None;
+                }
+                let mint = ctx
+                    .chain
+                    .type_decl(name)
+                    .filter(|t| t.is_newtype())
+                    .and_then(|t| t.mint_sig().map(|label| (label, t.mint_params())));
+                if let Some((label, params)) = mint {
+                    (label, params, Vec::new(), cd.args.clone(), false)
+                } else {
+                    let f = ctx.chain.constructor_of(name)?;
+                    (f.src(), f.params(), f.doc_lines(), cd.args.clone(), false)
+                }
+            }
         }
     };
 

@@ -2439,3 +2439,184 @@ both_uri_shapes! {
         assert!(md.contains(&format!("— {uri}:1")), "the live document's own row: {md}");
     }
 }
+
+// ---- the class callee's constructor section (the one-name law's
+//      Act 3 — the original ask) ----
+
+both_uri_shapes! {
+#[test]
+fn a_class_callee_hover_shows_the_class_block_and_the_constructor_section() {
+    // hover on a class callee — `Logger("hello")` — shows the class
+    // block (primary) AND the designated ctor's verbatim impl slice
+    // appended (it carries `[constructor] pub fn new(..) -> Self`
+    // whole)
+    let mut s = S::boot();
+    let src = "class Logger {\n    msg: str;\n}\nimpl Logger {\n    [constructor] pub fn new(msg: str) -> Self { return Self { msg: msg }; }\n    pub fn show(self) -> str { return self.msg; }\n}\nentry fn main() -> nil {\n    let l = Logger(\"hello\");\n}\n";
+    let md = markdown(s.hover_in("file:///t/main.rut", src, "= Logger(", 1, 2));
+    assert!(md.contains("class Logger {"), "the class block stays primary: {md}");
+    assert!(md.contains("constructor:"), "the ctor section appends: {md}");
+    assert!(
+        md.contains("[constructor] pub fn new(msg: str) -> Self"),
+        "the ctor's verbatim impl slice: {md}"
+    );
+}
+}
+
+both_uri_shapes! {
+#[test]
+fn a_no_ctor_class_callee_hover_appends_nothing() {
+    // a class with no designated ctor and no mint: the callee hover
+    // is the class block alone, exactly as before this phase
+    let mut s = S::boot();
+    let src = "class Plain {\n    n: i32;\n}\nentry fn main() -> nil {\n    let _p = Plain();\n}\n";
+    let md = markdown(s.hover_in("file:///t/main.rut", src, "= Plain(", 1, 2));
+    assert!(md.contains("class Plain {"), "{md}");
+    assert!(!md.contains("constructor:"), "no ctor, no section: {md}");
+    assert!(!md.contains("newtype mint"), "{md}");
+}
+}
+
+both_uri_shapes! {
+#[test]
+fn a_newtype_callee_hover_shows_the_mint_line() {
+    // a positional newtype's only constructor is the compiler-provided
+    // mint (`compile_newtype_ctor`: exactly one wrapped value, the
+    // wrapper back; the desugar names the field `inner`) — the
+    // synthesized line is source-less BY DESIGN (the LSP verbatim law
+    // renders inferred/semantic facts)
+    let mut s = S::boot();
+    let src = "// meters\nclass Meters(f64);\nentry fn main() -> nil {\n    let m = Meters(1.0);\n}\n";
+    let md = markdown(s.hover_in("file:///t/main.rut", src, "= Meters(", 1, 2));
+    assert!(
+        md.contains("class Meters(f64) {"),
+        "the class block stays primary: {md}"
+    );
+    assert!(
+        md.contains("constructor — the newtype mint: Meters(inner: f64) -> Meters"),
+        "{md}"
+    );
+    assert!(
+        !md.contains("constructor:"),
+        "the mint is no designated ctor section: {md}"
+    );
+}
+}
+
+both_uri_shapes! {
+#[test]
+fn an_argument_path_hovers_the_binding_never_the_ctor() {
+    // the identity discriminator: an ARGUMENT path shares the parent
+    // CallNode but is not the callee slot — `Logger(msg)`'s `msg`
+    // answers the binding hover, and a CAPITALIZED argument (`show
+    // (Logger)`) still answers the bare class block, never the ctor
+    // section
+    let mut s = S::boot();
+    let src = "class Logger {\n    msg: str;\n}\nimpl Logger {\n    [constructor] pub fn new(msg: str) -> Self { return Self { msg: msg }; }\n    pub fn show(self) -> str { return self.msg; }\n}\nfn use_it(msg: str) -> str {\n    let l = Logger(msg);\n    return l.show();\n}\nfn take_val(v: Logger) -> str {\n    return v.msg;\n}\nfn show(v: Logger) -> str {\n    return v.msg;\n}\nentry fn main() -> nil {\n    let l = Logger(\"hi\");\n    let _a = show(Logger);\n}\n";
+    let md = markdown(s.hover_in("file:///t/main.rut", src, "= Logger(msg)", 1, 10));
+    assert!(md.contains("msg: str"), "{md}");
+    assert!(md.contains("parameter"), "{md}");
+    assert!(!md.contains("constructor:"), "{md}");
+    // a capitalized ARGUMENT path: the same parent CallNode, the
+    // callee slot's identity is the discriminator
+    let md = markdown(s.hover_in("file:///t/main.rut", src, "= show(Logger)", 1, 7));
+    assert!(md.contains("class Logger {"), "{md}");
+    assert!(!md.contains("constructor:"), "an argument never triggers: {md}");
+}
+}
+
+both_uri_shapes! {
+#[test]
+fn a_type_position_and_the_decl_site_carry_no_ctor_section() {
+    // type positions (`l: Logger`) and decl sites answer exactly as
+    // before — the section rides the CALLEE position only
+    let mut s = S::boot();
+    let src = "class Logger {\n    msg: str;\n}\nimpl Logger {\n    [constructor] pub fn new(msg: str) -> Self { return Self { msg: msg }; }\n}\nfn take(l: Logger) -> str {\n    return l.msg;\n}\n";
+    let md = markdown(s.hover_in("file:///t/main.rut", src, "l: Logger", 1, 4));
+    assert!(md.contains("class Logger {"), "{md}");
+    assert!(!md.contains("constructor:"), "a type position appends nothing: {md}");
+    let md = markdown(s.hover_in("file:///t/main.rut", src, "class Logger", 1, 6));
+    assert!(md.contains("class Logger {"), "{md}");
+    assert!(!md.contains("constructor:"), "the decl site appends nothing: {md}");
+}
+}
+
+both_uri_shapes! {
+#[test]
+fn a_member_call_tail_hovers_the_impl_fn_unchanged() {
+    // `Logger::new(..)`'s tail resolves through the member law → the
+    // impl fn's verbatim render — no ctor section appends there
+    let mut s = S::boot();
+    let src = "class Logger {\n    msg: str;\n}\nimpl Logger {\n    [constructor] pub fn new(msg: str) -> Self { return Self { msg: msg }; }\n}\nentry fn main() -> nil {\n    let l = Logger::new(\"hi\");\n}\n";
+    let md = markdown(s.hover_in("file:///t/main.rut", src, "Logger::new", 1, 10));
+    assert!(md.contains("[constructor] pub fn new(msg: str) -> Self"), "{md}");
+    assert!(md.contains("in `Logger`"), "{md}");
+    assert!(
+        !md.contains("constructor:"),
+        "the tail is a member answer, no section: {md}"
+    );
+}
+}
+
+both_uri_shapes! {
+#[test]
+fn the_self_lanes_carry_no_ctor_section() {
+    // `Self` (the value spelling) and `Self` (the type slot) render
+    // the enclosing type, unchanged — no ctor section
+    let mut s = S::boot();
+    let src = "class Logger {\n    msg: str;\n}\nimpl Logger {\n    [constructor] pub fn new(msg: str) -> Self { return Self { msg: msg }; }\n}\nentry fn main() -> nil {\n    let l = Logger(\"hi\");\n}\n";
+    let md = markdown(s.hover_in("file:///t/main.rut", src, "return Self", 1, 7));
+    assert!(md.contains("class Logger {"), "{md}");
+    assert!(!md.contains("constructor:"), "the Self lane appends nothing: {md}");
+    let md = markdown(s.hover_in("file:///t/main.rut", src, ") -> Self {", 1, 5));
+    assert!(md.contains("class Logger {"), "{md}");
+    assert!(!md.contains("constructor:"), "the SelfTy lane appends nothing: {md}");
+}
+}
+
+both_uri_shapes! {
+#[test]
+fn a_foreign_ctor_impl_names_its_home() {
+    // the ctor's impl lives in ANOTHER file: the section carries the
+    // impl's provenance + its own doc lines (the queried file's own
+    // block above already carries its own)
+    let mut s = S::boot();
+    s.index_file(
+        "file:///ws/lib/log.rut",
+        "impl Logger {\n    // the maker\n    [constructor] pub fn new(msg: str) -> Self { return Self { msg: msg }; }\n}\n",
+    );
+    let src = "class Logger {\n    msg: str;\n}\nentry fn main() -> nil {\n    let l = Logger(\"hello\");\n}\n";
+    let md = markdown(s.hover_in("file:///t/main.rut", src, "= Logger(", 1, 2));
+    assert!(md.contains("class Logger {"), "{md}");
+    assert!(md.contains("constructor:"), "{md}");
+    assert!(md.contains("[constructor] pub fn new(msg: str) -> Self"), "{md}");
+    assert!(md.contains("log.rut"), "the impl's provenance: {md}");
+    assert!(md.contains("the maker"), "the ctor's own doc lines ride: {md}");
+}
+}
+
+both_uri_shapes! {
+#[test]
+fn a_qualified_ctor_callee_appends_the_section() {
+    // `shape::Logger("x")` — the qualified callee resolves through the
+    // module namespace lane; the class block stays primary, the ctor
+    // section appends as the bare callee's does
+    let mut s = S::boot();
+    s.index_mod_at(
+        "file:///ws/pkg/src/shape/mod.rut",
+        "pkg",
+        "shape",
+        "pub class Logger {\n    msg: str;\n}\nimpl Logger {\n    [constructor] pub fn new(msg: str) -> Self { return Self { msg: msg }; }\n}\n",
+    );
+    let doc = "mod shape;\nentry fn main() -> nil { let l = shape::Logger(\"x\"); }\n";
+    let uri = "file:///ws/pkg/src/mod.rut";
+    s.index_mod_at(uri, "pkg", "", doc);
+    let md = markdown(s.hover_in(uri, doc, "shape::Logger(", 1, 8));
+    assert!(md.contains("class Logger {"), "the class block stays primary: {md}");
+    assert!(md.contains("constructor:"), "{md}");
+    assert!(md.contains("[constructor] pub fn new(msg: str) -> Self"), "{md}");
+    // the head segment still renders the module, no ctor section
+    let md = markdown(s.hover_in(uri, doc, "shape::Logger(", 1, 2));
+    assert!(md.contains("file module"), "{md}");
+    assert!(!md.contains("constructor:"), "{md}");
+}
+}

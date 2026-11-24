@@ -315,3 +315,71 @@ fn the_paren_only_the_request_saw_still_answers() {
     assert_eq!(lbl, "fn f(a: i32) -> i32");
     assert_eq!(slot, Some(0));
 }
+
+// ---- the ctor fallback lane ----
+
+both_uri_shapes! {
+#[test]
+fn a_ctor_call_shows_the_ctor_signature_and_the_active_param() {
+    // a capitalized callee the free-fn lane misses names a class: the
+    // designated ctor answers with its verbatim impl signature
+    // (`is_method = false` — a ctor takes no receiver, its params ARE
+    // the call's args)
+    let mut s = S::boot();
+    let src = "class Logger {\n    msg: str;\n}\nimpl Logger {\n    [constructor] pub fn new(msg: str) -> Self { return Self { msg: msg }; }\n}\nentry fn main() -> nil {\n    let l = Logger(\"hello\");\n}\n";
+    let uri = "file:///t/main.rut";
+    let (lbl, slot, pieces) = slot_of(&s.sig_at(uri, src, "\"hello\"", 1));
+    assert_eq!(lbl, "[constructor] pub fn new(msg: str) -> Self");
+    assert_eq!(slot, Some(0));
+    assert_eq!(pieces, ["msg: str"], "the params as written");
+    // mid-typing: the ctor signature lives through the open paren
+    let (_, slot, _) = slot_of(&s.sig_in(uri, src, "Logger(", 1, 7));
+    assert_eq!(slot, Some(0));
+}
+}
+
+both_uri_shapes! {
+#[test]
+fn a_newtype_call_shows_the_synthesized_mint() {
+    // the mint's label is the hover's mint-line spelling (one truth,
+    // `TyView::mint_sig`) and mentions the param name — the alignment
+    // check holds on the synthesized shape
+    let mut s = S::boot();
+    let src = "class Meters(f64);\nentry fn main() -> nil {\n    let m = Meters(1.0);\n}\n";
+    let uri = "file:///t/main.rut";
+    let (lbl, slot, pieces) = slot_of(&s.sig_at(uri, src, "1.0", 1));
+    assert_eq!(lbl, "Meters(inner: f64) -> Meters");
+    assert_eq!(slot, Some(0));
+    assert_eq!(pieces, ["inner: f64"]);
+}
+}
+
+both_uri_shapes! {
+#[test]
+fn a_ctor_call_with_more_args_than_params_stays_silent() {
+    // the never-wrong guard holds on the ctor lane too
+    let mut s = S::boot();
+    let src = "class Two {\n    a: i32;\n    b: i32;\n}\nimpl Two {\n    [constructor] pub fn mk(a: i32, b: i32) -> Self { return Self { a: a, b: b }; }\n}\nentry fn main() -> nil {\n    let t = Two(1, 2, 3);\n}\n";
+    let uri = "file:///t/main.rut";
+    // three args for two params — on the third there is no slot left
+    let h = s.sig_at(uri, src, "3);", 1);
+    assert!(h.is_null(), "no slot left: {h}");
+    // but the first two slots still answer honestly
+    let (lbl, slot, pieces) = slot_of(&s.sig_at(uri, src, "1,", 1));
+    assert_eq!(lbl, "[constructor] pub fn mk(a: i32, b: i32) -> Self");
+    assert_eq!(slot, Some(0));
+    assert_eq!(pieces, ["a: i32", "b: i32"]);
+}
+}
+
+both_uri_shapes! {
+#[test]
+fn a_no_ctor_class_callee_stays_silent() {
+    // a capitalized callee naming a class with neither a designated
+    // ctor nor a mint — no help, never wrong help
+    let mut s = S::boot();
+    let src = "class Plain {\n    n: i32;\n}\nentry fn main() -> nil {\n    let _p = Plain();\n}\n";
+    let h = s.sig_in("file:///t/main.rut", src, "Plain(", 1, 5);
+    assert!(h.is_null(), "{h}");
+}
+}
