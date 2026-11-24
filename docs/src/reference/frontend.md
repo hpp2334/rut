@@ -269,10 +269,12 @@ from the AST:
   spans, so the formatter recovers every `//` and block comment with zero
   lexer/parser changes: trailing runs go on their element's line, own-line
   runs at the enclosing indent.
-- **Parens and literals re-derived** — the printer re-parens only where
-  flat precedence would invert the tree, re-spells floats shortest
-  round-trip from their bits, and re-quotes strings by the exact inverse of
-  the lexer's escape set (`0xff` legitimately becomes `255`).
+- **Literals print verbatim** — the printer re-parens only where flat
+  precedence would invert the tree; literals (numbers, strings, raw
+  strings, f-string template text) reprint VERBATIM from their source
+  spans: `0xF8FAFCFFu64`, `1_000_000`, `2.50`, `"\u{41}"`, and raw hash
+  levels survive exactly. Only f-string hole expressions are
+  re-formatted — the formatter re-derives nothing else.
 - **Tested invariants** — every corpus file formats, reparses clean, and is
   idempotent (`fmt(fmt(x)) == fmt(x)`); probe programs run through the full
   pipeline before and after formatting and log identical output.

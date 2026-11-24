@@ -26,6 +26,17 @@
 //! (the child-level table mirrors the parser's reduce levels). The
 //! VM-verified suite (`tests/semantic_equiv.rs`) referees the table.
 //!
+//! **Literals print verbatim**: every `LitNode` carries its exact
+//! token span, so atoms slice their spelling out of the normalized
+//! source ([`P::src_slice`]) — radix, underscores, exponent shapes,
+//! escape spellings, and raw-string hash levels survive byte-exact
+//! (the LSP verbatim law's fmt twin). The f-string composite slices
+//! its delimiters and chunk text and reprints only the hole
+//! expressions (live subtrees — fmt's whole job); the walk is driven
+//! by the hole expr spans, never by brace counting. Nothing is
+//! re-derived: the `Lit` value payloads stay in the AST for the
+//! compiler and fmt simply stops reading them.
+//!
 //! **Flat mode** (`in_flat`): when-arm INLINE bodies print
 //! their statements without newline hooks — drains are suppressed (the
 //! enclosing arm's end drain catches the runs; the block's own lines
@@ -41,7 +52,6 @@
 //! `}` — `block_end` walks the token stream back onto the `}`).
 
 use rut_ast::*;
-use rut_lexer::token::{FloatSuffix, IntSuffix};
 
 use crate::comments::CommentRun;
 use crate::style::Style;
@@ -139,105 +149,6 @@ fn vis_opt(v: Vis) -> Option<&'static str> {
         Vis::Self_ => None,
         other => Some(vis_str(other)),
     }
-}
-
-fn int_suffix(s: Option<IntSuffix>) -> &'static str {
-    match s {
-        None => "",
-        Some(IntSuffix::U8) => "u8",
-        Some(IntSuffix::U16) => "u16",
-        Some(IntSuffix::U32) => "u32",
-        Some(IntSuffix::U64) => "u64",
-        Some(IntSuffix::I8) => "i8",
-        Some(IntSuffix::I16) => "i16",
-        Some(IntSuffix::I32) => "i32",
-        Some(IntSuffix::I64) => "i64",
-    }
-}
-
-fn float_suffix(s: Option<FloatSuffix>) -> &'static str {
-    match s {
-        None => "",
-        Some(FloatSuffix::F32) => "f32",
-        Some(FloatSuffix::F64) => "f64",
-    }
-}
-
-/// The escape inverse of the lexer's `lex_escape` (`lexer.rs:270-314`),
-/// plus the f-string's `{{`/`}}` doubling (the fmt survey §2): every
-/// escape the lexer DECODES must re-encode so bytes re-lex identically.
-fn escape_str(body: &str, in_fstring: bool, literal_newline: bool) -> String {
-    let mut s = String::with_capacity(body.len() + 8);
-    for c in body.chars() {
-        if in_fstring {
-            match c {
-                '{' => {
-                    s.push_str("{{");
-                    continue;
-                }
-                '}' => {
-                    s.push_str("}}");
-                    continue;
-                }
-                _ => {}
-            }
-        }
-        match c {
-            '\t' => s.push_str("\\t"),
-            '\n' => {
-                if literal_newline {
-                    // the hash-leveled multi-line forms emit the newline
-                    // for real — that is their point
-                    s.push('\n');
-                } else {
-                    s.push_str("\\n");
-                }
-            }
-            '\r' => s.push_str("\\r"),
-            '\u{8}' => s.push_str("\\b"),
-            '\u{c}' => s.push_str("\\f"),
-            '\\' => s.push_str("\\\\"),
-            '"' => s.push_str("\\\""),
-            '\0' => s.push_str("\\0"),
-            '\'' => s.push_str("\\'"),
-            c if (c as u32) < 0x20 || (c as u32) == 0x7f => {
-                s.push_str(&format!("\\u{{{:x}}}", c as u32));
-            }
-            c => s.push(c),
-        }
-    }
-    s
-}
-
-/// Canonical raw-literal spelling: `r"..."` while the value fits (no
-/// newline, no quote); otherwise the hash-leveled multi-line form at the
-/// MINIMAL level — one past the longest `#` run that follows any `"` in
-/// the value (that run is what a close scan would trip on). A pure
-/// function of the value: parse∘print round-trips and fmt stays
-/// idempotent.
-fn raw_repr(s: &str) -> String {
-    if !s.contains('\n') && !s.contains('"') {
-        return format!("r\"{s}\"");
-    }
-    let b = s.as_bytes();
-    let mut level = 1usize;
-    let mut i = 0;
-    while i < b.len() {
-        if b[i] == b'"' {
-            let mut run = 0usize;
-            let mut j = i + 1;
-            while j < b.len() && b[j] == b'#' {
-                run += 1;
-                j += 1;
-            }
-            level = level.max(run + 1);
-            i = j;
-        } else {
-            i += 1;
-        }
-    }
-    let hashes = "#".repeat(level);
-    format!("r{hashes}\"{s}\"{hashes}")
 }
 
 #[derive(Clone, Copy)]
@@ -1779,7 +1690,7 @@ impl<'a> P<'a> {
                 self.text("}");
             }
             ExprRef::Lit(h) => {
-                self.lit(&h.get(self.a).lit);
+                self.lit(h.get(self.a));
             }
             ExprRef::AsyncBlock(h) => {
                 let d = h.get(self.a);
@@ -1905,33 +1816,82 @@ impl<'a> P<'a> {
             }
             ExprRef::FStr(h) => {
                 let d = h.get(self.a);
-                // a newline in any chunk promotes the literal to the
-                // hash-leveled multi-line form — the template's line
-                // structure survives formatting
-                let multiline = d
-                    .parts
-                    .iter()
-                    .any(|p| matches!(p, FPartAst::Lit(s) if s.contains('\n')));
-                let (open, close) = if multiline {
-                    ("f#\"", "\"#")
-                } else {
-                    ("f\"", "\"")
-                };
-                self.text_lit(open);
-                for p in &d.parts {
-                    match p {
-                        FPartAst::Lit(s) => {
-                            let esc = escape_str(s, true, multiline);
-                            self.text_lit(&esc);
+                // The composite prints VERBATIM: delimiters and chunk
+                // text slice out of the source (hash levels, escape
+                // spellings, the `{{`/`}}` doublings survive byte-exact
+                // — no multiline promotion); only the hole expressions
+                // reprint (live subtrees — fmt's whole job). The walk
+                // is driven by the hole EXPR spans, never by brace
+                // counting: a chunk's braces exist only as `{{`/`}}`
+                // pairs, so the nearest `{` behind a hole expr is its
+                // opener and the first `}` at/after its end is its
+                // closer. `FPartAst::Lit` payloads are IGNORED here
+                // (the compiler keeps the decoded chunks); `f""` has an
+                // EMPTY parts vec — the delimiter slicing must not
+                // depend on parts.
+                let sp = d.span;
+                let b = self.src.as_bytes();
+                // open delimiter: `f` + n `#`s + `"` (lex_str_prefix's
+                // shape)
+                let mut i = sp.lo as usize;
+                assert!(b[i] == b'f', "f-string span must open at its `f` prefix");
+                i += 1;
+                while b.get(i) == Some(&b'#') {
+                    i += 1;
+                }
+                assert!(
+                    b.get(i) == Some(&b'"'),
+                    "f-string open delimiter must end at `\"` on a clean parse"
+                );
+                let open_end = i + 1;
+                // close delimiter: scan back from span.hi over the
+                // `#`s, land on the `"`
+                let mut j = sp.hi as usize;
+                while j > open_end && b[j - 1] == b'#' {
+                    j -= 1;
+                }
+                j -= 1;
+                assert!(
+                    b[j] == b'"',
+                    "f-string close delimiter must start at `\"` on a clean parse"
+                );
+                let close_start = j;
+                self.text_lit(&self.src[sp.lo as usize..open_end]);
+                let mut cursor = open_end;
+                for part in &d.parts {
+                    if let FPartAst::Hole(e) = part {
+                        let he = e.span(self.a);
+                        // the chunk gap before the hole: scan back
+                        // from the expr to the hole's `{`
+                        let mut k = he.lo as usize;
+                        while k > cursor && b[k - 1] != b'{' {
+                            k -= 1;
                         }
-                        FPartAst::Hole(e) => {
-                            self.text("{");
-                            self.expr(*e);
-                            self.text("}");
+                        assert!(
+                            k > cursor && b[k - 1] == b'{',
+                            "f-string hole opener `{{` not found behind its expression"
+                        );
+                        self.text_lit(&self.src[cursor..k - 1]);
+                        self.text("{");
+                        self.expr(*e);
+                        // the hole's `}`: the first one at/after the
+                        // expr's end
+                        let mut m = he.hi as usize;
+                        while m < close_start && b[m] != b'}' {
+                            m += 1;
                         }
+                        assert!(
+                            b.get(m) == Some(&b'}'),
+                            "f-string hole closer `}}` not found after its expression"
+                        );
+                        self.text("}");
+                        cursor = m + 1;
                     }
                 }
-                self.text_lit(close);
+                // the tail chunk between the last hole (or the open
+                // delimiter) and the close delimiter
+                self.text_lit(&self.src[cursor..close_start]);
+                self.text_lit(&self.src[close_start..sp.hi as usize]);
             }
             ExprRef::Struct(h) => {
                 let d = h.get(self.a);
@@ -2107,53 +2067,29 @@ impl<'a> P<'a> {
         self.block(b);
     }
 
-    fn lit(&mut self, l: &Lit) {
-        match l {
-            Lit::Int(v, sfx) => {
-                let s = format!("{}{}", v, int_suffix(*sfx));
-                self.text(&s);
-            }
-            Lit::Float(bits, sfx) => {
-                // the shortest round-trip digits; a float with no `.`
-                // and no exponent would re-lex as a SUFFIXED INT, so
-                // `.0` rides whenever the digits came out integral.
-                // The NON-FINITE family reprints BARE: the digits are
-                // `inf`/`NaN` (the ident-fold literal's shape), no
-                // suffix spelling exists for them (`inff64` does not
-                // lex), and the parser's ident lane re-reads the bare
-                // word exactly.
-                let val = f64::from_bits(*bits);
-                let digits = match *sfx {
-                    Some(FloatSuffix::F32) => {
-                        format!("{}", f32::from_bits((val as f32).to_bits()))
-                    }
-                    _ => format!("{}", val),
-                };
-                let s = if digits.contains("inf") || digits.contains("NaN") {
-                    digits
-                } else if digits.contains('.') || digits.contains('e') {
-                    format!("{digits}{}", float_suffix(*sfx))
-                } else {
-                    format!("{digits}.0{}", float_suffix(*sfx))
-                };
-                self.text(&s);
-            }
-            Lit::Str(s) => {
-                let esc = escape_str(s, false, false);
-                self.text(&format!("\"{}\"", esc));
-            }
-            Lit::RawStr(s) => {
-                // hash-leveled repr — level 0 while the value fits (no
-                // newline, no quote), else the minimal multi-line level
-                // (`raw_repr`); content prints verbatim, never re-indented
-                self.text_lit(&raw_repr(s));
-            }
-            Lit::Bool(b) => {
-                self.text(if *b { "true" } else { "false" });
-            }
-            Lit::Nil => {
-                self.text("nil");
-            }
-        }
+    /// a literal's source slice — the span×src join. The AST stores
+    /// literal VALUES (semantics — the compiler consumes the decoded
+    /// strings, the u64 values, the f64 bits), but every `LitNode`
+    /// carries its exact token span, so fmt reprints the SPELLING from
+    /// the source: radix, underscores, exponent shapes, escape
+    /// spellings, and raw-string hash levels survive byte-exact.
+    /// `true`/`false`/`nil` are words — the slice IS the word. A clean
+    /// parse token-backs every literal, so an empty slice is a broken
+    /// invariant and fails LOUDLY (release `text("")` would silently
+    /// DROP the literal — `text` no-ops on empty).
+    fn src_slice(src: &str, sp: Span) -> &str {
+        let s = &src[sp.lo as usize..sp.hi as usize];
+        assert!(
+            !s.is_empty(),
+            "literal span must be token-backed on a clean parse"
+        );
+        s
+    }
+
+    fn lit(&mut self, node: &LitNode) {
+        let s = Self::src_slice(self.src, node.span);
+        // text_lit: raw strings carry REAL newlines — the count rides
+        // `lit_nl` for the flat-attempt probe
+        self.text_lit(s);
     }
 }

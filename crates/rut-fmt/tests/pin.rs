@@ -1,6 +1,6 @@
 //! Unit pins — the exact-byte laws the corpus's conformance suite
 //! deliberately does NOT pin: comment reattachment shapes, literal
-//! requoting, re-paren decisions, `[style]` parsing.
+//! verbatim preservation, re-paren decisions, `[style]` parsing.
 
 use rut_ast::parser::Mode;
 use rut_fmt::{format, Style};
@@ -97,22 +97,26 @@ fn comment_inside_empty_block_survives() {
 #[test]
 fn floats_keep_their_dot_and_suffix() {
     // `9.0f32` must not come back as `9f32` (that re-lexes as a
-    // suffixed INT and refuses to compile)
+    // suffixed INT and refuses to compile) — verbatim guarantees it
     assert_eq!(
         fmt("fn f() {\n    let a = 9.0f32;\n}"),
         "fn f() {\n    let a = 9.0f32;\n}\n"
     );
+    // non-canonical spellings survive byte-exact
     assert_eq!(
         fmt("fn f() {\n    let a = 2.50;\n}"),
-        "fn f() {\n    let a = 2.5;\n}\n"
+        "fn f() {\n    let a = 2.50;\n}\n"
+    );
+    assert_eq!(
+        fmt("fn f() {\n    let a = 1e10f64;\n}"),
+        "fn f() {\n    let a = 1e10f64;\n}\n"
     );
 }
 
 #[test]
 fn inf_reprints_bare_with_no_suffix() {
-    // the ident-fold literal's digits are `inf` — no suffix spelling
-    // exists for the non-finite family (`inff64` does not lex), and
-    // the parser's ident lane re-reads the bare word exactly
+    // the ident-fold literal carries the WORD's span — the verbatim
+    // slice re-lexes as the same ident, which folds again
     assert_eq!(
         fmt("fn f() {\n    let a = inf;\n    let b = -inf;\n}"),
         "fn f() {\n    let a = inf;\n    let b = -inf;\n}\n"
@@ -120,23 +124,52 @@ fn inf_reprints_bare_with_no_suffix() {
 }
 
 #[test]
-fn ints_lose_the_radix_and_keep_the_suffix() {
+fn ints_keep_their_radix_and_underscores() {
     assert_eq!(
         fmt("fn f() {\n    let a = 0xff;\n}"),
-        "fn f() {\n    let a = 255;\n}\n"
+        "fn f() {\n    let a = 0xff;\n}\n"
+    );
+    // the reported case: the color literal's hex + suffix survive
+    assert_eq!(
+        fmt("pub let PAGE_BG: u64 = 0xF8FAFCFFu64;\n"),
+        "pub let PAGE_BG: u64 = 0xF8FAFCFFu64;\n"
     );
     assert_eq!(
-        fmt("fn f() {\n    let a = 7u64;\n}"),
-        "fn f() {\n    let a = 7u64;\n}\n"
+        fmt("fn f() {\n    let a = 0b1010;\n    let b = 0o777;\n    let c = 1_000_000;\n    let d = 7u64;\n}"),
+        "fn f() {\n    let a = 0b1010;\n    let b = 0o777;\n    let c = 1_000_000;\n    let d = 7u64;\n}\n"
     );
 }
 
 #[test]
-fn strings_requote_with_the_exact_inverse_escapes() {
+fn strings_keep_their_escape_spellings() {
     assert_eq!(
         fmt("fn f() {\n    let s = \"a\\tb\\n\\\"q\\\"\";\n}"),
         "fn f() {\n    let s = \"a\\tb\\n\\\"q\\\"\";\n}\n"
     );
+}
+
+#[test]
+fn non_canonical_escapes_stay_as_written() {
+    // `\u{41}` is `A` — the hex spelling survives anyway (the old
+    // printer re-spelled the decoded content to a bare `A`)
+    assert_eq!(
+        fmt("fn f() {\n    let s = \"\\u{41}\";\n}"),
+        "fn f() {\n    let s = \"\\u{41}\";\n}\n"
+    );
+    // the escaped-apostrophe spelling survives (the value needs no
+    // escape inside a double-quoted string)
+    assert_eq!(
+        fmt("fn f() {\n    let s = \"it\\'s\";\n}"),
+        "fn f() {\n    let s = \"it\\'s\";\n}\n"
+    );
+}
+
+#[test]
+fn the_reported_repro_formats_to_itself() {
+    let src = "pub let PAGE_BG: u64 = 0xF8FAFCFFu64;\n";
+    let once = fmt(src);
+    assert_eq!(once, src, "byte-identical");
+    assert_eq!(fmt(&once), once, "idempotent");
 }
 
 #[test]
@@ -167,7 +200,8 @@ fn raw_embedded_quotes_print_at_level_one() {
 
 #[test]
 fn raw_hash_runs_pick_the_minimal_level() {
-    // value `a"#b` needs level 2 — and level 2 is what comes back
+    // value `a"#b` needs level 2 — verbatim keeps it (and nothing
+    // downgrades a fitting level anymore)
     assert_eq!(
         fmt("fn f() {\n    let s = r##\"a\"#b\"##;\n}"),
         "fn f() {\n    let s = r##\"a\"#b\"##;\n}\n"
@@ -175,11 +209,12 @@ fn raw_hash_runs_pick_the_minimal_level() {
 }
 
 #[test]
-fn raw_that_fits_downgrades_to_level_zero() {
-    // hashes are never kept when the value needs none of them
+fn raw_hash_levels_survive_verbatim() {
+    // the author's hash level is spelling, not value — it survives
+    // even when a lower level would fit
     assert_eq!(
         fmt("fn f() {\n    let x = r#\"plain\"#;\n}"),
-        "fn f() {\n    let x = r\"plain\";\n}\n"
+        "fn f() {\n    let x = r#\"plain\"#;\n}\n"
     );
 }
 
@@ -200,8 +235,45 @@ fn single_line_fstr_stays_level_zero() {
 }
 
 #[test]
+fn fstr_escaped_newline_stays_escaped_level_zero() {
+    // `f"a\nb"` spells the newline as an escape — the spelling
+    // survives; NO promotion to the hash-leveled form
+    assert_eq!(
+        fmt("fn f() {\n    let t = f\"a\\nb\";\n}"),
+        "fn f() {\n    let t = f\"a\\nb\";\n}\n"
+    );
+}
+
+#[test]
+fn fstr_chunk_bytes_stay_verbatim_holes_reprint() {
+    // chunk gaps around a hole were empty — the hole's interior
+    // whitespace is the live expr's business and gets re-formatted
+    assert_eq!(
+        fmt("fn f() {\n    let t = f\"{ x + 1 }\";\n}"),
+        "fn f() {\n    let t = f\"{x + 1}\";\n}\n"
+    );
+    // escaped braces beside a hole survive byte-exact (`{{` chunk
+    // bytes then the hole's lone opener)
+    assert_eq!(
+        fmt("fn f() {\n    let x = 1;\n    let t = f\"{{{x}}}\";\n}"),
+        "fn f() {\n    let x = 1;\n    let t = f\"{{{x}}}\";\n}\n"
+    );
+    // adjacent holes, an empty template, and a NESTED f-string in a
+    // hole (the grammar admits it — lex_hole routes the `f` ident
+    // through the word lane, so the inner literal lexes whole)
+    assert_eq!(
+        fmt("fn f() {\n    let a = 1;\n    let b = 2;\n    let t = f\"{a}{b}\";\n    let e = f\"\";\n    let n = f\"x{f\"{a}\"}y\";\n}"),
+        "fn f() {\n    let a = 1;\n    let b = 2;\n    let t = f\"{a}{b}\";\n    let e = f\"\";\n    let n = f\"x{f\"{a}\"}y\";\n}\n"
+    );
+}
+
+#[test]
 fn multiline_literals_are_idempotent() {
     let src = "fn f() {\n    let s = r#\"a\nb\"#;\n    let t = f#\"line {x}\nmore\"#;\n}";
+    let once = fmt(src);
+    assert_eq!(fmt(&once), once);
+    // the verbatim spellings re-lex to themselves — idempotence holds
+    let src = "fn f() {\n    let a = 0xF8FAFCFFu64;\n    let b = 2.50;\n    let c = 1e10f64;\n    let d = \"\\u{41}\";\n    let t = f\"{{{x}}}\";\n}";
     let once = fmt(src);
     assert_eq!(fmt(&once), once);
 }

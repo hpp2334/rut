@@ -225,8 +225,9 @@ entry fn main() {
 fn struct_field_init_shorthand_survives_formatting() {
     // `Task { id, .. }` — the field-init shorthand. The parser desugars
     // it to `id: id` (a single-segment path over the name token), so
-    // fmt reprints it EXPANDED (the normalize-on-reprint contract, like
-    // `0xff` → `255`): round-trip, idempotence, and identical VM output.
+    // fmt reprints it EXPANDED (a reprint normalization — literals are
+    // span-verbatim now, but the desugar is a tree shape the AST no
+    // longer records): round-trip, idempotence, and identical VM output.
     let src = r#"
 use ink::{ Logger };
 class Task {

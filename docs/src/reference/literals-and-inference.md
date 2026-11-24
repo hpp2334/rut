@@ -181,10 +181,9 @@ query:
   and `{{`/`}}` work exactly as at level 0, literal chunks may span
   lines, and holes stay single-line (a hole spilling past its line is
   a diagnostic — bind the expression to a name first).
-- The formatter reprints a value at its **minimal level**: `r"..."`
-  while the value has no newline and no `"`, one past the longest
-  `#` run that follows a `"` otherwise. Formatting never re-indents
-  literal content.
+- The formatter reprints the literal VERBATIM — the author's hash
+  level is spelling, and spelling survives: `r#""#` stays `r#""#` even
+  when `r""` would fit. Formatting never re-indents literal content.
 
 ## Format literals — `f"..."`
 

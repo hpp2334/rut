@@ -8,12 +8,16 @@
 //! "formatting fidelity is the formatter's job") — are recovered by the
 //! between-token gap scan ([`comments`]) and re-attached verbatim.
 //!
-//! The two fidelity losses the AST carries are reconstructed:
-//! source parens (the AST is the precedence-reduced grouping — absent
+//! The one fidelity loss the AST carries is reconstructed: source
+//! parens (the AST is the precedence-reduced grouping — absent
 //! parens are re-emitted exactly where the parse's grouping would be
-//! flattened; the op-level table lives in [`printer`]) and literal
-//! re-derivation (floats from their f64 bits, strings re-quoted from
-//! the decoded content, raw strings re-quoted canonically).
+//! flattened; the op-level table lives in [`printer`]). Literals are
+//! NOT re-derived: they reprint VERBATIM as span×src slices — the
+//! LSP verbatim law's fmt twin. Radix, underscores, exponent shapes,
+//! escape spellings, and raw-string hash levels survive exactly; the
+//! one composite (the f-string) slices its delimiters and chunk text
+//! and reprints only its hole expressions. The formatter re-derives
+//! nothing.
 //!
 //! What it does NOT do: it never changes program meaning — every test
 //! run proves the formatted output parses clean, reparses to the same

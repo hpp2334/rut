@@ -127,6 +127,9 @@ pipeline lives in the `Doc`.
 - **The LSP verbatim law**: decl text in hover/completion is a
   `Doc::text(span)` slice on the OWNING document; only source-less
   text (inferred/semantic/absent — e.g. inlay hints) is rendered.
+  fmt reprints literals as span×src slices too (radix / underscores /
+  escapes / hash levels survive) — the fmt lane re-derives nothing
+  but parens and layout.
 - **The parse entry law**: recovery is NOT a knob — the ENTRY is the
   choice, and both take the source BY VALUE (it moves into the
   artifact). `parse(src, mode) -> Result<Doc, Diag>` is fail-fast

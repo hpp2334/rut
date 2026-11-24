@@ -1392,13 +1392,13 @@ msgstr "布尔"
 
 
 #: src/tutorial/values-and-variables.md:18 src/reference/primitive-types.md:12
-#: src/reference/literals-and-inference.md:210
+#: src/reference/literals-and-inference.md:209
 msgid "`bool`"
 msgstr "`bool`"
 
 
 #: src/tutorial/values-and-variables.md:18
-#: src/reference/literals-and-inference.md:210
+#: src/reference/literals-and-inference.md:209
 msgid "`true` / `false`"
 msgstr "`true` / `false`"
 
@@ -1409,7 +1409,7 @@ msgstr "文本"
 
 
 #: src/tutorial/values-and-variables.md:19 src/reference/primitive-types.md:13
-#: src/reference/literals-and-inference.md:211
+#: src/reference/literals-and-inference.md:210
 #: src/reference/rc-dispose-identity.md:124
 #: src/reference/by-reference-and-nullable.md:105
 #: src/reference/value-boundary.md:36 src/reference/value-boundary.md:37
@@ -11864,7 +11864,7 @@ msgstr "其写法**仅为前缀且结合最紧** —— `?` 作用于紧随其�
 
 
 #: src/reference/builtin-generic-types.md:54
-#: src/reference/literals-and-inference.md:206
+#: src/reference/literals-and-inference.md:205
 #: src/reference/by-reference-and-nullable.md:64
 msgid "Type"
 msgstr "类型"
@@ -12798,35 +12798,35 @@ msgstr ""
 
 #: src/reference/literals-and-inference.md:184
 msgid ""
-"The formatter reprints a value at its **minimal level**: `r\"...\"` while the value has no newline and no `\"`, one past the longest `#` run that follows a `\"` otherwise. Formatting never re-indents literal content."
+"The formatter reprints the literal VERBATIM — the author's hash level is spelling, and spelling survives: `r#\"\"#` stays `r#\"\"#` even when `r\"\"` would fit. Formatting never re-indents literal content."
 msgstr ""
-"格式化器以**最小级别**重排一个值：值里没有换行也没有 `\"` 时用 `r\"...\"`，否则取比最长的 `\"` 后 `#` 串再多一级。格式化绝不重排字面量内容的缩进。"
+"格式化器逐字节原样重排字面量——作者写的哈希级别就是拼写，拼写原样保留：`r#\"\"#` 保持 `r#\"\"#`，即使 `r\"\"` 也够用。格式化绝不重排字面量内容的缩进。"
 
 
-#: src/reference/literals-and-inference.md:189
+#: src/reference/literals-and-inference.md:188
 msgid "Format literals — `f\"...\"`"
 msgstr "格式化字面量 —— `f\"...\"`"
 
 
-#: src/reference/literals-and-inference.md:191
+#: src/reference/literals-and-inference.md:190
 msgid ""
 "`{ expr }` splices an expression's value: identifiers, paths, calls, arithmetic — any expression _except_ nested string literals (bind one to a name first). The lexer balances braces to find the closing `}`."
 msgstr ""
 "`{ expr }` 把表达式的值拼接进来：标识符、路径、调用、算术 —— 任何表达式都可以，_除了_ 嵌套的字符串字面量（先把后者绑定到一个名字）。词法分析器会平衡花括号以找到收尾的 `}`。"
 
 
-#: src/reference/literals-and-inference.md:194
+#: src/reference/literals-and-inference.md:193
 msgid "`{{` and `}}` are literal braces. Escapes work exactly like plain strings."
 msgstr "`{{` 与 `}}` 是字面意义的花括号。转义的处理与普通字符串完全一致。"
 
 
-#: src/reference/literals-and-inference.md:196
+#: src/reference/literals-and-inference.md:195
 msgid ""
 "The literal desugars at compile time to a concatenation of the literal chunks and one `str(x)` conversion per placeholder — a builtin per-type formatting call, no runtime parsing:"
 msgstr "该字面量在编译期脱糖为字面量片段的拼接，每个占位符对应一次 `str(x)` 转换 —— 即按类型内建的格式化调用，运行时没有解析："
 
 
-#: src/reference/literals-and-inference.md:200
+#: src/reference/literals-and-inference.md:199
 msgid ""
 "```text\n"
 "f\"a={a} b={f(b())}\"   ->   concat(\"a=\", str(a), \" b=\", str(f(b())))\n"
@@ -12837,59 +12837,59 @@ msgstr ""
 "```"
 
 
-#: src/reference/literals-and-inference.md:204
+#: src/reference/literals-and-inference.md:203
 msgid "Formattable types and their rendering:"
 msgstr "可格式化的类型及其渲染："
 
 
-#: src/reference/literals-and-inference.md:206
+#: src/reference/literals-and-inference.md:205
 msgid "Rendering"
 msgstr "渲染"
 
 
-#: src/reference/literals-and-inference.md:208
+#: src/reference/literals-and-inference.md:207
 msgid "ints"
 msgstr "整数"
 
 
-#: src/reference/literals-and-inference.md:208
+#: src/reference/literals-and-inference.md:207
 msgid "decimal, `-` for negatives"
 msgstr "十进制，负数带 `-`"
 
 
-#: src/reference/literals-and-inference.md:209
+#: src/reference/literals-and-inference.md:208
 msgid "`f32`/`f64`"
 msgstr "`f32`/`f64`"
 
 
-#: src/reference/literals-and-inference.md:209
+#: src/reference/literals-and-inference.md:208
 msgid "shortest round-trip decimal (`3.5`, `0.1`, `1e300`)"
 msgstr "最短往返十进制表示（`3.5`、`0.1`、`1e300`）"
 
 
-#: src/reference/literals-and-inference.md:211
+#: src/reference/literals-and-inference.md:210
 msgid "contents, verbatim"
 msgstr "逐字内容"
 
 
-#: src/reference/literals-and-inference.md:212
+#: src/reference/literals-and-inference.md:211
 msgid "enum"
 msgstr "枚举"
 
 
-#: src/reference/literals-and-inference.md:212
+#: src/reference/literals-and-inference.md:211
 msgid "member name (`Color::Red` → `\"Red\"`)"
 msgstr "成员名（`Color::Red` → `\"Red\"`）"
 
 
-#: src/reference/literals-and-inference.md:214
+#: src/reference/literals-and-inference.md:213
 msgid ""
 "Everything else — struct/class values, vecs and fixed arrays, `?T` boxes, `opaque`, tuples — is a **compile error** inside `f\"...\"` (preventing accidental implementation-detail printing). Write a `to_string() -> str` method on your type and call it explicitly, and route developer output through your host logger (for example the `ink` package's `Logger::debug(f\"...\")`)."
 msgstr ""
 "其余一切 —— struct/class 值、vec 与定长数组、`?T` 盒、`opaque`、元组 —— 在 `f\"...\"` 中都是**编译错误**（避免把实现细节意外打印出来）。请在你的类型上写一个 `to_string() -> str` 方法并显式调用它，并把开发者输出路由到宿主日志器（例如 `ink` 包的 `Logger::debug(f\"...\")`）。"
 
 
-#: src/reference/literals-and-inference.md:221
+#: src/reference/literals-and-inference.md:220
 msgid ""
 "The accumulator idiom `out = f\"{out}{chunk}\"` is recognized by the compiler and appends in place — amortized O(1) instead of copying the whole prefix per step, linear in the total output. Core ships no string-builder class: when a reusable builder reads better (a tokenizer or encoder threading text through many calls), reach for the `strbuild` package's `StringBuilder` ([stdlib](stdlib.md)); when an accumulator binding reads better, the f-string shape IS the optimized path."
 msgstr ""
@@ -24482,36 +24482,36 @@ msgstr ""
 
 #: src/reference/frontend.md:272
 msgid ""
-"**Parens and literals re-derived** — the printer re-parens only where flat precedence would invert the tree, re-spells floats shortest round-trip from their bits, and re-quotes strings by the exact inverse of the lexer's escape set (`0xff` legitimately becomes `255`)."
+"**Literals print verbatim** — the printer re-parens only where flat precedence would invert the tree; literals (numbers, strings, raw strings, f-string template text) reprint VERBATIM from their source spans: `0xF8FAFCFFu64`, `1_000_000`, `2.50`, `\"\\u{41}\"`, and raw hash levels survive exactly. Only f-string hole expressions are re-formatted — the formatter re-derives nothing else."
 msgstr ""
-"**括号与字面量重新推导**——打印器只在扁平优先级会颠倒树的地方重新加括号，从比特重新以最短往返形式书写浮点数，并按词法分析器转义集合的精确逆运算重新给字符串加引号（`0xff` 名正言顺地变成 `255`）。"
+"**字面量逐字节原样打印**——打印器只在扁平优先级会颠倒树的地方重新加括号；字面量（数字、字符串、原始字符串、f-string 模板文本）从其源码 span 逐字节原样重排：`0xF8FAFCFFu64`、`1_000_000`、`2.50`、`\"\\u{41}\"` 与原始字符串的哈希级别都原样保留。只有 f-string 的插值洞表达式会被重新格式化——除此之外格式化器不重新推导任何东西。"
 
 
-#: src/reference/frontend.md:276
+#: src/reference/frontend.md:278
 msgid ""
 "**Tested invariants** — every corpus file formats, reparses clean, and is idempotent (`fmt(fmt(x)) == fmt(x)`); probe programs run through the full pipeline before and after formatting and log identical output."
 msgstr ""
 "**经受测试的不变式**——每个语料文件都能格式化、重新解析干净，并且幂等（`fmt(fmt(x)) == fmt(x)`）；探针程序在格式化前后各跑一遍完整流水线，并记录到相同的输出。"
 
 
-#: src/reference/frontend.md:279
+#: src/reference/frontend.md:281
 msgid ""
 "**Refusal law** — a source with diagnostics is refused: rendered diagnostics, exit 1, nothing rewritten. The formatter never guesses."
 msgstr "**拒绝法则**——带诊断的源码会被拒绝：渲染诊断、以 1 退出、不重写任何东西。格式化器从不猜测。"
 
 
-#: src/reference/frontend.md:281
+#: src/reference/frontend.md:283
 msgid ""
 "**Style is the package's** — the nearest ancestor `rut.jsonc`'s `style` block sets `indent_width` (1–8, default 4) and `max_width` (≥ 20, default 100); no manifest means defaults. See [Project structure and rut.jsonc](project-structure.md)."
 msgstr ""
 
 
-#: src/reference/frontend.md:286
+#: src/reference/frontend.md:288
 msgid "Testing"
 msgstr "测试"
 
 
-#: src/reference/frontend.md:288
+#: src/reference/frontend.md:290
 msgid ""
 "The corpus is the conformance suite: every `examples/**/*.rut`, `examples/**/*.d.rut`, and playground classic must parse with zero diagnostics. Parser invariant tests include 100k-deep `((((`, `[[[[`, `{{{{`, unary chains, and nested generic arguments — each yields exactly one _nesting too deep_ diagnostic — and fuzz targets assert no host stack overflow and no cursor rollback. Formatter tests pin the round-trip and idempotence laws above."
 msgstr ""

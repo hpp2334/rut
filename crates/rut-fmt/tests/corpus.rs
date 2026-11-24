@@ -151,111 +151,25 @@ fn span_free(dump: &str) -> String {
     out
 }
 
-/// canonicalize the `Lit` leaf spellings in a rendered dump — the dump
-/// slices literal text from the SOURCE, and the formatter legitimately
-/// re-spells literals (hex → decimal is the same u64; `0.10` → `0.1`
-/// the same f64; `3.14159265f32` → `3.1415927f32` the same f32 bits;
-/// `\\'` → `'` the same char). Values, not spellings, are the tree.
-fn norm_lits(dump: &str) -> String {
-    let mut out = String::with_capacity(dump.len());
-    for line in dump.lines() {
-        // the leaf spells `@ID Lit <text>` — canonicalize <text>
-        if let Some(k) = line.find(" Lit ") {
-            let (head, rest) = line.split_at(k + " Lit ".len());
-            let text = rest.trim_end();
-            if !text.is_empty() && !text.starts_with('@') {
-                out.push_str(head);
-                out.push_str(&norm_one_lit(text));
-                out.push('\n');
-                continue;
-            }
-        }
-        out.push_str(line);
-        out.push('\n');
-    }
-    out
-}
-
-fn norm_one_lit(text: &str) -> String {
-    // split a trailing ` [..)` back off
-    let (body, tail) = match text.find(" [..)") {
-        Some(i) => (&text[..i], &text[i..]),
-        None => (text, ""),
-    };
-    // string literal: collapse the optional backslash-apostrophe spelling
-    if body.starts_with('"') || body.starts_with("f\"") {
-        return format!("{}{}", body.replace("\\'", "'"), tail);
-    }
-    // a KNOWN numeric suffix at the end only (hex digits carry u/i/f!)
-    const SUFS: [&str; 10] = [
-        "u8", "u16", "u32", "u64", "i8", "i16", "i32", "i64", "f32", "f64",
-    ];
-    let mut digits = body;
-    let mut sfx = "";
-    for cand in SUFS {
-        if let Some(d) = body.strip_suffix(cand) {
-            digits = d;
-            sfx = cand;
-            break;
-        }
-    }
-    // radix ints FIRST (hex digits legitimately contain e/f)
-    for (p, r) in [
-        ("0x", 16u32),
-        ("0X", 16),
-        ("0o", 8),
-        ("0O", 8),
-        ("0b", 2),
-        ("0B", 2),
-    ] {
-        if let Some(d) = digits.strip_prefix(p) {
-            if let Ok(v) = u64::from_str_radix(d, r) {
-                return format!("{}{}{}", v, sfx, tail);
-            }
-        }
-    }
-    // floats: canonicalize to the shortest digits (with a forced `.0`
-    // when integral — a bare `9f32` would re-lex as a suffixed int)
-    if digits.contains('.') || sfx == "f32" || sfx == "f64" {
-        let canon = if sfx == "f32" {
-            with_dot(format!("{}", digits.parse::<f32>().unwrap_or(0.0)))
-        } else {
-            with_dot(format!("{}", digits.parse::<f64>().unwrap_or(0.0)))
-        };
-        return format!("{}{}{}", canon, sfx, tail);
-    }
-    format!("{}{}{}", digits, sfx, tail)
-}
-
-fn with_dot(mut s: String) -> String {
-    if !s.contains('.') && !s.contains('e') && !s.contains("inf") && !s.contains("NaN") {
-        s.push_str(".0");
-    }
-    s
-}
-
 #[test]
 fn corpus_dump_trees_match_through_format() {
     // the round-trip invariant itself: dump(parse(x)) == dump(parse(fmt(x)))
     // ignoring spans — the printed source parses to the SAME tree.
+    // Literals need NO normalization: fmt reprints them VERBATIM as
+    // span×src slices, so the dump's source-sliced spellings match
+    // byte-for-byte — that byte-stability IS the point of the test.
     let files = corpus();
     let mut failures = Vec::new();
     for f in &files {
         let src = std::fs::read_to_string(f).unwrap();
         let mode = mode_of(f);
         let p1 = parse_with_recover(src.clone(), mode);
-        let want = norm_lits(&span_free(&rut_ast::AstPrinter::text_of(
-            p1.ast(),
-            p1.text(p1.span()),
-        )));
+        let want = span_free(&rut_ast::AstPrinter::text_of(p1.ast(), p1.text(p1.span())));
         let Ok(out) = rut_fmt::format(&src, mode, &rut_fmt::Style::default()) else {
             continue; // covered by the other test's message
         };
         let p2 = parse_with_recover(out.clone(), mode);
-        let got = norm_lits(&span_free(&rut_ast::AstPrinter::text_of(
-            p2.ast(),
-            p2.text(p2.span()),
-        )));
+        let got = span_free(&rut_ast::AstPrinter::text_of(p2.ast(), p2.text(p2.span())));
         if got != want {
             // find the first differing line for a readable failure
             let w: Vec<&str> = want.lines().collect();

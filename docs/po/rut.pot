@@ -1273,12 +1273,12 @@ msgid "boolean"
 msgstr ""
 
 #: src/tutorial/values-and-variables.md:18 src/reference/primitive-types.md:12
-#: src/reference/literals-and-inference.md:210
+#: src/reference/literals-and-inference.md:209
 msgid "`bool`"
 msgstr ""
 
 #: src/tutorial/values-and-variables.md:18
-#: src/reference/literals-and-inference.md:210
+#: src/reference/literals-and-inference.md:209
 msgid "`true` / `false`"
 msgstr ""
 
@@ -1287,7 +1287,7 @@ msgid "text"
 msgstr ""
 
 #: src/tutorial/values-and-variables.md:19 src/reference/primitive-types.md:13
-#: src/reference/literals-and-inference.md:211
+#: src/reference/literals-and-inference.md:210
 #: src/reference/rc-dispose-identity.md:124
 #: src/reference/by-reference-and-nullable.md:105
 #: src/reference/value-boundary.md:36 src/reference/value-boundary.md:37
@@ -11738,7 +11738,7 @@ msgid ""
 msgstr ""
 
 #: src/reference/builtin-generic-types.md:54
-#: src/reference/literals-and-inference.md:206
+#: src/reference/literals-and-inference.md:205
 #: src/reference/by-reference-and-nullable.md:64
 msgid "Type"
 msgstr ""
@@ -12623,78 +12623,78 @@ msgstr ""
 
 #: src/reference/literals-and-inference.md:184
 msgid ""
-"The formatter reprints a value at its **minimal level**: `r\"...\"` while "
-"the value has no newline and no `\"`, one past the longest `#` run that "
-"follows a `\"` otherwise. Formatting never re-indents literal content."
+"The formatter reprints the literal VERBATIM — the author's hash level is "
+"spelling, and spelling survives: `r#\"\"#` stays `r#\"\"#` even when `r\"\"` "
+"would fit. Formatting never re-indents literal content."
 msgstr ""
 
-#: src/reference/literals-and-inference.md:189
+#: src/reference/literals-and-inference.md:188
 msgid "Format literals — `f\"...\"`"
 msgstr ""
 
-#: src/reference/literals-and-inference.md:191
+#: src/reference/literals-and-inference.md:190
 msgid ""
 "`{ expr }` splices an expression's value: identifiers, paths, calls, "
 "arithmetic — any expression _except_ nested string literals (bind one to a "
 "name first). The lexer balances braces to find the closing `}`."
 msgstr ""
 
-#: src/reference/literals-and-inference.md:194
+#: src/reference/literals-and-inference.md:193
 msgid ""
 "`{{` and `}}` are literal braces. Escapes work exactly like plain strings."
 msgstr ""
 
-#: src/reference/literals-and-inference.md:196
+#: src/reference/literals-and-inference.md:195
 msgid ""
 "The literal desugars at compile time to a concatenation of the literal "
 "chunks and one `str(x)` conversion per placeholder — a builtin per-type "
 "formatting call, no runtime parsing:"
 msgstr ""
 
-#: src/reference/literals-and-inference.md:200
+#: src/reference/literals-and-inference.md:199
 msgid ""
 "```text\n"
 "f\"a={a} b={f(b())}\"   ->   concat(\"a=\", str(a), \" b=\", str(f(b())))\n"
 "```"
 msgstr ""
 
-#: src/reference/literals-and-inference.md:204
+#: src/reference/literals-and-inference.md:203
 msgid "Formattable types and their rendering:"
 msgstr ""
 
-#: src/reference/literals-and-inference.md:206
+#: src/reference/literals-and-inference.md:205
 msgid "Rendering"
 msgstr ""
 
-#: src/reference/literals-and-inference.md:208
+#: src/reference/literals-and-inference.md:207
 msgid "ints"
 msgstr ""
 
-#: src/reference/literals-and-inference.md:208
+#: src/reference/literals-and-inference.md:207
 msgid "decimal, `-` for negatives"
 msgstr ""
 
-#: src/reference/literals-and-inference.md:209
+#: src/reference/literals-and-inference.md:208
 msgid "`f32`/`f64`"
 msgstr ""
 
-#: src/reference/literals-and-inference.md:209
+#: src/reference/literals-and-inference.md:208
 msgid "shortest round-trip decimal (`3.5`, `0.1`, `1e300`)"
 msgstr ""
 
-#: src/reference/literals-and-inference.md:211
+#: src/reference/literals-and-inference.md:210
 msgid "contents, verbatim"
 msgstr ""
 
-#: src/reference/literals-and-inference.md:212
+#: src/reference/literals-and-inference.md:211
 msgid "enum"
 msgstr ""
 
-#: src/reference/literals-and-inference.md:212
+#: src/reference/literals-and-inference.md:211
 msgid "member name (`Color::Red` → `\"Red\"`)"
 msgstr ""
 
-#: src/reference/literals-and-inference.md:214
+#: src/reference/literals-and-inference.md:213
 msgid ""
 "Everything else — struct/class values, vecs and fixed arrays, `?T` boxes, "
 "`opaque`, tuples — is a **compile error** inside `f\"...\"` (preventing "
@@ -12704,7 +12704,7 @@ msgid ""
 "`Logger::debug(f\"...\")`)."
 msgstr ""
 
-#: src/reference/literals-and-inference.md:221
+#: src/reference/literals-and-inference.md:220
 msgid ""
 "The accumulator idiom `out = f\"{out}{chunk}\"` is recognized by the "
 "compiler and appends in place — amortized O(1) instead of copying the whole "
@@ -23902,26 +23902,28 @@ msgstr ""
 
 #: src/reference/frontend.md:272
 msgid ""
-"**Parens and literals re-derived** — the printer re-parens only where flat "
-"precedence would invert the tree, re-spells floats shortest round-trip from "
-"their bits, and re-quotes strings by the exact inverse of the lexer's escape "
-"set (`0xff` legitimately becomes `255`)."
+"**Literals print verbatim** — the printer re-parens only where flat "
+"precedence would invert the tree; literals (numbers, strings, raw strings, "
+"f-string template text) reprint VERBATIM from their source spans: "
+"`0xF8FAFCFFu64`, `1_000_000`, `2.50`, `\"\\u{41}\"`, and raw hash levels "
+"survive exactly. Only f-string hole expressions are re-formatted — the "
+"formatter re-derives nothing else."
 msgstr ""
 
-#: src/reference/frontend.md:276
+#: src/reference/frontend.md:278
 msgid ""
 "**Tested invariants** — every corpus file formats, reparses clean, and is "
 "idempotent (`fmt(fmt(x)) == fmt(x)`); probe programs run through the full "
 "pipeline before and after formatting and log identical output."
 msgstr ""
 
-#: src/reference/frontend.md:279
+#: src/reference/frontend.md:281
 msgid ""
 "**Refusal law** — a source with diagnostics is refused: rendered "
 "diagnostics, exit 1, nothing rewritten. The formatter never guesses."
 msgstr ""
 
-#: src/reference/frontend.md:281
+#: src/reference/frontend.md:283
 msgid ""
 "**Style is the package's** — the nearest ancestor `rut.jsonc`'s `style` "
 "block sets `indent_width` (1–8, default 4) and `max_width` (≥ 20, default "
@@ -23929,11 +23931,11 @@ msgid ""
 "rut.jsonc](project-structure.md)."
 msgstr ""
 
-#: src/reference/frontend.md:286
+#: src/reference/frontend.md:288
 msgid "Testing"
 msgstr ""
 
-#: src/reference/frontend.md:288
+#: src/reference/frontend.md:290
 msgid ""
 "The corpus is the conformance suite: every `examples/**/*.rut`, "
 "`examples/**/*.d.rut`, and playground classic must parse with zero "
