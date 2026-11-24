@@ -559,18 +559,53 @@ impl TypeTable {
     /// block start as a local offset inside `descs`; the own block is moved to
     /// the end so later [`TypeTable::intern`] calls append after the uses.
     /// Must run before any own type is interned.
+    ///
+    /// ONE BLOCK PER SCOPE: a scope an earlier surface already registered
+    /// keeps its block and its base — a later surface's re-shipped copy of it
+    /// is not appended again. Every copy is the same unit's surface verbatim
+    /// ("a scope number is ONE unit per walk", the law
+    /// [`TypeTable::use_seed_rows`] rides), so the skipped copy adds no row
+    /// this table lacks. Appending it anyway would leave a stale copy in the
+    /// table that stays "registered" whenever another scope's base sits below
+    /// it: `id_for` then spells its rows through THAT scope, and link maps
+    /// the id past the scope's real block — a boot-time panic in `Interp::new`'s
+    /// ref-register scan.
     pub fn use_block(&mut self, descs: Vec<crate::types::RutType>, blocks: &[(ScopeId, u32)]) {
         if !self.packed {
             return;
         }
-        let start = self.types.len() as u32;
-        self.types.extend(descs);
-        for (s, off) in blocks {
-            let need = *s as usize + 1;
+        let mut order: Vec<(ScopeId, u32)> = blocks.to_vec();
+        order.sort_by_key(|&(_, off)| off);
+        let mut cursor = self.types.len() as u32;
+        let mut next_row = 0usize;
+        for (pos, &(s, off)) in order.iter().enumerate() {
+            let off = off as usize;
+            if off > next_row {
+                // rows no block claims ride as they are (no scope registration)
+                self.types.extend(descs[next_row..off].iter().cloned());
+                cursor += (off - next_row) as u32;
+            }
+            let end = order
+                .get(pos + 1)
+                .map(|&(_, o)| o as usize)
+                .unwrap_or(descs.len());
+            next_row = end;
+            // the law's skip: a scope already registered keeps its block
+            // and its base — the re-shipped copy is not appended again
+            let already = self.scope_base.get(s as usize).copied().unwrap_or(0) >= self.boot_len;
+            if already {
+                continue;
+            }
+            self.types.extend(descs[off..end].iter().cloned());
+            let need = s as usize + 1;
             if self.scope_base.len() < need {
                 self.scope_base.resize(need, 0);
             }
-            self.scope_base[*s as usize] = start + *off;
+            self.scope_base[s as usize] = cursor;
+            cursor += (end - off) as u32;
+        }
+        if next_row < descs.len() {
+            self.types.extend(descs[next_row..].iter().cloned());
         }
         let need = self.scope as usize + 1;
         if self.scope_base.len() < need {
@@ -830,5 +865,56 @@ mod tests {
         assert_eq!(t.repr_of(TY_ERR), Repr::Any);
         assert!(!t.crosses_boundary(&i, TY_ERR));
         assert_eq!(arr_elem_repr(&t, TY_ERR), Repr::Any);
+    }
+
+    /// One block per scope: a surface that re-ships a dependency's
+    /// block never displaces the copy an earlier surface registered.
+    /// Three registrations of scope 2 used to leave two stale copies in
+    /// the table, and the middle one — sitting right above scope 3's
+    /// own block — still read as "registered" through scope 3's base,
+    /// so a structural spelling of one of its rows came back spelled
+    /// through scope 3 (`id_for` attributes a dense row to the greatest
+    /// registered base below it). Link maps such an id past scope 3's
+    /// real block.
+    #[test]
+    fn use_block_registers_one_block_per_scope() {
+        fn row(names: &mut Interner, n: &str) -> RutType {
+            RutType {
+                name: names.intern(n),
+                kind: TyKind::Opt { elem: TY_U64 },
+            }
+        }
+        let mut names = Interner::new();
+        let mut t = TypeTable::boot_scoped(1);
+        // surface x: dep's block, then x's own
+        t.use_block(
+            vec![
+                row(&mut names, "dep_a"),
+                row(&mut names, "dep_b"),
+                row(&mut names, "x_own"),
+            ],
+            &[(2, 0), (3, 2)],
+        );
+        // the dependency's own surface: dep's block again
+        t.use_block(
+            vec![row(&mut names, "dep_a"), row(&mut names, "dep_b")],
+            &[(2, 0)],
+        );
+        // surface y: dep's block, then y's own
+        t.use_block(
+            vec![
+                row(&mut names, "dep_a"),
+                row(&mut names, "dep_b"),
+                row(&mut names, "y_own"),
+            ],
+            &[(2, 0), (4, 2)],
+        );
+        let boot = t.boot_len as usize;
+        // exactly one copy of each block: dep (2 rows), x, y — nothing else
+        assert_eq!(t.types.len(), boot + 4, "one block per scope");
+        // a structural spelling of a carried row resolves through ITS scope
+        assert_eq!(t.intern(row(&mut names, "dep_b")), pack(2, 1));
+        assert_eq!(t.intern(row(&mut names, "x_own")), pack(3, 0));
+        assert_eq!(t.intern(row(&mut names, "y_own")), pack(4, 0));
     }
 }
