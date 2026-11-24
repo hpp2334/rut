@@ -218,6 +218,43 @@ fn the_own_package_head_answers_inside_a_flat_package() {
 
 both_uri_shapes! {
 #[test]
+fn references_agree_with_hover_about_an_open_scratch_file() {
+    let mut s = S::boot();
+    s.index_file("file:///t/main.rut", USE_MAKE); // the importer: indexed, never opened
+    s.analyze(A_LIB, A_DISK); // the lib: opened, never mounted (Scratch)
+    // a Scratch file is visible only as itself: the reverse edge from
+    // its own declaration answers nothing (the scan's candidates and
+    // every candidate's resolution stop at the scratch wall)
+    let hits = s.refs_in(A_LIB, A_DISK, "make", 1, 0, false);
+    assert!(hits.is_empty(), "{hits:?}");
+    // ... and the importer's hover agrees — one answer, two queries
+    let h = s.hover_at("file:///t/main.rut", USE_MAKE, "make()", 1);
+    assert!(no_hover(&h), "{h:?}");
+    // the lib rides the workspace scan's lane: the two queries agree
+    // on the found answer
+    s.index_file(A_LIB, A_DISK);
+    if names_shape() {
+        let hits = s.refs_in(A_LIB, A_DISK, "make", 1, 0, false);
+        assert_eq!(hits.len(), 2, "{hits:?}");
+        assert!(hits.iter().all(|l| l["uri"] == "file:///t/main.rut"), "{hits:?}");
+        let starts: Vec<(i64, i64)> = hits.iter().map(|l| pos_pair(&l["range"]["start"])).collect();
+        assert_eq!(starts, [(0, 9), (2, 12)], "{hits:?}");
+        let md = markdown(s.hover_at("file:///t/main.rut", USE_MAKE, "make()", 1));
+        assert!(md.contains("pub fn make() -> i32"), "{md}");
+    } else {
+        // the hiding shape: the unstamped cross-package lane is still
+        // dead — the pkg-name derivation has no renamed dir to grip
+        // (recorded; the lane is a separate plan's business)
+        let hits = s.refs_in(A_LIB, A_DISK, "make", 1, 0, false);
+        assert!(hits.is_empty(), "{hits:?}");
+        let h = s.hover_at("file:///t/main.rut", USE_MAKE, "make()", 1);
+        assert!(no_hover(&h), "{h:?}");
+    }
+}
+}
+
+both_uri_shapes! {
+#[test]
 fn an_open_scratch_file_is_invisible_to_other_documents() {
     let (a, b) = ("file:///t/a.rut", "file:///t/b.rut");
     let bsrc = "class Box2 {\n    n: i32;\n}\n";

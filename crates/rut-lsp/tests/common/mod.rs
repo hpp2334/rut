@@ -768,7 +768,8 @@ pub mod rut_new {
     pub const ROOT: &str = "mod child;\nmod m;\n\npub let LIMIT: i32 = 7;\nlet HIDDEN: i32 = 3;\n\npub fn rootfn() -> i32 { return 1; }\nfn rootpriv() -> i32 { return 2; }\n\npub struct RootTy {\n    a: i32,\n}\n\nentry fn main() -> nil {\n    let x = m::mk(41).bump();\n}\n";
 
     /// `child`'s on-disk head (a pin's open document replaces it —
-    /// the twin may lag an open edit, exactly as in the editor)
+    /// this indexed text is what the index lane laid down on the uri,
+    /// which opening adopts; the buffer is the truth)
     pub const CHILD_HEAD: &str = "mod sub;\n\npub fn kid() -> i32 { return 3; }\n";
 
     /// the leaf module `m`: the leaf kinds the lanes gate — a fn, a

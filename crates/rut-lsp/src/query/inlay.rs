@@ -14,10 +14,10 @@
 //!   parameter names before the args at call sites, only on the
 //!   exact-arity match (mismatch → no hints, never wrong hints). The
 //!   callee resolves through the resolver family's doors —
-//!   [`Chain::expr_ty`] (literals → primitives, paths → the bindings
+//!   `expr_ty` (literals → primitives, paths → the bindings
 //!   read internally and module lets, calls → the callee's written
 //!   ret, member chains → the member lanes) for receivers and
-//!   [`Chain::impl_method_fn`] for the method rule (own-surface hits
+//!   `impl_method_fn` for the method rule (own-surface hits
 //!   are FINAL — no hints, never wrong names).
 //!
 //! The consistency law: a type hint's text is the SAME string hover

@@ -187,7 +187,8 @@ fn definition_on_the_mod_edge_names_the_child_file_top() {
     let (lsp, mut pool) = Lsp::spawn_native();
     // the plan-C lane through the bindgen face: the root file is
     // BOTH a stamped index (its uri carries the (module, mod_path)
-    // pair `doc_mods_of` reads) and the analyzed doc; the `helpers`
+    // stamp the index lane laid down, which opening adopts) and the
+    // analyzed doc; the `helpers`
     // ident in `pub mod helpers;` jumps to the mounted child at 0:0
     let root = "pub mod helpers;\nentry fn main() -> nil {\n}\n";
     let child = "pub struct Slot {\n    n: i32;\n}\n";

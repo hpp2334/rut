@@ -329,7 +329,8 @@ fn call_ty<'a>(
             );
         }
         // `m::mk(..)` — a module-qualified callee: the namespace lane
-        // resolves it (the ONE home — [`Chain::qualified_scope`]), the
+        // resolves it (the ONE home — the collection's
+        // `qualified_scope`), the
         // written ret prices the call (the async/Self handling rides
         // [`call_ret`])
         let seg_names: Vec<String> = segs

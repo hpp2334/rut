@@ -62,7 +62,8 @@ pub(super) fn type_tier_completions(w: &World, file: FileId) -> Vec<CompletionOu
 
 /// Member completions after `<TypeHead>::` — the `::` law's member
 /// lists whose head is a type, reusing the index lookup hover's member
-/// lane keys on (`find_ty`): an enum head offers its members, any
+/// lane keys on (`type_decl` — the file scope's first type): an enum
+/// head offers its members, any
 /// other type head its statics and associated fns (the inherent
 /// `impl T { fn .. }` rows — the owner string IS the type's name). An
 /// interface head offers nothing: its signatures ride receivers,
