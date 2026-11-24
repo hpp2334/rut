@@ -442,9 +442,9 @@ together:
   `del` — sync, no I/O, each a one-step `RequestBuilder`), the
   chainable builder (`method`/`url`/`header` — repeatable —
   /`body`), `build()` freezing a re-sendable `Request`, and the
-  async points: `send(cx) -> Response` (THE one — resolves at
-  headers), `body(cx) -> bytes` (the drain), and on the minted
-  `ByteStream`: `next(cx) -> ?bytes` (nil = EOF-or-failed;
+  async points: `send() -> Response` (THE one — resolves at
+  headers), `body() -> bytes` (the drain), and on the minted
+  `ByteStream`: `next() -> ?bytes` (nil = EOF-or-failed;
   `error()` reads the same sticky fact). NO `text()` — callers
   await `body()` then `.decode()`; NO query/params struct; NO
   `_async` suffixes anywhere. The plan's usage chain compiles
@@ -458,8 +458,8 @@ together:
       .header("Accept", "application/json")
       .body(payload)
       .build()
-      .send(cx);
-  // terse: await client.get(u).build().send(cx)
+      .send();
+  // terse: await client.get(u).build().send()
   ```
 
   One engine adaptation, disclosed: async METHODS are not woven in
@@ -519,16 +519,16 @@ use http::HttpClient;
 use futures::launch_future;
 use ink::Logger;
 
-async fn fetch(cx: RunContext, log: Logger, url: str) -> nil {
+async fn fetch(log: Logger, url: str) -> nil {
     let client = HttpClient();
-    let r = await client.get(url).build().send(cx);
+    let r = await client.get(url).build().send();
     let e = r.transport_error();
     if (e != nil) {
         let why: str = e;
         log.error(why);
         return;
     }
-    let b = await r.body(cx);
+    let b = await r.body();
     log.info(f"status={r.status()} ok={r.ok()} len={b.len()}");
 }
 

@@ -403,7 +403,7 @@ is how *any* embedder package reaches rut code; see
 ## `http`
 
 The async HTTP client lives with the concurrency chapter —
-builder construction, `send(cx)` resolving at headers, body drains and
+builder construction, `send()` resolving at headers, body drains and
 byte streams — in [async: futures and await](async.md).
 
 ## Put it together

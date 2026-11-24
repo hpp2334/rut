@@ -5141,8 +5141,8 @@ msgstr ""
 #: src/tutorial/stdlib.md:405
 msgid ""
 "The async HTTP client lives with the concurrency chapter — builder "
-"construction, `send(cx)` resolving at headers, body drains and byte streams "
-"— in [async: futures and await](async.md)."
+"construction, `send()` resolving at headers, body drains and byte streams — "
+"in [async: futures and await](async.md)."
 msgstr ""
 
 #: src/tutorial/stdlib.md:411
@@ -8022,7 +8022,7 @@ msgstr ""
 #: src/examples/00-todolist.md:188 src/examples/01-sort.md:208
 #: src/examples/02-digest.md:199 src/examples/03-plugin.md:216
 #: src/examples/04-custom-async.md:127 src/examples/05-todolist-web.md:245
-#: src/examples/06-github-viewer-cli.md:224
+#: src/examples/06-github-viewer-cli.md:228
 #: src/examples/playground-corpus.md:188
 msgid "Takeaways"
 msgstr ""
@@ -9570,25 +9570,28 @@ msgid ""
 "        eprint(why);\n"
 "        return 1;\n"
 "    }\n"
-"    let (tree, e) = decodeJsonBytes<Root>(await resp.body());\n"
+"    let (tree, e) = decode_root_bytes<Root>(await resp.body());\n"
 "```"
 msgstr ""
 
 #: src/examples/06-github-viewer-cli.md:107
 msgid ""
 "`list` is the **drain** lane: one `body()` await pulls the whole tree, and "
-"the JSON decode goes through the std `json` package's reader with `decode` "
-"spelled on `Entry`'s own inherent impl in this file. Status mapping is one "
-"function: `status() == 0` is the reserved transport verdict, 404 names the "
-"host that was checked, 403 is the rate-limit note, anything else non-2xx is "
-"the bare status."
+"the JSON decode goes through the std `json` package's reader through this "
+"file's LOCAL shim `decode_root_bytes` — json's generic-fn bodies are "
+"owner-anchored, so the canonical entries could never be seeded for this "
+"pkg's types (the example's README discloses the gap and the shims) — with "
+"`decode` spelled on `Entry`'s own inherent impl in this file. Status mapping "
+"is one function: `status() == 0` is the reserved transport verdict, 404 "
+"names the host that was checked, 403 is the rate-limit note, anything else "
+"non-2xx is the bare status."
 msgstr ""
 
-#: src/examples/06-github-viewer-cli.md:115
+#: src/examples/06-github-viewer-cli.md:119
 msgid "The download: true streaming, chunk by chunk"
 msgstr ""
 
-#: src/examples/06-github-viewer-cli.md:117
+#: src/examples/06-github-viewer-cli.md:121
 msgid ""
 "`download` walks a `ByteStream` — `next()` answers one chunk per await (nil "
 "= EOF-or-failed; the sticky `error()` names which), and each chunk lands "
@@ -9596,7 +9599,7 @@ msgid ""
 "once first, so a stale file never leaks its tail into a fresh download:"
 msgstr ""
 
-#: src/examples/06-github-viewer-cli.md:123
+#: src/examples/06-github-viewer-cli.md:127
 msgid ""
 "```rut\n"
 "    let stream = resp.byte_stream();\n"
@@ -9625,7 +9628,7 @@ msgid ""
 "```"
 msgstr ""
 
-#: src/examples/06-github-viewer-cli.md:149
+#: src/examples/06-github-viewer-cli.md:153
 msgid ""
 "Bounded memory end to end, and every failure on the data path is a message "
 "plus an exit code — never a panic, never a trap. The lane's one-shot law is "
@@ -9634,18 +9637,18 @@ msgid ""
 "trapping."
 msgstr ""
 
-#: src/examples/06-github-viewer-cli.md:155
+#: src/examples/06-github-viewer-cli.md:159
 msgid "The readbacks, on the response handle"
 msgstr ""
 
-#: src/examples/06-github-viewer-cli.md:157
+#: src/examples/06-github-viewer-cli.md:161
 msgid ""
 "The `Response` class wraps the host's opaque handle with sync readbacks — "
 "status, the 2xx test, the transport text, and the sticky mid-read failure "
 "([the std packages](../reference/stdlib.md)):"
 msgstr ""
 
-#: src/examples/06-github-viewer-cli.md:162
+#: src/examples/06-github-viewer-cli.md:166
 msgid ""
 "```rut\n"
 "impl Response {\n"
@@ -9668,11 +9671,11 @@ msgid ""
 "```"
 msgstr ""
 
-#: src/examples/06-github-viewer-cli.md:182
+#: src/examples/06-github-viewer-cli.md:186
 msgid "The embedder's offer list"
 msgstr ""
 
-#: src/examples/06-github-viewer-cli.md:184
+#: src/examples/06-github-viewer-cli.md:188
 msgid ""
 "`src/main.rs` shows the whole program closure in one chain — the walk feeds "
 "the run, the async pair and `calc` offer beside it, and the host bodies "
@@ -9681,26 +9684,26 @@ msgid ""
 "`pkg(hp)` coerces:"
 msgstr ""
 
-#: src/examples/06-github-viewer-cli.md:192
+#: src/examples/06-github-viewer-cli.md:196
 msgid "\"rgh_host\""
 msgstr ""
 
-#: src/examples/06-github-viewer-cli.md:192
+#: src/examples/06-github-viewer-cli.md:196
 msgid "// example-local rows\n"
 msgstr ""
 
-#: src/examples/06-github-viewer-cli.md:196
+#: src/examples/06-github-viewer-cli.md:200
 msgid "\"calc_host\""
 msgstr ""
 
-#: src/examples/06-github-viewer-cli.md:198
+#: src/examples/06-github-viewer-cli.md:202
 msgid ""
 "// the ONE world's body installs (src/world.rs): math, nmap, strbuild\n"
 "// (json's writer rides it), async_host — and the http lane the binary\n"
 "// names itself (the real reqwest side)\n"
 msgstr ""
 
-#: src/examples/06-github-viewer-cli.md:208
+#: src/examples/06-github-viewer-cli.md:212
 msgid ""
 "The walk pulls json's own `deps` along — `strbuild`, `pouch`, `nmapset` — so "
 "the whole serde surface, wrapper families included, is in the closure "
@@ -9715,39 +9718,39 @@ msgid ""
 "under `rut run`, which offers the std http pair by presence."
 msgstr ""
 
-#: src/examples/06-github-viewer-cli.md:226
+#: src/examples/06-github-viewer-cli.md:230
 msgid ""
 "**An async rut program in production shape**: the brain awaits at the fetch "
 "sites only; the embedder launches, rides the engine's driving loop to idle, "
 "and exits with the brain's code."
 msgstr ""
 
-#: src/examples/06-github-viewer-cli.md:229
+#: src/examples/06-github-viewer-cli.md:233
 msgid ""
 "**Headers-first send + one-shot body/stream** is the whole mental model of "
 "the std http lane — drain JSON in one await, stream files chunk by chunk."
 msgstr ""
 
-#: src/examples/06-github-viewer-cli.md:232
+#: src/examples/06-github-viewer-cli.md:236
 msgid ""
 "**Failures are values end to end**: transport errors, 404s, wire deaths, and "
 "io errors all become messages plus exit codes."
 msgstr ""
 
-#: src/examples/06-github-viewer-cli.md:234
+#: src/examples/06-github-viewer-cli.md:238
 msgid ""
 "**The fixture lane is the test gate**: recorded replies keyed on method + "
 "URL, deterministic chunks on a virtual clock, zero network."
 msgstr ""
 
-#: src/examples/06-github-viewer-cli.md:237
+#: src/examples/06-github-viewer-cli.md:241
 msgid ""
 "The closure is load-bearing here: json's `Vec<T>` serde wrappers are json's "
 "own source, compiled where json compiles — the container packages ride along "
 "as json's plain deps."
 msgstr ""
 
-#: src/examples/06-github-viewer-cli.md:241
+#: src/examples/06-github-viewer-cli.md:245
 msgid ""
 "The lane's declarations live in the std tree; for the runner behind `rut "
 "run`, see [the rut CLI](../reference/cli.md)."

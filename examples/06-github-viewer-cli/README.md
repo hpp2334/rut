@@ -18,10 +18,9 @@ error, `2` usage.
 
 ## The brain is async
 
-`rgh_main` is an ASYNC free fn (`async fn rgh_main(cx: RunContext,
-args: str) -> i32` — the [async](../../docs/src/reference/async.md) shape; the cx is
-engine-minted,
-never passed). The embedder's one entry is `boot`:
+`rgh_main` is an ASYNC free fn (`async fn rgh_main(args: str) -> i32`
+— the [async](../../docs/src/reference/async.md) shape; the cx is
+injected, never spelled). The embedder's one entry is `boot`:
 
 ```rut
 entry fn boot(args: str) -> nil {
@@ -41,9 +40,9 @@ mid-drive; the brain keeps the `-> i32` discipline beside it.
 The fetch sites await — and ONLY the fetch sites:
 
 ```rut
-let resp = await client.get(url).build().send(cx);   // resolves at HEADERS
-let (tree, e) = decode_root_bytes<Root>(await resp.body(cx));  // list: one drain
-let c = await stream.next(cx);                       // download: chunk per await
+let resp = await client.get(url).build().send();     // resolves at HEADERS
+let (tree, e) = decode_root_bytes<Root>(await resp.body());  // list: one drain
+let c = await stream.next();                         // download: chunk per await
 ```
 
 Everything else — argv carve, flags, URLs, JSON, formatting — is the
@@ -68,14 +67,14 @@ rate-limit note; any other non-2xx → `rgh: CDN <n>`.
 | piece | where | does |
 |---|---|---|
 | the brain | `mod.rut` | argv carve (hand-rolled — there is no `str.split`; the `scan`/`slice` tokenizer primitives), flag/subcommand parse, URL building, `decodeJsonBytes`-shaped root decode over the tree JSON (`Entry` + `Root` spell json's `JsonDeserialize` members on their own inherent impls — structural satisfaction — over `rut/json`'s reader), depth-first flatten, `human_size`, every message and exit code; the awaits live at the fetch sites |
-| the std HTTP lane | `rut/http_host` + `rut/http` (tree pkgs), bodies in `rut-std` behind its default-off `http` feature | the async-only face: `HttpClient()`, the verbs as build sugars (`get`/`post`/`put`/`patch`/`del`), the builder chain, `build()`, and the async points — `send(cx)` (headers), `body(cx)` (the drain), `byte_stream()` + `next(cx)` (chunk per await); `status()` (0 = transport), `ok()`, `transport_error()`, `read_error()` |
+| the std HTTP lane | `rut/http_host` + `rut/http` (tree pkgs), bodies in `rut-std` behind its default-off `http` feature | the async-only face: `HttpClient()`, the verbs as build sugars (`get`/`post`/`put`/`patch`/`del`), the builder chain, `build()`, and the async points — `send()` (headers), `body()` (the drain), `byte_stream()` + `next()` (chunk per await); `status()` (0 = transport), `ok()`, `transport_error()`, `read_error()` |
 | the example's host rows | `rgh_host/` + `src/main.rs` | CLI I/O only: `out` (stdout line), `eprint` (stderr line), `write_file` (truncate-or-create), `append_file` (append-or-create — one streamed chunk per call), `exit` (the one-way door) |
-| the embedder | `src/main.rs` | mount std (the manifest walk) + the async pair + `rgh_host`, compile `mod.rut` (Impl mode), verify, install the ONE world's body set (`world::host_pkgs` in `src/world.rs` — math + nmap + strbuild + async_host + the real `http::pkg()`), `verify_against` over the same home's expected table, `vm.call("boot", (args,))`, drive `run_until_idle(Wait::Block)` to idle, exit with the carried code |
+| the embedder | `src/main.rs` | mount std (the manifest walk) + the async pair + `calc_host` (the Math bodies' decl surface) + `rgh_host`, compile `mod.rut` (Impl mode), verify, install the ONE world's body set (`world::host_pkgs` in `src/world.rs` — math + nmap + strbuild + async_host + the real `http::pkg()`), `verify_against` over the same home's expected table, `vm.call("boot", (args,))`, drive `run_until_idle(Wait::Block)` to idle, exit with the carried code |
 
 The disk-write split is the streaming shape: `download` TRUNCATES the
 dest through `write_file` once (a stale file never leaks its tail
 into a fresh download), then walks `byte_stream()` — `await
-next(cx)` per chunk, each landing through the sync `append_file` row.
+next()` per chunk, each landing through the sync `append_file` row.
 Disk writes are sync embedder rows: blocking the loop briefly per
 chunk is the CLI norm, disclosed. The chunks arrive one per await
 (bounded memory end to end), and the byte count in the confirmation
@@ -86,7 +85,7 @@ line is the sum of the arrived chunks.
 - **send resolves at HEADERS** — the wire body stays unread; the
   status and the mapping run before any body byte is pulled.
 - **body xor stream (the one-shot law)** — `list` drains
-  (`resp.body(cx)`, one future), `download` streams
+  (`resp.body()`, one future), `download` streams
   (`resp.byte_stream()`, chunk per await). A response never gives
   both; a late/second taker DEGRADES (an empty drain / a dead reader
   whose next is an immediate EOF) — never a trap.

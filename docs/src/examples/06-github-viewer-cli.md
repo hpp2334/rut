@@ -101,12 +101,16 @@ async fn do_list(client: HttpClient, owner: str, repo: str, rf: str) -> i32 {
         eprint(why);
         return 1;
     }
-    let (tree, e) = decodeJsonBytes<Root>(await resp.body());
+    let (tree, e) = decode_root_bytes<Root>(await resp.body());
 ```
 
 `list` is the **drain** lane: one `body()` await pulls the whole
 tree, and the JSON decode goes through the std `json` package's
-reader with `decode` spelled on `Entry`'s own inherent impl in this
+reader through this file's LOCAL shim `decode_root_bytes` — json's
+generic-fn bodies are owner-anchored, so the canonical entries could
+never be seeded for this pkg's types (the example's README discloses
+the gap and the shims) — with `decode` spelled on `Entry`'s own
+inherent impl in this
 file. Status
 mapping is one function: `status() == 0` is the reserved transport
 verdict, 404 names the host that was checked, 403 is the rate-limit

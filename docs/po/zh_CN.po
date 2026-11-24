@@ -5298,9 +5298,9 @@ msgstr "`http`"
 
 #: src/tutorial/stdlib.md:405
 msgid ""
-"The async HTTP client lives with the concurrency chapter — builder construction, `send(cx)` resolving at headers, body drains and byte streams — in [async: futures and await](async.md)."
+"The async HTTP client lives with the concurrency chapter — builder construction, `send()` resolving at headers, body drains and byte streams — in [async: futures and await](async.md)."
 msgstr ""
-"异步 HTTP 客户端与并发那一章同住——构建器的构造、在响应头处完成的 `send(cx)`、响应体排干与字节流——见[异步：future 与 await](async.md)。"
+"异步 HTTP 客户端与并发那一章同住——构建器的构造、在响应头处完成的 `send()`、响应体排干与字节流——见[异步：future 与 await](async.md)。"
 
 
 #: src/tutorial/stdlib.md:411
@@ -8087,7 +8087,7 @@ msgstr ""
 #: src/examples/00-todolist.md:188 src/examples/01-sort.md:208
 #: src/examples/02-digest.md:199 src/examples/03-plugin.md:216
 #: src/examples/04-custom-async.md:127 src/examples/05-todolist-web.md:245
-#: src/examples/06-github-viewer-cli.md:224
+#: src/examples/06-github-viewer-cli.md:228
 #: src/examples/playground-corpus.md:188
 msgid "Takeaways"
 msgstr "要点"
@@ -9653,29 +9653,29 @@ msgid ""
 "        eprint(why);\n"
 "        return 1;\n"
 "    }\n"
-"    let (tree, e) = decodeJsonBytes<Root>(await resp.body());\n"
+"    let (tree, e) = decode_root_bytes<Root>(await resp.body());\n"
 "```"
 msgstr ""
 
 
 #: src/examples/06-github-viewer-cli.md:107
 msgid ""
-"`list` is the **drain** lane: one `body()` await pulls the whole tree, and the JSON decode goes through the std `json` package's reader with `decode` spelled on `Entry`'s own inherent impl in this file. Status mapping is one function: `status() == 0` is the reserved transport verdict, 404 names the host that was checked, 403 is the rate-limit note, anything else non-2xx is the bare status."
+"`list` is the **drain** lane: one `body()` await pulls the whole tree, and the JSON decode goes through the std `json` package's reader through this file's LOCAL shim `decode_root_bytes` — json's generic-fn bodies are owner-anchored, so the canonical entries could never be seeded for this pkg's types (the example's README discloses the gap and the shims) — with `decode` spelled on `Entry`'s own inherent impl in this file. Status mapping is one function: `status() == 0` is the reserved transport verdict, 404 names the host that was checked, 403 is the rate-limit note, anything else non-2xx is the bare status."
 msgstr ""
 
 
-#: src/examples/06-github-viewer-cli.md:115
+#: src/examples/06-github-viewer-cli.md:119
 msgid "The download: true streaming, chunk by chunk"
 msgstr "下载：真正的流式，逐块进行"
 
 
-#: src/examples/06-github-viewer-cli.md:117
+#: src/examples/06-github-viewer-cli.md:121
 msgid ""
 "`download` walks a `ByteStream` — `next()` answers one chunk per await (nil = EOF-or-failed; the sticky `error()` names which), and each chunk lands through the **sync** `append_file` host row. The destination is truncated once first, so a stale file never leaks its tail into a fresh download:"
 msgstr ""
 
 
-#: src/examples/06-github-viewer-cli.md:123
+#: src/examples/06-github-viewer-cli.md:127
 msgid ""
 "```rut\n"
 "    let stream = resp.byte_stream();\n"
@@ -9705,26 +9705,26 @@ msgid ""
 msgstr ""
 
 
-#: src/examples/06-github-viewer-cli.md:149
+#: src/examples/06-github-viewer-cli.md:153
 msgid ""
 "Bounded memory end to end, and every failure on the data path is a message plus an exit code — never a panic, never a trap. The lane's one-shot law is worth knowing: per response it is `body()` **xor** `byte_stream()`, and a late/second taker degrades (an empty drain, a dead reader) rather than trapping."
 msgstr ""
 "内存全程有界，数据路径上的每个失败都是一条消息加一个退出码——绝不是 panic，绝不是陷阱。这条链路的一次性法则值得知道：每个响应要么 `body()` 要么 `byte_stream()`，**二选一**；迟到者或第二名取用者会退化（空排空、失效 reader）而不是触发陷阱。"
 
 
-#: src/examples/06-github-viewer-cli.md:155
+#: src/examples/06-github-viewer-cli.md:159
 msgid "The readbacks, on the response handle"
 msgstr "读回，在响应句柄上"
 
 
-#: src/examples/06-github-viewer-cli.md:157
+#: src/examples/06-github-viewer-cli.md:161
 msgid ""
 "The `Response` class wraps the host's opaque handle with sync readbacks — status, the 2xx test, the transport text, and the sticky mid-read failure ([the std packages](../reference/stdlib.md)):"
 msgstr ""
 "`Response` 类用同步读回包装宿主的 opaque 句柄——状态、2xx 测试、传输文本，以及粘性的读取中途失败（[std 包](../reference/stdlib.md)）："
 
 
-#: src/examples/06-github-viewer-cli.md:162
+#: src/examples/06-github-viewer-cli.md:166
 msgid ""
 "```rut\n"
 "impl Response {\n"
@@ -9767,35 +9767,35 @@ msgstr ""
 "```"
 
 
-#: src/examples/06-github-viewer-cli.md:182
+#: src/examples/06-github-viewer-cli.md:186
 msgid "The embedder's offer list"
 msgstr ""
 
 
-#: src/examples/06-github-viewer-cli.md:184
+#: src/examples/06-github-viewer-cli.md:188
 msgid ""
 "`src/main.rs` shows the whole program closure in one chain — the walk feeds the run, the async pair and `calc` offer beside it, and the host bodies install through `world::host_pkgs(..)` — the example's ONE world (`src/world.rs`), the same home the offline suite and the live smoke read; `pkg(hp)` coerces:"
 msgstr ""
 "`src/main.rs` 把整个程序闭包放进一条链 —— 遍历喂给运行，async 对与 `calc` 在旁 offer，宿主函数体经 `world::host_pkgs(..)` 安装——示例的唯一世界（`src/world.rs`），离线套件与 live smoke 读的是同一个家；`pkg(hp)` 自动转换："
 
 
-#: src/examples/06-github-viewer-cli.md:192
+#: src/examples/06-github-viewer-cli.md:196
 msgid "\"rgh_host\""
 msgstr ""
 
 
-#: src/examples/06-github-viewer-cli.md:192
+#: src/examples/06-github-viewer-cli.md:196
 msgid ""
 "// example-local rows\n"
 msgstr ""
 
 
-#: src/examples/06-github-viewer-cli.md:196
+#: src/examples/06-github-viewer-cli.md:200
 msgid "\"calc_host\""
 msgstr ""
 
 
-#: src/examples/06-github-viewer-cli.md:198
+#: src/examples/06-github-viewer-cli.md:202
 msgid ""
 "// the ONE world's body installs (src/world.rs): math, nmap, strbuild\n"
 "// (json's writer rides it), async_host — and the http lane the binary\n"
@@ -9803,45 +9803,45 @@ msgid ""
 msgstr ""
 
 
-#: src/examples/06-github-viewer-cli.md:208
+#: src/examples/06-github-viewer-cli.md:212
 msgid ""
 "The walk pulls json's own `deps` along — `strbuild`, `pouch`, `nmapset` — so the whole serde surface, wrapper families included, is in the closure ([Dependency kinds](../reference/dependency-kinds.md)); the `strbuild_host` rows the writer declares are bound in the same home (`strbuild::pkg()`). The HTTP bodies install through `http::pkg()` (the reqwest lane); the example's own rows are CLI I/O only — `out` (stdout), `eprint`, the file pair, and `exit` — declared in the example-local `rgh_host` decl package and verified against the bindings at boot ([Host fns and declaration files](../reference/host-fns.md)). One consequence: `rut run` cannot host rgh itself — its rows are example-local — but ordinary HTTP programs do run under `rut run`, which offers the std http pair by presence."
 msgstr ""
 "遍历会把 json 自己的 `deps` 一并拉进来——`strbuild`、`pouch`、`nmapset`——因此整个 serde表面（包装器家族含在内）都在闭包里（[Dependencykinds](../reference/dependency-kinds.md)）；写它所声明的 `strbuild_host` 行也在同一个家里绑定（`strbuild::pkg()`）。HTTP 请求体经`http::pkg()`（reqwest 车道）安装；本示例自己的行只有 CLII/O——`out`（stdout）、`eprint`、文件对与 `exit`——声明在示例本地的 `rgh_host` decl包里，并在启动时对照绑定校验（[Host fns and declarationfiles](../reference/host-fns.md)）。一个推论：`rut run` 无法自己承载rgh——它的行是示例本地的——但普通 HTTP 程序确实能在 `rut run` 下运行，它会提供 std http 这对包。"
 
 
-#: src/examples/06-github-viewer-cli.md:226
+#: src/examples/06-github-viewer-cli.md:230
 msgid ""
 "**An async rut program in production shape**: the brain awaits at the fetch sites only; the embedder launches, rides the engine's driving loop to idle, and exits with the brain's code."
 msgstr "**一个生产形态的异步 rut 程序**：大脑只在取数站点 await；嵌入方启动、骑引擎的驱动循环直至空闲，然后带着大脑的退出码退出。"
 
 
-#: src/examples/06-github-viewer-cli.md:229
+#: src/examples/06-github-viewer-cli.md:233
 msgid ""
 "**Headers-first send + one-shot body/stream** is the whole mental model of the std http lane — drain JSON in one await, stream files chunk by chunk."
 msgstr "**头部优先的发送 + 一次性 body/流**就是 std http 链路的全部心智模型：一次 await 排空 JSON，逐块流式下载文件。"
 
 
-#: src/examples/06-github-viewer-cli.md:232
+#: src/examples/06-github-viewer-cli.md:236
 msgid ""
 "**Failures are values end to end**: transport errors, 404s, wire deaths, and io errors all become messages plus exit codes."
 msgstr "**失败从头到尾都是值**：传输错误、404、线路死亡和 io 错误全部变成消息加退出码。"
 
 
-#: src/examples/06-github-viewer-cli.md:234
+#: src/examples/06-github-viewer-cli.md:238
 msgid ""
 "**The fixture lane is the test gate**: recorded replies keyed on method + URL, deterministic chunks on a virtual clock, zero network."
 msgstr "**夹具链路就是测试门禁**：按方法 + URL 为键的录制回应、虚拟时钟上确定性的数据块、零网络。"
 
 
-#: src/examples/06-github-viewer-cli.md:237
+#: src/examples/06-github-viewer-cli.md:241
 msgid ""
 "The closure is load-bearing here: json's `Vec<T>` serde wrappers are json's own source, compiled where json compiles — the container packages ride along as json's plain deps."
 msgstr ""
 "这里的闭包是承重的：json 的 `Vec<T>` serde 包装器是 json 自己的源码，在 json 编译之处编译——容器包作为json 的普通 deps 随行。"
 
 
-#: src/examples/06-github-viewer-cli.md:241
+#: src/examples/06-github-viewer-cli.md:245
 msgid ""
 "The lane's declarations live in the std tree; for the runner behind `rut run`, see [the rut CLI](../reference/cli.md)."
 msgstr "这条链路的声明住在 std 树里；`rut run` 背后的运行器，见[rut CLI](../reference/cli.md)。"
