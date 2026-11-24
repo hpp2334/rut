@@ -33,7 +33,7 @@ msgid "Your first rut program"
 msgstr ""
 
 #: src/SUMMARY.md:11 src/quick-start/playground.md:1
-#: src/reference/project-structure.md:290
+#: src/reference/project-structure.md:294
 msgid "The playground"
 msgstr ""
 
@@ -22079,7 +22079,7 @@ msgid ""
 "whose bodies the embedder binds."
 msgstr ""
 
-#: src/reference/stdlib.md:122 src/reference/project-structure.md:273
+#: src/reference/stdlib.md:122 src/reference/project-structure.md:277
 msgid "package"
 msgstr ""
 
@@ -22114,7 +22114,7 @@ msgstr ""
 msgid "the `Logger` class"
 msgstr ""
 
-#: src/reference/stdlib.md:126 src/reference/project-structure.md:281
+#: src/reference/stdlib.md:126 src/reference/project-structure.md:285
 msgid "`pouch`"
 msgstr ""
 
@@ -22126,7 +22126,7 @@ msgstr ""
 msgid "the growable sequence `Vec<T>`"
 msgstr ""
 
-#: src/reference/stdlib.md:127 src/reference/project-structure.md:282
+#: src/reference/stdlib.md:127 src/reference/project-structure.md:286
 msgid "`flow`"
 msgstr ""
 
@@ -22151,7 +22151,7 @@ msgstr ""
 msgid "the native key table; `HashMap`/`HashSet`"
 msgstr ""
 
-#: src/reference/stdlib.md:129 src/reference/project-structure.md:283
+#: src/reference/stdlib.md:129 src/reference/project-structure.md:287
 msgid "`json`"
 msgstr ""
 
@@ -22173,7 +22173,7 @@ msgstr ""
 msgid "the builder rows; the `StringBuilder` class"
 msgstr ""
 
-#: src/reference/stdlib.md:131 src/reference/project-structure.md:276
+#: src/reference/stdlib.md:131 src/reference/project-structure.md:280
 msgid "`calc`"
 msgstr ""
 
@@ -22187,7 +22187,7 @@ msgid ""
 "f64>`, the width falls out of the argument)"
 msgstr ""
 
-#: src/reference/stdlib.md:132 src/reference/project-structure.md:277
+#: src/reference/stdlib.md:132 src/reference/project-structure.md:281
 msgid "`calc_host`"
 msgstr ""
 
@@ -27891,7 +27891,7 @@ msgstr ""
 msgid "The toolchain tree"
 msgstr ""
 
-#: src/reference/project-structure.md:248
+#: src/reference/project-structure.md:250
 msgid ""
 "Dependency line: `rut-lexer ← rut-ast (tree + grammar) ← rut-driver → "
 "rut-lir → rut-core ← rut-vm` (with `rut-vm-threaded` behind it; the driver "
@@ -27901,115 +27901,117 @@ msgid ""
 "(`rut-std`, `rut-wasm`) on top, and `rut-cli`/`demo` above those. `rut-lsp` "
 "sits on the frontend crates — tokens, diagnostics, and symbols need no VM — "
 "plus the driver's pure core for manifest and bundle parsing (the dep tables "
-"behind the editor's dep walk). It is the language core: the queries "
-"(`analysis`, `completion`, `definition`, `check`, and the rest) live beside "
-"the classifier — the SEALED `semantic` module (a private `mod` hides even "
-"its own `pub` items), which sits on the frontend crates for the same reason "
-"— so a feature cannot land on one and miss the other, and embedders take the "
-"core without an editor at all. `rut-lsp-wasm` is the thin wasm-bindgen face "
-"over that core: every exported method delegates onto the `Lsp` handle, so "
-"the extension and the playground bundle the face with no second "
-"implementation to keep in step."
+"behind the editor's dep walk). It is the language core, and its layers point "
+"downward only — the actor's event loop, then the session's one method per "
+"request, then the load lanes and the queries (`analysis`, `completion`, "
+"`definition`, `check`, and the rest), then the resolver and the world — all "
+"the way to the classifier: the SEALED `doc` module (a private `mod` hides "
+"even its own `pub` items), which sits on the frontend crates for the same "
+"reason — so a feature cannot land on one and miss the other, and embedders "
+"take the core without an editor at all. `rut-lsp-wasm` is the thin "
+"wasm-bindgen face over that core: every exported method delegates onto the "
+"`Lsp` handle, so the extension and the playground bundle the face with no "
+"second implementation to keep in step."
 msgstr ""
 
-#: src/reference/project-structure.md:268
+#: src/reference/project-structure.md:272
 msgid "The in-tree packages"
 msgstr ""
 
-#: src/reference/project-structure.md:270
+#: src/reference/project-structure.md:274
 msgid ""
 "`rut/` carries the standard and swappable packages the CLI offers on demand:"
 msgstr ""
 
-#: src/reference/project-structure.md:273
+#: src/reference/project-structure.md:277
 msgid "shape"
 msgstr ""
 
-#: src/reference/project-structure.md:275
+#: src/reference/project-structure.md:279
 msgid "`core`"
 msgstr ""
 
-#: src/reference/project-structure.md:275
+#: src/reference/project-structure.md:279
 msgid ""
 "the only standard package — the builtin surface, auto-offered by every run's "
 "`.compile()`"
 msgstr ""
 
-#: src/reference/project-structure.md:276
+#: src/reference/project-structure.md:280
 msgid ""
 "the math surface as a normal lib (its `math` module) — generic fns over "
 "`calc_host`; a `deps`\\-carrying dir mounts through `load_dir`/`dir_pkgs`, "
 "never `tree_pkg` ([stdlib](stdlib.md))"
 msgstr ""
 
-#: src/reference/project-structure.md:277
+#: src/reference/project-structure.md:281
 msgid ""
 "host pkg: the math rows + the `PI` constants (bare at its root) — offer "
 "`rut_native::tree_pkg(\"calc_host\")`, bind `rut_std::math::pkg()` "
 "([stdlib](stdlib.md))"
 msgstr ""
 
-#: src/reference/project-structure.md:278
+#: src/reference/project-structure.md:282
 msgid "`ink_host`, `nmap_host`, `async_host`, `bench_cross`"
 msgstr ""
 
-#: src/reference/project-structure.md:278
+#: src/reference/project-structure.md:282
 msgid "host pkgs — flat `.d.rut` surfaces; bodies live in `rut-std`"
 msgstr ""
 
-#: src/reference/project-structure.md:279
+#: src/reference/project-structure.md:283
 msgid "`http_host`"
 msgstr ""
 
-#: src/reference/project-structure.md:279
+#: src/reference/project-structure.md:283
 msgid ""
 "host pkg, the surface-tree pilot — the default `src/mod.d.rut` root over the "
 "std HTTP rows, `net/` + `stream/` mods ([project "
 "structure](#host-surface-trees)); bodies in `rut-std`"
 msgstr ""
 
-#: src/reference/project-structure.md:280
+#: src/reference/project-structure.md:284
 msgid "`ink`, `http`, `strbuild`, `futures`"
 msgstr ""
 
-#: src/reference/project-structure.md:280
+#: src/reference/project-structure.md:284
 msgid ""
 "rut classes over host rows (published compiled — methods cross on the "
 "surface's inherent rows)"
 msgstr ""
 
-#: src/reference/project-structure.md:281
+#: src/reference/project-structure.md:285
 msgid "the growable sequence `Vec<T>` (plain linked package)"
 msgstr ""
 
-#: src/reference/project-structure.md:282
+#: src/reference/project-structure.md:286
 msgid ""
 "the push pipeline (`Flow<E>`; its `VecFlow`/`SetFlow` wrappers over "
 "`pouch`/`nmapset`)"
 msgstr ""
 
-#: src/reference/project-structure.md:283
+#: src/reference/project-structure.md:287
 msgid ""
 "the serde pkg — owns the wrapper families over `pouch`/`nmapset`, plain "
 "`deps` ([Dependency kinds](dependency-kinds.md))"
 msgstr ""
 
-#: src/reference/project-structure.md:284
+#: src/reference/project-structure.md:288
 msgid "`nmapset`"
 msgstr ""
 
-#: src/reference/project-structure.md:284
+#: src/reference/project-structure.md:288
 msgid "native-key maps/sets over `nmap_host`"
 msgstr ""
 
-#: src/reference/project-structure.md:286
+#: src/reference/project-structure.md:290
 msgid ""
 "Nothing in the engine knows the swappable packages' names — deps are "
 "resolved by name from manifests; a host may replace the non-`core` set "
 "wholesale ([Embedding and native modules](embedding.md))."
 msgstr ""
 
-#: src/reference/project-structure.md:292
+#: src/reference/project-structure.md:296
 msgid ""
 "`demo/` is a React + rspack + TypeScript page over the wasm build. The wasm "
 "ABI is two calls — `compile(src)` returning diagnostics, an AST dump, an IR "

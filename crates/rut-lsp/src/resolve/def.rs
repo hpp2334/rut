@@ -12,8 +12,8 @@ use rut_ast::{
     ModuleLetNode, StructNode, SurfaceFnNode, SurfaceStructNode,
 };
 
-use crate::semantic::Span;
-use crate::world::collection::{FnView, LetView, MemberView, ModView, TyView};
+use crate::doc::Span;
+use crate::world::views::{FnView, LetView, MemberView, ModView, TyView};
 use crate::world::{File, FileId, World};
 
 /// one resolved jump target — the uri is the doc itself, a workspace

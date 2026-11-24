@@ -1581,7 +1581,7 @@ async function main() {
             'the lock pin matches the committed zip bytes',
         );
         // the cache path is computed RUST-side — sha256 of the URL string
-        // plus the url's own artifact ext (crates/rut-lsp/src/deps.rs
+        // plus the url's own artifact ext (crates/rut-lsp/src/load/manifest.rs
         // cache_path); the binding never hashes, so the gate recomputes
         // the SAME digest over the fixture URL and the row must equal it
         // — derived, never a pinned constant

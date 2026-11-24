@@ -3,7 +3,7 @@
 //! binding, and only one step can match a node:
 //!
 //! 1. the caret's node — the boundary convention
-//!    ([`crate::semantic::node_at_caret`]); an error fence names
+//!    ([`crate::doc::node_at_caret`]); an error fence names
 //!    nothing;
 //! 2. the `Self` spellings;
 //! 3. a declaring name under the caret — a node decl ([`Def::Node`])
@@ -27,7 +27,7 @@ use rut_ast::{
 use rut_lexer::span::Span;
 
 use super::def::{decl_ident, Def};
-use crate::semantic::on_name;
+use crate::doc::on_name;
 use crate::world::{FileId, World};
 
 /// a member door's receiver — the node-derived spelling: the receiver

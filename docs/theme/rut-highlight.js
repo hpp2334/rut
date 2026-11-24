@@ -82,7 +82,7 @@ const MEMBER_CALL = mode('title', { begin: /\.[A-Za-z_$][A-Za-z0-9_$]*(?=\s*\()/
 const MEMBER_FIELD = mode('property', { begin: /\.[A-Za-z_$][A-Za-z0-9_$]*/ });
 
 // Use lines — `use ink::{ Logger };` — mirror the classifier's law
-// (`crates/rut-lsp/src/semantic/names.rs`, ItemKind::Use): the path
+// (`crates/rut-lsp/src/doc/names.rs`, ItemKind::Use): the path
 // segments read as their heads (lowercase = a module, capitalized = a
 // type), the imported names as the leaf members (capitalized = a type,
 // lowercase = a function). Scope mapping, on the grammar's

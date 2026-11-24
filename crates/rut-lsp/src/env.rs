@@ -32,8 +32,8 @@
 //! they hand the loop their own `Io` through [`crate::Lsp::set_env_io`],
 //! the same door the face's `set_env` posts its `JsEnv` through. The
 //! capability has TWO readers, both pure reads: the dep walk
-//! (`crate::walk`) and the mod-name slot's disk probe
-//! (`crate::query::completion::mod_name::list_child_mods`).
+//! (`crate::load::dep_walk`) and the mod-name slot's disk probe
+//! (`crate::feature::completion::mod_name::list_child_mods`).
 //!
 //! # The clock (machinery, the one addition)
 //!
@@ -54,7 +54,7 @@ use std::rc::Rc;
 
 /// the loop's wake source — the closure the `SetEnv` arm installs on
 /// the env: a clone of the loop's own inbox sender captured inside, so
-/// firing it posts one identity-free `Msg::Wake` (`crate::event_loop`).
+/// firing it posts one identity-free `Msg::Wake` (`crate::actor::event_loop`).
 /// Pure machinery; no business fact crosses it.
 pub type WakeFn = Rc<dyn Fn()>;
 

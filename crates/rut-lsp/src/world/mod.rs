@@ -10,35 +10,67 @@
 //! design): the **decl layer** (the files' decl maps — types, fns,
 //! fields, enum members, module lets, use names, all keyed on the
 //! nodes' own recorded name spans; docs ride the decl nodes' `DocData`
-//! chains — see [`decls`]) and the **binding pass** (`bindings` — every
-//! fn-local binding as `{ name, decl_ident_span, scope_span, kind, ty }`,
-//! shadow-correct resolve). `infer` is the display-side type heuristic
-//! both consume. Heuristic, like the classifier: a miss is an empty
+//! chains — see [`decls`]) and the **binding pass** (`rut_ast`'s
+//! `Doc::bindings()` — every fn-local binding as
+//! `{ name, decl_ident_span, scope_span, kind, ty }`, shadow-correct
+//! resolve). `resolve::ty_infer` is the display-side type heuristic
+//! both consume — one layer DOWN, in `resolve`. Heuristic, like the classifier: a miss is an empty
 //! answer, never wrong text.
 //!
 //! Layout: [`World`]/[`File`]/[`Stamp`] here, the per-file doors in
 //! `decls`, `ty` (the shared vocabulary — TyForm and the `Ty` value
-//! type) →
-//! `collection` (the resolver family in `member`, completion's tier
-//! doors in `tiers`, the per-node views in `views/`) → `bindings` +
-//! `infer` (what's under the cursor) + `pkg` (package identity and the
-//! doc's import table); the file-module namespace walk lives in
-//! `resolve::mods` — the adapters over rut-lir's pure laws. The
-//! queries above spell this layer — never the reverse.
+//! type), and the per-node `views/` (a view's verbatim text is a
+//! span×src join on the owning file's document); the resolver family
+//! that answers the cross-file questions lives one layer down in
+//! `resolve` (`scope`, `exports`, `member`, `pkg`, `ty_infer`), the
+//! file-module namespace walk in `resolve::mods` — the adapters over
+//! rut-lir's pure laws. The layers above spell this one — never the
+//! reverse.
 
-pub mod bindings;
-pub(crate) mod collection;
 pub(crate) mod decls;
-pub(crate) mod infer;
-pub(crate) mod pkg;
 pub(crate) mod ty;
+pub(crate) mod views;
 
-pub use bindings::{BindKind, Binding};
 pub(crate) use decls::{decls_of, DeclMap};
 
 use std::collections::HashMap;
 
-use crate::semantic::{mode_of, Document, Mode};
+use crate::doc::{mode_of, Document, Mode};
+
+/// a rooted path, lexically normalized — `.` dropped, `..` collapsed
+/// segment by segment (a path dep's origins carry the joined `..` —
+/// the walk never munges them; the KEY reads through). No `std::path`
+/// (the crate's law): the string walk the hosts' env resolves with.
+pub(crate) fn lexical(path: &str) -> String {
+    let mut out: Vec<&str> = Vec::new();
+    for seg in path.split('/') {
+        match seg {
+            "" | "." => {}
+            ".." => {
+                out.pop();
+            }
+            s => out.push(s),
+        }
+    }
+    format!("/{}", out.join("/"))
+}
+
+/// one physical file's identity — the path its origin names, however
+/// the mounting lane spelled it: the workspace indexer's uri
+/// (`file:///ws/app/src/mod.rut`) and the dep walk's rooted string
+/// (`/ws/app/src/mod.rut`) are ONE file, lexically normalized. An
+/// origin naming no rooted path (the prelude's `core`, a store key, a
+/// virtual-fs uri) is its own key. THE STORE's key law — the
+/// `by_origin` map is keyed through it (the resolver's pkg facts live
+/// one layer down; the store names no layer above).
+pub(crate) fn file_key(origin: &str) -> String {
+    let path = origin.strip_prefix("file://").unwrap_or(origin);
+    if path.starts_with('/') {
+        lexical(path)
+    } else {
+        origin.to_string()
+    }
+}
 
 pub(crate) type FileId = u32;
 
@@ -162,7 +194,7 @@ impl World {
     /// alone, the ONE ambient entry; every other std pkg rides the dep
     /// lane like any third-party lib)
     pub(crate) fn new(prelude: File) -> World {
-        let key = crate::world::pkg::file_key(&prelude.stamp.origin);
+        let key = file_key(&prelude.stamp.origin);
         let mut by_origin = HashMap::new();
         by_origin.insert(key, 0);
         World {
@@ -174,9 +206,7 @@ impl World {
     /// the file mounted at `origin` (by identity — either spelling of
     /// its path), if any
     pub(crate) fn get(&self, origin: &str) -> Option<FileId> {
-        self.by_origin
-            .get(&crate::world::pkg::file_key(origin))
-            .copied()
+        self.by_origin.get(&file_key(origin)).copied()
     }
 
     /// the file mounted at `origin`, only when open — the position
@@ -221,7 +251,7 @@ impl World {
     /// the session's lookups key on); its stamp and text are the latest
     /// lane's — the walk's is the loader's law.
     pub(crate) fn mount(&mut self, mut file: File) -> FileId {
-        let key = crate::world::pkg::file_key(&file.stamp.origin);
+        let key = file_key(&file.stamp.origin);
         let Some(slot) = self.by_origin.get(&key).copied() else {
             let id = self.files.len() as FileId;
             self.by_origin.insert(key, id);
@@ -266,7 +296,7 @@ impl World {
             return;
         };
         if matches!(self.files[id as usize].stamp.lane, Lane::Scratch) {
-            self.by_origin.remove(&crate::world::pkg::file_key(origin));
+            self.by_origin.remove(&file_key(origin));
             self.remove_slot(id);
         } else {
             self.files[id as usize].open = false;

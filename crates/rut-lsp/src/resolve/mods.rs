@@ -74,7 +74,7 @@ pub(crate) fn find_mod(w: &World, pkg: Option<&str>, path: &str) -> Option<FileI
 
 /// the file that speaks for a FOREIGN package's root — its stamped
 /// root ([`find_mod`]); an UNNAMED flat file the host never named
-/// answers by the path derivation ([`crate::world::pkg::matches_pkg`]) only when no
+/// answers by the path derivation ([`crate::resolve::pkg::matches_pkg`]) only when no
 /// stamped root stands. The queried file never lands here (its own
 /// package rides the own lanes; a path coincidence is no root) — and
 /// a use leaf that names a MODULE — `use calc::{ math }`: the walked

@@ -1,5 +1,5 @@
 //! rut-lsp — the rut language core for language servers: the queries
-//! (`crate::query::analysis` and the sibling modules below), the
+//! (`crate::feature::analysis` and the sibling modules below), the
 //! values, the actor event loop, and the session state, ONE crate
 //! with no wasm coupling. Hosts embed it directly — the wasm-bindgen
 //! face (the exported `RutLsp` class, the JS envelope glue) lives
@@ -7,10 +7,10 @@
 //! [`Lsp`].
 //!
 //! Every method on [`Lsp`] is an ASYNC RPC bridge (the actor seam):
-//! the call posts one [`event_loop::Msg`] on the loop's mpsc inbox and
+//! the call posts one [`actor::event_loop::Msg`] on the loop's mpsc inbox and
 //! awaits a oneshot reply, while ONE long-lived loop task owns the
 //! `Session` exclusively and answers messages FIFO — sync
-//! handlers over `&mut Session` (see [`event_loop`]). A dropped
+//! handlers over `&mut Session` (see [`actor::event_loop`]). A dropped
 //! loop answers the error envelope; a panicked handler isolates to its
 //! own reply channel. Every text answer is the JSON envelope:
 //!
@@ -97,66 +97,82 @@
 //! An LSP serves a long-lived editing session, so the instance OWNS
 //! its session state (the one world) for its lifetime — the
 //! host holds one [`Lsp`] per boot and mutates it per request. The
-//! state lives in `Session` (see [`state`]), owned exclusively by
-//! the loop task ([`event_loop`]); the host's [`Lsp`] is the inbox
-//! handle. Calls serialize on the loop's FIFO — concurrent unresolved
-//! calls resolve in send order, and no caller ever borrows the state.
+//! state lives in `Session` (see [`session`]), owned exclusively by
+//! the loop task ([`actor::event_loop`]); the host's [`Lsp`] is the
+//! inbox handle. Calls serialize on the loop's FIFO — concurrent
+//! unresolved calls resolve in send order, and no caller ever borrows
+//! the state.
 //!
 //! The executor is the HOST's choice: [`Lsp::boot`] takes one spawn
 //! closure (the wasm face hands `wasm_bindgen_futures::spawn_local`),
 //! and native tests take the whole pool from [`Lsp::spawn_native`].
+//!
+//! THE LAYOUT — downward-only layering (law L5); a lower layer never
+//! names a higher one:
+//!
+//! ```text
+//! src/
+//! ├── lib.rs, env.rs        public surface
+//! ├── actor/                event loop, defer queue, wire
+//! ├── session.rs            one method per request
+//! ├── load/                 dep walk, manifest and lock bridge, prelude
+//! ├── feature/              analysis, check, hover, definition, references, completion/, signature_help, inlay
+//! ├── resolve/              cursor, def, walk, scope, exports, member, mods, pkg, ty_infer
+//! ├── world/                World, File, Stamp, Lane, FileId, DeclMap, views/, ty.rs
+//! └── doc/                  Document, classifier, symbols, line index
+//! ```
 
 use std::future::Future;
 use std::pin::Pin;
 use std::rc::Rc;
 
-mod event_loop;
-mod walk;
-mod wire;
+// ---- the actor — the machinery shell: the event loop, the defer
+// queue, and the wire. Business-blind; the host's bridges post
+// `actor::event_loop::Msg`. ----
+mod actor;
 
-// ---- the session — the editing session's accumulated facts,
-// moved whole to `state`; the loop and the boot doors spell
-// `state::Session` ----
-mod state;
+// ---- the session — the editing session's accumulated facts, one
+// method per request; the loop and the boot doors spell
+// `session::Session` ----
+mod session;
 
-// ---- the language core — the queries and the values ----
-//
-// `query` and every sibling below are PRIVATE impl: the host's whole
-// world is the [`Lsp`] handle and its JSON envelopes — no internal
-// name crosses the crate boundary (the face crate implements
-// [`env::Io`] and nothing else). The canonical paths inside the crate
-// spell the module tree (`crate::query::analysis`, `crate::world`, …).
-mod query;
+// ---- the load layer — how files enter the world: the dep walk, the
+// manifest and lock bridge, the prelude ----
+mod load;
 
-mod deps;
+// ---- the feature layer — one module per request family; the
+// session's methods call down into it ----
+mod feature;
+
 pub mod env;
-// the classifier/document layer — absorbed from `rut-semantic` and
-// SEALED: the private `mod` decl makes even the module's own `pub`
-// items invisible outside the crate, so the queries keep one spelling
-// (`crate::semantic::…`) and no consumer can reach past the ABI
-mod prelude;
-mod semantic;
 
-// ---- the shared mod laws — the LSP's adapters over rut-lir's pure
-// walks (the one home; the mirrors are gone). The queries spell
-// `crate::resolve::…` from wherever they live today; Act 6 owns the
-// final downward layering. ----
+// ---- the resolver layer — the caret's one classification, the one
+// walk to declarations, the scope/surface doors, and the adapters
+// over rut-lir's pure mod laws (the one home; the mirrors are gone).
+// The features spell `crate::resolve::…`. ----
 mod resolve;
 
 // ---- the mounted world — the session's accumulated language facts,
-// the decl layer + the binding pass every query reads (see the
-// module's own doc). One-way layering: `query` spells `world`, never
-// the reverse. ----
+// the store + the decl layer + the views every query reads (see the
+// module's own doc). One-way layering: `feature` spells `world`,
+// never the reverse. ----
 mod world;
+
+// ---- the document layer — the classifier/document pipeline,
+// absorbed from `rut-semantic` and SEALED: the private `mod` decl
+// makes even the module's own `pub` items invisible outside the
+// crate, so the layers above keep one spelling (`crate::doc::…`) and
+// no consumer can reach past the ABI ----
+mod doc;
 
 /// the language core as the host holds it — one per editing session.
 /// Not the state itself: the INBOX HANDLE. The loop task owns `Session`
-/// exclusively; every entry posts one `event_loop::Msg` and awaits the
+/// exclusively; every entry posts one `actor::event_loop::Msg` and awaits the
 /// oneshot reply (the actor seam — the handlers are sync bodies over
 /// `&mut Session`, so no bridge can borrow across an await and no handler
 /// can post).
 pub struct Lsp {
-    tx: futures::channel::mpsc::UnboundedSender<event_loop::Msg>,
+    tx: futures::channel::mpsc::UnboundedSender<actor::event_loop::Msg>,
 }
 
 impl Lsp {
@@ -168,9 +184,9 @@ impl Lsp {
     /// running it is the honest dead-loop shape — every bridge then
     /// answers the loop-gone envelope.
     pub fn boot(spawn: impl FnOnce(Pin<Box<dyn Future<Output = ()>>>)) -> Lsp {
-        let (tx, rx) = event_loop::pair();
-        spawn(Box::pin(event_loop::run(
-            state::Session::boot(),
+        let (tx, rx) = actor::event_loop::pair();
+        spawn(Box::pin(actor::event_loop::run(
+            session::Session::boot(),
             tx.clone(),
             rx,
         )));
@@ -190,8 +206,8 @@ impl Lsp {
     /// dropped) map onto `Canceled`: the loop cannot answer.
     async fn rpc(
         &self,
-        build: impl FnOnce(event_loop::Tx) -> event_loop::Msg,
-    ) -> Result<event_loop::Reply, futures::channel::oneshot::Canceled> {
+        build: impl FnOnce(actor::event_loop::Tx) -> actor::event_loop::Msg,
+    ) -> Result<actor::event_loop::Reply, futures::channel::oneshot::Canceled> {
         let (tx, rx) = futures::channel::oneshot::channel();
         self.tx
             .unbounded_send(build(tx))
@@ -201,19 +217,22 @@ impl Lsp {
 
     /// the text-envelope bridge: the JSON answer, or the loop-gone
     /// error envelope
-    async fn text(&self, build: impl FnOnce(event_loop::Tx) -> event_loop::Msg) -> String {
+    async fn text(
+        &self,
+        build: impl FnOnce(actor::event_loop::Tx) -> actor::event_loop::Msg,
+    ) -> String {
         match self.rpc(build).await {
-            Ok(event_loop::Reply::Text(s)) => s,
+            Ok(actor::event_loop::Reply::Text(s)) => s,
             // a void completion (a superseded reload answers Done — its
             // WalkOut merged into the later reload's promise)
             Ok(_) => "null".to_string(),
-            Err(_) => event_loop::loop_gone(),
+            Err(_) => actor::event_loop::loop_gone(),
         }
     }
 
     /// the semantic-token legend (names in token-type index order)
     pub async fn legend(&self) -> String {
-        self.text(|tx| event_loop::Msg::Cmd(event_loop::Cmd::Legend { tx }))
+        self.text(|tx| actor::event_loop::Msg::Cmd(actor::event_loop::Cmd::Legend { tx }))
             .await
     }
 
@@ -225,23 +244,27 @@ impl Lsp {
     /// diags map back through the file stamps. No package context →
     /// parse-only, exactly the pre-B1 answer.
     pub async fn analyze(&self, uri: String, src: String) -> String {
-        self.text(|tx| event_loop::Msg::Cmd(event_loop::Cmd::Analyze { uri, src, tx }))
-            .await
+        self.text(|tx| {
+            actor::event_loop::Msg::Cmd(actor::event_loop::Cmd::Analyze { uri, src, tx })
+        })
+        .await
     }
 
     /// close: drop the document (the world keeps the file's last text). The
     /// await is ordering only — this lane answers no payload.
     pub async fn forget(&self, uri: String) {
         let _ = self
-            .rpc(|tx| event_loop::Msg::Cmd(event_loop::Cmd::Forget { uri, tx }))
+            .rpc(|tx| actor::event_loop::Msg::Cmd(actor::event_loop::Cmd::Forget { uri, tx }))
             .await;
     }
 
     /// hover at an LSP position — the doc index first, then the
     /// prelude + workspace; `null` when there's nothing to say
     pub async fn hover(&self, uri: String, line: u32, ch: u32) -> String {
-        self.text(|tx| event_loop::Msg::Cmd(event_loop::Cmd::Hover { uri, line, ch, tx }))
-            .await
+        self.text(|tx| {
+            actor::event_loop::Msg::Cmd(actor::event_loop::Cmd::Hover { uri, line, ch, tx })
+        })
+        .await
     }
 
     /// completions over the document's CURRENT text — `analyze`'s
@@ -253,7 +276,7 @@ impl Lsp {
     /// doc still ended at `log`), so the source always rides the call.
     pub async fn complete(&self, uri: String, src: String, line: u32, ch: u32) -> String {
         self.text(|tx| {
-            event_loop::Msg::Cmd(event_loop::Cmd::Complete {
+            actor::event_loop::Msg::Cmd(actor::event_loop::Cmd::Complete {
                 uri,
                 src,
                 line,
@@ -272,15 +295,24 @@ impl Lsp {
     /// is its own world entry's stamp — the mod-edge
     /// clicks and the own-package use lanes key on it.
     pub async fn definition(&self, uri: String, line: u32, ch: u32) -> String {
-        self.text(|tx| event_loop::Msg::Cmd(event_loop::Cmd::Definition { uri, line, ch, tx }))
-            .await
+        self.text(|tx| {
+            actor::event_loop::Msg::Cmd(actor::event_loop::Cmd::Definition { uri, line, ch, tx })
+        })
+        .await
     }
 
     /// type definitions at an LSP position (an expression -> its type's
     /// declaration) — same shape as `definition`
     pub async fn type_definition(&self, uri: String, line: u32, ch: u32) -> String {
-        self.text(|tx| event_loop::Msg::Cmd(event_loop::Cmd::TypeDefinition { uri, line, ch, tx }))
-            .await
+        self.text(|tx| {
+            actor::event_loop::Msg::Cmd(actor::event_loop::Cmd::TypeDefinition {
+                uri,
+                line,
+                ch,
+                tx,
+            })
+        })
+        .await
     }
 
     /// inlay hints for a document range — the inline inference display:
@@ -297,7 +329,7 @@ impl Lsp {
         end_ch: u32,
     ) -> String {
         self.text(|tx| {
-            event_loop::Msg::Cmd(event_loop::Cmd::Inlay {
+            actor::event_loop::Msg::Cmd(actor::event_loop::Cmd::Inlay {
                 uri,
                 start_line,
                 start_ch,
@@ -318,7 +350,7 @@ impl Lsp {
     /// speaks.
     pub async fn references(&self, uri: String, line: u32, ch: u32, include_decl: u32) -> String {
         self.text(|tx| {
-            event_loop::Msg::Cmd(event_loop::Cmd::References {
+            actor::event_loop::Msg::Cmd(actor::event_loop::Cmd::References {
                 uri,
                 line,
                 ch,
@@ -342,7 +374,7 @@ impl Lsp {
     /// paren that triggered the request.
     pub async fn signature_help(&self, uri: String, src: String, line: u32, ch: u32) -> String {
         self.text(|tx| {
-            event_loop::Msg::Cmd(event_loop::Cmd::SignatureHelp {
+            actor::event_loop::Msg::Cmd(actor::event_loop::Cmd::SignatureHelp {
                 uri,
                 src,
                 line,
@@ -358,11 +390,13 @@ impl Lsp {
     /// a URI replaces its entry. The await is ordering only.
     pub async fn index_file(&self, uri: String, src: String) {
         let _ = self
-            .rpc(|tx| event_loop::Msg::Cmd(event_loop::Cmd::IndexFile { uri, src, tx }))
+            .rpc(|tx| {
+                actor::event_loop::Msg::Cmd(actor::event_loop::Cmd::IndexFile { uri, src, tx })
+            })
             .await;
     }
 
-    // ---- the deps face (crate::deps — one engine, no JS-side parsing) ----
+    // ---- the deps face (crate::load::manifest — one engine, no JS-side parsing) ----
 
     /// parse one `rut.jsonc` — the dep-table JSON out (the module's
     /// identity, its entry sources with the mode each indexes in, and
@@ -370,8 +404,10 @@ impl Lsp {
     /// pins). A malformed manifest is the error envelope — the host
     /// surfaces it as a hint.
     pub async fn parse_manifest(&self, text: String) -> String {
-        self.text(|tx| event_loop::Msg::Cmd(event_loop::Cmd::ParseManifest { text, tx }))
-            .await
+        self.text(|tx| {
+            actor::event_loop::Msg::Cmd(actor::event_loop::Cmd::ParseManifest { text, tx })
+        })
+        .await
     }
 
     /// hand the core the READ-ONLY host environment — one [`env::Io`]
@@ -388,7 +424,9 @@ impl Lsp {
     /// envelope — loud, never a silent empty walk. Replace-on-reinject:
     /// a later call swaps the capability. The await is ordering only.
     pub async fn set_env_io(&self, io: Rc<dyn env::Io>) {
-        let _ = self.rpc(|tx| event_loop::Msg::SetEnv { env: io, tx }).await;
+        let _ = self
+            .rpc(|tx| actor::event_loop::Msg::SetEnv { env: io, tx })
+            .await;
     }
 
     /// the READ-ONLY dep walk (`walk` — the extension's manifest walk
@@ -402,15 +440,17 @@ impl Lsp {
     /// lock pin — never fetched, never written; a refused row answers
     /// one `missing` row plus ONE hint per reason through the env's
     /// notify lane. The answer is `{"missing": [...]}` (see
-    /// `wire::WalkOut`); the mounted world itself is the defs store's,
+    /// `actor::wire::WalkOut`); the mounted world itself is the defs store's,
     /// exactly as a host-indexed dep leaves it.
     pub async fn resolve_deps(&self, roots_json: String) -> String {
         let roots = match serde_json::from_str::<Vec<String>>(&roots_json) {
             Ok(r) => r,
-            Err(e) => return json_envelope(wire::Error::new(e.to_string())),
+            Err(e) => return json_envelope(actor::wire::Error::new(e.to_string())),
         };
-        self.text(move |tx| event_loop::Msg::Cmd(event_loop::Cmd::ResolveDeps { roots, tx }))
-            .await
+        self.text(move |tx| {
+            actor::event_loop::Msg::Cmd(actor::event_loop::Cmd::ResolveDeps { roots, tx })
+        })
+        .await
     }
 
     /// RELOAD the deps — the level-triggered door onto the same walk
@@ -428,10 +468,12 @@ impl Lsp {
     pub async fn reload_deps(&self, roots_json: String) -> String {
         let roots = match serde_json::from_str::<Vec<String>>(&roots_json) {
             Ok(r) => r,
-            Err(e) => return json_envelope(wire::Error::new(e.to_string())),
+            Err(e) => return json_envelope(actor::wire::Error::new(e.to_string())),
         };
-        self.text(move |tx| event_loop::Msg::Cmd(event_loop::Cmd::ReloadDeps { roots, tx }))
-            .await
+        self.text(move |tx| {
+            actor::event_loop::Msg::Cmd(actor::event_loop::Cmd::ReloadDeps { roots, tx })
+        })
+        .await
     }
 
     /// index one dep source file under its module NAME at a MOD PATH —
@@ -449,7 +491,7 @@ impl Lsp {
         src: String,
     ) -> String {
         self.text(|tx| {
-            event_loop::Msg::Cmd(event_loop::Cmd::IndexModAt {
+            actor::event_loop::Msg::Cmd(actor::event_loop::Cmd::IndexModAt {
                 uri,
                 pkg,
                 mod_path,
@@ -470,13 +512,17 @@ impl Lsp {
 impl Lsp {
     pub fn spawn_native() -> (Lsp, futures::executor::LocalPool) {
         use futures::task::LocalSpawnExt;
-        let (tx, rx) = event_loop::pair();
+        let (tx, rx) = actor::event_loop::pair();
         let pool = futures::executor::LocalPool::new();
         // tx.clone() is the loop's SELF-ADDRESS — the wake source the
         // SetEnv arm installs captures it (the clock's tick re-enters
         // this loop), while `tx` moves to the host handle
         pool.spawner()
-            .spawn_local(event_loop::run(state::Session::boot(), tx.clone(), rx))
+            .spawn_local(actor::event_loop::run(
+                session::Session::boot(),
+                tx.clone(),
+                rx,
+            ))
             .expect("the loop parks on the fresh pool");
         (Lsp { tx }, pool)
     }
@@ -496,16 +542,15 @@ pub(crate) fn json_envelope<T: serde::Serialize>(value: T) -> String {
     }
 }
 
-/// the definition-target envelope — `DefLocation` is serde-free in the
-/// resolver layer (it carries no serializer), so this module spells
-/// the LSP `Location` JSON: `{ uri, range }`
-pub(crate) fn locations_envelope(locs: &[crate::resolve::DefLocation]) -> String {
-    let value: Vec<wire::Location> = locs
-        .iter()
-        .map(|l| wire::Location {
+/// the definition-target rows — `DefLocation` is serde-free in the
+/// resolver layer (it carries no serializer), so this spells the LSP
+/// `Location` JSON row: `{ uri, range }` (the session's definition
+/// family joins through it; the loop's `reply` serializes the rows)
+pub(crate) fn locations(locs: &[crate::resolve::DefLocation]) -> Vec<actor::wire::Location> {
+    locs.iter()
+        .map(|l| actor::wire::Location {
             uri: l.uri.clone(),
             range: l.range,
         })
-        .collect();
-    json_envelope(value)
+        .collect()
 }

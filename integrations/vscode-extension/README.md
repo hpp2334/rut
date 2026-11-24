@@ -133,7 +133,7 @@ semantics unchanged.
 ## Semantic diagnostics — the check lane
 
 Diagnostics are two lanes merged, one engine
-(`crates/rut-lsp-wasm/src/query/check.rs`):
+(`crates/rut-lsp/src/feature/check.rs`):
 
 - **Parse lane** (always): the lexer + parser diags for the open
   document — a syntax error squiggles the moment it is written.
@@ -239,8 +239,8 @@ delete, and no fetch on it, by construction.
   document re-schedules its analysis (open diagnostics may have
   changed).
 - **One engine, one face** — the dep tables
-  (`crates/rut-lsp/src/deps.rs`) are the CLI's own parsers and the
-  walk (`crates/rut-lsp/src/walk.rs`) is the core's; the
+  (`crates/rut-lsp/src/load/manifest.rs`) are the CLI's own parsers and the
+  walk (`crates/rut-lsp/src/load/dep_walk.rs`) is the core's; the
   extension injects the read-only capability and surfaces the hints,
   nothing more.
 - Auto-import completions offer foreign public names with the
@@ -289,7 +289,7 @@ before packing.
 | Layer           | What                                                                                                                                                                                                                                                                                                                   | Where                          |
 | --------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------ |
 | TextMate        | comments, strings (incl. `r"…"`, `f"…"`, and the hash-leveled multi-line forms `r#"…"#` / `f#"…"#` — the `#` run sets the level via a begin/end backreference), numbers + suffixes, keywords (incl. contextual `type`/`builtin`), primitives (`str`/`bytes`), `opaque`, nullable `?`, operators — instant, no analysis | `syntaxes/rut.tmLanguage.json` |
-| Semantic tokens | identifier classes: functions, methods, types, primitives, params, fields, enum members — exact, incl. f-string holes                                                                                                                                                                                                  | `crates/rut-lsp` (`semantic/`) |
+| Semantic tokens | identifier classes: functions, methods, types, primitives, params, fields, enum members — exact, incl. f-string holes                                                                                                                                                                                                  | `crates/rut-lsp` (`doc/`)      |
 
 VS Code merges both: semantic tokens override the grammar inside their
 ranges. The `semanticTokenScopes` contribution maps the legend onto theme

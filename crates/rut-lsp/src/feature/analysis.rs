@@ -1,0 +1,305 @@
+//! Per-document analysis — the LSP values over the session's world:
+//! the queried file's document (one parse per change — the sync
+//! lane's) is the single source for diags / tokens / symbols, and
+//! every query reads it through the world. The server layer only
+//! routes and publishes; nothing here re-parses per request.
+
+use crate::doc::{Diag, Span};
+use crate::resolve::DefLocation;
+use crate::world::{File, FileId, World};
+use ls_types::*;
+
+use crate::doc::{SymKind, Symbol};
+use crate::feature::check;
+use crate::feature::definition;
+use crate::feature::references;
+use crate::feature::signature_help;
+
+/// the analysis envelope — the per-document rows (diags, tokens,
+/// symbols) read off the entry's kept document. A plain record: the
+/// rows exist to move to the wire, so the server lane reads the fields
+/// directly.
+pub struct Analysis {
+    pub diags: Vec<Diagnostic>,
+    pub tokens: Vec<SemanticToken>,
+    pub symbols: Vec<DocumentSymbol>,
+}
+
+/// one Document → the LSP `Analysis` envelope — every row rides the
+/// doc's own lazy views (the classifier and the symbol tree compute
+/// once per version, on the sync lane's entry)
+pub fn of(doc: &crate::doc::Document) -> Analysis {
+    Analysis {
+        diags: doc.diags().iter().map(|d| to_diagnostic(d, doc)).collect(),
+        tokens: encode(doc),
+        symbols: to_document_symbols(doc),
+    }
+}
+
+// ---- spans -> LSP ranges ----
+
+/// THE span→range door over a world file — both ends through the
+/// file's own document. One converter: the lanes above hold a file
+/// (definition's spans over a target, a hover's decoration) and join
+/// through this.
+pub fn range(file: &File, span: Span) -> Range {
+    let (l1, c1) = file.doc.position(span.lo);
+    let (l2, c2) = file.doc.position(span.hi);
+    Range {
+        start: Position {
+            line: l1,
+            character: c1,
+        },
+        end: Position {
+            line: l2,
+            character: c2,
+        },
+    }
+}
+
+// ---- semantic tokens -> the delta encoding ----
+
+/// `Document`'s spans → the delta encoding, every position and length
+/// joined through the doc's own doors (`position`/`text` — no manual
+/// `lines()`+`src()` pairing). Spans must be sorted and
+/// non-overlapping (the classifier's contract). Lengths and columns
+/// are UTF-16 code units — LSP's position currency.
+pub fn encode(doc: &crate::doc::Document) -> Vec<SemanticToken> {
+    let mut out = Vec::with_capacity(doc.spans().len());
+    let (mut prev_line, mut prev_char) = (0u32, 0u32);
+    for (sp, ty) in doc.spans() {
+        let (line, ch) = doc.position(sp.lo);
+        let len: u32 = doc.text(*sp).chars().map(|c| c.len_utf16() as u32).sum();
+        let delta_line = line - prev_line;
+        let delta_char = if delta_line == 0 { ch - prev_char } else { ch };
+        out.push(SemanticToken {
+            delta_line,
+            delta_start: delta_char,
+            length: len,
+            token_type: ty.index(),
+            token_modifiers_bitset: 0,
+        });
+        prev_line = line;
+        prev_char = ch;
+    }
+    out
+}
+
+// ---- diagnostics ----
+
+/// The doc-door diagnostic — the positions join through the
+/// document's own doors (the one builder, [`to_diagnostic_parts`],
+/// under a `Document`).
+pub(crate) fn to_diagnostic(d: &Diag, doc: &crate::doc::Document) -> Diagnostic {
+    to_diagnostic_parts(d, doc.src(), doc.lines())
+}
+
+/// The diagnostic builder over PARTS — the check lane's shape: its
+/// compiler-diag rows name DIFFERENT files (one per-text `LineIndex`
+/// each — no `Document` to ride a door), so the positions construct
+/// here.
+pub(crate) fn to_diagnostic_parts(
+    d: &Diag,
+    src: &str,
+    index: &crate::doc::LineIndex,
+) -> Diagnostic {
+    let (l1, c1) = index.position(src, d.span.lo);
+    let (l2, c2) = index.position(src, d.span.hi);
+    Diagnostic {
+        range: Range {
+            start: Position {
+                line: l1,
+                character: c1,
+            },
+            end: Position {
+                line: l2,
+                character: c2,
+            },
+        },
+        severity: Some(DiagnosticSeverity::ERROR),
+        code: None,
+        code_description: None,
+        source: Some("rut".to_string()),
+        message: d.msg.clone(),
+        related_information: None,
+        tags: None,
+        data: None,
+    }
+}
+
+/// Merge two diagnostic lists for one document, dropping TRUE
+/// duplicates — same range AND same message (the check lane re-parses
+/// the document, so every parse error arrives again). Distinct sites
+/// are never collapsed: the checker reports multiple sites per body
+/// (the B3 emission law), and each carries its own range.
+pub fn merge_diags(base: Vec<Diagnostic>, extra: Vec<Diagnostic>) -> Vec<Diagnostic> {
+    let mut out = base;
+    for d in extra {
+        let dup = out
+            .iter()
+            .any(|e| e.range == d.range && e.message == d.message);
+        if !dup {
+            out.push(d);
+        }
+    }
+    out
+}
+
+// ---- document-level queries (the hosts' entry points) ----
+//
+// The wasm-bindgen bodies in lib.rs and the tests run the *same*
+// hover / completion queries over the same world — defined here
+// once, so no host can grow its own dialect. Every query reads the
+// session's SYNCED entry (the queried file's kept document) — the
+// old per-request lex→parse→index pipeline is gone.
+
+/// hover at a byte position: the queried file first, then the world.
+/// Returns the full LSP value — hosts hand it to their client as-is.
+pub fn hover_on(w: &World, file: FileId, pos: u32) -> Option<Hover> {
+    let f = w.file(file);
+    let h = crate::feature::hover::hover(w, file, pos)?;
+    Some(Hover {
+        contents: HoverContents::Markup(MarkupContent {
+            kind: MarkupKind::Markdown,
+            value: h.markdown,
+        }),
+        range: Some(range(f, h.span)),
+    })
+}
+
+/// definitions at a byte position: the unified walk's answer located
+/// (the survey §3.3 layers, one walk). Empty = nothing resolves;
+/// multiple entries = the candidate list. Targets carry the doc URI,
+/// a workspace origin, or the prelude's true `rut/...` source path —
+/// the face resolves them (server: against the workspace root; wasm
+/// shim: the extension does).
+pub fn definition_on(w: &World, file: FileId, pos: u32) -> Vec<DefLocation> {
+    definition::definition(w, file, pos)
+}
+
+/// type definitions at a byte position: the expression's type head →
+/// that type's declaration (the cheap shape the survey priced)
+pub fn type_definition_on(w: &World, file: FileId, pos: u32) -> Vec<DefLocation> {
+    definition::get_type_definition(w, file, pos)
+}
+
+/// references at an LSP position (the survey §4.4): the definition
+/// index read BACKWARDS — a token is a reference iff the one walk
+/// from it lands on the declaration under the cursor. Within-file
+/// through the binding pass (shadow-aware), cross-file through the use
+/// graph's reverse edges — over the world files' KEPT documents (no
+/// re-parse lane). `include_declaration` per the LSP spec.
+pub fn references_on(
+    w: &World,
+    file: FileId,
+    line: u32,
+    ch: u32,
+    include_declaration: bool,
+) -> Vec<DefLocation> {
+    references::references(
+        w,
+        file,
+        w.file(file).doc.byte(line, ch),
+        include_declaration,
+    )
+}
+
+/// signature help at an LSP position (the survey §4.4): the callee
+/// resolves through the receiver machinery (free calls by unique
+/// recorded params, methods through the receiver's type head), the
+/// signature renders verbatim, the active parameter comes from the
+/// comma/paren depth at the request position. Ambiguity or arity
+/// mismatch → no help, never wrong help.
+pub fn signature_help_on(w: &World, file: FileId, line: u32, ch: u32) -> Option<SignatureHelp> {
+    signature_help::signature_help(w, file, w.file(file).doc.byte(line, ch))
+}
+
+/// the check lane's merged answer for one document — the world's
+/// package groups feed the compiler run; the file's own package
+/// context (its stamp names it) decides parse-only vs merged.
+pub(crate) fn merged_diags_for(
+    w: &World,
+    file: FileId,
+    parse_diags: Vec<Diagnostic>,
+) -> Vec<Diagnostic> {
+    let f = w.file(file);
+    let groups = if f.stamp.module.is_some() {
+        check::groups_from_files(w)
+    } else {
+        Vec::new()
+    };
+    check::merged_doc_diags(
+        &f.stamp.origin,
+        f.doc.src(),
+        f.stamp.module.clone(),
+        f.stamp.mod_path.clone(),
+        groups,
+        parse_diags,
+    )
+}
+
+// ---- symbols ----
+
+fn to_document_symbols(doc: &crate::doc::Document) -> Vec<DocumentSymbol> {
+    symbols_on(doc, doc.symbols())
+}
+
+fn symbols_on(doc: &crate::doc::Document, raw: &[Symbol]) -> Vec<DocumentSymbol> {
+    raw.iter().map(|r| convert(r.clone(), doc)).collect()
+}
+
+#[allow(deprecated)] // `DocumentSymbol::deprecated` — kept for older clients; tags are the modern way
+fn convert(r: Symbol, doc: &crate::doc::Document) -> DocumentSymbol {
+    // selection ⊆ range holds by construction at every symbol site and is
+    // test-gated (semantic tests + the lsp-wasm corpus check) — no clamp here
+    let (rl1, rc1) = doc.position(r.range.lo);
+    let (rl2, rc2) = doc.position(r.range.hi);
+    let (sl1, sc1) = doc.position(r.selection.lo);
+    let (sl2, sc2) = doc.position(r.selection.hi);
+    DocumentSymbol {
+        name: r.name,
+        detail: None,
+        kind: symbol_kind(r.kind),
+        tags: None,
+        deprecated: None,
+        range: Range {
+            start: Position {
+                line: rl1,
+                character: rc1,
+            },
+            end: Position {
+                line: rl2,
+                character: rc2,
+            },
+        },
+        selection_range: Range {
+            start: Position {
+                line: sl1,
+                character: sc1,
+            },
+            end: Position {
+                line: sl2,
+                character: sc2,
+            },
+        },
+        children: if r.children.is_empty() {
+            None
+        } else {
+            Some(symbols_on(doc, &r.children))
+        },
+    }
+}
+
+fn symbol_kind(k: SymKind) -> SymbolKind {
+    match k {
+        SymKind::Function => SymbolKind::FUNCTION,
+        SymKind::Variable => SymbolKind::VARIABLE,
+        SymKind::Enum => SymbolKind::ENUM,
+        SymKind::EnumMember => SymbolKind::ENUM_MEMBER,
+        SymKind::Class => SymbolKind::CLASS,
+        SymKind::Field => SymbolKind::FIELD,
+        SymKind::Method => SymbolKind::METHOD,
+        SymKind::Interface => SymbolKind::INTERFACE,
+        SymKind::Module => SymbolKind::MODULE,
+    }
+}

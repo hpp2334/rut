@@ -2,7 +2,7 @@
 //!
 //! THE CONTRACT (see AGENTS.md):
 //! - this module is SEALED (`mod ast;` at the crate root — the same
-//!   privacy wall as rut-lsp's `semantic`): the vocabulary is
+//!   privacy wall as rut-lsp's `doc`): the vocabulary is
 //!   reachable only through the flat re-exports below (which the
 //!   crate root globs), never an `ast::` module path
 //! - every node kind is its own struct; span + name + doc live

@@ -7,8 +7,8 @@ use rut_ast::{
     AnyHandle, BuiltinPrimitiveNode, BuiltinTyNode, ItemRef, MethodRef, SurfaceFnNode, UseNode,
 };
 
-use crate::semantic::Document;
-use crate::world::collection::{FnView, GlobUse, LetView, ModView, TyView, UseView};
+use crate::doc::Document;
+use crate::world::views::{FnView, GlobUse, LetView, ModView, TyView, UseView};
 use crate::world::File;
 
 /// one file's decl inventory: the node ADDRESSES in source order, the

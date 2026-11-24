@@ -9,12 +9,12 @@ use rut_ast::{IdentId, ModDeclNode, UseNode, Vis};
 
 use super::cursor::{member_span, path_seg, Cursor, UseAt};
 use super::def::Def;
-use crate::world::collection::{
+use crate::doc::is_cap;
+use crate::resolve::pkg::{import_map, matches_pkg};
+use crate::resolve::{
     ambiguous_scope, file_scope, member, prefer_bodies, qualified_module, qualified_scope, CandRow,
     MemberHit, MemberTarget,
 };
-use crate::world::infer::is_cap;
-use crate::world::pkg::{import_map, matches_pkg};
 use crate::world::{File, FileId, World};
 
 /// the caret's resolutions — one arm per cursor kind
@@ -295,7 +295,7 @@ fn member_targets(w: &World, file: FileId, c: &Cursor) -> Vec<Def> {
         return Vec::new();
     };
     let sp = member_span(w.file(file).doc.ast(), *node);
-    match crate::world::collection::member_gated(w, file, sp.lo, Some((Some(*id), *recv))) {
+    match crate::resolve::member_gated(w, file, sp.lo, Some((Some(*id), *recv))) {
         MemberHit::Found(target) => target_defs(w, &target),
         MemberHit::None => Vec::new(),
         // the bare-name fallback on the member's own name
@@ -323,7 +323,7 @@ pub(crate) fn name_lane(w: &World, file: FileId, id: IdentId, at: u32) -> Vec<De
     let d = w.file(file);
     let name = d.doc.ast().name(id);
     // 4. type position — the file scope's spelled type (the ONE home)
-    if is_cap(name) || crate::semantic::is_primitive_ty(name) {
+    if is_cap(name) || crate::doc::is_primitive_ty(name) {
         let tys: Vec<Def> = file_scope(w, file, name)
             .types
             .iter()
@@ -334,7 +334,7 @@ pub(crate) fn name_lane(w: &World, file: FileId, id: IdentId, at: u32) -> Vec<De
         }
         // a primitive token with no surface decl (i32, bool …) is a
         // miss — never a wrong jump
-        if crate::semantic::is_primitive_ty(name) {
+        if crate::doc::is_primitive_ty(name) {
             return Vec::new();
         }
     }
@@ -507,7 +507,7 @@ pub(crate) fn pkg_root_index(w: &World, file: FileId, pkg: &str) -> Option<FileI
         let f = w.file(*id);
         (
             f.stamp.mod_path.is_none(),
-            f.stamp.mode == crate::semantic::Mode::Decl,
+            f.stamp.mode == crate::doc::Mode::Decl,
             !f.stamp.origin.contains("://"),
         )
     });

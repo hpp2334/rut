@@ -234,7 +234,9 @@ rut/
 │   ├── rut-std/          # host bodies: log, math, nmap, http, async
 │   ├── rut-wasm/         # the wasm ABI (compile/run envelope)
 │   ├── rut-lsp/          # the language core: the queries + the sealed
-│   │                     #   `semantic` module (classifier, Document)
+│   │                     #   `doc` module (classifier, Document); the
+│   │                     #   layers point downward — actor → session →
+│   │                     #   load/feature → resolve → world → doc
 │   ├── rut-lsp-wasm/     # the wasm-bindgen face over rut-lsp: the
 │   │                     #   editor ABI served in-process
 │   └── rut-cli/          # the `rut` binary ([The rut CLI](cli.md))
@@ -255,15 +257,17 @@ net, no `std::path`), hosts
 `rut-lsp` sits on the frontend crates — tokens, diagnostics, and
 symbols need no VM — plus the driver's pure core for manifest and
 bundle parsing (the dep tables behind the editor's dep walk). It is
-the language core: the queries (`analysis`, `completion`,
-`definition`, `check`, and the rest) live beside the classifier — the
-SEALED `semantic` module (a private `mod` hides even its own `pub`
-items), which sits on the frontend crates for the same reason — so a
-feature cannot land on one and miss the other, and embedders take the
-core without an editor at all. `rut-lsp-wasm` is the thin
-wasm-bindgen face over that core: every exported method delegates
-onto the `Lsp` handle, so the extension and the playground bundle the
-face with no second implementation to keep in step.
+the language core, and its layers point downward only — the actor's
+event loop, then the session's one method per request, then the load
+lanes and the queries (`analysis`, `completion`, `definition`,
+`check`, and the rest), then the resolver and the world — all the way
+to the classifier: the SEALED `doc` module (a private `mod` hides
+even its own `pub` items), which sits on the frontend crates for the
+same reason — so a feature cannot land on one and miss the other, and
+embedders take the core without an editor at all. `rut-lsp-wasm` is
+the thin wasm-bindgen face over that core: every exported method
+delegates onto the `Lsp` handle, so the extension and the playground
+bundle the face with no second implementation to keep in step.
 
 ## The in-tree packages
 

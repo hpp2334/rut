@@ -3,7 +3,7 @@
 //! Three modules, one law each:
 //! - `ast` (SEALED `mod`) — PURE STRUCTURE: the typed-arena AST.
 //!   The module is private — the same privacy wall as rut-lsp's
-//!   `semantic`: consumers get the flat re-exports at the crate
+//!   `doc`: consumers get the flat re-exports at the crate
 //!   root and `parser::`, never an `ast::` module path. `Ast` is a
 //!   CAPSULE whose mut doors are `pub(crate)` — only the in-crate
 //!   pipeline may build or repair a tree; every other consumer reads.

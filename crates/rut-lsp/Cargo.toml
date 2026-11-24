@@ -17,11 +17,11 @@ path = "src/lib.rs"
 # wasm32-clean, proven by the face's CI lane.
 [dependencies]
 # THE LAYER LAW — the frontend lives INSIDE this crate: the sealed
-# `semantic` module (Document — parse + its read/join doors, mode
+# `doc` module (Document — parse + its read/join doors, mode
 # derivation, the position math) is the crate's ONLY consumer of the
 # grammar, so `rut-lexer`/`rut-ast` are its vocabulary and nothing
 # else here drives normalize → lex → parse by hand (production src
-# spells the parser lane only inside semantic/doc.rs; the corpus tests
+# spells the parser lane only inside doc/doc.rs; the corpus tests
 # pin the same grammar through the public door, tests/corpus.rs).
 # rut-driver carries the manifest/bundle bytes; rut-core the checker's
 # run chain. rut-lir is the mod laws' one home (`check::{mod_head,

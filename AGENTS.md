@@ -35,9 +35,9 @@ call.
 
 ## Frontend layering: one parse entry, lsp-wasm talks only to rut-lsp
 
-**Call the layer whose abstraction you consume.** Document semantics
+**Call the layer whose abstraction you consume.** Document meaning
 (classify, symbols, mode derivation, position math) → rut-lsp's
-`semantic` module. Syntax only (reprint, transform) → the grammar's
+`doc` module. Syntax only (reprint, transform) → the grammar's
 entry pair `rut_ast::parser::parse` / `parse_with_recover` (fmt does
 exactly this), or `Doc::parse` directly. Nobody outside `rut-ast`'s
 `parser` module drives `normalize → lex → parse` by hand — the
@@ -50,7 +50,7 @@ pipeline lives in the `Doc`.
   syntax edit, so they live together; the halves stay nameable so the
   layer law below can forbid reaching into the grammar from read-only
   lanes. The `ast` module is a sealed `mod` (the same privacy wall as
-  rut-lsp's `semantic`), so the tree vocabulary is reachable ONLY
+  rut-lsp's `doc`), so the tree vocabulary is reachable ONLY
   through the flat crate-root re-exports.
 - **The AST artifact law (v4)**: `Ast` stores PURE STRUCTURE — the
   typed nodes, their spans/verdicts, the interner vocabulary, the
@@ -107,11 +107,12 @@ pipeline lives in the `Doc`.
   `is_incomplete` over `AnyHandle`); position questions walk the
   generic machinery (`node_at` → `ancestors` → `downcast`) — there is
   no `context_at` and no position-verdict enum (the `Ctx` rows in
-  rut-lsp's `query/` are chain+mods bundles a query needs, not
-  verdicts).
+  rut-lsp's `feature/` are chain+mods bundles a query needs, not
+  verdicts). The editor's one classification of a caret is rut-lsp
+  `resolve::Cursor` — a consumer of that geometry, not a second one.
 - **Scoped token lane**: `name_at` is the fence residue, `tokens_in`
   the classifier's window — no other token interpretation crosses
-  rut-ast. Outside the classifier (rut-lsp's `semantic/tokens.rs` +
+  rut-ast. Outside the classifier (rut-lsp's `doc/tokens.rs` +
   `legend.rs`), no lsp code matches `Tok::`.
 - **The span law (v3.1)**: a decl's span starts at its FIRST source
   token — modifiers included — and ends at its own terminator (`}` /
@@ -126,7 +127,7 @@ pipeline lives in the `Doc`.
   the same way — nothing stored, nothing stale.
 - **The LSP verbatim law**: decl text in hover/completion is a
   `Doc::text(span)` slice on the OWNING document; only source-less
-  text (inferred/semantic/absent — e.g. inlay hints) is rendered.
+  text (inferred or absent — e.g. inlay hints) is rendered.
   fmt reprints literals as span×src slices too (radix / underscores /
   escapes / hash levels survive) — the fmt lane re-derives nothing
   but parens and layout.
@@ -146,53 +147,77 @@ pipeline lives in the `Doc`.
   managed prefix, rebuilt wholesale by the edit lane). `ast.errors()`
   is the flat ordered view of every diag (the panel); the
   positional view is the `ErrorNode`s in the streams.
-- **`rut-lsp`'s `semantic` module is the only grammar lane**, and its
+- **`rut-lsp`'s `doc` module is the only grammar lane**, and its
   parse lane is `Document::parse` (mode from the filename convention
   `mode_of`, editor opts baked — recovering always). The module is
-  SEALED (`mod semantic;` — a private decl hides even its own `pub`
-  items), so the queries spell `crate::semantic::…` and no consumer
+  SEALED (`mod doc;` — a private decl hides even its own `pub`
+  items), so the queries spell `crate::doc::…` and no consumer
   reaches past the ABI; `rut-ast` stays as shared tree vocabulary,
   `rut-driver`/`rut-core` are other lanes. The grammar tests drive the
   parser via rut-ast's own unit-test tree (the sanctioned seam, like
   the futures LocalPool); the fail-fast `parse` door exists for "a
   diag means stop" callers — today only rut-ast's own tests — while
-  fmt/semantic/driver ride the recovering entry. The LSP side pins the
+  fmt/doc/driver ride the recovering entry. The LSP side pins the
   same grammar through its public door (`tests/corpus.rs` analyzes the
   corpus fixtures envelope-style). (The wasm face
   `rut-lsp-wasm` layers one crate higher: its only language dep is
   `rut-lsp`.) And since the privacy wall the WHOLE crate is sealed
-  the way `semantic` is: **rut-lsp's public surface is `Lsp` +
+  the way `doc` is: **rut-lsp's public surface is `Lsp` +
   `env::Io`** (`WakeFn` rides beside it — the face implements `Io`
   for `JsEnv` across the crate boundary, and the test mocks
-  implement it too); `semantic` and every struct are private impl —
+  implement it too); `doc` and every struct are private impl —
   the JSON envelopes are `String`s, so `wire` carries no public type
   either. The face's deps (rut-lsp + the wasm trio) are the layer
   proof: it spells `rut_lsp::{Lsp, env::…}` and nothing else.
-- **The collection law**: every file in the session's world — the
-  open doc, the prelude, walked deps — is a
-  `MountedFile { doc: Document, mount, decls }` in the session's
-  `DefIndexCollection` (rut-lsp's `world/collection/` — the store in
-  its `mod.rs`, the member-law resolver family in `member`, the
-  completion tier doors in `tiers`, the views in `views/`); the session
-  cache is `SessionState.docs: HashMap<String, MountedFile>` — ONE
-  composition for open docs and mounts alike (the plan's separate
-  `HashMap<String, Document>` shell cache is consciously superseded).
-  The row types (`DefIndex`/`TyDef`/`FnDef`/…) are gone; the doors
+- **The one-world law**: every file in the session's world — the
+  open doc, the prelude, the walked deps, the workspace pushes — is
+  one `File { doc, stamp, open, decls }` in one `World`
+  (rut-lsp's `world/` — the store in its `mod.rs`, the per-node views
+  in `views/`), keyed by origin; opening adopts the stamp its loader
+  laid down, an open file's buffer is the truth for every reader, and
+  `Lane::Scratch` files are visible only as themselves. The doors
   answer through typed views over `(doc, AnyHandle)` — a view's
   verbatim text is a span×src join on the owning file's document, its
   line is `doc.line_of`, its `ambient`/vis derives from the modifier
   chain. Chain preferences have ONE home each: `type_decl` the
   mounted-over-embed rule, `functions` the 0/1/many honesty rule
-  (a `Vec`, not a row), `module_let` unique-or-none, `member`/`members`
-  the member law, `use_exports` the mod-walk gates, `bare` the
+  (a `Vec`, not a row), `member`/`members` the member law,
+  `use_exports` the mod-walk gates, `bare` the
   locals+ambient+auto-import merge — and `prefer_bodies` the
   body-over-decl preference. The feature doors (`get_definition`,
-  `references` in `query/`) consume the collection; the plan's
+  `references` in `feature/`) consume the world; the plan's
   `get_declaration` is consciously ABSENT — the wire spells no
   declaration request, and `prefer_bodies`' single decision point
-  makes the inverted walk a local change when one arrives. The
-  collection rebuilds on sync / dep-walk completion — never per
-  query.
+  makes the inverted walk a local change when one arrives. The world
+  mutates in place per mount/sync/close — rebuilt never.
+- **No mirrors**: the language laws rut-lsp lives by have ONE home,
+  in the compiler's crates — `rut_lir::check::{vis_crosses, mod_head,
+  mod_walk, mod_walk_pub}` (visibility, the mod-tree mount laws) and
+  `rut_driver::mods::mount_edges` (the mount core). An LSP copy of
+  any of them is forbidden: the adapters in `resolve::mods` carry the
+  world's stamped files INTO the pure walks; they never re-spell a
+  law beside it.
+- **One caret, one answer**: the editor classifies a caret exactly
+  once — `resolve::cursor` derives the `Cursor`; `resolve::resolve`
+  walks it to declarations answering the typed `resolve::Def`; a
+  feature (hover, definition, references) classifies, resolves, and
+  renders — it never walks on its own.
+- **Downward only**: the crate layers point one way — `lib`/`actor` →
+  `session` → `load`/`feature` → `resolve` → `world` → `doc` →
+  (`rut-ast`, `rut-lexer`), with `world` allowed to call the shared
+  laws in `rut-lir`/`rut-driver`. A lower layer never names a higher
+  one:
+  ```text
+  src/
+  ├── lib.rs, env.rs        public surface
+  ├── actor/                event loop, defer queue, wire
+  ├── session.rs            one method per request
+  ├── load/                 dep walk, manifest and lock bridge, prelude
+  ├── feature/              analysis, check, hover, definition, references, completion/, signature_help, inlay
+  ├── resolve/              cursor, def, walk, scope, exports, member, mods, pkg, ty_infer
+  ├── world/                World, File, Stamp, Lane, FileId, DeclMap, views/, ty.rs
+  └── doc/                  Document, classifier, symbols, line index
+  ```
 
 ## Browser drives: use `agent-browser`, not hand-rolled WebDriver
 
@@ -312,8 +337,8 @@ order:
   driven on the native `LocalPool` (`Lsp::spawn_native`) over an `Io`
   mock, sharing the `tests/common/` harness. There is NO unit-test
   tree (`src/tests/` is gone): an assertion the envelopes cannot
-  express does not ship. The one in-crate exception is `event_loop`'s
-  own `#[cfg(test)] mod tests` — the NEUTRAL-QUEUE/cancel machinery
+  express does not ship. The one in-crate exception is
+  `actor::event_loop`'s own `#[cfg(test)] mod tests` — the NEUTRAL-QUEUE/cancel machinery
   drives the loop's private handles directly (dummy cmds, the defer
   queue), which no envelope can reach.
   `crates/rut-lsp-wasm` is the wasm-bindgen
@@ -344,7 +369,7 @@ order:
   `complete`/`signature-help` with src, definition/inlay/references,
   `legend`, `forget`), the workspace-scan push (`indexFile`/
   `indexModAt`/`parseManifest` — the host's `findFiles` respects
-  editor ignore semantics the env cannot), and the dep pull
+  the editor's ignore rules the env cannot), and the dep pull
   (`setEnv` + `reloadDeps`, the deferred door the hosts ride;
   `resolveDeps` stays as the eager manual door — tests, cold boot,
   env-less hosts). No entry may bypass the env capability
