@@ -280,13 +280,11 @@ fn call_ty<'a>(
             if let Some(QualHit::Fn(fv)) = qual(&[name.to_string()], false) {
                 return call_ret(home, idxs, ast, &fv, &segs[0].generics, args, qual);
             }
-            let hits: Vec<_> = idxs
-                .iter()
-                .flat_map(|f| f.fns())
-                .filter(|f| f.name() == name && f.owner().is_none())
-                .collect();
-            if let [one] = hits.as_slice() {
-                return call_ret(home, idxs, ast, one, &segs[0].generics, args, qual);
+            // the unique free fn by name over the inference window (the
+            // one law beside the member law, the window-shaped adapter):
+            // ambiguity is a miss, never a wrong type
+            if let Some(fv) = super::collection::unique_free_fn_in(idxs.iter().copied(), name) {
+                return call_ret(home, idxs, ast, &fv, &segs[0].generics, args, qual);
             }
             // `Logger(..)` — the constructor call. Only an INDEXED
             // class/struct answers: a capitalized name with no type
@@ -300,7 +298,7 @@ fn call_ty<'a>(
                     .iter()
                     .filter_map(|f| f.ty(name).map(|t| (*f, t)))
                     .collect();
-                if let Some(ty) = prefer_mounted(&ty_hits).into_iter().next() {
+                if let Some((_, ty)) = prefer_mounted(&ty_hits).into_iter().next() {
                     if matches!(
                         ty.form(),
                         TyForm::Class | TyForm::Struct | TyForm::HostStruct
@@ -367,8 +365,9 @@ fn generic_name(home: &File, ast: &Ast, name: &str, args: &[TyRef]) -> String {
 }
 
 /// a member call's ret on `ty_name` — the impl-fn lane over the
-/// window: [`find_member_fn`]'s answer priced by [`call_ret`] (the
-/// substitution, then the async wrap). `None` when no impl fn
+/// window: the inherent-impl door's window-shaped adapter
+/// ([`super::collection::impl_method_fn_in`]) priced by [`call_ret`]
+/// (the substitution, then the async wrap). `None` when no impl fn
 /// answers — an own-surface member is FINAL with no recorded fn
 /// (never a same-named impl fn from another file leaks through: the
 /// member law's gate)
@@ -383,28 +382,8 @@ fn member_ret<'a>(
     args: &[ExprRef],
     qual: &impl Fn(&[String], bool) -> Option<QualHit<'a>>,
 ) -> Option<String> {
-    find_member_fn(idxs, ty_name, member)
+    super::collection::impl_method_fn_in(idxs.iter().copied(), ty_name, member)
         .and_then(|f| call_ret(home, idxs, ast, &f, written, args, qual))
-}
-
-/// a member's impl fn on `ty_name` — the callee's method half over
-/// the inference window (the chain's `impl_method_fn` law, spelled
-/// over idxs): per file, a same-named own-surface member answers
-/// FINAL with no fn, then the impl fn whose owner is the target
-fn find_member_fn<'a>(idxs: &[&'a File], ty_name: &str, member: &str) -> Option<FnView<'a>> {
-    for i in idxs.iter() {
-        if let Some(t) = i.ty(ty_name) {
-            if t.methods().iter().any(|m| m.name() == member) {
-                return None;
-            }
-        }
-        for f in i.fns() {
-            if f.name() == member && f.owner().as_deref() == Some(ty_name) {
-                return Some(f);
-            }
-        }
-    }
-    None
 }
 
 /// a callee fn view's ret at a call site — the written ret priced for

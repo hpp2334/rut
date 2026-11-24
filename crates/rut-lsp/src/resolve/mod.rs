@@ -11,4 +11,4 @@ pub(crate) mod def;
 pub(crate) mod mods;
 pub(crate) mod walk;
 
-pub(crate) use def::{Def, DefLocation};
+pub(crate) use def::{Def, DefLocation, View};

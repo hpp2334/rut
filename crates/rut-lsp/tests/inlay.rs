@@ -540,3 +540,37 @@ both_uri_shapes! {
         }
     }
 }
+
+#[test]
+fn a_closed_scratch_file_never_hands_its_rows_to_the_next_file() {
+    // the per-version cache keys FileIds, and ids are stable only
+    // between store mutations: closing a scratch file SHIFTS every
+    // later id down (the close law), so the next mount lands in the
+    // closed file's slot. The cache drops on that shift — document C
+    // answers its own rows, document B keeps answering B's. This pin
+    // guards NEW machinery (the session's inlay cache — Act 4): on the
+    // base tree the pass rode the document's own lazy view and nothing
+    // could leak, so it is GREEN-only by construction.
+    let mut s = S::boot();
+    let b = "file:///t/b.rut";
+    let bsrc = "fn go(n: i32) -> i32 {\n    return n;\n}\nentry fn main() -> nil {\n    let n = go(1);\n}\n";
+    let hs_b = s.inlay_all(b, bsrc);
+    assert_eq!(hs_b.len(), 2, "B's own hints: {hs_b:?}");
+    // a scratch file opens ABOVE B's slot, is cached, then closes
+    let a = "file:///t/a.rut";
+    let asrc = "fn helper() -> str {\n    let s = \"x\";\n    return s;\n}\n";
+    let hs_a = s.inlay_all(a, asrc);
+    assert_eq!(hs_a.len(), 1, "A's own hint: {hs_a:?}");
+    s.forget(a);
+    // the next mount takes A's old slot — it must answer ITS OWN rows,
+    // never the rows cached under the recycled id
+    let c = "file:///t/c.rut";
+    let csrc = "class Tag {\n    n: i32;\n}\nfn mk() -> Tag {\n    let t = Tag { n: 1 };\n    return t;\n}\n";
+    let hs_c = s.inlay_all(c, csrc);
+    assert_eq!(hs_c.len(), 1, "C answers C's rows: {hs_c:?}");
+    assert_eq!(label(&hs_c[0]), ": Tag", "{hs_c:?}");
+    assert_eq!(pos(&hs_c[0]), end_of(csrc, "let t", 1), "{hs_c:?}");
+    // and B's cache still answers B (the drop never touched it)
+    let hs_b2 = s.inlay_all(b, bsrc);
+    assert_eq!(hs_b2, hs_b, "B's rows survive the shift: {hs_b2:?}");
+}

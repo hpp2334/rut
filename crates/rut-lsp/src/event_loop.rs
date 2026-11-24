@@ -428,7 +428,7 @@ fn dispatch(l: &mut Loop, cmd: Cmd) {
             // The stored env rides along (two disjoint-field borrows of
             // the loop) — the mod-name slot's disk probe reads it.
             l.session.sync(&uri, &src);
-            let items = l.session.complete_stored(&uri, line, ch, l.env.as_deref());
+            let items = l.session.complete(&uri, line, ch, l.env.as_deref());
             let _ = tx.send(Reply::Text(json_envelope(serde_json::json!(items))));
         }
         Cmd::Definition { uri, line, ch, tx } => {
@@ -464,8 +464,9 @@ fn dispatch(l: &mut Loop, cmd: Cmd) {
             let answer = match l.session.open_file(&uri) {
                 None => "null".to_string(),
                 Some(f) => {
-                    let hints = crate::query::analysis::inlay_hints_on(
-                        &l.session.world,
+                    // the per-version cache read + the range filter —
+                    // the session's body (the rows ride its own lane)
+                    let hints = l.session.inlay_hints(
                         f,
                         ls_types::Range {
                             start: ls_types::Position {

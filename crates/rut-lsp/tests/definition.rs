@@ -1422,3 +1422,20 @@ both_uri_shapes! {
         );
     }
 }
+
+#[test]
+fn definition_at_a_tail_s_end_byte_still_rides_the_tail() {
+    // DELTA (Act 4 — the classification probes one node back at the
+    // same caret): the byte after a qualified tail's last char sits in
+    // the statement's own span, so the base tree's probe answered
+    // nothing there (RED on base: `[]`); the caret is still ON the
+    // tail — the member law answers it, like every mid-tail byte.
+    let mut s = S::boot();
+    let uri = "file:///t/main.rut";
+    let src = "enum Color { Red, Green }\nentry fn main() -> nil {\n    let c = Color::Red;\n}\n";
+    let hits = s.def_in(uri, src, "Color::Red", 1, 10);
+    assert_eq!(hits.len(), 1, "{hits:?}");
+    assert_eq!(hits[0]["uri"], uri, "{hits:?}");
+    // the enum member's own decl site (line 0, `Red` after `{ `)
+    assert_eq!(pos_pair(&hits[0]["range"]["start"]), (0, 13), "{hits:?}");
+}

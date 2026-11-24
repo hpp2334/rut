@@ -44,22 +44,28 @@ use ls_types::{
 
 use rut_ast::{CallNode, ExprRef, MethodNode};
 
+use crate::resolve::View;
 use crate::world::{FileId, World};
 
-/// everything one signature-help query needs — the session's world
-/// beside the queried file's id in it (its kept document owns the tree)
-pub struct Ctx<'a> {
-    /// the session's world — every file the query reads
-    pub w: &'a World,
-    /// the queried file — its own entry in the world
-    pub file: FileId,
+/// the resolved fn view behind a callee door's [`crate::resolve::Def`]
+/// — the doors answer typed defs; the signature renders through the
+/// view (a callee def is always a fn node, so the view is always
+/// [`View::Fn`])
+fn fn_view<'w>(
+    w: &'w World,
+    d: crate::resolve::Def,
+) -> Option<crate::world::collection::FnView<'w>> {
+    match d.view(w) {
+        Some(View::Fn(f)) => Some(f),
+        _ => None,
+    }
 }
 
 /// `textDocument/signatureHelp` at an LSP position (already converted to
 /// a byte offset). `None` when there is no call to help with, or when
 /// the callee does not resolve to exactly one known signature.
-pub fn signature_help(ctx: &Ctx, pos: u32) -> Option<SignatureHelp> {
-    let d = ctx.w.file(ctx.file);
+pub fn signature_help(w: &World, file: FileId, pos: u32) -> Option<SignatureHelp> {
+    let d = w.file(file);
     let ast = d.doc.ast();
     // the cursor's node — the byte under it, else the byte just before
     // (a cursor sitting on a token's end reads that token) — then the
@@ -94,7 +100,7 @@ pub fn signature_help(ctx: &Ctx, pos: u32) -> Option<SignatureHelp> {
             // the DECL site: the cursor on a fn/method's own name or
             // param list answers with THAT signature (the active slot
             // rides the param the cursor names)
-            return signature_help_at_decl(ctx, probe, pos);
+            return signature_help_at_decl(w, file, probe, pos);
         }
     };
 
@@ -118,12 +124,20 @@ pub fn signature_help(ctx: &Ctx, pos: u32) -> Option<SignatureHelp> {
         if crate::semantic::is_keyword(recv_text) {
             return None;
         }
-        let ty_name = crate::world::collection::named_recv(ctx.w, ctx.file, pos, recv_id)?;
+        let ty_name = crate::world::collection::named_recv(w, file, pos, recv_id)?;
         // own-surface finality: `None` here is FINAL — no help, never
         // a same-named impl fn's signature
-        let f =
-            crate::world::collection::impl_method_fn(ctx.w, ctx.file, &ty_name, ast.name(name))?;
-        (f.src(), f.params(), f.doc_lines(), md.args.clone(), true)
+        let fndef = fn_view(
+            w,
+            crate::world::collection::impl_method_fn(w, file, &ty_name, ast.name(name))?,
+        )?;
+        (
+            fndef.src(),
+            fndef.params(),
+            fndef.doc_lines(),
+            md.args.clone(),
+            true,
+        )
     } else {
         let cd = call.downcast::<CallNode>()?.get(ast);
         // free fn by unique match (the call_ty law: ambiguity is a
@@ -136,48 +150,43 @@ pub fn signature_help(ctx: &Ctx, pos: u32) -> Option<SignatureHelp> {
             _ => None,
         }?;
         let name = ast.name(callee_id);
-        let hits: Vec<_> = ctx
-            .w
-            .chain(ctx.file)
-            .flat_map(|id| ctx.w.file(id).fns())
-            .filter(|f| f.name() == name && f.owner().is_none())
-            .collect();
-        match hits.as_slice() {
-            [one] => (
+        // the ctor fallback lane — a single capitalized callee
+        // names a class in call position. The FILE SCOPE gates the
+        // whole fallback: the queried file must bind the class
+        // (`type_decl`) — an unbound or ambiguous name answers
+        // nothing (the compiler refuses both; hover's candidates
+        // lane answers the ambiguity), never wrong help from a
+        // foreign same-named class. The newtype answers through
+        // the mint arm (never the marker sweep — the engine's
+        // `Ctx::class_ctors` law: a newtype never registers; the
+        // synthesized label mentions the param name so the
+        // alignment check holds); the designated ctor answers with
+        // its verbatim impl signature from the class's OWN file
+        // (the compiler's inherent-impl rule), `is_method = false`
+        // (a ctor takes no receiver — its params ARE the call's
+        // args). Anything else stays a miss — no help, never wrong
+        // help.
+        if let Some(one) =
+            crate::world::collection::unique_free_fn(w, file, name).and_then(|d| fn_view(w, d))
+        {
+            (
                 one.src(),
                 one.params(),
                 one.doc_lines(),
                 cd.args.clone(),
                 false,
-            ),
-            // the ctor fallback lane — a single capitalized callee
-            // names a class in call position. The FILE SCOPE gates the
-            // whole fallback: the queried file must bind the class
-            // (`type_decl`) — an unbound or ambiguous name answers
-            // nothing (the compiler refuses both; hover's candidates
-            // lane answers the ambiguity), never wrong help from a
-            // foreign same-named class. The newtype answers through
-            // the mint arm (never the marker sweep — the engine's
-            // `Ctx::class_ctors` law: a newtype never registers; the
-            // synthesized label mentions the param name so the
-            // alignment check holds); the designated ctor answers with
-            // its verbatim impl signature from the class's OWN file
-            // (the compiler's inherent-impl rule), `is_method = false`
-            // (a ctor takes no receiver — its params ARE the call's
-            // args). Anything else stays a miss — no help, never wrong
-            // help.
-            _ => {
-                if !crate::world::infer::is_cap(name) {
-                    return None;
-                }
-                let t = crate::world::collection::type_decl(ctx.w, ctx.file, name)?;
-                if t.is_newtype() {
-                    let label = t.mint_sig()?;
-                    (label, t.mint_params(), Vec::new(), cd.args.clone(), false)
-                } else {
-                    let f = crate::world::collection::constructor_of(t)?;
-                    (f.src(), f.params(), f.doc_lines(), cd.args.clone(), false)
-                }
+            )
+        } else {
+            if !crate::world::infer::is_cap(name) {
+                return None;
+            }
+            let t = crate::world::collection::type_decl(w, file, name)?;
+            if t.is_newtype() {
+                let label = t.mint_sig()?;
+                (label, t.mint_params(), Vec::new(), cd.args.clone(), false)
+            } else {
+                let f = crate::world::collection::constructor_of(t)?;
+                (f.src(), f.params(), f.doc_lines(), cd.args.clone(), false)
             }
         }
     };
@@ -236,8 +245,13 @@ pub fn signature_help(ctx: &Ctx, pos: u32) -> Option<SignatureHelp> {
 /// name or param list — THAT signature answers (the recorded params as
 /// written; the paren itself = the first slot). A surface fn's view
 /// resolves through the same index the call lane reads.
-fn signature_help_at_decl(ctx: &Ctx, probe: rut_ast::AnyHandle, pos: u32) -> Option<SignatureHelp> {
-    let d = ctx.w.file(ctx.file);
+fn signature_help_at_decl(
+    w: &World,
+    file: FileId,
+    probe: rut_ast::AnyHandle,
+    pos: u32,
+) -> Option<SignatureHelp> {
+    let d = w.file(file);
     let ast = d.doc.ast();
     for a in ast.ancestors(probe) {
         if a.is::<rut_ast::ModuleNode>() {
@@ -278,20 +292,14 @@ fn signature_help_at_decl(ctx: &Ctx, probe: rut_ast::AnyHandle, pos: u32) -> Opt
                     .map(|t| ast.name(t.get(ast).name.ident).to_string())
             })?;
             (
-                crate::world::collection::impl_method_fn(ctx.w, ctx.file, &owner, name_text)?,
+                crate::world::collection::impl_method_fn(w, file, &owner, name_text)
+                    .and_then(|dd| fn_view(w, dd))?,
                 true,
             )
         } else {
-            let hits: Vec<_> = ctx
-                .w
-                .chain(ctx.file)
-                .flat_map(|id| ctx.w.file(id).fns())
-                .filter(|v| v.name() == name_text && v.owner().is_none())
-                .collect();
-            let [one] = hits.as_slice() else {
-                return None;
-            };
-            (*one, false)
+            let one = crate::world::collection::unique_free_fn(w, file, name_text)
+                .and_then(|dd| fn_view(w, dd))?;
+            (one, false)
         };
         let params = view.params();
         let (label, pieces) = signature_parts(&view.src(), &params, is_method)?;

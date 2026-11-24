@@ -27,7 +27,7 @@ use rut_ast::{
 use rut_lexer::span::Span;
 
 use super::def::{decl_ident, Def};
-use crate::semantic::{node_at_caret, on_name};
+use crate::semantic::on_name;
 use crate::world::{FileId, World};
 
 /// a member door's receiver — the node-derived spelling: the receiver
@@ -98,14 +98,29 @@ pub(crate) enum Cursor {
 }
 
 /// the classification of the node the caret rides — `w` is the
-/// session's world, `file` the queried file
+/// session's world, `file` the queried file. The probe: the byte under
+/// the caret first; when THAT byte's node names nothing (the byte sits
+/// in the statement's own span — a partially-typed name's end rides
+/// the stmt it ends), the node the byte BEFORE belongs to, the caret
+/// unchanged — a cursor sitting on a token's end reads that token, the
+/// same boundary convention one node deeper.
 pub(crate) fn cursor(w: &World, file: FileId, pos: u32) -> Cursor {
     let d = w.file(file);
     let ast = d.doc.ast();
-    // 1. the caret's node — the byte under it, else the byte just
-    //    before (the boundary convention). The fence residue names
-    //    nothing.
-    let Some(h) = node_at_caret(&d.doc, pos) else {
+    let c = classify(w, file, ast, ast.node_at(pos), pos);
+    if !matches!(c, Cursor::Nothing) {
+        return c;
+    }
+    let back = pos.checked_sub(1).and_then(|p| ast.node_at(p));
+    classify(w, file, ast, back, pos)
+}
+
+/// one probe node's classification at the caret `pos` — [`cursor`]'s
+/// body (the node and the caret are independent: the probe may walk
+/// back while the caret stays)
+fn classify(w: &World, file: FileId, ast: &rut_ast::Ast, h: Option<AnyHandle>, pos: u32) -> Cursor {
+    // 1. the caret's node. The fence residue names nothing.
+    let Some(h) = h else {
         return Cursor::Nothing;
     };
     if h.is::<rut_ast::ErrorNode>() {
@@ -166,27 +181,17 @@ pub(crate) fn cursor(w: &World, file: FileId, pos: u32) -> Cursor {
     //    FIELD ACCESS (a `::` path's tail is the qualified lane's
     //    member position — step 6 keeps it a Path; the walk's path arm
     //    keys the member law on the path's own receiver). The typing
-    //    edge carries no member yet.
-    let member_pos = |ast: &rut_ast::Ast, h: AnyHandle| -> Option<(Option<IdentId>, Recv)> {
-        if let Some(m) = h.downcast::<rut_ast::MethodNode>() {
-            let d = m.get(ast);
-            return match d.member {
-                None => Some((None, Recv::Expr(d.recv))),
-                Some(n) => on_name(n.span, pos).then_some((Some(n.ident), Recv::Expr(d.recv))),
+    //    edge carries no member yet. The derivation is [`member_pos`]'s
+    //    one body — the path shape is read by the member door, never
+    //    here.
+    if h.is::<rut_ast::MethodNode>() || h.is::<rut_ast::FieldNode>() {
+        if let Some((member, recv)) = member_pos(ast, h, pos) {
+            return Cursor::Member {
+                node: h,
+                recv,
+                name: member,
             };
         }
-        if let Some(f) = h.downcast::<rut_ast::FieldNode>() {
-            let d = f.get(ast);
-            return on_name(d.name.span, pos).then_some((Some(d.name.ident), Recv::Expr(d.recv)));
-        }
-        None
-    };
-    if let Some((member, recv)) = member_pos(ast, h) {
-        return Cursor::Member {
-            node: h,
-            recv,
-            name: member,
-        };
     }
     // 6. a multi-segment path — value and type slots alike
     if let Some((segs_data, is_ty)) = path_segs(ast, h) {
@@ -311,6 +316,59 @@ fn path_segs(ast: &rut_ast::Ast, h: AnyHandle) -> Option<(Vec<(IdentId, Span)>, 
 pub(crate) fn path_seg(ast: &rut_ast::Ast, h: AnyHandle, at: usize) -> (IdentId, Span) {
     let (segs, _) = path_segs(ast, h).expect("a path cursor rides a path node");
     segs[at]
+}
+
+/// the (member, receiver) pair a member-position node carries — a
+/// method call's member (the typing edge rides its absent member), a
+/// field access's name, or a `::` path's tail segment (the tail IS
+/// the member lane — the walk's path arm keys the door on it). One
+/// body for every reader: the classification above (its member step
+/// reads the method/field shapes only), the member door, the member
+/// tier. `None` when the node is no member position or the cursor is
+/// not on its member segment (a path's head is a name position).
+pub(crate) fn member_pos(
+    ast: &rut_ast::Ast,
+    h: AnyHandle,
+    pos: u32,
+) -> Option<(Option<IdentId>, Recv)> {
+    if let Some(m) = h.downcast::<rut_ast::MethodNode>() {
+        let d = m.get(ast);
+        // the cursor rides the member name (the token-scan's
+        // boundary convention: a name ends its own position) — or
+        // the shape is the TYPING EDGE (absent member, `recv.`):
+        // a member position with nothing resolved yet
+        return match d.member {
+            None => Some((None, Recv::Expr(d.recv))),
+            Some(n) => {
+                let on_member = n.span.lo <= pos && pos <= n.span.hi;
+                on_member.then_some((Some(n.ident), Recv::Expr(d.recv)))
+            }
+        };
+    }
+    if let Some(f) = h.downcast::<rut_ast::FieldNode>() {
+        let d = f.get(ast);
+        let on_member = d.name.span.lo <= pos && pos <= d.name.span.hi;
+        return if on_member {
+            Some((Some(d.name.ident), Recv::Expr(d.recv)))
+        } else {
+            None
+        };
+    }
+    if let Some(p) = h.downcast::<PathNode>() {
+        let segs = &p.get(ast).segs;
+        if segs.len() >= 2 {
+            if let Some(i) = segs
+                .iter()
+                .position(|s| s.name.span.lo <= pos && pos <= s.name.span.hi)
+            {
+                if i + 1 == segs.len() {
+                    // the tail segment IS the member lane
+                    return Some((Some(segs[i].name.ident), Recv::Seg(segs[i - 1].name.ident)));
+                }
+            }
+        }
+    }
+    None
 }
 
 /// the span the cursor's lane decorates: the declaring name, the

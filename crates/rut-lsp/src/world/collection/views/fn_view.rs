@@ -39,22 +39,6 @@ impl<'a> FnView<'a> {
         unreachable!("a fn view addresses a fn node")
     }
 
-    /// byte span of the name identifier — the definition target
-    pub(crate) fn name_span(&self) -> Option<rut_lexer::span::Span> {
-        let ast = self.ast();
-        macro_rules! ns {
-            ($t:ty) => {
-                if let Some(d) = self.h.downcast::<$t>() {
-                    return Some(d.get(ast).name.span);
-                }
-            };
-        }
-        ns!(FnNode);
-        ns!(SurfaceFnNode);
-        ns!(MethodDeclNode);
-        unreachable!("a fn view addresses a fn node")
-    }
-
     /// verbatim signature source
     pub(crate) fn src(&self) -> String {
         let ast = self.ast();

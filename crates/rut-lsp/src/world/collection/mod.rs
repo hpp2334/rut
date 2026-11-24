@@ -24,20 +24,40 @@ mod tiers;
 mod views;
 
 pub(crate) use member::{
-    binding_ty, constructor_of, enclosing_type, expr_ty, iface_decl, impl_method_fn, member,
-    member_at, member_dial_allows, member_gated, named_recv, recv_ty_name, used_ifaces, MemberHit,
-    MemberTarget,
+    binding_ty, constructor_of, enclosing_type, expr_ty, iface_decl, impl_method_fn,
+    impl_method_fn_in, member, member_dial_allows, member_gated, named_recv, recv_ty_name,
+    unique_free_fn, unique_free_fn_in, used_ifaces, MemberHit, MemberTarget,
 };
 pub(crate) use tiers::{
     ambiguous_scope, bare, bound_has, file_scope, functions, one_name_refused, qualified_module,
     qualified_scope, type_decl, type_via_imports, use_bound_scope, use_exports, CandRow, Candidate,
     ExportRow, FileScope, MemberRow, UseExports, Via,
 };
-pub(crate) use tiers::{members, members_for, prefer_mounted, surface_names};
+pub(crate) use tiers::{members, members_for, surface_names};
 pub(crate) use views::{FnView, GlobUse, LetView, MemberView, ModView, TyView, UseView};
 
 use crate::semantic::Mode;
 use crate::world::File;
+
+/// the ambient layer's mounted-over-embed pick: the MOUNTED carriers
+/// (real origins) when any exist, else the embedded prelude — the
+/// zero-fetch fallback (the old flat `type_decl`'s precedence, kept
+/// as the ambient fallback shape). THE one home of the preference;
+/// [`prefer_bodies`] stages it first (a mounted carrier outranks the
+/// prelude, above the body law), and the inference pass's ctor lane
+/// rides it over its own window.
+pub(crate) fn prefer_mounted<'a, T: Copy>(pairs: &[(&'a File, T)]) -> Vec<(&'a File, T)> {
+    let mounted: Vec<(&File, T)> = pairs
+        .iter()
+        .copied()
+        .filter(|(f, _)| f.stamp.src_path.is_none())
+        .collect();
+    if mounted.is_empty() {
+        pairs.to_vec()
+    } else {
+        mounted
+    }
+}
 
 /// body-over-decl — THE single preference: a package that indexes
 /// BOTH its `.d.rut` surface (`mode == Decl`) and its `mod.rut` body
@@ -45,22 +65,18 @@ use crate::world::File;
 /// there is. One precedence above the body law: a MOUNTED dep outranks
 /// the ambient prelude — the prelude is the zero-fetch fast path for
 /// the ONE embedded pkg, a fallback, never the answer when the real
-/// thing is mounted (its `src_path` marks it). The generic payload
-/// keeps one law for every shape the layers collect (spans, views).
+/// thing is mounted (its `src_path` marks it) — staged first through
+/// [`prefer_mounted`]. The generic payload keeps one law for every
+/// shape the layers collect (spans, views).
 pub(crate) fn prefer_bodies<'a, T: Copy>(hits: &[(&'a File, T)]) -> Vec<(&'a File, T)> {
-    let mounted: Vec<(&File, T)> = hits
-        .iter()
-        .copied()
-        .filter(|(f, _)| f.stamp.src_path.is_none())
-        .collect();
-    let pool: &[(&File, T)] = if mounted.is_empty() { hits } else { &mounted };
+    let pool = prefer_mounted(hits);
     let bodies: Vec<(&File, T)> = pool
         .iter()
         .copied()
         .filter(|(f, _)| f.stamp.mode != Mode::Decl)
         .collect();
     if bodies.is_empty() {
-        pool.to_vec()
+        pool
     } else {
         bodies
     }

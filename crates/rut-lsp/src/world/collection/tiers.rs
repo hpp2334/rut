@@ -15,6 +15,7 @@ use crate::resolve::cursor::Recv;
 use crate::world::{File, FileId, World};
 
 pub(crate) use super::prefer_bodies;
+use super::prefer_mounted;
 
 impl<'a> ExportRow<'a> {
     /// the row's exported name — `None` for a `mod` edge (a walkable
@@ -131,7 +132,7 @@ pub(crate) fn members<'a>(
     pos: u32,
     node: AnyHandle,
 ) -> Option<Vec<MemberRow<'a>>> {
-    let (_, recv) = super::member_at(w, file, pos, node)?;
+    let (_, recv) = crate::resolve::cursor::member_pos(w.file(file).doc.ast(), node, pos)?;
     members_for(w, file, pos, recv)
 }
 
@@ -931,8 +932,10 @@ fn ambient_layers<'a>(w: &'a World, file: FileId, name: &str, out: &mut FileScop
             }
         }
     }
-    out.types.extend(prefer_mounted(&tys));
-    out.fns.extend(prefer_mounted(&fns));
+    out.types
+        .extend(super::prefer_mounted(&tys).into_iter().map(|(_, t)| t));
+    out.fns
+        .extend(super::prefer_mounted(&fns).into_iter().map(|(_, f)| f));
 }
 
 /// the computed-head lane — a type name REACHED THROUGH A VALUE
@@ -1001,7 +1004,7 @@ pub(crate) fn type_via_imports<'a>(w: &'a World, file: FileId, name: &str) -> Op
         }
     }
     let picked = prefer_mounted(&flat);
-    picked.into_iter().next()
+    picked.into_iter().next().map(|(_, t)| t)
 }
 
 // ---- the qualified path — the module namespace lane ----
@@ -1298,23 +1301,6 @@ pub(crate) fn bound_has(bound: &FileScope<'_>, f: &File, name: &str) -> bool {
             .lets
             .iter()
             .any(|l| std::ptr::eq(l.file, f) && l.name() == name)
-}
-
-/// the ambient layer's mounted-over-embed pick: the MOUNTED carriers
-/// (real origins) when any exist, else the embedded prelude — the
-/// zero-fetch fallback (the old flat `type_decl`'s precedence, kept
-/// as the ambient fallback shape)
-pub(crate) fn prefer_mounted<'a, T: Copy>(pairs: &[(&'a File, T)]) -> Vec<T> {
-    let mounted: Vec<&(&'a File, T)> = pairs
-        .iter()
-        .filter(|(f, _)| f.stamp.src_path.is_none())
-        .collect();
-    let pool: Vec<&(&'a File, T)> = if mounted.is_empty() {
-        pairs.iter().collect()
-    } else {
-        mounted
-    };
-    pool.into_iter().map(|(_, v)| *v).collect()
 }
 
 /// the OWN layer of one file's scope — the shared core both scope

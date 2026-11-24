@@ -166,7 +166,7 @@ fn hover_lists_the_candidates_for_an_ambiguous_module_let() {
     // `one_name_refused` gate — an ambiguous name jumps NOWHERE (never a
     // pick between the bindings; the hover lists them). The plan's Before
     // was 2 targets; Act 3's unified walk keeps the silence (rule B: the
-    // gate rides get_definition at the same logical point).
+    // gate rides `definition` at the same logical point).
     let amb = s.def_in(uri, src, "return A;", 1, 7);
     assert!(amb.is_empty(), "{amb:?}");
     let src2 = "fn g() -> i32 { return 1; }\nfn g() -> i32 { return 2; }\nfn f() -> i32 {\n    return g();\n}\n";

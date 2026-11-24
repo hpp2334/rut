@@ -1884,3 +1884,30 @@ both_uri_shapes! {
         }
     }
 }
+
+#[test]
+fn the_typed_prefix_rides_the_cursor_s_own_name_span() {
+    // DELTA (Act 4 — the prefix is the ONE classification's name span):
+    // the base tree's prefix walk only knew paths/lets/params, so at a
+    // `for` variable's own name the typed prefix rode empty and the
+    // auto-import tier offered every foreign name (RED there: `Vec`).
+    // The cursor's Decl span carries the prefix now.
+    let (io, root) = std_io_world();
+    let mut s = S::with_io(&io);
+    s.resolve(&[&root]);
+    let uri = "file:///t/main.rut";
+    let src = "entry fn main() -> nil {\n    let xs = [1];\n    for (let n of xs) {\n    }\n}\n";
+    // the caret past the typed `n` (the name's own end byte)
+    let (pl, pc) = S::pos_at_byte(src, byte_of(src, "let n", 1) + 5);
+    let items = s.complete_pos(uri, src, pl, pc);
+    assert!(
+        import_offer(&items, "Vec").is_none(),
+        "the prefix filters the foreign tier: {:?}",
+        labels(&items)
+    );
+    assert!(
+        offers(&items, "nil"),
+        "the bare tier still stands: {:?}",
+        labels(&items)
+    );
+}

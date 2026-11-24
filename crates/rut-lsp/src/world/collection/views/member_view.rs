@@ -113,32 +113,6 @@ impl<'a> MemberView<'a> {
         false
     }
 
-    /// byte span of the name identifier — the field / enum-member
-    /// decl-site hover and the definition lookup key on it. The
-    /// synthesized newtype's `inner` records no name token (the span
-    /// degenerates empty) — the field's own extent stands in.
-    pub(crate) fn name_span(&self) -> Option<rut_lexer::span::Span> {
-        let ast = self.ast();
-        if let Some(d) = self.h.downcast::<FieldDeclNode>() {
-            let d = d.get(ast);
-            return Some(if d.name.span.hi > d.name.span.lo {
-                d.name.span
-            } else {
-                d.span
-            });
-        }
-        macro_rules! ns {
-            ($t:ty) => {
-                if let Some(d) = self.h.downcast::<$t>() {
-                    return Some(d.get(ast).name.span);
-                }
-            };
-        }
-        ns!(MethodDeclNode);
-        ns!(EnumMemberNode);
-        unreachable!("a member view addresses a member node")
-    }
-
     pub(crate) fn doc_lines(&self) -> Vec<String> {
         let ast = self.ast();
         macro_rules! dd {

@@ -5,12 +5,14 @@
 //! [`crate::event_loop`]); the host's `Lsp` is only the inbox handle,
 //! and no caller ever borrows the state.
 
-use std::collections::{BTreeMap, HashSet};
+use std::collections::{BTreeMap, HashMap, HashSet};
+use std::sync::Arc;
 
 use crate::env;
 use crate::event_loop;
+use crate::query::inlay::InlayRow;
 use crate::wire;
-use crate::world::{File, FileId, World};
+use crate::world::{File, FileId, Lane, World};
 
 pub(crate) struct Session {
     /// ONE world — every file the session knows (the prelude boots
@@ -46,6 +48,15 @@ pub(crate) struct Session {
     /// STALE handle (its walk already fired) is harmless —
     /// `cancel_defer` answers `None` for it.
     pub(crate) walk_task: Option<event_loop::DeferTask>,
+    /// the inlay pass's per-version cache — file id → (the document
+    /// version the rows were computed at, the rows). A query recomputes
+    /// when the file's version differs ([`Session::inlay_hints`]).
+    /// IDS ARE KEYS ONLY BETWEEN MUTATIONS: a store mutation that
+    /// shifts ids (a scratch file leaving the store — the close law's
+    /// removal, a mount replacing one) drops the cache, so a cached
+    /// row set can never answer for a DIFFERENT file
+    /// ([`Session::drop_shifted_inlays`]).
+    pub(crate) inlays: HashMap<FileId, (u32, Arc<[InlayRow]>)>,
 }
 
 impl Session {
@@ -62,6 +73,7 @@ impl Session {
             direct_deps: HashSet::new(),
             hints_shown: HashSet::new(),
             walk_task: None,
+            inlays: HashMap::new(),
         }
     }
 
@@ -99,9 +111,25 @@ impl Session {
     /// close: the file under `uri` closes — a loader-stamped file
     /// keeps its last buffer text (a later read answers from it); a
     /// never-stamped scratch file leaves the world (a file no loader
-    /// mounted is still removed).
+    /// mounted is still removed). A scratch REMOVAL shifts every later
+    /// file's id, so the inlay cache drops (a cached row set must
+    /// never answer for a different file).
     pub(crate) fn close(&mut self, uri: &str) {
+        self.drop_shifted_inlays(uri);
         self.world.close(uri);
+    }
+
+    /// the inlay cache keys FileIds — ids are stable only between
+    /// store mutations, and the two mutation shapes that shift them
+    /// both run through a SCRATCH slot (the close law removes it; a
+    /// mount replacing one re-pushes at the end). When `uri` holds a
+    /// scratch file, the cached rows drop before the mutation.
+    fn drop_shifted_inlays(&mut self, uri: &str) {
+        if let Some(id) = self.world.get(uri) {
+            if matches!(self.world.file(id).stamp.lane, Lane::Scratch) {
+                self.inlays.clear();
+            }
+        }
     }
 
     // ---- the lanes the ABI handlers and the dep walk SHARE (the
@@ -133,6 +161,7 @@ impl Session {
     /// file under its module NAME (replace-by-origin) — the FLAT
     /// mount (`mod_path` `None`).
     pub(crate) fn index_named_at(&mut self, uri: &str, name: &str, src: String) {
+        self.drop_shifted_inlays(uri);
         let file = crate::deps::mount_file(name, uri, None, src);
         self.world.mount(file);
     }
@@ -152,6 +181,7 @@ impl Session {
         mod_path: &str,
         src: String,
     ) -> Vec<wire::ModDecl> {
+        self.drop_shifted_inlays(uri);
         let file = File::from_src(
             crate::world::Stamp::workspace(uri, Some(pkg), Some(mod_path)),
             src,
@@ -178,6 +208,7 @@ impl Session {
     /// entry; an OPEN file keeps its buffer (the incoming text
     /// drops).
     pub(crate) fn index_file(&mut self, uri: &str, src: String) {
+        self.drop_shifted_inlays(uri);
         let file = File::from_src(crate::world::Stamp::workspace(uri, None, None), src);
         self.world.mount(file);
     }
@@ -199,7 +230,7 @@ impl Session {
     /// the cursor sits in. `io` is the stored host env (the loop's
     /// capability) — the mod-name slot's disk probe reads it; `None`
     /// and that slot simply answers empty.
-    pub(crate) fn complete_stored(
+    pub(crate) fn complete(
         &self,
         uri: &str,
         line: u32,
@@ -209,27 +240,40 @@ impl Session {
         let Some(f) = self.open_file(uri) else {
             return Vec::new();
         };
-        let file = self.world.file(f);
-        let byte = file.doc.byte(line, ch);
-        let dir = crate::query::completion::file_dir(uri);
-        let facts = crate::query::completion::DocFile {
-            dir: dir.as_deref(),
-            // the flavor is the file's own stamp — the lane's word
-            // (`.d.rut` Decl, everything else Impl), THE authority
-            // (never a basename match)
-            decl: file.stamp.mode == crate::semantic::Mode::Decl,
-            io,
+        let byte = self.world.file(f).doc.byte(line, ch);
+        crate::query::completion::complete(&self.world, f, byte, &self.direct_deps, io)
+            .into_iter()
+            .map(crate::query::completion::lsp_item)
+            .collect()
+    }
+
+    /// the inlay query's body — the per-version cache read, then the
+    /// feature's range filter: the rows recompute when the file's
+    /// document version differs from the cached one, and the asked
+    /// range is presentation over the cached rows. The cache keys the
+    /// file's id; the shift-drop at the store mutations keeps a cached
+    /// row set from ever answering for a different file.
+    pub(crate) fn inlay_hints(
+        &mut self,
+        file: FileId,
+        range: ls_types::Range,
+    ) -> Vec<ls_types::InlayHint> {
+        let (lo, hi, version) = {
+            let f = self.world.file(file);
+            (
+                f.doc.byte(range.start.line, range.start.character),
+                f.doc.byte(range.end.line, range.end.character),
+                f.doc.version(),
+            )
         };
-        crate::query::completion::complete(
-            &self.world,
-            f,
-            byte,
-            file.doc.src(),
-            &facts,
-            &self.direct_deps,
-        )
-        .into_iter()
-        .map(crate::query::completion::lsp_item)
-        .collect()
+        let rows = match self.inlays.get(&file) {
+            Some((v, rows)) if *v == version => rows.clone(),
+            _ => {
+                let rows: Arc<[InlayRow]> = crate::query::inlay::compute(&self.world, file).into();
+                self.inlays.insert(file, (version, rows.clone()));
+                rows
+            }
+        };
+        crate::query::inlay::inlay_hints(&self.world, file, lo, hi, &rows)
     }
 }

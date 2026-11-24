@@ -5,8 +5,10 @@
 //! applies the typed prefix (presentation, at the call site).
 
 use super::rows::{filtered, push_item, BindRow, CompletionOut, Row};
-use super::{CompletionKind, DocFile};
+use super::CompletionKind;
+use crate::env::Io;
 use crate::resolve::mods;
+use crate::semantic::Mode;
 use crate::world::collection;
 use crate::world::{FileId, World};
 use rut_ast::AnyHandle;
@@ -102,7 +104,10 @@ pub(super) fn bare_tier_out(w: &World, file: FileId) -> Vec<CompletionOut> {
 /// The mod-name tier — the `mod NAME;` name slot's answer: the module
 /// files beside the open document, listed by the disk probe in
 /// `super::mod_name` (the loader's child spellings — the mount law's
-/// home is rut-driver's `mount_edges`).
+/// home is rut-driver's `mount_edges`). The slot's FILE facts derive
+/// from the file's own entry: the directory from its origin
+/// (`file://` uris only — [`super::mod_name::file_dir`]), the flavor
+/// from its stamp (a `.d.rut` doc — children spell `mod.d.rut`).
 /// No filesystem to ask (no env, or a non-`file://` uri) is an empty
 /// list — a miss is an empty list, never the bare dump. The gate: a
 /// name the open document ALREADY declares never re-offers (a
@@ -111,15 +116,17 @@ pub(super) fn bare_tier_out(w: &World, file: FileId) -> Vec<CompletionOut> {
 pub(super) fn mod_name_tier_out(
     w: &World,
     file: FileId,
-    facts: &DocFile<'_>,
+    io: Option<&dyn Io>,
     node: AnyHandle,
     prefix: &str,
 ) -> Vec<CompletionOut> {
-    let (Some(dir), Some(io)) = (facts.dir, facts.io) else {
+    let dir = super::mod_name::file_dir(&w.file(file).stamp.origin);
+    let decl = w.file(file).stamp.mode == Mode::Decl;
+    let (Some(dir), Some(io)) = (dir.as_deref(), io) else {
         return Vec::new();
     };
     let mut out: Vec<CompletionOut> = Vec::new();
-    for c in super::mod_name::list_child_mods(io, dir, facts.decl) {
+    for c in super::mod_name::list_child_mods(io, dir, decl) {
         // the declared gate — another `mod` decl of the open doc
         // owning the name kills the candidate
         if w.file(file)

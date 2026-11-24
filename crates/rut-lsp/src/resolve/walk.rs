@@ -2,7 +2,7 @@
 //! matches the classification ([`super::cursor::Cursor`]) to one of
 //! six arms; the lane order inside each arm is binding. `[]` is a
 //! miss; several is the candidate peek (hover's to render —
-//! `get_definition` gates the one-name refusal's rows to `[]`, the
+//! `definition` gates the one-name refusal's rows to `[]`, the
 //! silence law).
 
 use rut_ast::{IdentId, ModDeclNode, UseNode, Vis};
@@ -312,7 +312,7 @@ fn name_targets(w: &World, file: FileId, c: &Cursor) -> Vec<Def> {
     name_lane(w, file, *id, span.lo)
 }
 
-/// THE NAME LANES — today's get_definition layers 4-7, keyed on a
+/// THE NAME LANES — the definition feature's layers 4-7, keyed on a
 /// name: a capitalized or primitive name through the file scope's
 /// types (a primitive with none is a miss), then the binding pass
 /// (the declaring row), then the one-name refusal's candidate rows,

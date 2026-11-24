@@ -7,12 +7,11 @@
 
 use std::collections::HashSet;
 
-use rut_ast::{
-    AnyHandle, ExprRef, FieldNode, IdentId, Lit, MethodDeclNode, MethodNode, PathNode, UseNode, Vis,
-};
+use rut_ast::{AnyHandle, ExprRef, IdentId, Lit, MethodDeclNode, UseNode, Vis};
 
 use super::{FnView, MemberView, TyView};
 use crate::resolve::cursor::Recv;
+use crate::resolve::Def;
 use crate::semantic::Span;
 use crate::world::bindings::{BindKind, Binding};
 use crate::world::infer::QualHit;
@@ -23,19 +22,24 @@ use crate::world::{File, FileId, World};
 /// declares, gated by the member-vis law. Doors consume NODES, not
 /// derived facts: the caller hands the node the cursor's walk found
 /// (a method call, a field access, or a `::` path's tail segment);
-/// the member + receiver derive INSIDE, the receiver's type
-/// resolves INSIDE (self → the enclosing type, literals →
-/// primitives, paths → the bindings — read internally, never a
-/// caller-run pass — then module lets), and the member law (own
-/// surface → enum members → inherent impl methods → interface
-/// signatures) with every gate (the use-both rule, then the
-/// member-vis dial against the queried file — the site context)
-/// lives here. One rule for every host — hover, definition, and
-/// completion share it. The signature-help lane rides
+/// the member + receiver derive INSIDE — [`crate::resolve::cursor::
+/// member_pos`]'s one body — the receiver's type resolves INSIDE
+/// (self → the enclosing type, literals → primitives, paths → the
+/// bindings — read internally, never a caller-run pass — then module
+/// lets), and the member law (own surface → enum members → inherent
+/// impl methods → interface signatures) with every gate (the
+/// use-both rule, then the member-vis dial against the queried file —
+/// the site context) lives here. One rule for every host — hover,
+/// definition, and completion share it. The signature-help lane rides
 /// [`impl_method_fn`] UNGATED: a
 /// call site spelling a refused member is already a panel error.
 pub(crate) fn member<'a>(w: &'a World, file: FileId, pos: u32, node: AnyHandle) -> MemberHit<'a> {
-    member_gated(w, file, pos, member_at(w, file, pos, node))
+    member_gated(
+        w,
+        file,
+        pos,
+        crate::resolve::cursor::member_pos(w.file(file).doc.ast(), node, pos),
+    )
 }
 
 /// the gated resolve over an ALREADY-derived (member, receiver) — the
@@ -153,7 +157,7 @@ fn member_derived<'a>(
     }
     // the mounted-over-embed pick over the same hits (one home)
     match super::prefer_mounted(&hits).into_iter().next() {
-        Some(f) => MemberHit::Found(MemberTarget::ImplFn(f)),
+        Some((_, f)) => MemberHit::Found(MemberTarget::ImplFn(f)),
         None => MemberHit::None,
     }
 }
@@ -195,56 +199,6 @@ pub(crate) fn member_dial_allows(w: &World, site: FileId, decl_file: &File, vis:
         crate::resolve::mods::mod_path_of(decl_file),
         vis,
     )
-}
-
-/// the (member, receiver) pair a member-position node carries —
-/// `None` when the node is not a member position or the cursor is
-/// not on its member segment (a path's head is a name position)
-pub(crate) fn member_at(
-    w: &World,
-    file: FileId,
-    pos: u32,
-    node: AnyHandle,
-) -> Option<(Option<IdentId>, Recv)> {
-    let ast = w.file(file).doc.ast();
-    if let Some(m) = node.downcast::<MethodNode>() {
-        let d = m.get(ast);
-        // the cursor rides the member name (the token-scan's
-        // boundary convention: a name ends its own position) — or
-        // the shape is the TYPING EDGE (absent member, `recv.`):
-        // a member position with nothing resolved yet
-        return match d.member {
-            None => Some((None, Recv::Expr(d.recv))),
-            Some(n) => {
-                let on_member = n.span.lo <= pos && pos <= n.span.hi;
-                on_member.then_some((Some(n.ident), Recv::Expr(d.recv)))
-            }
-        };
-    }
-    if let Some(f) = node.downcast::<FieldNode>() {
-        let d = f.get(ast);
-        let on_member = d.name.span.lo <= pos && pos <= d.name.span.hi;
-        return if on_member {
-            Some((Some(d.name.ident), Recv::Expr(d.recv)))
-        } else {
-            None
-        };
-    }
-    if let Some(p) = node.downcast::<PathNode>() {
-        let segs = &p.get(ast).segs;
-        if segs.len() >= 2 {
-            if let Some(i) = segs
-                .iter()
-                .position(|s| s.name.span.lo <= pos && pos <= s.name.span.hi)
-            {
-                if i + 1 == segs.len() {
-                    // the tail segment IS the member lane
-                    return Some((Some(segs[i].name.ident), Recv::Seg(segs[i - 1].name.ident)));
-                }
-            }
-        }
-    }
-    None
 }
 
 /// the receiver's type name — the node-derived spelling: the
@@ -391,20 +345,18 @@ pub(crate) fn expr_ty<'a>(w: &'a World, file: FileId, e: ExprRef) -> Option<Stri
 }
 
 /// the inherent impl-block fn `impl ty_name { fn member(..) }` —
-/// the callee door's method half (the old `impl_method_fn` rule's
-/// one home). Own-surface methods (interface bodies,
-/// builtin/primitive surfaces) have no recorded params: a hit there
-/// is FINAL (the known-receiver-is-final law) and yields `None`,
-/// never a wrong signature from a same-named impl fn in another
-/// file.
-pub(crate) fn impl_method_fn<'a>(
-    w: &'a World,
-    file: FileId,
-    ty_name: &str,
-    member: &str,
-) -> Option<FnView<'a>> {
-    for id in w.chain(file) {
-        let i = w.file(id);
+/// the callee door's method half, over ANY file window (the chain
+/// door below and the inference pass's slice share the body — the
+/// [`enclosing_type`] precedent: one law, two shapes). Per file, a
+/// same-named own-surface member answers FINAL with no fn (the
+/// known-receiver-is-final law — never a same-named impl fn from
+/// another file leaks through), then the impl fn whose owner is the
+/// target type's name.
+pub(crate) fn impl_method_fn_in<'a, I>(files: I, ty_name: &str, member: &str) -> Option<FnView<'a>>
+where
+    I: IntoIterator<Item = &'a File>,
+{
+    for i in files.into_iter() {
         if let Some(t) = i.ty(ty_name) {
             if t.methods().iter().any(|m| m.name() == member) {
                 return None;
@@ -417,6 +369,46 @@ pub(crate) fn impl_method_fn<'a>(
         }
     }
     None
+}
+
+/// THE inherent-impl door — [`impl_method_fn_in`] over
+/// `w.chain(file)`, the typed answer ([`Def`]): the feature classifies
+/// and resolves, the view is rendering's business.
+pub(crate) fn impl_method_fn(w: &World, file: FileId, ty_name: &str, member: &str) -> Option<Def> {
+    impl_method_fn_in(w.chain(file).map(|id| w.file(id)), ty_name, member).map(|f| Def::Node {
+        file: w.id_of(f.file),
+        node: f.h,
+    })
+}
+
+/// the unique free fn by name over ANY file window — the `call_ty`
+/// law's body, shared with the chain door below and the inference
+/// pass (one law, two shapes, the [`enclosing_type`] precedent): fns
+/// named `name` with no owner; exactly one, else `None` (ambiguity is
+/// a miss, never a wrong answer).
+pub(crate) fn unique_free_fn_in<'a, I>(files: I, name: &str) -> Option<FnView<'a>>
+where
+    I: IntoIterator<Item = &'a File>,
+{
+    let hits: Vec<FnView<'a>> = files
+        .into_iter()
+        .flat_map(|f| f.fns())
+        .filter(|f| f.name() == name && f.owner().is_none())
+        .collect();
+    match hits.as_slice() {
+        [one] => Some(*one),
+        _ => None,
+    }
+}
+
+/// THE unique-free-fn door — [`unique_free_fn_in`] over
+/// `w.chain(file)`, the typed answer ([`Def`]): the free callee
+/// resolves exactly once across the world, else it does not resolve.
+pub(crate) fn unique_free_fn(w: &World, file: FileId, name: &str) -> Option<Def> {
+    unique_free_fn_in(w.chain(file).map(|id| w.file(id)), name).map(|f| Def::Node {
+        file: w.id_of(f.file),
+        node: f.h,
+    })
 }
 
 /// the class's designated constructor — `impl Logger {

@@ -40,7 +40,6 @@ mod paths;
 mod rows;
 mod tiers;
 
-pub(crate) use mod_name::file_dir;
 pub use rows::{lsp_item, CompletionOut};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -62,9 +61,10 @@ pub enum CompletionKind {
 
 use std::collections::HashSet;
 
-use rut_ast::{AnyHandle, ExprRef, IdentId, PathNode, Span, TyRef};
+use rut_ast::{AnyHandle, ExprRef, IdentId, Span, TyRef};
 
 use crate::env::Io;
+use crate::resolve::cursor::{self, Cursor};
 use crate::world::{File, FileId, World};
 
 use crate::world::collection::{members, members_for, use_exports};
@@ -74,85 +74,31 @@ use paths::{position_path_completions, type_head_completions, type_tier_completi
 use rows::filtered;
 use tiers::{bare_tier_out, local_completions, member_tier_out, mod_name_tier_out, use_tier_out};
 
-/// The typing edge, from the tree: the byte before the cursor names
-/// the context — a `use` ancestor (the use tiers), a member node (the
-/// incomplete `recv.` shape included: the member is being typed), a
-/// `::` path's tail segment (the qualified tier), a type slot at an
-/// annotation boundary (the type tier), else the bare tiers with the
-/// partial ident (the fence residue riding `Doc::name_at`). No token
-/// scans.
-enum Edge {
-    /// inside a `use` statement: the use NODE (the tier door's key),
-    /// the spelled path + the typed prefix
-    Use {
-        node: AnyHandle,
-        segs: Vec<String>,
-        prefix: String,
-    },
-    /// a `::` run's tail: the head segments + the typed prefix
-    Qualified { segs: Vec<String>, prefix: String },
-    /// `recv.` / `recv.na`: the member NODE (the tier door's key) +
-    /// the receiver expression (the mod-head attempt's key) + the
-    /// typed prefix (the incomplete method shape's absent member is
-    /// the empty prefix)
-    Member {
-        node: AnyHandle,
-        recv: ExprRef,
-        prefix: String,
-    },
-    /// the annotation boundary — a type position (`let x: ⏐`,
-    /// `fn f() -> T⏐`)
-    Annotation { prefix: String },
-    /// the bare tiers, with the partial ident if one is mid-typed
-    Bare { prefix: String },
-    /// the `mod NAME;` name slot — the node under the cursor (the decl
-    /// being typed, or the `mod` fence) + the typed prefix
-    ModName { node: AnyHandle, prefix: String },
-    /// the type slot's `.`/`::` member request (`let c: layout.Co⏐`):
-    /// the head segments for the mod tier, the tail ident for the
-    /// member tier — no bare fallthrough (a miss is an empty list)
-    TypeDot {
-        head: Vec<String>,
-        tail: IdentId,
-        prefix: String,
-    },
-}
-
-/// the open document's FILE facts the mod-name tier probes with (the
-/// face's knowledge); no dir / no env = no probe
-pub(crate) struct DocFile<'a> {
-    /// the doc uri's directory, `file://` uris only
-    pub dir: Option<&'a str>,
-    /// a `.d.rut` doc — children spell `mod.d.rut`
-    pub decl: bool,
-    pub io: Option<&'a dyn Io>,
-}
-
 /// Completions at `pos`: use-path tiers inside a `use` statement
 /// (walking a package's mod namespaces), qualified-position tiers
 /// after `modname::` in the package's own files, member items after
 /// `recv.` (filtered by the typed prefix), the type tier at an
 /// annotation boundary, otherwise the visible fn-local bindings ahead
 /// of the keyword table plus the visible decls under the bare-name law
-/// plus the auto-import tier, deduped by label. `src` is the NORMALIZED
-/// source — the auto-import edits' coordinates ride the same text the
-/// spans index. `doc` is the open document's file-module context (the
-/// face's knowledge; the default keeps position-path completion off).
-/// `file` is the open document's FILE facts the mod-name tier probes
-/// with (the uri's directory + the doc's flavor + the env) — no dir /
-/// no env, and the slot answers empty, never the bare dump.
-/// `direct_deps` is the open document's own dep set (its manifest's
-/// rows) — the auto-import tier derives its gate from it live.
+/// plus the auto-import tier, deduped by label. The document's own
+/// normalized text (the spans' currency — the auto-import edits ride
+/// it) is the file's. The mod-name slot's FILE facts derive from the
+/// file's own entry: the directory from its origin (`file://` uris
+/// only), the flavor from its stamp — no dir / no env, and the slot
+/// answers empty, never the bare dump. `direct_deps` is the open
+/// document's own dep set (its manifest's rows) — the auto-import tier
+/// derives its gate from it live. `io` is the stored host env (the
+/// loop's capability) — the mod-name slot's disk probe reads it.
 pub fn complete(
     w: &World,
     file: FileId,
     pos: u32,
-    src: &str,
-    facts: &DocFile<'_>,
     direct_deps: &HashSet<String>,
+    io: Option<&dyn Io>,
 ) -> Vec<CompletionOut> {
     let head = w.file(file);
     let ast = head.doc.ast();
+    let src = head.doc.src();
     match typing_edge(w, file, pos, src) {
         Edge::Use { node, segs, prefix } => {
             // the OWN lane first — a head that speaks for the doc's own
@@ -240,7 +186,7 @@ pub fn complete(
         // miss is an empty list, never the bare keyword dump (the use
         // tier's law). The tier reads no stamp: none is
         // involved, the disk beside the document is the answer.
-        Edge::ModName { node, prefix } => mod_name_tier_out(w, file, facts, node, &prefix),
+        Edge::ModName { node, prefix } => mod_name_tier_out(w, file, io, node, &prefix),
         Edge::Bare { prefix } => {
             // the dot guard: the request sits after a `.` the tree
             // could not shape into a member node (a fence swallowed the
@@ -274,6 +220,53 @@ pub fn complete(
             out
         }
     }
+}
+
+/// The typing edge, from the tree: the byte before the cursor names
+/// the context — a `use` ancestor (the use tiers), a member node (the
+/// incomplete `recv.` shape included: the member is being typed), a
+/// `::` path's tail segment (the qualified tier), a type slot at an
+/// annotation boundary (the type tier), else the bare tiers with the
+/// partial ident (the fence residue riding `Doc::name_at`). The three
+/// on-name shapes are the ONE classification's
+/// ([`crate::resolve::cursor`]); the between-tokens probes — the
+/// annotation boundary, the mod-name slot, the dangling `::`, the
+/// cursor past a member — are completion's own. No token scans.
+enum Edge {
+    /// inside a `use` statement: the use NODE (the tier door's key),
+    /// the spelled path + the typed prefix
+    Use {
+        node: AnyHandle,
+        segs: Vec<String>,
+        prefix: String,
+    },
+    /// a `::` run's tail: the head segments + the typed prefix
+    Qualified { segs: Vec<String>, prefix: String },
+    /// `recv.` / `recv.na`: the member NODE (the tier door's key) +
+    /// the receiver expression (the mod-head attempt's key) + the
+    /// typed prefix (the incomplete method shape's absent member is
+    /// the empty prefix)
+    Member {
+        node: AnyHandle,
+        recv: ExprRef,
+        prefix: String,
+    },
+    /// the annotation boundary — a type position (`let x: ⏐`,
+    /// `fn f() -> T⏐`)
+    Annotation { prefix: String },
+    /// the bare tiers, with the partial ident if one is mid-typed
+    Bare { prefix: String },
+    /// the `mod NAME;` name slot — the node under the cursor (the decl
+    /// being typed, or the `mod` fence) + the typed prefix
+    ModName { node: AnyHandle, prefix: String },
+    /// the type slot's `.`/`::` member request (`let c: layout.Co⏐`):
+    /// the head segments for the mod tier, the tail ident for the
+    /// member tier — no bare fallthrough (a miss is an empty list)
+    TypeDot {
+        head: Vec<String>,
+        tail: IdentId,
+        prefix: String,
+    },
 }
 
 /// the typed part of `sp` — the slice up to the cursor (a cursor past
@@ -362,46 +355,57 @@ fn gap_spells(head: &File, from: u32, pos: u32, punct: char) -> bool {
     gap.rfind(punct).is_some()
 }
 
-/// the bare tiers' prefix: the partial ident the cursor sits in
-/// (`Ve⏐` → `Ve`), from the tree — a path segment, a let/param name —
-/// else the fence residue (`Doc::name_at`)
-fn bare_prefix_walk(head: &File, p0: rut_ast::AnyHandle, pos: u32, src: &str) -> String {
-    use crate::semantic::on_name;
-    let ast = head.doc.ast();
-    if let Some(p) = p0.downcast::<PathNode>() {
-        for s in &p.get(ast).segs {
-            if on_name(s.name.span, pos) {
-                return partial_text(head, s.name.span, pos);
+/// the bare tiers' prefix — the typed part of the name the ONE
+/// classification rides: a lone path segment, a declaring name (a
+/// let/param/loop-var mid-typed), a path segment (a `::` head the
+/// qualified lane did not take) — the doc's `text` from the cursor's
+/// name span start to `pos`; the fence residue keeps `Doc::name_at`
+/// (the word under the byte before the cursor, when the probe landed
+/// on an error fence)
+fn bare_prefix(
+    w: &World,
+    head: &File,
+    ast: &rut_ast::Ast,
+    p0: rut_ast::AnyHandle,
+    pos: u32,
+    c: &Cursor,
+    src: &str,
+) -> String {
+    let on = |sp: Span| partial_text(head, sp, pos);
+    if std::env::var("RUT_EDGE_DEBUG").is_ok() {
+        let kind = match c {
+            Cursor::Name { .. } => "Name",
+            Cursor::Decl(_) => "Decl",
+            Cursor::Path { .. } => "Path",
+            Cursor::Nothing => "Nothing",
+            _ => "other",
+        };
+        let nb = w
+            .file(w.id_of(head))
+            .doc
+            .bindings()
+            .iter()
+            .map(|b| (ast.name(b.name), b.decl_ident_span.lo, b.decl_ident_span.hi))
+            .collect::<Vec<_>>();
+        eprintln!(
+            "bare debug: pos={pos} cursor={kind} p0={:?} bindings={nb:?}",
+            p0.kind
+        );
+    }
+    match c {
+        Cursor::Name { span, .. } => on(*span),
+        Cursor::Decl(d) => on(d.name_span(w)),
+        Cursor::Path { node, at, .. } => on(cursor::path_seg(ast, *node, *at).1),
+        // the fence residue: the word under the byte before the cursor
+        _ if p0.is::<rut_ast::ErrorNode>() => {
+            if let Some((sp, _)) = head.doc.name_at(pos.saturating_sub(1)) {
+                let end = (pos as usize).clamp(sp.lo as usize, sp.hi as usize);
+                return src[sp.lo as usize..end].to_string();
             }
+            String::new()
         }
+        _ => String::new(),
     }
-    if let Some(l) = p0.downcast::<rut_ast::LetStmtNode>() {
-        let d = l.get(ast);
-        if on_name(d.name.span, pos) {
-            return partial_text(head, d.name.span, pos);
-        }
-        if let Some(ns) = &d.destructure {
-            for n in ns {
-                if on_name(n.span, pos) {
-                    return partial_text(head, n.span, pos);
-                }
-            }
-        }
-    }
-    if let Some(p) = p0.downcast::<rut_ast::ParamNode>() {
-        let d = p.get(ast);
-        if on_name(d.name.span, pos) {
-            return partial_text(head, d.name.span, pos);
-        }
-    }
-    // the fence residue: the word under the byte before the cursor
-    if p0.is::<rut_ast::ErrorNode>() {
-        if let Some((sp, _)) = head.doc.name_at(pos.saturating_sub(1)) {
-            let end = (pos as usize).clamp(sp.lo as usize, sp.hi as usize);
-            return src[sp.lo as usize..end].to_string();
-        }
-    }
-    String::new()
 }
 
 /// the dot context, text-backed: the source before `pos` ends with a

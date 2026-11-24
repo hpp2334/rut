@@ -1,14 +1,20 @@
 //! The typing edge — the walk that names the completion context from
 //! the tree: the byte before the cursor lands the probe, and the
 //! probe's own node kind (or its ancestors') names the tier — the
-//! Edge verdict the dispatcher matches. No token scans.
+//! Edge verdict the dispatcher matches. The three ON-NAME shapes are
+//! the ONE classification's ([`crate::resolve::cursor`]: `Cursor::Use`
+//! names the use tier's walk, `Cursor::Member` the member tier,
+//! `Cursor::Path` on the tail the qualified tier); the
+//! between-tokens probes — the annotation boundary, the mod-name
+//! slot, the dangling `::`, the cursor past a member — are
+//! completion's own. No token scans.
 
 use rut_ast::{AnyHandle, Ast, FieldNode, MethodNode, ModDeclNode, NodeKindId, PathNode, UseNode};
 
-use crate::semantic::on_name;
+use crate::resolve::cursor::{self, Cursor, UseAt};
 use crate::world::{File, FileId, World};
 
-use super::{bare_prefix_walk, gap_spells, partial_text, ty_slot_dot, ty_slot_prefix, Edge};
+use super::{bare_prefix, gap_spells, partial_text, ty_slot_dot, ty_slot_prefix, Edge};
 
 /// the typing edge — the walk: the byte before the cursor lands the
 /// probe, and the probe's own node kind (or its ancestors') names the
@@ -56,11 +62,14 @@ pub(super) fn typing_edge(w: &World, file: FileId, pos: u32, src: &str) -> Edge 
             prefix: String::new(),
         };
     };
+    // the ONE classification — the three on-name shapes read it; the
+    // between-tokens probes below keep their own walks
+    let c = cursor::cursor(w, file, pos);
     // the use tier — a Use ancestor (uses are ITEMS: only a probe
     // inside the use statement itself has one)
     for a in ast.ancestors(p0) {
-        if let Some(u) = a.downcast::<UseNode>() {
-            return use_edge(head, ast, a, u.get(ast), pos);
+        if a.downcast::<UseNode>().is_some() {
+            return use_edge(w, file, head, ast, a, pos, &c);
         }
         if a.is::<rut_ast::ModuleNode>() {
             break;
@@ -72,8 +81,28 @@ pub(super) fn typing_edge(w: &World, file: FileId, pos: u32, src: &str) -> Edge 
     if let Some(e) = mod_name_edge(head, ast, p0, pos, src) {
         return e;
     }
-    // the member lane — a method call (the partial shape rides its
-    // absent member as the empty prefix) or a field access
+    // the member lane — the cursor's Member shape (a method call's
+    // member, a field access's name; the incomplete `recv.` rides its
+    // absent member as the empty prefix). The BETWEEN-TOKENS shapes —
+    // the cursor past the member (`f(`'s arg slot) — keep the node's
+    // own walk below (the probe reaches what the classification
+    // cannot: a cursor mid-call names no member position).
+    if let Cursor::Member {
+        node,
+        recv: cursor::Recv::Expr(e),
+        name,
+    } = &c
+    {
+        let prefix = match name {
+            Some(_) => partial_text(head, cursor::member_span(ast, *node), pos),
+            None => String::new(),
+        };
+        return Edge::Member {
+            node: *node,
+            recv: *e,
+            prefix,
+        };
+    }
     if let Some(m) = p0.downcast::<MethodNode>() {
         let d = m.get(ast);
         let prefix = d
@@ -94,28 +123,33 @@ pub(super) fn typing_edge(w: &World, file: FileId, pos: u32, src: &str) -> Edge 
             prefix: partial_text(head, d.name.span, pos),
         };
     }
-    // the qualified lane — a `::` path whose TAIL segment the cursor
-    // rides (a single-seg path is a bare position; the head segments
-    // are the walk)
+    // the qualified lane — the cursor's Path shape, the tail segment
+    // the cursor rides, the VALUE spelling (a type slot keeps the
+    // annotation probes below). A single-seg path is a bare position
+    // (the classification answers Name); the head segments are the
+    // walk. A caret ON a tail's end byte still rides the tail (the
+    // probe backs one node, the caret stays).
+    if let Cursor::Path {
+        node,
+        segs,
+        at,
+        is_ty: false,
+    } = &c
+    {
+        if at + 1 == segs.len() {
+            let sp = cursor::path_seg(ast, *node, *at).1;
+            return Edge::Qualified {
+                segs: segs[..*at].to_vec(),
+                prefix: partial_text(head, sp, pos),
+            };
+        }
+    }
+    // the dangling `::` — the cursor strictly past the last segment
+    // (the head's members tier): every seg is the walk, the prefix
+    // empty. (A cursor ON the name's end is the bare typing edge, not
+    // a `::` request.)
     if let Some(p) = p0.downcast::<PathNode>() {
         let segs = &p.get(ast).segs;
-        if segs.len() >= 2 {
-            if let Some(i) = segs.iter().position(|s| on_name(s.name.span, pos)) {
-                if i + 1 == segs.len() {
-                    return Edge::Qualified {
-                        segs: segs[..i]
-                            .iter()
-                            .map(|s| ast.name(s.name.ident).to_string())
-                            .collect(),
-                        prefix: partial_text(head, segs[i].name.span, pos),
-                    };
-                }
-            }
-        }
-        // the cursor strictly past the last segment — the dangling
-        // `::` (the head's members tier): every seg is the walk, the
-        // prefix empty. (A cursor ON the name's end is the bare
-        // typing edge, not a `::` request.)
         if let Some(last) = segs.last() {
             if last.name.span.hi < pos {
                 return Edge::Qualified {
@@ -227,46 +261,75 @@ pub(super) fn typing_edge(w: &World, file: FileId, pos: u32, src: &str) -> Edge 
         }
     }
     Edge::Bare {
-        prefix: bare_prefix_walk(head, p0, pos, src),
+        prefix: bare_prefix(w, head, ast, p0, pos, &c, src),
     }
 }
 
-/// the use tier's context, off the node's own recorded spans: a path
-/// segment under the cursor walks the path BEFORE it with the partial
-/// seg as the prefix; a leaf name (brace list or flat form) walks the
-/// FULL path with the partial name as the prefix; past a separator
-/// with nothing typed, the full path and an empty prefix.
-fn use_edge(head: &File, ast: &Ast, node: AnyHandle, u: &UseNode, pos: u32) -> Edge {
-    // the walk carries the path BEFORE the segment the cursor rides
-    // (the riding segment is the typed prefix — `use po⏐` is the
-    // module-NAME tier; a sync that ran past the incomplete leaf can
-    // leave later tokens in the path — the statement's recovery — and
-    // they are not the walk)
-    let ridden = u
+/// the use tier's context: ON a path segment or leaf the ONE
+/// classification carries the shape — everything before the ridden
+/// segment is the walk, the typed prefix rides the cursor's own span.
+/// OFF-name (after `{`, past a separator with nothing typed) the
+/// statement's own spans carry the walk: everything spelled before the
+/// cursor, the prefix empty (the sync-race guard — a sync that ran
+/// past the incomplete leaf can leave later tokens in the path, the
+/// statement's recovery, and they are not the walk).
+fn use_edge(
+    w: &World,
+    file: FileId,
+    head: &File,
+    ast: &Ast,
+    node: AnyHandle,
+    pos: u32,
+    c: &Cursor,
+) -> Edge {
+    if let Cursor::Use {
+        node: cnode,
+        segs,
+        at,
+    } = c
+    {
+        let k = match at {
+            UseAt::Head => 0,
+            UseAt::Segment(k) => *k,
+            UseAt::Leaf(_) => segs.len(),
+        };
+        let sp = cursor::cursor_span(w, file, c);
+        // the walk's segs off the node's own spans — a sync that ran
+        // past an incomplete leaf can leave later tokens in the path
+        // (the statement's recovery), and they are not the walk
+        let ud = node
+            .downcast::<UseNode>()
+            .expect("a use ancestor rides a use node")
+            .get(ast);
+        let before: Vec<String> = match at {
+            UseAt::Leaf(_) => ud
+                .path
+                .iter()
+                .filter(|n| n.span.hi <= pos)
+                .map(|n| ast.name(n.ident).to_string())
+                .collect(),
+            _ => ud.path[..k]
+                .iter()
+                .map(|n| ast.name(n.ident).to_string())
+                .collect(),
+        };
+        return Edge::Use {
+            node: *cnode,
+            segs: before,
+            prefix: partial_text(head, sp, pos),
+        };
+    }
+    // off-name: everything spelled before the cursor is the walk
+    let u = node
+        .downcast::<UseNode>()
+        .expect("a use ancestor rides a use node")
+        .get(ast);
+    let before: Vec<String> = u
         .path
         .iter()
-        .position(|n| n.span.lo <= pos && pos <= n.span.hi);
-    let before: Vec<String> = match ridden {
-        Some(k) => u.path[..k]
-            .iter()
-            .map(|n| ast.name(n.ident).to_string())
-            .collect(),
-        None => u
-            .path
-            .iter()
-            .filter(|n| n.span.hi <= pos)
-            .map(|n| ast.name(n.ident).to_string())
-            .collect(),
-    };
-    for n in u.path.iter().chain(&u.names) {
-        if on_name(n.span, pos) {
-            return Edge::Use {
-                node,
-                segs: before,
-                prefix: partial_text(head, n.span, pos),
-            };
-        }
-    }
+        .filter(|n| n.span.hi <= pos)
+        .map(|n| ast.name(n.ident).to_string())
+        .collect();
     Edge::Use {
         node,
         segs: before,

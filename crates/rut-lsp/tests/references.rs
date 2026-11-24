@@ -642,3 +642,26 @@ both_uri_shapes! {
         assert_refs(&mut s, &uri, src, "r.go()", 1, 2, &[byte_of(src, "r.go()", 1) + 2]);
     }
 }
+
+both_uri_shapes! {
+    #[test]
+    fn references_on_a_use_head_answers_the_sibling_use_sites() {
+        // DELTA (Act 4 — the scan matches the walk's DEFS): a use head
+        // resolves to the package's own def (`Def::Module`), so a
+        // sibling spelling of the same head is a reference of it. The
+        // base tree's matcher keyed on decl records — a module has no
+        // decl record, so the head answered `[]` (RED there).
+        let mut s = S::boot();
+        s.index_mod_at(WIDGET_URI, "gadgets", "", WIDGET_SRC);
+        let uri = "file:///t/main.rut";
+        let src = "use gadgets::{ Widget };\nentry fn main() -> nil {\n    let w = Widget { id: 1 };\n}\n";
+        let hits = s.refs_in(uri, src, "use gadgets", 1, 4, true);
+        assert_eq!(hits.len(), 1, "{hits:?}");
+        assert_eq!(hits[0]["uri"], uri, "{hits:?}");
+        assert_eq!(span_of(src, &hits[0]).0 as u32, byte_of(src, "gadgets", 1), "{hits:?}");
+        // include_decl adds nothing here: a module names no declaring
+        // ident in the scan (its answer IS the file top)
+        let hits = s.refs_in(uri, src, "use gadgets", 1, 4, false);
+        assert_eq!(hits.len(), 1, "{hits:?}");
+    }
+}

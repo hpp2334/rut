@@ -30,33 +30,6 @@ impl<'a> TyView<'a> {
         self.file.doc.src()
     }
 
-    /// the declaring ident's span (the definition target)
-    pub(crate) fn name_span(&self) -> Option<rut_lexer::span::Span> {
-        Some(self.name_span_raw())
-    }
-
-    /// the node's own recorded name span (the degenerate-empty span
-    /// included — fields fall back to their own extent)
-    fn name_span_raw(&self) -> rut_lexer::span::Span {
-        let ast = self.ast();
-        macro_rules! ns {
-            ($t:ty) => {
-                if let Some(d) = self.h.downcast::<$t>() {
-                    return d.get(ast).name.span;
-                }
-            };
-        }
-        ns!(ClassNode);
-        ns!(StructNode);
-        ns!(InterfaceNode);
-        ns!(EnumNode);
-        ns!(BuiltinTyNode);
-        ns!(BuiltinPrimitiveNode);
-        ns!(SurfaceStructNode);
-        ns!(AliasNode);
-        unreachable!("a type view addresses a type decl node")
-    }
-
     pub(crate) fn name(&self) -> &'a str {
         let ast = self.ast();
         macro_rules! nm {

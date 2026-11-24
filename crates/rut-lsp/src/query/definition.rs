@@ -23,13 +23,12 @@
 //!   `pub(super)`/`pub(pkg)` rules gate the use lanes inside the
 //!   walk); generics resolve at the head.
 //!
-//! `get_definition` is also `references`' entry until Act 4, so the
-//! reference scan rides the unified walk's answers in this change.
-//! What `references` still reads from here — [`Ctx`], `DefLocation`,
-//! [`loc_at`], [`node_name`], [`ty_span`], [`fn_span`] — dies there.
+//! The silence gate ([`definition_silent`]) is the one law's
+//! definition-side half — `references` rides it at the same cursor
+//! kinds for its query AND every scanned site (a refused name counts
+//! nothing, on either side of the query).
 
 use crate::resolve::cursor::{Cursor, UseAt};
-use crate::semantic::Span;
 use crate::world::collection::{one_name_refused, MemberHit, MemberTarget};
 use crate::world::infer::QualHit;
 use crate::world::types::head_of_ty;
@@ -37,18 +36,7 @@ use crate::world::{File, FileId, World};
 
 use rut_ast::UseNode;
 
-pub(crate) use crate::resolve::def::{loc_at, DefLocation};
-
-/// everything one query needs — the session's world beside the
-/// queried file's id in it (the open document's own entry; its
-/// buffer is the truth). `references` builds the same shape per
-/// candidate file, so the matcher runs unchanged there.
-pub struct Ctx<'a> {
-    /// the session's world — every file the query reads
-    pub w: &'a World,
-    /// the queried file — its own entry in the world
-    pub file: FileId,
-}
+use crate::resolve::DefLocation;
 
 // ---- definition ----
 
@@ -64,9 +52,7 @@ pub struct Ctx<'a> {
 /// `textDocument/declaration` request (the three-lane ABI is frozen),
 /// so the door has no caller; the pick policy's single decision point
 /// makes the inverted walk a local change when one arrives.
-pub fn get_definition(ctx: &Ctx, pos: u32) -> Vec<DefLocation> {
-    let w = ctx.w;
-    let file = ctx.file;
+pub fn definition(w: &World, file: FileId, pos: u32) -> Vec<DefLocation> {
     let c = crate::resolve::cursor::cursor(w, file, pos);
     let defs = crate::resolve::walk::resolve(w, file, &c);
     // the one-name law's silence (see the module doc)
@@ -80,8 +66,9 @@ pub fn get_definition(ctx: &Ctx, pos: u32) -> Vec<DefLocation> {
 /// points (by cursor kind): a use leaf the file binds twice, and a
 /// bare name the binding layer cannot resolve beside a second
 /// distinct binding. Decl sites answered before the gate (the walk's
-/// `Decl` arm) — never silenced.
-fn definition_silent(w: &World, file: FileId, pos: u32, c: &Cursor) -> bool {
+/// `Decl` arm) — never silenced. `references` rides the same gate on
+/// its query and on every scanned site.
+pub(crate) fn definition_silent(w: &World, file: FileId, pos: u32, c: &Cursor) -> bool {
     let d = w.file(file);
     let ast = d.doc.ast();
     match c {
@@ -112,9 +99,7 @@ fn definition_silent(w: &World, file: FileId, pos: u32, c: &Cursor) -> bool {
 /// position keys the name lanes on the cursor's own recorded name and
 /// locates the type head's targets
 /// ([`crate::resolve::walk::type_targets`]).
-pub fn get_type_definition(ctx: &Ctx, pos: u32) -> Vec<DefLocation> {
-    let w = ctx.w;
-    let file = ctx.file;
+pub fn get_type_definition(w: &World, file: FileId, pos: u32) -> Vec<DefLocation> {
     let doc = w.file(file);
     let c = crate::resolve::cursor::cursor(w, file, pos);
     // the fence residue and the Self spellings name no declaration
@@ -240,109 +225,4 @@ fn cursor_name(w: &World, file: FileId, c: &Cursor) -> Option<rut_core::IdentId>
 /// shape (the queried file first, the world after)
 fn files_of(w: &World, file: FileId) -> Vec<&File> {
     w.chain(file).map(|id| w.file(id)).collect()
-}
-
-// ---- what references still reads (until Act 4) ----
-
-/// a type's definition target span — the declaring ident (the node's
-/// own recorded name span); the whole decl is the fallback when the
-/// name span is missing on a degenerate parse
-pub(crate) fn ty_span(t: &crate::world::collection::TyView) -> Span {
-    t.name_span().unwrap_or(t.span())
-}
-
-pub(crate) fn fn_span(f: &crate::world::collection::FnView) -> Span {
-    f.name_span().unwrap_or(f.span())
-}
-
-/// the (name id, name span) the cursor's node records — a path
-/// segment, a param name, a let's name (destructured members
-/// included), a loop variable
-pub(crate) fn node_name(
-    ast: &rut_ast::Ast,
-    h: rut_ast::AnyHandle,
-    pos: u32,
-) -> Option<(rut_core::IdentId, Span)> {
-    use crate::semantic::on_name;
-    if let Some(p) = h.downcast::<rut_ast::PathNode>() {
-        for s in &p.get(ast).segs {
-            if on_name(s.name.span, pos) {
-                return Some((s.name.ident, s.name.span));
-            }
-        }
-        return None;
-    }
-    if let Some(p) = h.downcast::<rut_ast::ParamNode>() {
-        let d = p.get(ast);
-        return on_name(d.name.span, pos).then_some((d.name.ident, d.name.span));
-    }
-    if let Some(l) = h.downcast::<rut_ast::LetStmtNode>() {
-        let d = l.get(ast);
-        if on_name(d.name.span, pos) {
-            return Some((d.name.ident, d.name.span));
-        }
-        if let Some(ns) = &d.destructure {
-            for n in ns {
-                if on_name(n.span, pos) {
-                    return Some((n.ident, n.span));
-                }
-            }
-        }
-        return None;
-    }
-    if let Some(f) = h.downcast::<rut_ast::ForOfNode>() {
-        let d = f.get(ast);
-        return on_name(d.var.span, pos).then_some((d.var.ident, d.var.span));
-    }
-    if let Some(f) = h.downcast::<rut_ast::ForCNode>() {
-        let d = f.get(ast);
-        return on_name(d.var.span, pos).then_some((d.var.ident, d.var.span));
-    }
-    // struct-literal field labels are name positions (the FieldInit
-    // rides the literal as data — no node of its own)
-    if let Some(sl) = h.downcast::<rut_ast::StructLitNode>() {
-        for fi in &sl.get(ast).fields {
-            if on_name(fi.name.span, pos) {
-                return Some((fi.name.ident, fi.name.span));
-            }
-        }
-        return None;
-    }
-    // type positions are name positions too (`x: i32|` — the slot's
-    // own path node)
-    if let Some(t) = h.downcast::<rut_ast::TyPathNode>() {
-        for seg in &t.get(ast).segs {
-            if on_name(seg.name.span, pos) {
-                return Some((seg.name.ident, seg.name.span));
-            }
-        }
-        return None;
-    }
-    // the decl nodes: the cursor on the declared NAME is a name
-    // position (the walk's decl arm answers fields, lets, fns, and
-    // mod edges — types and aliases ride here; references keys its
-    // targets on these)
-    macro_rules! decl_node {
-        ($t:ty) => {
-            if let Some(d) = h.downcast::<$t>() {
-                let dd = d.get(ast);
-                return on_name(dd.name.span, pos).then_some((dd.name.ident, dd.name.span));
-            }
-        };
-    }
-    decl_node!(rut_ast::FieldDeclNode);
-    decl_node!(rut_ast::EnumMemberNode);
-    decl_node!(rut_ast::ModuleLetNode);
-    decl_node!(rut_ast::ClassNode);
-    decl_node!(rut_ast::StructNode);
-    decl_node!(rut_ast::InterfaceNode);
-    decl_node!(rut_ast::EnumNode);
-    decl_node!(rut_ast::BuiltinTyNode);
-    decl_node!(rut_ast::BuiltinPrimitiveNode);
-    decl_node!(rut_ast::SurfaceStructNode);
-    decl_node!(rut_ast::AliasNode);
-    decl_node!(rut_ast::MethodDeclNode);
-    decl_node!(rut_ast::FnNode);
-    decl_node!(rut_ast::ModDeclNode);
-    None
 }

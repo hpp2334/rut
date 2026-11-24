@@ -27,6 +27,19 @@
 //! bug. Inlay text is the sanctioned source-less rendering (inferred);
 //! tooltips render the written decl verbatim via the views.
 
+//! The consistency law: a type hint's text is the SAME string hover
+//! shows for the binding — one source (the declared annotation's span
+//! join, else the resolver's answer), literal defaults included — and
+//! the tooltip IS the binding's hover markdown. Divergence would be a
+//! bug. Inlay text is the sanctioned source-less rendering (inferred);
+//! tooltips render the written decl verbatim via the views.
+//!
+//! The LIFECYCLE: [`compute`] runs the whole-document pass once per
+//! document version — the SESSION caches the rows beside the version
+//! (the shell's old per-version lazy view, lifted out so this layer
+//! no longer hangs off the doc artifact); [`inlay_hints`] filters the
+//! rows to the asked range (presentation) and renders them.
+
 use ls_types::{
     InlayHint, InlayHintKind, InlayHintLabel, InlayHintTooltip, MarkupContent, MarkupKind, Position,
 };
@@ -36,33 +49,11 @@ use rut_ast::{ElseBranch, ExprRef, ItemRef, StmtRef};
 use crate::world::types::head_of_ty;
 use crate::world::{FileId, World};
 
-/// everything one inlay query needs — the session's world beside the
-/// queried file's id in it (its kept document owns the
-/// tree, the line index, and the text)
-pub struct Ctx<'a> {
-    /// the session's world — every file the query reads
-    pub w: &'a World,
-    /// the queried file — its own entry in the world
-    pub file: FileId,
-}
-
-impl Ctx<'_> {
-    /// the queried file's own entry
-    fn doc(&self) -> &'_ crate::world::File {
-        self.w.file(self.file)
-    }
-
-    /// the queried file's tree
-    fn ast(&self) -> &rut_ast::Ast {
-        self.doc().doc.ast()
-    }
-}
-
 /// one hint before position/label conversion — byte-based so the range
-/// filter runs in the spans' currency. The PER-VERSION lazy view's row
-/// (the shell caches the computed pass beside its other lazies and
-/// drops it on sync)
-pub(crate) struct RawInlay {
+/// filter runs in the spans' currency. The PER-VERSION cached row: the
+/// session holds `Arc<[InlayRow]>` beside the document version that
+/// produced it.
+pub(crate) struct InlayRow {
     pub byte: u32,
     pub label: String,
     pub kind: InlayHintKind,
@@ -71,20 +62,12 @@ pub(crate) struct RawInlay {
 
 /// `textDocument/inlayHint` for `[lo, hi]` (byte offsets into the
 /// normalized source — the full document when the face passes 0..len).
-/// THE PASS is the shell's lazy per-version view: computed at first
-/// read over the whole document, cached beside the doc's other lazies
-/// (dropped by sync — a new version recomputes), and the range filter
-/// rides the cache (presentation). Sorted by position.
-pub fn hints(ctx: &Ctx, lo: u32, hi: u32) -> Vec<InlayHint> {
-    let doc = ctx.doc();
-    let raw = doc.doc.inlays_view(|| {
-        let mut raw: Vec<RawInlay> = Vec::new();
-        type_hints(ctx, &mut raw);
-        call_hints(ctx, &mut raw);
-        raw.sort_by_key(|h| doc.doc.position(h.byte));
-        raw
-    });
-    raw.iter()
+/// THE PASS rides the session's per-version cache ([`compute`] at the
+/// caller's hand when the version moved); the range filter over the
+/// rows is presentation. Sorted by position.
+pub fn inlay_hints(w: &World, file: FileId, lo: u32, hi: u32, rows: &[InlayRow]) -> Vec<InlayHint> {
+    let doc = w.file(file);
+    rows.iter()
         .filter(|h| h.byte >= lo && h.byte <= hi)
         .map(|h| {
             let (line, character) = doc.doc.position(h.byte);
@@ -107,13 +90,27 @@ pub fn hints(ctx: &Ctx, lo: u32, hi: u32) -> Vec<InlayHint> {
         .collect()
 }
 
+/// the whole-document pass — TYPE hints on the unannotated bindings
+/// and module lets, PARAMETER hints at the exact-arity call sites —
+/// sorted by position. Run once per document version; the session
+/// caches the answer.
+pub(crate) fn compute(w: &World, file: FileId) -> Vec<InlayRow> {
+    let mut raw: Vec<InlayRow> = Vec::new();
+    type_hints(w, file, &mut raw);
+    call_hints(w, file, &mut raw);
+    let doc = w.file(file);
+    raw.sort_by_key(|h| doc.doc.position(h.byte));
+    raw
+}
+
 /// TYPE hints — the bindings pass's unannotated rows (the doc's own
 /// lazy pass read internally) and the decl layer's module lets whose
 /// annotation is absent. Position: the end of the binding's declaring
 /// ident (VS Code's dotted-decoration spot). Label: `: Type` — the
 /// server supplies the colon. Tooltip: the hover markdown.
-fn type_hints(ctx: &Ctx, out: &mut Vec<RawInlay>) {
-    let doc = ctx.doc();
+fn type_hints(w: &World, file: FileId, out: &mut Vec<InlayRow>) {
+    let doc = w.file(file);
+    let ast = doc.doc.ast();
     for b in doc.doc.bindings() {
         // an unannotated row IS the trigger (`ty_span` absent — a
         // normal absent slot); the label only lands when the resolver
@@ -124,14 +121,14 @@ fn type_hints(ctx: &Ctx, out: &mut Vec<RawInlay>) {
         if !matches!(b.kind, rut_ast::BindKind::Let | rut_ast::BindKind::IterVar) {
             continue;
         }
-        let Some(ty) = crate::world::collection::binding_ty(ctx.w, ctx.file, b)
-            .filter(|t| !t.trim().is_empty())
+        let Some(ty) =
+            crate::world::collection::binding_ty(w, file, b).filter(|t| !t.trim().is_empty())
         else {
             continue;
         };
-        let name = doc.doc.ast().name(b.name);
+        let name = ast.name(b.name);
         let tooltip = crate::query::hover::binding_markdown(b, name, Some(ty.clone()));
-        out.push(RawInlay {
+        out.push(InlayRow {
             byte: b.decl_ident_span.hi,
             label: format!(": {ty}"),
             kind: InlayHintKind::TYPE,
@@ -144,7 +141,7 @@ fn type_hints(ctx: &Ctx, out: &mut Vec<RawInlay>) {
     for l in doc.lets() {
         if l.h
             .downcast::<rut_ast::ModuleLetNode>()
-            .map(|n| n.get(ctx.ast()).ty.is_some())
+            .map(|n| n.get(ast).ty.is_some())
             == Some(true)
         {
             continue;
@@ -153,7 +150,7 @@ fn type_hints(ctx: &Ctx, out: &mut Vec<RawInlay>) {
             continue;
         };
         let Some(name) = l.name_span() else { continue };
-        out.push(RawInlay {
+        out.push(InlayRow {
             byte: name.hi,
             label: format!(": {text}"),
             kind: InlayHintKind::TYPE,
@@ -165,40 +162,43 @@ fn type_hints(ctx: &Ctx, out: &mut Vec<RawInlay>) {
 /// PARAMETER hints — one walk over every body (fns, methods, lambdas,
 /// module-let initializers), a hint per arg where the callee's recorded
 /// params match the arity exactly.
-fn call_hints(ctx: &Ctx, out: &mut Vec<RawInlay>) {
-    let mut cx = CallCx { ctx, out };
-    for item in ctx.ast().root().items(ctx.ast()) {
+fn call_hints(w: &World, file: FileId, out: &mut Vec<InlayRow>) {
+    let mut cx = CallCx { w, file, out };
+    let ast = w.file(file).doc.ast();
+    for item in ast.root().items(ast) {
         match item {
-            ItemRef::Fn(h) => cx.walk_block(h.get(ctx.ast()).body),
-            ItemRef::Class(h) => cx.walk_methods(&h.get(ctx.ast()).methods),
-            ItemRef::Struct(h) => cx.walk_methods(&h.get(ctx.ast()).methods),
-            ItemRef::Interface(h) => cx.walk_methods(&h.get(ctx.ast()).methods),
-            ItemRef::Impl(h) => cx.walk_methods(&h.get(ctx.ast()).methods),
-            ItemRef::ModuleLet(h) => cx.walk_expr(h.get(ctx.ast()).init),
+            ItemRef::Fn(h) => cx.walk_block(h.get(ast).body),
+            ItemRef::Class(h) => cx.walk_methods(&h.get(ast).methods),
+            ItemRef::Struct(h) => cx.walk_methods(&h.get(ast).methods),
+            ItemRef::Interface(h) => cx.walk_methods(&h.get(ast).methods),
+            ItemRef::Impl(h) => cx.walk_methods(&h.get(ast).methods),
+            ItemRef::ModuleLet(h) => cx.walk_expr(h.get(ast).init),
             _ => {}
         }
     }
 }
 
 struct CallCx<'a> {
-    ctx: &'a Ctx<'a>,
-    out: &'a mut Vec<RawInlay>,
+    w: &'a World,
+    file: FileId,
+    out: &'a mut Vec<InlayRow>,
 }
 
 impl CallCx<'_> {
     fn walk_methods(&mut self, methods: &[rut_ast::MethodRef]) {
+        let ast = self.w.file(self.file).doc.ast();
         for m in methods {
             let rut_ast::MethodRef::Method(h) = m else {
                 continue;
             };
-            if let Some(body) = h.get(self.ctx.ast()).body {
+            if let Some(body) = h.get(ast).body {
                 self.walk_block(body);
             }
         }
     }
 
     fn walk_block(&mut self, block: rut_ast::Handle<rut_ast::BlockNode>) {
-        let d = block.get(self.ctx.ast());
+        let d = block.get(self.w.file(self.file).doc.ast());
         for s in d.stmts.iter().copied() {
             self.walk_stmt(s);
         }
@@ -209,22 +209,23 @@ impl CallCx<'_> {
     }
 
     fn walk_stmt(&mut self, s: StmtRef) {
+        let ast = self.w.file(self.file).doc.ast();
         match s {
-            StmtRef::Let(h) => self.walk_expr(h.get(self.ctx.ast()).init),
+            StmtRef::Let(h) => self.walk_expr(h.get(ast).init),
             StmtRef::ForOf(h) => {
-                let d = h.get(self.ctx.ast());
+                let d = h.get(ast);
                 self.walk_expr(d.iter);
                 self.walk_block(d.body);
             }
             StmtRef::ForC(h) => {
-                let d = h.get(self.ctx.ast());
+                let d = h.get(ast);
                 self.walk_expr(d.init);
                 self.walk_expr(d.cond);
                 self.walk_expr(d.update);
                 self.walk_block(d.body);
             }
             StmtRef::If(h) => {
-                let d = h.get(self.ctx.ast());
+                let d = h.get(ast);
                 self.walk_expr(d.cond);
                 self.walk_block(d.then);
                 match d.els {
@@ -234,19 +235,19 @@ impl CallCx<'_> {
                 }
             }
             StmtRef::While(h) => {
-                let d = h.get(self.ctx.ast());
+                let d = h.get(ast);
                 self.walk_expr(d.cond);
                 self.walk_block(d.body);
             }
             StmtRef::When(h) => {
-                let d = h.get(self.ctx.ast());
+                let d = h.get(ast);
                 self.walk_expr(d.scrut);
                 for a in &d.arms {
-                    self.walk_expr(a.get(self.ctx.ast()).body);
+                    self.walk_expr(a.get(ast).body);
                 }
             }
             StmtRef::Return(h) => {
-                if let Some(v) = h.get(self.ast()).value {
+                if let Some(v) = h.get(ast).value {
                     self.walk_expr(v);
                 }
             }
@@ -256,7 +257,7 @@ impl CallCx<'_> {
     }
 
     fn walk_expr(&mut self, e: ExprRef) {
-        let ast = self.ctx.ast();
+        let ast = self.w.file(self.file).doc.ast();
         match e {
             ExprRef::Call(h) => {
                 let (callee, args) = {
@@ -283,17 +284,13 @@ impl CallCx<'_> {
                 }
             }
             ExprRef::Block(bh) => self.walk_block(bh),
-            ExprRef::Lambda(h) => self.walk_expr(h.get(self.ast()).body),
+            ExprRef::Lambda(h) => self.walk_expr(h.get(ast).body),
             _ => {
-                for c in rut_ast::expr_children(self.ast(), e) {
+                for c in rut_ast::expr_children(ast, e) {
                     self.walk_expr(c);
                 }
             }
         }
-    }
-
-    fn ast(&self) -> &rut_ast::Ast {
-        self.ctx.ast()
     }
 
     /// `f(..)` — a free fn by unique match (the `call_ty` law:
@@ -302,19 +299,18 @@ impl CallCx<'_> {
         let ExprRef::Path(h) = callee else {
             return;
         };
-        let segs = &h.get(self.ast()).segs;
+        let ast = self.w.file(self.file).doc.ast();
+        let segs = &h.get(ast).segs;
         if segs.len() != 1 {
             return;
         }
-        let name = self.ast().name(segs[0].name.ident);
-        let hits: Vec<_> = self
-            .ctx
-            .w
-            .chain(self.ctx.file)
-            .flat_map(|id| self.ctx.w.file(id).fns())
-            .filter(|f| f.name() == name && f.owner().is_none())
-            .collect();
-        let [one] = hits.as_slice() else { return };
+        let name = ast.name(segs[0].name.ident);
+        let Some(one) = crate::world::collection::unique_free_fn(self.w, self.file, name) else {
+            return;
+        };
+        let Some(crate::resolve::View::Fn(one)) = one.view(self.w) else {
+            return;
+        };
         let params = one.params();
         self.arg_hints(&params, args);
     }
@@ -331,15 +327,14 @@ impl CallCx<'_> {
         name: rut_ast::IdentId,
         args: &[ExprRef],
     ) {
-        let ast = self.ctx.ast();
+        let ast = self.w.file(self.file).doc.ast();
         let pos = call.span(ast).lo;
         let head = match recv {
             ExprRef::Path(ph) if ph.get(ast).segs.len() == 1 => {
                 let id = ph.get(ast).segs[0].name.ident;
-                crate::world::collection::named_recv(self.ctx.w, self.ctx.file, pos, id)
+                crate::world::collection::named_recv(self.w, self.file, pos, id)
             }
-            _ => crate::world::collection::expr_ty(self.ctx.w, self.ctx.file, recv)
-                .map(|t| head_of_ty(&t)),
+            _ => crate::world::collection::expr_ty(self.w, self.file, recv).map(|t| head_of_ty(&t)),
         };
         let Some(ty_name) = head else { return };
         let Some(params) = self.method_params(&ty_name, ast.name(name)) else {
@@ -352,8 +347,11 @@ impl CallCx<'_> {
     /// impl-block methods only, via the shared door (own-surface
     /// methods are FINAL with no hints, never wrong names)
     fn method_params(&self, ty_name: &str, member: &str) -> Option<Vec<String>> {
-        crate::world::collection::impl_method_fn(self.ctx.w, self.ctx.file, ty_name, member)
-            .map(|f| f.params())
+        let f = crate::world::collection::impl_method_fn(self.w, self.file, ty_name, member)?;
+        let Some(crate::resolve::View::Fn(f)) = f.view(self.w) else {
+            return None;
+        };
+        Some(f.params())
     }
 
     /// one PARAMETER hint per arg, at the arg's first byte — only on
@@ -364,8 +362,8 @@ impl CallCx<'_> {
             return;
         }
         for (p, a) in params.iter().zip(args) {
-            self.out.push(RawInlay {
-                byte: a.span(self.ast()).lo,
+            self.out.push(InlayRow {
+                byte: a.span(self.w.file(self.file).doc.ast()).lo,
                 label: format!("{p}:"),
                 kind: InlayHintKind::PARAMETER,
                 tooltip: None,

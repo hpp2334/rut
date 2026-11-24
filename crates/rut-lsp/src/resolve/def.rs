@@ -126,8 +126,8 @@ impl Def {
     }
 
     /// the declared name — a node's ident, a binding row's name, a
-    /// file module's display name
-    #[allow(dead_code)] // the plan's answer API — the render half reads names off the cursor today; Act 4's references ride this
+    /// file module's display name (references' scan keys its name
+    /// pre-filter on it)
     pub(crate) fn name<'w>(&self, w: &'w World) -> &'w str {
         match self {
             Def::Node { file, node } => {

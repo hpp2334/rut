@@ -4,13 +4,13 @@
 //! every query reads it through the world. The server layer only
 //! routes and publishes; nothing here re-parses per request.
 
+use crate::resolve::DefLocation;
 use crate::semantic::{Diag, Span};
 use crate::world::{File, FileId, World};
 use ls_types::*;
 
 use crate::query::check;
 use crate::query::definition;
-use crate::query::inlay;
 use crate::query::references;
 use crate::query::signature_help;
 use crate::semantic::{SymKind, Symbol};
@@ -173,31 +173,18 @@ pub fn hover_on(w: &World, file: FileId, pos: u32) -> Option<Hover> {
 /// a workspace origin, or the prelude's true `rut/...` source path —
 /// the face resolves them (server: against the workspace root; wasm
 /// shim: the extension does).
-pub fn definition_on(w: &World, file: FileId, pos: u32) -> Vec<definition::DefLocation> {
-    definition::get_definition(&definition::Ctx { w, file }, pos)
+pub fn definition_on(w: &World, file: FileId, pos: u32) -> Vec<DefLocation> {
+    definition::definition(w, file, pos)
 }
 
 /// type definitions at a byte position: the expression's type head →
 /// that type's declaration (the cheap shape the survey priced)
-pub fn type_definition_on(w: &World, file: FileId, pos: u32) -> Vec<definition::DefLocation> {
-    definition::get_type_definition(&definition::Ctx { w, file }, pos)
-}
-
-/// inlay hints over a document range (the survey §4.3): TYPE hints on
-/// unannotated bindings (the binding pass / decl layer's inference —
-/// the same text hover shows), PARAMETER hints at exact-arity call
-/// sites. Returns full LSP values; hosts hand them to their
-/// client as-is.
-pub fn inlay_hints_on(w: &World, file: FileId, range: Range) -> Vec<InlayHint> {
-    let ctx = inlay::Ctx { w, file };
-    let doc = w.file(file);
-    let lo = doc.doc.byte(range.start.line, range.start.character);
-    let hi = doc.doc.byte(range.end.line, range.end.character);
-    inlay::hints(&ctx, lo, hi)
+pub fn type_definition_on(w: &World, file: FileId, pos: u32) -> Vec<DefLocation> {
+    definition::get_type_definition(w, file, pos)
 }
 
 /// references at an LSP position (the survey §4.4): the definition
-/// index read BACKWARDS — a token is a reference iff go-to-definition
+/// index read BACKWARDS — a token is a reference iff the one walk
 /// from it lands on the declaration under the cursor. Within-file
 /// through the binding pass (shadow-aware), cross-file through the use
 /// graph's reverse edges — over the world files' KEPT documents (no
@@ -208,9 +195,13 @@ pub fn references_on(
     line: u32,
     ch: u32,
     include_declaration: bool,
-) -> Vec<definition::DefLocation> {
-    let ctx = definition::Ctx { w, file };
-    references::references(&ctx, w.file(file).doc.byte(line, ch), include_declaration)
+) -> Vec<DefLocation> {
+    references::references(
+        w,
+        file,
+        w.file(file).doc.byte(line, ch),
+        include_declaration,
+    )
 }
 
 /// signature help at an LSP position (the survey §4.4): the callee
@@ -220,8 +211,7 @@ pub fn references_on(
 /// comma/paren depth at the request position. Ambiguity or arity
 /// mismatch → no help, never wrong help.
 pub fn signature_help_on(w: &World, file: FileId, line: u32, ch: u32) -> Option<SignatureHelp> {
-    let ctx = signature_help::Ctx { w, file };
-    signature_help::signature_help(&ctx, w.file(file).doc.byte(line, ch))
+    signature_help::signature_help(w, file, w.file(file).doc.byte(line, ch))
 }
 
 /// the check lane's merged answer for one document — the world's
