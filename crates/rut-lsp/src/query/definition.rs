@@ -318,6 +318,14 @@ fn get_definition_targets(ctx: &Ctx, pos: u32) -> Vec<DefLocation> {
         }];
     }
 
+    // an AMBIGUOUS name — two distinct bindings, a one-name violation
+    // the checker refuses — jumps NOWHERE at a use site (never a pick
+    // between them; the hover lists the candidates). Decl sites
+    // answered at layer 1, locals at layer 5 — both exact.
+    if chain.one_name_refused(&name) {
+        return Vec::new();
+    }
+
     // 6. module-let use sites — the file scope's lets (the door),
     //    every hit (the candidate list)
     let scope = chain.file_scope(&name);
@@ -389,8 +397,22 @@ fn get_type_definition_targets(ctx: &Ctx, pos: u32) -> Vec<DefLocation> {
     };
     let name = ast.name(name_id).to_string();
 
-    // a type token: its own declaration (definition's answer)
+    // a type token: its own declaration (definition's answer). A type
+    // the one-name law refuses — beside a same-named decl or leaf —
+    // answers definition's way: its own decl site is ITSELF, every
+    // other spelling of the name jumps nowhere (never a pick between
+    // the bindings)
     if crate::world::infer::is_cap(&name) || crate::semantic::is_primitive_ty(&name) {
+        if chain.one_name_refused(&name) {
+            return decl_site_span(ast, h, pos)
+                .map(|sp| {
+                    vec![DefLocation {
+                        uri: ctx.doc_uri.to_string(),
+                        range: range_of(doc.doc.lines(), doc.doc.src(), sp),
+                    }]
+                })
+                .unwrap_or_default();
+        }
         if let Some(locs) = ty_name_locations(ctx, chain, &imported, &name) {
             return locs;
         }
@@ -454,6 +476,19 @@ fn decl_site_span(ast: &rut_ast::Ast, h: rut_ast::AnyHandle, pos: u32) -> Option
     decl!(rut_ast::ModuleLetNode);
     decl!(rut_ast::FnNode);
     decl!(rut_ast::MethodDeclNode);
+    // a type decl's own name (class/struct/interface/enum/builtin/
+    // host/alias) is the declaration too — the doc's own row, never
+    // the file scope's layers: a file the one-name law refuses (the
+    // type beside a same-named decl) still jumps the decl under the
+    // cursor to ITSELF, where the scope's layers answer nothing
+    decl!(rut_ast::ClassNode);
+    decl!(rut_ast::StructNode);
+    decl!(rut_ast::InterfaceNode);
+    decl!(rut_ast::EnumNode);
+    decl!(rut_ast::BuiltinTyNode);
+    decl!(rut_ast::BuiltinPrimitiveNode);
+    decl!(rut_ast::SurfaceStructNode);
+    decl!(rut_ast::AliasNode);
     // the binding layer's decls: a param/let/loop-var whose NAME the
     // cursor rides is its own declaration (params sit before their
     // scope, so the scope-containment resolve can't see them)

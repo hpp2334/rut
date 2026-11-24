@@ -26,7 +26,7 @@ mod tiers;
 mod views;
 
 pub(crate) use member::{enclosing_type, used_ifaces, MemberHit, MemberTarget, RecvNode};
-pub(crate) use tiers::{bound_has, ExportRow, MemberRow, UseExports};
+pub(crate) use tiers::{bound_has, CandRow, Candidate, ExportRow, MemberRow, UseExports, Via};
 pub(crate) use views::{FnView, GlobUse, LetView, MemberView, ModView, TyView, UseView};
 
 use rut_ast::{

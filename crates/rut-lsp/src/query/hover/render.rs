@@ -6,7 +6,9 @@
 //! law) — nothing rendered is stored text.
 
 use crate::world::bindings::{BindKind, Binding};
-use crate::world::collection::{FnView, LetView, MemberView, ModView, MountedFile, TyView};
+use crate::world::collection::{
+    CandRow, Candidate, FnView, LetView, MemberView, ModView, MountedFile, TyView, Via,
+};
 use crate::world::types::TyForm;
 
 fn code_block(body: &str) -> String {
@@ -111,22 +113,80 @@ pub(crate) fn render_fn_hits(one: &FnView) -> String {
     out
 }
 
-pub(crate) fn render_candidates(many: &[FnView]) -> String {
+/// the candidate list — one bullet per binding: the verbatim decl
+/// (source-less only for a leaf that binds nothing), its kind, the
+/// use edge it rode when one bound it, and the owning file's
+/// provenance
+pub(crate) fn render_candidates(many: &[Candidate]) -> String {
     let mut out = String::from("multiple definitions:");
-    for f in many {
-        let where_ = match f.owner() {
-            Some(o) => format!(" ({o})"),
-            None => String::new(),
-        };
-        out.push_str(&format!(
-            "\n- `{}`{} — {}:{}",
-            f.src().replace('\n', " "),
-            where_,
-            f.file.mount.origin,
-            f.line()
-        ));
+    for c in many {
+        out.push_str("\n- ");
+        out.push_str(&c.line());
     }
     out
+}
+
+impl Candidate<'_> {
+    /// one bullet: `` `pub fn mk(n: i32) -> i32` — fn — via `use m::{
+    /// mk }` — file:///ws/app/src/m/mod.rut:13 ``
+    fn line(&self) -> String {
+        let (src, kind, provenance) = match &self.row {
+            CandRow::Ty(t) => (
+                t.head(),
+                match t.form() {
+                    TyForm::Class => "class",
+                    TyForm::Struct => "struct",
+                    TyForm::Interface => "interface",
+                    TyForm::Enum => "enum",
+                    TyForm::Builtin => "builtin",
+                    TyForm::Primitive => "builtin primitive",
+                    TyForm::HostStruct => "host struct",
+                    TyForm::Alias => "alias",
+                }
+                .to_string(),
+                Some((t.file.mount.origin.clone(), t.line())),
+            ),
+            CandRow::Let(l) => (
+                l.src(),
+                "module let".to_string(),
+                Some((l.file.mount.origin.clone(), l.line())),
+            ),
+            CandRow::Fn(f) => (
+                f.src(),
+                match f.owner() {
+                    Some(o) => format!("fn (method of `{o}`)"),
+                    None => "fn".to_string(),
+                },
+                Some((f.file.mount.origin.clone(), f.line())),
+            ),
+            CandRow::Mod(m) => (
+                m.src(),
+                "module".to_string(),
+                Some((m.file.mount.origin.clone(), m.line())),
+            ),
+            // a use leaf that binds nothing: no row of its own — the
+            // spelling is the candidate
+            CandRow::Leaf(u) => (
+                u.src(),
+                "use leaf (nothing binds)".to_string(),
+                Some((u.file.mount.origin.clone(), u.line())),
+            ),
+        };
+        let mut out = format!("`{}` — {kind}", src.replace('\n', " "));
+        match &self.via {
+            Some(Via::Leaf(u)) => {
+                out.push_str(&format!(" — via `{}`", u.src().replace('\n', " ")));
+            }
+            Some(Via::Glob(g)) => {
+                out.push_str(&format!(" — via the glob `{}`", g.spelling()));
+            }
+            None => {}
+        }
+        if let Some((origin, line)) = provenance.filter(|(o, _)| !o.is_empty()) {
+            out.push_str(&format!(" — {origin}:{line}"));
+        }
+        out
+    }
 }
 
 /// the identifier hover — the binding row rendered: the binding as it

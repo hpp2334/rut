@@ -2093,34 +2093,304 @@ both_uri_shapes! {
 
 both_uri_shapes! {
     #[test]
-    fn a_twice_bound_name_hovers_nothing() {
-        // the one-name shape: a file scope that binds a name TWICE is
-        // a file the compiler refuses at the second spelling (two use
-        // leaves of one name; an own decl beside a leaf) — the name
-        // answers nothing, never a pick between the bindings
+    fn a_twice_bound_name_hovers_its_candidates() {
+        // the mid-edit shape: a file scope that binds a name TWICE by
+        // DISTINCT bindings is a file the compiler refuses at the
+        // second spelling — the hover LISTS every binding through the
+        // candidates path (each with its kind and provenance: which
+        // decl, which `use` leaf and its source), never a pick between
+        // them; definition stays silent on the same name
         let (mut s, _io) = rut_new::boot();
         let uri = rut_new::at("src/child/mod.rut");
+        let m = rut_new::at("src/m/mod.rut");
         // two same-named decls in two packages are legal; two leaves
-        // of one name in a third file refuse
+        // of one name in a third file refuse — each candidate rides
+        // the `use` that bound it, beside its own decl's provenance
         let math = format!("{}pub fn mk(n: i32) -> Calc {{ return Calc {{ d: n }}; }}\n", rut_new::CALC_MATH);
         s.index_mod_at(&rut_new::calc("src/math/mod.rut"), "calc", "math", &math);
         let src = "use m::{ mk };\nuse calc::math::{ mk };\nfn k() -> i32 { return mk(41).bump(); }\n";
+        let want = format!(
+            "multiple definitions:\n- `pub fn mk(n: i32) -> Counter` — fn — via `use m::{{ mk }}` — {m}:13\n- `pub fn mk(n: i32) -> Calc` — fn — via `use calc::math::{{ mk }}` — {}:17",
+            rut_new::calc("src/math/mod.rut")
+        );
+        // the call site AND each leaf — one name, one list
         for (needle, occ, off) in [("mk(41)", 1, 0), ("{ mk }", 1, 2), ("{ mk }", 2, 2)] {
-            let h = s.hover_in(&uri, src, needle, occ, off);
-            assert!(no_hover(&h), "[{needle} #{occ}] a twice-bound name: {h:?}");
+            let md = markdown(s.hover_in(&uri, src, needle, occ, off));
+            assert_eq!(md, want, "[{needle} #{occ}] the candidates: ");
         }
-        // an own decl beside a leaf: the registry refuses the file
+        // an own decl beside a leaf: the registry refuses the file —
+        // the own decl first, then the leaf's row
         let src = "use m::{ mk };\nfn mk(n: i32) -> i32 { return n; }\nfn k() -> i32 { return mk(41); }\n";
-        let h = s.hover_in(&uri, src, "mk(41)", 1, 0);
-        assert!(no_hover(&h), "the call site answers nothing: {h:?}");
+        let want = format!(
+            "multiple definitions:\n- `fn mk(n: i32) -> i32` — fn — {uri}:2\n- `pub fn mk(n: i32) -> Counter` — fn — via `use m::{{ mk }}` — {m}:13"
+        );
+        assert_eq!(markdown(s.hover_in(&uri, src, "mk(41)", 1, 0)), want);
+        assert_eq!(markdown(s.hover_in(&uri, src, "{ mk }", 1, 2)), want, "the leaf too");
         // the decl SITE stays exact (decl-site navigation)
         let md = markdown(s.hover_in(&uri, src, "fn mk(", 1, 3));
         assert!(md.contains("fn mk(n: i32) -> i32"), "the decl itself: {md}");
+        assert!(!md.contains("multiple definitions"), "the decl site is no list: {md}");
         // the shadowing the law admits resolves to the winner: an own
-        // decl over a glob
+        // module let over a glob's fn of the name
+        let src = "use m::*;\npub let mk: i32 = 3;\nfn k() -> i32 { return mk; }\n";
+        let md = markdown(s.hover_in(&uri, src, "return mk", 1, 7));
+        assert!(md.contains("pub let mk: i32 = 3"), "the own let wins: {md}");
+    }
+}
+
+both_uri_shapes! {
+    #[test]
+    fn an_own_fn_or_type_beside_an_own_package_glob_hovers_both() {
+        // found while confirming the glob table against the compiler:
+        // its OWN-package glob lane refuses an own free fn beside a
+        // glob-bound fn of the name, and an own type beside a
+        // glob-bound type ("duplicate fn `mk` — already declared in
+        // module `child`"), though the glob-bound name is no decl of
+        // the module (`child::mk` stays undeclared). Mirrored AS THE
+        // COMPILER IS: both are the candidates, never the own decl
+        // alone. The documented precedence holds for every other
+        // shape — a module let, the other kind, a cross-package glob:
+        // there the own decl wins
+        let (mut s, _io) = rut_new::boot();
+        let uri = rut_new::at("src/child/mod.rut");
+        let m = rut_new::at("src/m/mod.rut");
         let src = "use m::*;\nfn mk(n: i32) -> i32 { return n; }\nfn k() -> i32 { return mk(41); }\n";
         let md = markdown(s.hover_in(&uri, src, "mk(41)", 1, 0));
-        assert!(md.contains("fn mk(n: i32) -> i32"), "the own decl wins: {md}");
+        assert_eq!(
+            md,
+            format!(
+                "multiple definitions:\n- `fn mk(n: i32) -> i32` — fn — {uri}:2\n- `pub fn mk(n: i32) -> Counter` — fn — via the glob `m::*` — {m}:13"
+            )
+        );
+        // ... spelled through the own-package name, the same lane
+        let src = "use app::m::*;\nfn mk(n: i32) -> i32 { return n; }\nfn k() -> i32 { return mk(41); }\n";
+        let md = markdown(s.hover_in(&uri, src, "mk(41)", 1, 0));
+        assert!(md.contains("via the glob `app::m::*`"), "{md}");
+        // the type shape
+        let src = "use m::*;\nclass Counter {\n    n: i32,\n}\nfn k(c: Counter) -> i32 { return c.bump(); }\n";
+        let md = markdown(s.hover_in(&uri, src, "c: Counter", 1, 3));
+        assert_eq!(
+            md,
+            format!(
+                "multiple definitions:\n- `class Counter` — class — {uri}:2\n- `pub struct Counter` — struct — via the glob `m::*` — {m}:7"
+            )
+        );
+        // the documented precedence, the shapes the compiler accepts —
+        // the own decl wins and nothing lists
+        for (src, needle, off, own) in [
+            ("use m::*;\npub let mk: i32 = 3;\nfn k() -> i32 { return mk; }\n", "return mk", 7, "pub let mk: i32 = 3"),
+            ("pub let mk: i32 = 3;\nuse m::*;\nfn k() -> i32 { return mk; }\n", "return mk", 7, "pub let mk: i32 = 3"),
+            ("use m::*;\nfn STEP() -> i32 { return 1; }\nfn k() -> i32 { return STEP(); }\n", "return STEP", 7, "fn STEP() -> i32"),
+            ("use m::*;\nfn Counter() -> i32 { return 1; }\nfn k() -> i32 { return Counter(); }\n", "return Counter", 7, "fn Counter() -> i32"),
+            ("use calc::math::*;\nfn cmk(n: i32) -> i32 { return n; }\nfn k() -> i32 { return cmk(1); }\n", "return cmk", 7, "fn cmk(n: i32) -> i32"),
+            ("class Calc {\n    n: i32,\n}\nuse calc::math::*;\nfn k(c: Calc) -> i32 { return 0; }\n", "c: Calc", 3, "class Calc"),
+        ] {
+            let md = markdown(s.hover_in(&uri, src, needle, 1, off));
+            assert!(md.contains(own), "[{src:?}] the own decl wins: {md}");
+            assert!(!md.contains("multiple definitions"), "[{src:?}] no list: {md}");
+        }
+    }
+}
+
+both_uri_shapes! {
+    #[test]
+    fn a_twice_bound_type_or_let_hovers_its_candidates() {
+        // the same law for the registry's other kinds — a type, a
+        // module let: each candidate with its kind and the `use` that
+        // bound it
+        let (mut s, _io) = rut_new::boot();
+        let uri = rut_new::at("src/child/mod.rut");
+        let m = rut_new::at("src/m/mod.rut");
+        let src = "use m::{ Counter };\nuse app::m::{ Counter };\nfn k(c: Counter) -> i32 { return c.bump(); }\n";
+        let want = format!(
+            "multiple definitions:\n- `pub struct Counter` — struct — via `use m::{{ Counter }}` — {m}:7\n- `pub struct Counter` — struct — via `use app::m::{{ Counter }}` — {m}:7"
+        );
+        assert_eq!(markdown(s.hover_in(&uri, src, "c: Counter", 1, 3)), want);
+        let src = "use m::{ STEP };\nuse app::m::{ STEP };\nfn k() -> i32 { return STEP; }\n";
+        let want = format!(
+            "multiple definitions:\n- `pub let STEP: i32 = 2;` — module let — via `use m::{{ STEP }}` — {m}:16\n- `pub let STEP: i32 = 2;` — module let — via `use app::m::{{ STEP }}` — {m}:16"
+        );
+        assert_eq!(markdown(s.hover_in(&uri, src, "return STEP", 1, 7)), want);
+    }
+}
+
+both_uri_shapes! {
+    #[test]
+    fn two_own_decls_of_a_name_hover_both() {
+        // decl + decl — "duplicate name `mk` — the fn already declares
+        // it in this file": both decls are the candidates, each at its
+        // own line (no `use` rode); the decl sites stay exact
+        let (mut s, _io) = rut_new::boot();
+        let uri = rut_new::at("src/child/mod.rut");
+        let src = "fn mk(n: i32) -> i32 { return n; }\nclass mk {\n    n: i32,\n}\nfn k() -> i32 { return mk(41); }\n";
+        let want = format!(
+            "multiple definitions:\n- `class mk` — class — {uri}:2\n- `fn mk(n: i32) -> i32` — fn — {uri}:1"
+        );
+        assert_eq!(markdown(s.hover_in(&uri, src, "mk(41)", 1, 0)), want);
+        let md = markdown(s.hover_in(&uri, src, "fn mk(", 1, 3));
+        assert!(md.contains("fn mk(n: i32) -> i32"), "the fn's own site: {md}");
+        assert!(!md.contains("multiple definitions"), "a decl site is no list: {md}");
+        let md = markdown(s.hover_in(&uri, src, "class mk", 1, 6));
+        assert!(md.contains("class mk {"), "the class's own site: {md}");
+        assert!(!md.contains("multiple definitions"), "a decl site is no list: {md}");
+    }
+}
+
+// ---- round 5: the glob ledger — one binding per distinct HEAD ----
+
+both_uri_shapes! {
+    #[test]
+    fn an_identical_glob_spelled_twice_binds_like_one() {
+        // the compiler's glob ledger keys the HEAD ("the same head
+        // re-globbed is idempotent"): a file spelling `use m::*;`
+        // twice compiles exactly as with one glob, so every name the
+        // glob binds hovers as it does under the single glob — a fn, a
+        // type, a module let, a `pub(pkg)` fn, a generic fn. The brace
+        // form with two stars and a `pub use` beside the private one
+        // are the same one binding
+        let (mut s, _io) = rut_new::boot();
+        let uri = rut_new::at("src/child/mod.rut");
+        let body = "fn k() -> i32 { let c: Counter = mk(41); return c.bump() + STEP + SHARED + pkgfn() + mk_box(1).get(); }\n";
+        for (needle, off) in [
+            ("mk(41)", 0),
+            ("Counter", 0),
+            ("+ STEP", 2),
+            ("SHARED", 0),
+            ("pkgfn()", 0),
+            ("mk_box", 0),
+        ] {
+            let one = markdown(s.hover_in(&uri, &format!("use m::*;\n{body}"), needle, 1, off));
+            assert!(one.contains("```rut"), "[{needle}] the single glob binds it: {one}");
+            for uses in [
+                "use m::*;\nuse m::*;\n",
+                "pub use m::*;\nuse m::*;\n",
+                "use m::{ *, * };\n",
+            ] {
+                let again = markdown(s.hover_in(&uri, &format!("{uses}{body}"), needle, 1, off));
+                assert_eq!(again, one, "[{uses:?} @ {needle}] the same head re-globbed is ONE binding");
+            }
+        }
+    }
+}
+
+both_uri_shapes! {
+    #[test]
+    fn globs_of_distinct_heads_binding_one_name_hover_both() {
+        // DISTINCT sources: "`Counter` arrives from both `m::*` and
+        // `app::*` — import it explicitly" — the compiler refuses the
+        // file, so the both-bound name picks nothing: the hover lists
+        // the candidates, each beside the glob that bound it (one
+        // module reached by two heads; the two modules declaring
+        // `SHARED`; two packages)
+        let (mut s, _io) = rut_new::boot();
+        let uri = rut_new::at("src/child/mod.rut");
+        let m = rut_new::at("src/m/mod.rut");
+        let grid = rut_new::at("src/m/grid/mod.rut");
+        let src = "use m::*;\nuse app::m::*;\nfn k() -> i32 { let c = mk(41); return c.bump() + STEP; }\n";
+        let md = markdown(s.hover_in(&uri, src, "mk(41)", 1, 0));
+        assert_eq!(
+            md,
+            format!(
+                "multiple definitions:\n- `pub fn mk(n: i32) -> Counter` — fn — via the glob `m::*` — {m}:13\n- `pub fn mk(n: i32) -> Counter` — fn — via the glob `app::m::*` — {m}:13"
+            )
+        );
+        let md = markdown(s.hover_in(&uri, src, "+ STEP", 1, 2));
+        assert!(
+            md.contains("via the glob `m::*`") && md.contains("via the glob `app::m::*`"),
+            "every name both heads bind: {md}"
+        );
+        // `SHARED` is declared by `m` AND by its `grid`
+        let src = "use m::*;\nuse app::m::grid::*;\nfn k() -> i32 { return SHARED + STEP; }\n";
+        let md = markdown(s.hover_in(&uri, src, "return SHARED", 1, 7));
+        assert_eq!(
+            md,
+            format!(
+                "multiple definitions:\n- `pub let SHARED: i32 = 10;` — module let — via the glob `m::*` — {m}:24\n- `pub let SHARED: i32 = 20;` — module let — via the glob `app::m::grid::*` — {grid}:4"
+            )
+        );
+        // ... the reversed spelling lists the globs in its own order
+        let src = "use app::m::grid::*;\nuse m::*;\nfn k() -> i32 { return SHARED; }\n";
+        let md = markdown(s.hover_in(&uri, src, "return SHARED", 1, 7));
+        let bullets: Vec<&str> = md.lines().skip(1).collect();
+        assert_eq!(bullets.len(), 2, "{md}");
+        assert!(bullets[0].contains("i32 = 20;") && bullets[0].contains("`app::m::grid::*`"), "{md}");
+        assert!(bullets[1].contains("i32 = 10;") && bullets[1].contains("the glob `m::*`"), "{md}");
+        // two PACKAGES: `mk` is declared in `m` and in the dep's `math`
+        let math = format!("{}pub fn mk(n: i32) -> Calc {{ return Calc {{ d: n }}; }}\n", rut_new::CALC_MATH);
+        s.index_mod_at(&rut_new::calc("src/math/mod.rut"), "calc", "math", &math);
+        let src = "use m::*;\nuse calc::math::*;\nfn k() -> i32 { return mk(41).bump(); }\n";
+        let md = markdown(s.hover_in(&uri, src, "mk(41)", 1, 0));
+        for want in [
+            "multiple definitions:",
+            "— via the glob `m::*` —",
+            &format!("— {m}:13"),
+            "— via the glob `calc::math::*` —",
+            &format!("— {}:17", rut_new::calc("src/math/mod.rut")),
+        ] {
+            assert!(md.contains(want), "{want:?} in: {md}");
+        }
+    }
+}
+
+both_uri_shapes! {
+    #[test]
+    fn a_name_one_of_two_globs_binds_still_hovers() {
+        // the per-file carve-out: two globs of distinct heads overlap
+        // on ONE name — the compiler refuses that PROGRAM as a whole
+        // (it names only the overlapping name, used or not), but the
+        // overlap is that name's alone: a name only ONE of the globs
+        // binds hovers exactly as under its single glob
+        let (mut s, _io) = rut_new::boot();
+        let uri = rut_new::at("src/child/mod.rut");
+        let body = "fn k() -> i32 { return mk(41).bump() + STEP + SHARED + cell(); }\n";
+        let both = format!("use m::*;\nuse app::m::grid::*;\n{body}");
+        for (needle, off, uses) in [
+            ("mk(41)", 0, "use m::*;\n"),
+            ("+ STEP", 2, "use m::*;\n"),
+            ("cell()", 0, "use m::grid::*;\n"),
+        ] {
+            let one = markdown(s.hover_in(&uri, &format!("{uses}{body}"), needle, 1, off));
+            assert!(one.contains("```rut"), "[{needle}] its one glob binds it: {one}");
+            let under = markdown(s.hover_in(&uri, &both, needle, 1, off));
+            assert_eq!(under, one, "[{needle}] a one-bound name answers under its one glob");
+        }
+        let md = markdown(s.hover_in(&uri, &both, "+ SHARED", 1, 2));
+        assert!(md.starts_with("multiple definitions:"), "the both-bound name alone: {md}");
+        // distinct heads naming NO common name (`m::grid::*` + the
+        // dep's root `calc::*`): the compiler accepts the file — every
+        // name answers
+        let src = "use m::grid::*;\nuse calc::*;\nfn k() -> i32 { return cell() + ctop(); }\n";
+        let md = markdown(s.hover_in(&uri, src, "cell()", 1, 0));
+        assert!(md.contains("pub fn cell() -> i32"), "{md}");
+        let md = markdown(s.hover_in(&uri, src, "ctop()", 1, 0));
+        assert!(md.contains("pub fn ctop() -> i32"), "{md}");
+    }
+}
+
+both_uri_shapes! {
+    #[test]
+    fn the_same_head_globbed_twice_keeps_the_first_binding() {
+        // `use m::*; use m::grid::*;` — the heads are ONE (`m`), so
+        // the ledger stays idempotent: the compiler accepts the file
+        // and the FIRST glob's binding of a name both spell stands
+        // (`SHARED` is `m`'s in that order, the grid's reversed). An
+        // explicit leaf wins over any glob, either order
+        let (mut s, _io) = rut_new::boot();
+        let uri = rut_new::at("src/child/mod.rut");
+        let src = "use m::*;\nuse m::grid::*;\nfn k() -> i32 { return SHARED + STEP + cell(); }\n";
+        let md = markdown(s.hover_in(&uri, src, "return SHARED", 1, 7));
+        assert!(md.contains("pub let SHARED: i32 = 10;"), "the first binding stands: {md}");
+        assert!(!md.contains("multiple definitions"), "{md}");
+        let src = "use m::grid::*;\nuse m::*;\nfn k() -> i32 { return SHARED + STEP; }\n";
+        let md = markdown(s.hover_in(&uri, src, "return SHARED", 1, 7));
+        assert!(md.contains("pub let SHARED: i32 = 20;"), "reversed, the first stands too: {md}");
+        for src in [
+            "use m::*;\nuse m::grid::{ SHARED };\nfn k() -> i32 { return SHARED; }\n",
+            "use m::grid::{ SHARED };\nuse m::*;\nfn k() -> i32 { return SHARED; }\n",
+        ] {
+            let md = markdown(s.hover_in(&uri, src, "return SHARED", 1, 7));
+            assert!(md.contains("pub let SHARED: i32 = 20;"), "the leaf wins: {md}");
+        }
     }
 }
 

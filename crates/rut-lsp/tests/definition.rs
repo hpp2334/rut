@@ -1130,10 +1130,14 @@ both_uri_shapes! {
 both_uri_shapes! {
     #[test]
     fn a_twice_bound_name_jumps_nowhere() {
-        // the one-name shape: two use leaves of one name (same-named
-        // decls in two packages are legal; the second leaf refuses)
+        // the one-name shape — every registry kind of it: a use site
+        // of a name the file binds TWICE by distinct bindings jumps
+        // NOWHERE (never a pick between the bindings; the hover lists
+        // the candidates), and every decl SITE stays exact (itself)
         let (mut s, _io) = rut_new::boot();
         let uri = rut_new::at("src/child/mod.rut");
+        // two use leaves of one name (same-named decls in two
+        // packages are legal; the second leaf refuses)
         let math = format!(
             "{}pub fn mk(n: i32) -> Calc {{ return Calc {{ d: n }}; }}\n",
             rut_new::CALC_MATH
@@ -1145,6 +1149,187 @@ both_uri_shapes! {
             let hits = s.def_in(&uri, src, needle, occ, off);
             assert!(hits.is_empty(), "[{needle} #{occ}] a twice-bound name: {hits:?}");
         }
+        // an own decl beside a leaf
+        let src = "use m::{ mk };\nfn mk(n: i32) -> i32 { return n; }\nfn k() -> i32 { return mk(41); }\n";
+        assert!(
+            s.def_in(&uri, src, "mk(41)", 1, 0).is_empty(),
+            "an own decl beside a leaf: {:?}",
+            s.def_in(&uri, src, "mk(41)", 1, 0)
+        );
+        let hits = s.def_in(&uri, src, "fn mk(", 1, 3);
+        assert_eq!(hits.len(), 1, "the decl itself: {hits:?}");
+        assert_target(src, &hits[0], "mk", 2, 2, "the decl site is exact");
+        // two own decls — a fn and a class
+        let src = "fn mk(n: i32) -> i32 { return n; }\nclass mk {\n    n: i32,\n}\nfn k() -> i32 { return mk(41); }\n";
+        assert!(
+            s.def_in(&uri, src, "mk(41)", 1, 0).is_empty(),
+            "two own decls: {:?}",
+            s.def_in(&uri, src, "mk(41)", 1, 0)
+        );
+        let hits = s.def_in(&uri, src, "fn mk(", 1, 3);
+        assert_target(src, &hits[0], "mk", 1, 2, "the fn's own site");
+        let hits = s.def_in(&uri, src, "class mk", 1, 6);
+        assert_eq!(hits.len(), 1, "the class's own site: {hits:?}");
+        assert_target(src, &hits[0], "mk", 2, 2, "the class's own site");
+        // a type beside a leaf: the type's own site is itself, a
+        // spelling of the name (typeDefinition too) jumps nowhere
+        let src = "class Counter {\n    n: i32,\n}\nuse m::{ Counter };\nfn k(c: Counter) -> i32 { return c.bump(); }\n";
+        let hits = s.def_in(&uri, src, "class Counter", 1, 6);
+        assert_eq!(hits.len(), 1, "the type's own site: {hits:?}");
+        assert_target(src, &hits[0], "Counter", 1, 7, "the type's own site is exact");
+        assert!(s.def_in(&uri, src, "c: Counter", 1, 3).is_empty(), "a use site: ");
+        assert!(s.typedef_in(&uri, src, "c: Counter", 1, 3).is_empty(), "typeDefinition never picks either");
+        assert!(s.typedef_in(&uri, src, "{ Counter }", 1, 2).is_empty(), "the leaf too");
+        let hits = s.typedef_in(&uri, src, "class Counter", 1, 6);
+        assert_target(src, &hits[0], "Counter", 1, 7, "typeDefinition at the type's own site");
+    }
+}
+
+// ---- round 5: the glob ledger — one binding per distinct HEAD ----
+
+both_uri_shapes! {
+    #[test]
+    fn an_identical_glob_spelled_twice_jumps_like_one() {
+        // the compiler's glob ledger keys the HEAD ("the same head
+        // re-globbed is idempotent"): a file spelling `use m::*;`
+        // twice compiles exactly as with one glob, so every name the
+        // glob binds jumps as it does under the single glob — a fn, a
+        // type, a module let, a `pub(pkg)` fn, a generic fn
+        let (mut s, _io) = rut_new::boot();
+        let uri = rut_new::at("src/child/mod.rut");
+        let body = "fn k() -> i32 { let c: Counter = mk(41); return c.bump() + STEP + SHARED + pkgfn() + mk_box(1).get(); }\n";
+        for (needle, off) in [
+            ("mk(41)", 0),
+            ("Counter", 0),
+            ("+ STEP", 2),
+            ("SHARED", 0),
+            ("pkgfn()", 0),
+            ("mk_box", 0),
+        ] {
+            let one = s.def_in(&uri, &format!("use m::*;\n{body}"), needle, 1, off);
+            assert_eq!(one.len(), 1, "[{needle}] the single glob binds it: {one:?}");
+            let twice = s.def_in(&uri, &format!("use m::*;\nuse m::*;\n{body}"), needle, 1, off);
+            assert_eq!(twice, one, "[{needle}] the same head re-globbed is ONE binding");
+        }
+        // the concrete answers, read once: the glob's rows in `m`
+        let twice = format!("use m::*;\nuse m::*;\n{body}");
+        let m = rut_new::at("src/m/mod.rut");
+        assert_jump(&s.def_in(&uri, &twice, "mk(41)", 1, 0), &m, rut_new::M, "pub fn mk(", 1, "the fn");
+        assert_jump(&s.def_in(&uri, &twice, "Counter", 1, 0), &m, rut_new::M, "pub struct Counter", 1, "the type");
+        assert_jump(&s.def_in(&uri, &twice, "+ STEP", 1, 2), &m, rut_new::M, "pub let STEP", 1, "the module let");
+    }
+}
+
+both_uri_shapes! {
+    #[test]
+    fn globs_of_distinct_heads_binding_one_name_jump_nowhere() {
+        // DISTINCT sources: "`Counter` arrives from both `m::*` and
+        // `app::*` — import it explicitly" — the compiler refuses the
+        // file, so a name BOTH globs bind jumps nowhere (the hover
+        // lists the candidates); a name only ONE of the globs binds
+        // still jumps (the per-file carve-out — the compiler refuses
+        // that PROGRAM as a whole, naming only the overlapping name)
+        let (mut s, _io) = rut_new::boot();
+        let uri = rut_new::at("src/child/mod.rut");
+        let m = rut_new::at("src/m/mod.rut");
+        let grid = rut_new::at("src/m/grid/mod.rut");
+        let src = "use m::*;\nuse app::m::*;\nfn k() -> i32 { let c = mk(41); return c.bump() + STEP; }\n";
+        for (needle, off) in [("mk(41)", 0), ("+ STEP", 2)] {
+            assert!(
+                s.def_in(&uri, src, needle, 1, off).is_empty(),
+                "[{needle}] both heads bind it: {:?}",
+                s.def_in(&uri, src, needle, 1, off)
+            );
+        }
+        // ... typeDefinition neither: the type both heads bind
+        let typed = "use m::*;\nuse app::m::*;\nfn k(c: Counter) -> i32 { return c.bump(); }\n";
+        let hits = s.typedef_in(&uri, typed, "c: Counter", 1, 3);
+        assert!(hits.is_empty(), "typeDefinition never picks a binding: {hits:?}");
+        // `SHARED` is bound by both heads, `mk`/`STEP` by `m::*`
+        // alone, `cell` by the grid glob alone
+        let body = "fn k() -> i32 { return mk(41).bump() + STEP + SHARED + cell(); }\n";
+        let src = format!("use m::*;\nuse app::m::grid::*;\n{body}");
+        assert!(
+            s.def_in(&uri, &src, "+ SHARED", 1, 2).is_empty(),
+            "the both-bound name: {:?}",
+            s.def_in(&uri, &src, "+ SHARED", 1, 2)
+        );
+        assert_jump(&s.def_in(&uri, &src, "mk(41)", 1, 0), &m, rut_new::M, "pub fn mk(", 1, "the one-bound fn");
+        assert_jump(&s.def_in(&uri, &src, "+ STEP", 1, 2), &m, rut_new::M, "pub let STEP", 1, "the one-bound let");
+        assert_jump(&s.def_in(&uri, &src, "cell()", 1, 0), &grid, rut_new::GRID, "pub fn cell(", 1, "the other glob's name");
+        // ... the reversed spelling reads the same
+        let src = format!("use app::m::grid::*;\nuse m::*;\n{body}");
+        assert!(s.def_in(&uri, &src, "+ SHARED", 1, 2).is_empty(), "reversed: ");
+        assert_jump(&s.def_in(&uri, &src, "mk(41)", 1, 0), &m, rut_new::M, "pub fn mk(", 1, "reversed, the one-bound fn");
+        // distinct heads naming NO common name (`m::grid::*` + the
+        // dep's root `calc::*`): the compiler accepts the file — every
+        // name jumps
+        let src = "use m::grid::*;\nuse calc::*;\nfn k() -> i32 { return cell() + ctop(); }\n";
+        assert_jump(&s.def_in(&uri, src, "cell()", 1, 0), &grid, rut_new::GRID, "pub fn cell(", 1, "no overlap");
+        assert_jump(
+            &s.def_in(&uri, src, "ctop()", 1, 0),
+            &rut_new::calc_uri("src/mod.rut"),
+            rut_new::CALC_ROOT,
+            "pub fn ctop(",
+            1,
+            "the dep root's glob"
+        );
+    }
+}
+
+both_uri_shapes! {
+    #[test]
+    fn an_own_fn_or_type_beside_an_own_package_glob_jumps_nowhere() {
+        // found while confirming the glob table against the compiler:
+        // its own-package glob lane refuses an own free fn beside a
+        // glob-bound fn of the name, and an own type beside a
+        // glob-bound type ("duplicate fn `mk` — already declared in
+        // module `child`") — a use site jumps nowhere (never the pick
+        // round 4 made), every decl site to itself. The documented
+        // precedence holds for the shapes the compiler accepts — a
+        // module let, the other kind, a cross-package glob: there the
+        // own decl is the jump
+        let (mut s, _io) = rut_new::boot();
+        let uri = rut_new::at("src/child/mod.rut");
+        let src = "use m::*;\nfn mk(n: i32) -> i32 { return n; }\nfn k() -> i32 { return mk(41); }\n";
+        assert!(s.def_in(&uri, src, "mk(41)", 1, 0).is_empty(), "an own fn beside the glob's fn");
+        let hits = s.def_in(&uri, src, "fn mk(", 1, 3);
+        assert_target(src, &hits[0], "mk", 1, 2, "the fn's own site");
+        let src = "use m::*;\nclass Counter {\n    n: i32,\n}\nfn k(c: Counter) -> i32 { return c.bump(); }\n";
+        assert!(s.def_in(&uri, src, "c: Counter", 1, 3).is_empty(), "an own type beside the glob's type");
+        let hits = s.def_in(&uri, src, "class Counter", 1, 6);
+        assert_target(src, &hits[0], "Counter", 1, 7, "the type's own site");
+        // ... the shapes the compiler accepts: the own decl is the jump
+        let src = "use m::*;\npub let mk: i32 = 3;\nfn k() -> i32 { return mk; }\n";
+        let hits = s.def_in(&uri, src, "return mk", 1, 7);
+        assert_eq!(hits.len(), 1, "the own let wins: {hits:?}");
+        assert_target(src, &hits[0], "mk", 1, 2, "the own let");
+        let src = "use m::*;\nfn STEP() -> i32 { return 1; }\nfn k() -> i32 { return STEP(); }\n";
+        let hits = s.def_in(&uri, src, "return STEP", 1, 7);
+        assert_eq!(hits.len(), 1, "an own fn beside the glob's let: {hits:?}");
+        assert_target(src, &hits[0], "STEP", 1, 4, "the own fn");
+        let src = "use calc::math::*;\nfn cmk(n: i32) -> i32 { return n; }\nfn k() -> i32 { return cmk(1); }\n";
+        let hits = s.def_in(&uri, src, "return cmk", 1, 7);
+        assert_eq!(hits.len(), 1, "an own fn beside a cross-package glob's fn: {hits:?}");
+        assert_target(src, &hits[0], "cmk", 1, 3, "the own fn");
+    }
+}
+
+both_uri_shapes! {
+    #[test]
+    fn the_same_head_globbed_twice_keeps_the_first_binding() {
+        // `use m::*; use m::grid::*;` — the heads are ONE (`m`), so
+        // the ledger stays idempotent: the compiler accepts the file
+        // and the FIRST glob's binding of a name both spell stands
+        // (`SHARED` is `m`'s in that order, the grid's reversed)
+        let (mut s, _io) = rut_new::boot();
+        let uri = rut_new::at("src/child/mod.rut");
+        let m = rut_new::at("src/m/mod.rut");
+        let grid = rut_new::at("src/m/grid/mod.rut");
+        let src = "use m::*;\nuse m::grid::*;\nfn k() -> i32 { return SHARED; }\n";
+        assert_jump(&s.def_in(&uri, src, "return SHARED", 1, 7), &m, rut_new::M, "pub let SHARED", 1, "the first stands");
+        let src = "use m::grid::*;\nuse m::*;\nfn k() -> i32 { return SHARED; }\n";
+        assert_jump(&s.def_in(&uri, src, "return SHARED", 1, 7), &grid, rut_new::GRID, "pub let SHARED", 1, "reversed too");
     }
 }
 

@@ -3,6 +3,7 @@
 
 use rut_ast::{AnyHandle, UseNode, Vis};
 
+use super::decl_src;
 use crate::world::collection::MountedFile;
 
 /// one imported name of a use edge (a brace list's names share the
@@ -45,6 +46,22 @@ impl<'a> UseView<'a> {
             .map(|n| ast.name(n.ident).to_string())
             .collect()
     }
+
+    /// the use statement as spelled — the verbatim `span × src` slice,
+    /// trailing `;` trimmed: a candidate's provenance (which `use` a
+    /// row rode)
+    pub(crate) fn src(&self) -> String {
+        let ast = self.file.doc.ast();
+        decl_src(self.file.doc.src(), ast.span_of(self.h))
+    }
+
+    /// the statement's line in its own file
+    pub(crate) fn line(&self) -> u32 {
+        1 + self
+            .file
+            .doc
+            .line_of(self.file.doc.ast().span_of(self.h).lo)
+    }
 }
 
 /// one glob leaf — `use pkg::*` (the brace star rides beside the
@@ -61,4 +78,18 @@ pub(crate) struct GlobUse<'a> {
     pub(crate) interior: Vec<String>,
     /// the declared visibility — a `pub use` glob re-exports
     pub(crate) vis: Vis,
+}
+
+impl GlobUse<'_> {
+    /// the glob as spelled — `m::*`, `calc::math::*` (a candidate's
+    /// provenance; the brace form `use m::{ A, * }` reads `m::*`)
+    pub(crate) fn spelling(&self) -> String {
+        let mut out = String::from(self.pkg);
+        for seg in &self.interior {
+            out.push_str("::");
+            out.push_str(seg);
+        }
+        out.push_str("::*");
+        out
+    }
 }

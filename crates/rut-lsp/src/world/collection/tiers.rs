@@ -91,7 +91,7 @@ pub(crate) struct Bare<'a> {
 /// queries spell ([`Chain::file_scope`]). Every layer is exact inside:
 /// own decls in source order, use-bound rows body-preferred
 /// (`prefer_bodies`), ambient rows mounted-preferred.
-#[derive(Default)]
+#[derive(Clone, Default)]
 pub(crate) struct FileScope<'a> {
     /// the type decls the scope binds, walk order
     pub types: Vec<TyView<'a>>,
@@ -508,7 +508,7 @@ impl<'a> Chain<'a> {
 
     /// THE file-scope resolver — what the QUERIED file (the chain
     /// head) binds by `name`, walked in the compiler's layer order:
-    /// the head's own decls, then the names its use edges bind
+    /// the head's own decls, then the name its use edges bind
     /// ([`MountedFile::uses`] leaves, [`MountedFile::glob_uses`]
     /// leaves), then the ambient prelude rows (`prelude builtin` — the
     /// checker's wildcard-site split). A name the file never binds
@@ -520,89 +520,143 @@ impl<'a> Chain<'a> {
     /// completion tiers enumerate (`bare`, `use_exports`).
     ///
     /// THE ONE-NAME LAW rides the front door: a name the file binds
-    /// TWICE — two explicit use leaves (twice in one list included),
-    /// two globs, or a decl of its own beside a use leaf — is a file
-    /// the compiler refuses at the second spelling, so the name
-    /// answers NOTHING here (never a pick between the bindings). The
-    /// shadowing the law admits resolves to the winner: an explicit
-    /// leaf over any glob, an own decl over any glob.
+    /// TWICE by DISTINCT bindings ([`NameBindings::refused`]) is a file
+    /// the compiler refuses — the single-answer scope is EMPTY here
+    /// (never a pick between the bindings); the hover lists the
+    /// candidates through [`Chain::ambiguous_scope`]. The shadowing the
+    /// law admits resolves to the winner: an own decl over every use
+    /// binding, an explicit leaf over any glob.
     pub(crate) fn file_scope(&self, name: &str) -> FileScope<'a> {
         let mut out = FileScope::default();
-        let Some((leaves, globs)) = self.bindings(name) else {
+        let bindings = self.name_bindings(name);
+        if bindings.refused(self) {
             return out;
-        };
+        }
         out.extend(own_scope_of(self.head(), name));
-        for u in &leaves {
-            self.leaf_scope(u, name, &mut out);
-        }
-        for rows in globs {
-            out.extend(rows);
-        }
+        bindings.layer2(self, name, &mut out);
         self.ambient_layers(name, &mut out);
         out
     }
 
-    /// the use edges that bind `name` — the explicit leaves and the
-    /// globs' rows, each only when the law lets it bind: an own decl
-    /// shadows every glob, an explicit leaf wins over any glob. `None` =
-    /// the file binds the name TWICE (the one-name law's refusal — the
-    /// name answers nothing, own layer included).
-    fn bindings(&self, name: &str) -> Option<(Vec<UseView<'a>>, Vec<FileScope<'a>>)> {
+    /// THE mid-edit candidates — the file binds `name` twice by
+    /// DISTINCT bindings ([`NameBindings::refused`]: two decls of its
+    /// own, two use leaves, a decl beside a leaf, two globs of distinct
+    /// heads): the hover LISTS every binding, each with its kind and
+    /// provenance — the own decls first, then each use leaf's rows with
+    /// the `use` they rode, then each glob's with its spelling. `None`
+    /// = the name binds once or never: the single-answer lanes answer
+    /// it. (Definition stays silent on an ambiguous name — never a
+    /// pick.)
+    pub(crate) fn ambiguous_scope(&self, name: &str) -> Option<Vec<Candidate<'a>>> {
+        let bindings = self.name_bindings(name);
+        if !bindings.refused(self) {
+            return None;
+        }
+        let mut out: Vec<Candidate<'a>> = Vec::new();
+        for t in &bindings.own.types {
+            out.push(Candidate::own(CandRow::Ty(*t)));
+        }
+        for l in &bindings.own.lets {
+            out.push(Candidate::own(CandRow::Let(*l)));
+        }
+        for f in &bindings.own.fns {
+            out.push(Candidate::own(CandRow::Fn(*f)));
+        }
+        for m in &bindings.own.mods {
+            out.push(Candidate::own(CandRow::Mod(*m)));
+        }
+        for u in &bindings.leaves {
+            let mut rows = FileScope::default();
+            self.leaf_scope(u, name, &mut rows);
+            if rows.is_empty() {
+                // the leaf binds nothing of its own (a miss, a
+                // visibility gate) — the spelling itself is the
+                // candidate
+                out.push(Candidate::own(CandRow::Leaf(*u)));
+                continue;
+            }
+            out.extend(rows.into_candidates(Via::Leaf(*u)));
+        }
+        for (g, rows) in &bindings.globs {
+            out.extend(rows.clone().into_candidates(Via::Glob(g.clone())));
+        }
+        Some(out)
+    }
+
+    /// ONE name's bindings in the queried file — the analysis every
+    /// scope door reads ([`NameBindings`]): the own module-scope decls,
+    /// the explicit use leaves, and the globs (each glob's surface
+    /// resolved once per call)
+    fn name_bindings(&self, name: &str) -> NameBindings<'a> {
         let leaves: Vec<UseView<'a>> = self
             .head()
             .uses()
             .into_iter()
             .filter(|u| u.name() == name)
             .collect();
-        let glob_scopes: Vec<FileScope<'a>> = self
-            .head()
-            .glob_uses()
-            .into_iter()
-            .map(|g| self.glob_scope(&g))
-            .collect();
-        self.bindings_in(name, leaves, &glob_scopes)
+        let glob_scopes = self.glob_scopes();
+        self.bindings_with(name, leaves, &glob_scopes)
     }
 
-    /// [`Chain::bindings`] over scopes a caller already resolved (the
-    /// all-names enumeration resolves each glob ONCE)
-    fn bindings_in(
+    /// the head's glob leaves beside their resolved surfaces — each
+    /// glob's surface resolves ONCE (a chain sweep), whatever many
+    /// names read it
+    fn glob_scopes(&self) -> Vec<(GlobUse<'a>, FileScope<'a>)> {
+        self.head()
+            .glob_uses()
+            .into_iter()
+            .map(|g| {
+                let rows = self.glob_scope(&g);
+                (g, rows)
+            })
+            .collect()
+    }
+
+    /// [`Chain::name_bindings`] over glob scopes a caller already
+    /// resolved (the all-names enumeration resolves each glob once)
+    fn bindings_with(
         &self,
         name: &str,
         leaves: Vec<UseView<'a>>,
-        glob_scopes: &[FileScope<'a>],
-    ) -> Option<(Vec<UseView<'a>>, Vec<FileScope<'a>>)> {
-        let own = self.own_binds(name);
-        let globs: Vec<FileScope<'a>> = if own || !leaves.is_empty() {
-            Vec::new()
-        } else {
-            glob_scopes
-                .iter()
-                .filter_map(|rows| scope_named(rows, name))
-                .collect()
-        };
-        if leaves.len() + globs.len() + usize::from(own) > 1 {
-            return None;
+        glob_scopes: &[(GlobUse<'a>, FileScope<'a>)],
+    ) -> NameBindings<'a> {
+        let own = own_binders(self.head(), name);
+        // the globs bind only under no explicit leaf (the compiler's
+        // precedence — glob < explicit leaf < own declaration, the
+        // shadowing silent; an own decl's glob is kept beside it for
+        // the law's verdict below) — and ONE per distinct HEAD: the
+        // glob ledger keys the head ("the same head re-globbed is
+        // idempotent" — an identical spelling twice, or the same head
+        // with a different interior, binds once, the FIRST binding
+        // standing); only a DIFFERENT head's glob conflicts
+        let mut globs: Vec<(GlobUse<'a>, FileScope<'a>)> = Vec::new();
+        if leaves.is_empty() {
+            for (g, rows) in glob_scopes {
+                if globs.iter().any(|(kept, _)| kept.pkg == g.pkg) {
+                    continue;
+                }
+                if let Some(rows) = scope_named(rows, name) {
+                    globs.push((g.clone(), rows));
+                }
+            }
         }
-        Some((leaves, globs))
+        NameBindings { own, leaves, globs }
     }
 
     /// EVERY name the head's use edges bind — the file scope's layer 2
-    /// over all names at once (the same resolve [`Chain::file_scope`]
-    /// runs per name; each glob's surface resolves once). Completion's
-    /// enumeration gates ride it: a foreign row is offered exactly when
-    /// the file scope would answer its name with it.
+    /// over all names at once (the same analysis
+    /// [`Chain::file_scope`] runs per name; each glob's surface
+    /// resolves once). Completion's enumeration gates ride it: a
+    /// foreign row is offered exactly when the file scope would answer
+    /// its name with it (a twice-bound name offers nothing).
     pub(crate) fn use_bound_scope(&self) -> FileScope<'a> {
         let doc = self.head();
-        let glob_scopes: Vec<FileScope<'a>> = doc
-            .glob_uses()
-            .into_iter()
-            .map(|g| self.glob_scope(&g))
-            .collect();
+        let glob_scopes = self.glob_scopes();
         let mut names: Vec<&str> = doc
             .uses()
             .iter()
             .map(|u| u.name())
-            .chain(glob_scopes.iter().flat_map(|rows| {
+            .chain(glob_scopes.iter().flat_map(|(_, rows)| {
                 rows.types
                     .iter()
                     .map(|t| t.name())
@@ -619,39 +673,21 @@ impl<'a> Chain<'a> {
                 .into_iter()
                 .filter(|u| u.name() == name)
                 .collect();
-            if let Some((leaves, globs)) = self.bindings_in(name, leaves, &glob_scopes) {
-                for u in &leaves {
-                    self.leaf_scope(u, name, &mut out);
-                }
-                for rows in globs {
-                    out.extend(rows);
-                }
+            let bindings = self.bindings_with(name, leaves, &glob_scopes);
+            if !bindings.refused(self) {
+                bindings.layer2(self, name, &mut out);
             }
         }
         out
     }
 
-    /// does the file DECLARE `name` at module scope — a type, a module
-    /// let, a free fn, or a `mod NAME;` edge? (The one-name registry's
-    /// own-decl kinds; impl methods are type-scoped and never meet the
-    /// law.)
-    fn own_binds(&self, name: &str) -> bool {
-        let doc = self.head();
-        doc.ty(name).is_some()
-            || doc.lets().iter().any(|l| l.name() == name)
-            || doc
-                .fns()
-                .iter()
-                .any(|f| f.name() == name && f.owner().is_none())
-            || doc.mods().iter().any(|m| m.name() == name)
-    }
-
     /// the one-name law's refusal for `name` in the queried file — it
-    /// binds the name twice (two use leaves, two globs, or a decl
-    /// beside a leaf): the compiler refuses the file at the second
-    /// spelling, so no lane answers the name
+    /// binds the name twice by DISTINCT bindings
+    /// ([`NameBindings::refused`]): the compiler refuses the file at
+    /// the second spelling, so no lane PICKS an answer for it
+    /// (definition jumps nowhere; the hover lists the candidates)
     pub(crate) fn one_name_refused(&self, name: &str) -> bool {
-        self.bindings(name).is_none()
+        self.name_bindings(name).refused(self)
     }
 
     /// the head of a use path speaks for the doc's OWN package — the
@@ -1184,6 +1220,164 @@ impl<'a> Chain<'a> {
     }
 }
 
+/// ONE name's bindings in the queried file — what the own decls and
+/// the use edges say, the analysis every scope door reads
+/// ([`Chain::file_scope`], [`Chain::ambiguous_scope`],
+/// [`Chain::use_bound_scope`]).
+struct NameBindings<'a> {
+    /// the doc's own module-scope decls of the name — the one-name
+    /// registry's kinds (a type, a module let, a free fn, a `mod`
+    /// edge; impl methods are type-scoped and never meet the law)
+    own: OwnBinders<'a>,
+    /// the explicit use leaves naming it, source order
+    leaves: Vec<UseView<'a>>,
+    /// the globs binding it — ONE per distinct head (the compiler's
+    /// glob ledger: the same head re-globbed is idempotent), source
+    /// order, each beside its rows of the name
+    globs: Vec<(GlobUse<'a>, FileScope<'a>)>,
+}
+
+impl<'a> NameBindings<'a> {
+    /// THE ONE-NAME LAW's refusal — every shape the compiler refuses:
+    /// - the registry: two own decls ("duplicate name `mk` — the fn
+    ///   already declares it in this file"), two use leaves (an
+    ///   identical leaf twice included — "`use m::{ mk }` already
+    ///   binds it in this file"), an own decl beside a leaf;
+    /// - glob–glob: two globs of DISTINCT heads both bind it
+    ///   ("`Counter` arrives from both `m::*` and `app::*`");
+    /// - an own free fn beside an own-package glob's fn of the name,
+    ///   an own type beside such a glob's type ("duplicate fn `mk` —
+    ///   already declared in module `child`") —
+    ///   [`NameBindings::own_glob_collision`].
+    ///
+    /// The shadowing the law admits is no refusal: an own decl over
+    /// every other use binding, an explicit leaf over any glob; and the
+    /// same head re-globbed is idempotent (never two bindings).
+    fn refused(&self, chain: &Chain<'a>) -> bool {
+        match (self.own.len(), self.leaves.len()) {
+            (0, 0) => self.globs.len() > 1,
+            (0, 1) => false,
+            (1, 0) => self.own_glob_collision(chain),
+            _ => true,
+        }
+    }
+
+    /// the compiler's OWN-package glob lane refuses an own free fn
+    /// beside a glob-bound fn of the name, and an own type beside a
+    /// glob-bound type — "duplicate fn `mk` — already declared in
+    /// module `child`", the span on the GLOB'S decl, though the
+    /// glob-bound name is no decl of the module (`child::mk` stays
+    /// "not declared in module `child`"). Mirrored AS THE COMPILER IS.
+    /// Every other own-decl-beside-a-glob shape shadows silently, the
+    /// documented precedence: a module let, a `mod` edge, the other
+    /// kind (an own fn beside a glob's type or let), and any
+    /// cross-package glob (the driver's own
+    /// `own_decl_shadows_the_glob_silently` pins that one).
+    fn own_glob_collision(&self, chain: &Chain<'a>) -> bool {
+        self.globs.iter().any(|(g, rows)| {
+            chain.own_use_head(g.pkg).is_some()
+                && ((!self.own.fns.is_empty() && !rows.fns.is_empty())
+                    || (!self.own.types.is_empty() && !rows.types.is_empty()))
+        })
+    }
+
+    /// layer 2 — the ONE unshadowed use binding's rows: the explicit
+    /// leaf's resolve, else the glob's (an own decl shadows both —
+    /// layer 1 already spoke)
+    fn layer2(&self, chain: &Chain<'a>, name: &str, out: &mut FileScope<'a>) {
+        if !self.own.is_empty() {
+            return;
+        }
+        if let Some(u) = self.leaves.first() {
+            chain.leaf_scope(u, name, out);
+        } else if let Some((_, rows)) = self.globs.first() {
+            out.extend(rows.clone());
+        }
+    }
+}
+
+/// the doc's own module-scope decls of one name — the one-name
+/// registry's kinds
+struct OwnBinders<'a> {
+    types: Vec<TyView<'a>>,
+    lets: Vec<LetView<'a>>,
+    fns: Vec<FnView<'a>>,
+    mods: Vec<ModView<'a>>,
+}
+
+impl OwnBinders<'_> {
+    fn is_empty(&self) -> bool {
+        self.len() == 0
+    }
+
+    fn len(&self) -> usize {
+        self.types.len() + self.lets.len() + self.fns.len() + self.mods.len()
+    }
+}
+
+/// one candidate of a twice-bound name — the row and the use edge
+/// that bound it (`None` = the doc's own decl, or a leaf that binds
+/// nothing: the spelling is the candidate)
+pub(crate) struct Candidate<'a> {
+    pub row: CandRow<'a>,
+    pub via: Option<Via<'a>>,
+}
+
+impl<'a> Candidate<'a> {
+    /// a row the doc declares itself (or a method beside a same-named
+    /// free fn — the legal own ambiguity the fn lane lists)
+    pub(crate) fn own(row: CandRow<'a>) -> Candidate<'a> {
+        Candidate { row, via: None }
+    }
+}
+
+/// the doc's use edge a candidate rode in on — its provenance beside
+/// the row's own (which `use` leaf and its source, which glob)
+#[derive(Clone)]
+pub(crate) enum Via<'a> {
+    /// an explicit leaf — the `use` statement it rode
+    Leaf(UseView<'a>),
+    /// a glob — its spelling
+    Glob(GlobUse<'a>),
+}
+
+/// a candidate's decl row — a type, a module let, a fn, a `mod` edge,
+/// or a use leaf that binds nothing of its own
+pub(crate) enum CandRow<'a> {
+    Ty(TyView<'a>),
+    Let(LetView<'a>),
+    Fn(FnView<'a>),
+    Mod(ModView<'a>),
+    Leaf(UseView<'a>),
+}
+
+impl<'a> FileScope<'a> {
+    /// the scope's rows as candidates of ONE use binding, each beside
+    /// the edge that bound it
+    fn into_candidates(self, via: Via<'a>) -> Vec<Candidate<'a>> {
+        let mut out: Vec<Candidate<'a>> = Vec::new();
+        for t in self.types {
+            out.push(Candidate {
+                row: CandRow::Ty(t),
+                via: Some(via.clone()),
+            });
+        }
+        for l in self.lets {
+            out.push(Candidate {
+                row: CandRow::Let(l),
+                via: Some(via.clone()),
+            });
+        }
+        for f in self.fns {
+            out.push(Candidate {
+                row: CandRow::Fn(f),
+                via: Some(via.clone()),
+            });
+        }
+        out
+    }
+}
+
 /// where a qualified path's head resolved from — the walk's gates key
 /// on it: the own family (any declared edge, the visibility dial),
 /// the cross-package heads (the `pub` walk), the dep root (whose own
@@ -1276,6 +1470,23 @@ fn own_scope_of<'a>(f: &'a MountedFile, name: &str) -> FileScope<'a> {
     out.fns
         .extend(f.fns().into_iter().filter(|fv| fv.name() == name));
     out
+}
+
+/// one file's OWN module-scope binders of `name` — every one, the
+/// one-name registry's kinds: each type decl, each module let, each
+/// FREE fn (impl methods are type-scoped and never meet the law), each
+/// `mod` edge
+fn own_binders<'a>(f: &'a MountedFile, name: &str) -> OwnBinders<'a> {
+    OwnBinders {
+        types: f.types().into_iter().filter(|t| t.name() == name).collect(),
+        lets: f.lets().into_iter().filter(|l| l.name() == name).collect(),
+        fns: f
+            .fns()
+            .into_iter()
+            .filter(|fv| fv.name() == name && fv.owner().is_none())
+            .collect(),
+        mods: f.mods().into_iter().filter(|m| m.name() == name).collect(),
+    }
 }
 
 /// one file's DECLARATION rows of `name` — its own type / module let

@@ -774,12 +774,13 @@ pub mod rut_new {
     /// the leaf module `m`: the leaf kinds the lanes gate — a fn, a
     /// type (+ its impl), a module let, a `pub(pkg)` fn, a private
     /// fn, a nested `grid`, and the use rows (a private import, a
-    /// `pub use` re-export, a glob)
-    pub const M: &str = "pub mod grid;\n\nuse grid::{ cell };\npub use grid::{ G };\nuse grid::*;\n\npub struct Counter {\n    n: i32,\n}\nimpl Counter {\n    pub fn bump(self) -> i32 { return self.n + 1; }\n}\npub fn mk(n: i32) -> Counter { return Counter { n: n }; }\nfn secret() -> i32 { return 5; }\npub(pkg) fn pkgfn() -> i32 { return 6; }\npub let STEP: i32 = 2;\npub struct Box2<T> {\n    v: T,\n}\nimpl<T> Box2<T> {\n    pub fn get(self) -> T { return self.v; }\n}\npub fn mk_box<T>(v: T) -> Box2<T> { return Box2 { v: v }; }\n";
+    /// `pub use` re-export, a glob). `SHARED` (line 24) is `grid`'s
+    /// twin name: two globs of distinct heads both bind it
+    pub const M: &str = "pub mod grid;\n\nuse grid::{ cell };\npub use grid::{ G };\nuse grid::*;\n\npub struct Counter {\n    n: i32,\n}\nimpl Counter {\n    pub fn bump(self) -> i32 { return self.n + 1; }\n}\npub fn mk(n: i32) -> Counter { return Counter { n: n }; }\nfn secret() -> i32 { return 5; }\npub(pkg) fn pkgfn() -> i32 { return 6; }\npub let STEP: i32 = 2;\npub struct Box2<T> {\n    v: T,\n}\nimpl<T> Box2<T> {\n    pub fn get(self) -> T { return self.v; }\n}\npub fn mk_box<T>(v: T) -> Box2<T> { return Box2 { v: v }; }\npub let SHARED: i32 = 10;\n";
 
-    /// `m`'s nested module
+    /// `m`'s nested module (`SHARED`, line 4 — the glob-overlap twin)
     pub const GRID: &str =
-        "pub fn cell() -> i32 { return 9; }\npub let G: i32 = 1;\npub let GK: i32 = 1;\n";
+        "pub fn cell() -> i32 { return 9; }\npub let G: i32 = 1;\npub let GK: i32 = 1;\npub let SHARED: i32 = 20;\n";
 
     /// `child`'s own child
     pub const SUB: &str = "pub fn deep() -> i32 { return 4; }\n";

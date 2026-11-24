@@ -14,7 +14,8 @@ use super::render::{
 };
 use crate::semantic::Span;
 use crate::world::collection::{
-    enclosing_type, Chain, FnView, MemberHit, MemberTarget, ModView, MountedFile, TyView,
+    enclosing_type, CandRow, Candidate, Chain, FnView, MemberHit, MemberTarget, ModView,
+    MountedFile, TyView,
 };
 use crate::world::infer::is_cap;
 use crate::world::mods::DocMods;
@@ -169,6 +170,21 @@ pub fn hover(chain: &Chain, doc: &DocMods, pos: u32) -> Option<HoverOut> {
             });
         }
 
+        // THE mid-edit candidates: the file binds the name TWICE by
+        // distinct bindings — two decls of its own, two use leaves, a
+        // decl beside a leaf, two globs of distinct heads — a one-name
+        // violation the checker refuses; the hover LISTS every binding
+        // (kind + provenance: which decl, which `use` leaf and its
+        // source, which glob), never a pick. Definition stays silent
+        // on the same name. (A local binding answered above — inner
+        // layer wins, legal shadowing.)
+        if let Some(candidates) = chain.ambiguous_scope(name) {
+            return Some(HoverOut {
+                markdown: render_candidates(&candidates),
+                span: name_span,
+            });
+        }
+
         // module-let use sites — the file scope's unique match
         if let Some(md) = module_let_hover(chain, name) {
             return Some(HoverOut {
@@ -179,7 +195,8 @@ pub fn hover(chain: &Chain, doc: &DocMods, pos: u32) -> Option<HoverOut> {
 
         // bare name: the file scope's fn match (free fns, methods);
         // the scope bound the name to more than one of its own fns →
-        // the candidates list (the mid-edit/legal-ambiguity path)
+        // the candidates list (a free fn beside an impl method of one
+        // name — methods are type-scoped, the law never meets them)
         let hits: Vec<FnView> = chain.functions(name);
         match hits.as_slice() {
             [] => {}
@@ -191,7 +208,12 @@ pub fn hover(chain: &Chain, doc: &DocMods, pos: u32) -> Option<HoverOut> {
             }
             _ => {
                 return Some(HoverOut {
-                    markdown: render_candidates(&hits),
+                    markdown: render_candidates(
+                        &hits
+                            .iter()
+                            .map(|f| Candidate::own(CandRow::Fn(*f)))
+                            .collect::<Vec<_>>(),
+                    ),
                     span: name_span,
                 })
             }
@@ -427,7 +449,12 @@ fn qualified_path_hover(
             .or_else(|| match scope.fns.as_slice() {
                 [] => None,
                 [one] => Some(render_fn_hits(one)),
-                many => Some(render_candidates(many)),
+                many => Some(render_candidates(
+                    &many
+                        .iter()
+                        .map(|f| Candidate::own(CandRow::Fn(*f)))
+                        .collect::<Vec<_>>(),
+                )),
             })
     };
     Some(md.map(|md| (md, span)))
