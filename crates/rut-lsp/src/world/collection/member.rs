@@ -423,20 +423,25 @@ impl<'a> Chain<'a> {
 
     /// the class's designated constructor — `impl Logger {
     /// [constructor] pub fn new(..) -> Self }` — the ctor hover /
-    /// signature-help lanes' shared door (the callee's ctor half, ONE
-    /// home beside [`Chain::impl_method_fn`]). First hit in chain
-    /// order (the checker enforces one `[constructor]` per class, on
-    /// inherent impls only). A newtype never answers here — the
-    /// checker refuses the marker on a newtype (the engine's
-    /// `Ctx::class_ctors` law: a newtype never registers; its call
-    /// surface already IS the mint), so the newtype arm never rides
-    /// this sweep.
-    pub(crate) fn constructor_of(&self, ty_name: &str) -> Option<FnView<'a>> {
-        for f in self.iter().flat_map(|i| i.fns()) {
+    /// signature-help lanes' shared door. The sweep is the RESOLVED
+    /// class's OWN FILE's, never a name-keyed flat sweep over the
+    /// chain (the compiler's inherent-impl rule: an inherent impl must
+    /// live in its class's own module — module ↔ file is 1:1 — so a
+    /// same-named class in another package can never donate a ctor,
+    /// and a cross-module `[constructor]` impl is NOT a ctor of that
+    /// class). First hit in the file's own source order (the checker
+    /// enforces one `[constructor]` per class). A newtype never
+    /// answers here — the checker refuses the marker on a newtype
+    /// (the engine's `Ctx::class_ctors` law: a newtype never
+    /// registers; its call surface already IS the mint), so the
+    /// newtype arm never rides this sweep.
+    pub(crate) fn constructor_of(&self, ty: TyView<'a>) -> Option<FnView<'a>> {
+        let ty_name = ty.name();
+        let ast = ty.file.doc.ast();
+        for f in ty.file.fns() {
             if f.owner().as_deref() != Some(ty_name) {
                 continue;
             }
-            let ast = f.file.doc.ast();
             if let Some(m) = f.h.downcast::<MethodDeclNode>() {
                 if m.get(ast).marker() == Some(rut_core::sym::CONSTRUCTOR_MARKER) {
                     return Some(f);

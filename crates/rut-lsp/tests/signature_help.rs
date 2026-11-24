@@ -383,3 +383,116 @@ fn a_no_ctor_class_callee_stays_silent() {
     assert!(h.is_null(), "{h}");
 }
 }
+
+// ---- the file-scope law on the ctor fallback (review round 1): the
+//      whole fallback gates on `type_decl` and the ctor is the
+//      resolved class's own file's — never a name-keyed flat sweep ----
+
+both_uri_shapes! {
+#[test]
+fn the_bound_packages_ctor_answers_in_both_mount_orders() {
+    // P1's sig half — two packages each carry `class Logger` with a
+    // DIFFERENT ctor; the signature is the BOUND package's, in both
+    // mount orders — chain order must not decide
+    let aaa = "pub class Logger {\n    n: i32;\n}\nimpl Logger {\n    [constructor] pub fn mk(n: i32) -> Self { return Self { n: n }; }\n}\n";
+    let bbb = "pub class Logger {\n    msg: str;\n}\nimpl Logger {\n    [constructor] pub fn build(msg: str) -> Self { return Self { msg: msg }; }\n}\n";
+    for aaa_first in [true, false] {
+        let mut s = S::boot();
+        if aaa_first {
+            s.index_file("file:///ws/aaa.rut", aaa);
+            s.index_file("file:///ws/bbb.rut", bbb);
+        } else {
+            s.index_file("file:///ws/bbb.rut", bbb);
+            s.index_file("file:///ws/aaa.rut", aaa);
+        }
+        let uri = "file:///t/main.rut";
+        let src = "use aaa::{Logger};\nentry fn main() -> nil {\n    let l = Logger(1);\n}\n";
+        let (lbl, slot, pieces) = slot_of(&s.sig_at(uri, src, "1);", 1));
+        assert_eq!(lbl, "[constructor] pub fn mk(n: i32) -> Self");
+        assert_eq!(slot, Some(0));
+        assert_eq!(pieces, ["n: i32"]);
+        let src = "use bbb::{Logger};\nentry fn main() -> nil {\n    let l = Logger(\"x\");\n}\n";
+        let (lbl, slot, pieces) = slot_of(&s.sig_at(uri, src, "\"x\");", 1));
+        assert_eq!(lbl, "[constructor] pub fn build(msg: str) -> Self");
+        assert_eq!(slot, Some(0));
+        assert_eq!(pieces, ["msg: str"]);
+    }
+}
+}
+
+both_uri_shapes! {
+#[test]
+fn a_foreign_same_named_class_donates_no_signature() {
+    // P4's sig half — the file's OWN no-ctor class beside a mounted
+    // foreign `Logger` with a ctor: the foreign ctor must not answer
+    // (the compiler refuses the call)
+    let mut s = S::boot();
+    s.index_file(
+        "file:///ws/aaa.rut",
+        "pub class Logger {\n    n: i32;\n}\nimpl Logger {\n    [constructor] pub fn mk(n: i32) -> Self { return Self { n: n }; }\n}\n",
+    );
+    let src = "class Logger {\n    msg: str;\n}\nentry fn main() -> nil {\n    let l = Logger(\"x\");\n}\n";
+    let h = s.sig_in("file:///t/main.rut", src, "Logger(", 1, 7);
+    assert!(h.is_null(), "{h}");
+}
+}
+
+both_uri_shapes! {
+#[test]
+fn an_unbound_class_callee_stays_silent() {
+    // P2 — an unbound capitalized name that is a class elsewhere: the
+    // file scope gates the whole fallback (the compiler: "unknown
+    // function `Widget`") — no help, never the foreign ctor
+    let mut s = S::boot();
+    s.index_file(
+        "file:///ws/aaa.rut",
+        "pub class Widget {\n    v: i32;\n}\nimpl Widget {\n    [constructor] pub fn new(v: i32) -> Self { return Self { v: v }; }\n}\n",
+    );
+    let src = "entry fn main() -> nil {\n    let w = Widget(1);\n}\n";
+    let h = s.sig_in("file:///t/main.rut", src, "Widget(", 1, 7);
+    assert!(h.is_null(), "{h}");
+}
+}
+
+both_uri_shapes! {
+#[test]
+fn an_ambiguous_own_class_stays_silent() {
+    // D — two own `class Logger` decls (ambiguous, refused): sig help
+    // answers nothing, never the FIRST decl's ctor
+    let mut s = S::boot();
+    let src = "class Logger {\n    n: i32;\n}\nclass Logger {\n    msg: str;\n}\nimpl Logger {\n    [constructor] pub fn build(msg: str) -> Self { return Self { msg: msg }; }\n}\nentry fn main() -> nil {\n    let l = Logger(1);\n}\n";
+    let h = s.sig_in("file:///t/main.rut", src, "Logger(", 1, 7);
+    assert!(h.is_null(), "{h}");
+}
+}
+
+both_uri_shapes! {
+#[test]
+fn a_cross_module_ctor_impl_is_no_signature_of_the_class() {
+    // the compiler refuses an inherent impl outside the class's own
+    // module — a cross-module `[constructor]` impl is not the class's
+    // ctor: no help (the diagnostics panel owns the refusal)
+    let mut s = S::boot();
+    s.index_file(
+        "file:///ws/lib/log.rut",
+        "impl Logger {\n    // the maker\n    [constructor] pub fn new(msg: str) -> Self { return Self { msg: msg }; }\n}\n",
+    );
+    let src = "class Logger {\n    msg: str;\n}\nentry fn main() -> nil {\n    let l = Logger(\"hello\");\n}\n";
+    let h = s.sig_in("file:///t/main.rut", src, "Logger(", 1, 7);
+    assert!(h.is_null(), "{h}");
+}
+}
+
+both_uri_shapes! {
+#[test]
+fn a_generic_newtype_call_mints_with_its_binder() {
+    // the mint label carries the generics on both sides, consistent
+    // with the hover's mint line
+    let mut s = S::boot();
+    let src = "class Box<T>(T);\nentry fn main() -> nil {\n    let b = Box(1);\n}\n";
+    let (lbl, slot, pieces) = slot_of(&s.sig_at("file:///t/main.rut", src, "1);", 1));
+    assert_eq!(lbl, "Box<T>(inner: T) -> Box<T>");
+    assert_eq!(slot, Some(0));
+    assert_eq!(pieces, ["inner: T"]);
+}
+}

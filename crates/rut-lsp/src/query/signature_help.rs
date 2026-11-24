@@ -16,12 +16,15 @@
 //!   FINAL with no recorded params → no help, so a same-named impl fn's
 //!   signature can never leak through (the known-receiver-is-final law);
 //! * a capitalized single-seg callee misses the free-fn lane into the
-//!   CTOR fallback: the class's designated constructor answers with its
-//!   verbatim impl signature (`is_method = false` — a ctor takes no
-//!   receiver, its params ARE the call's args), a positional newtype
-//!   with its synthesized mint label (`TyView::mint_sig`, the hover's
-//!   mint line's spelling). Anything else stays a miss — no help, never
-//!   wrong help.
+//!   CTOR fallback, gated by the FILE SCOPE (`type_decl` — an unbound
+//!   or ambiguous name answers nothing, never wrong help from a
+//!   foreign same-named class): the bound class's designated
+//!   constructor answers with its verbatim impl signature from the
+//!   class's OWN file (`is_method = false` — a ctor takes no receiver,
+//!   its params ARE the call's args; the compiler's inherent-impl
+//!   rule), a positional newtype with its synthesized mint label
+//!   (`TyView::mint_sig`, the hover's mint line's spelling). Anything
+//!   else stays a miss — no help, never wrong help.
 //!
 //! The signature renders verbatim (the fn view's own slice — the fn
 //! name and params as written, the hover render's source). The
@@ -151,28 +154,31 @@ pub fn signature_help(ctx: &Ctx, pos: u32) -> Option<SignatureHelp> {
                 false,
             ),
             // the ctor fallback lane — a single capitalized callee
-            // names a class in call position. The newtype answers
-            // through the mint arm (never the marker sweep — the
-            // engine's `Ctx::class_ctors` law: a newtype never
-            // registers; the synthesized label mentions the param
-            // name so the alignment check holds); a designated ctor
-            // answers with its verbatim impl signature, `is_method =
-            // false` (a ctor takes no receiver — its params ARE the
-            // call's args). Anything else stays a miss — no help,
-            // never wrong help.
+            // names a class in call position. The FILE SCOPE gates the
+            // whole fallback: the queried file must bind the class
+            // (`type_decl`) — an unbound or ambiguous name answers
+            // nothing (the compiler refuses both; hover's candidates
+            // lane answers the ambiguity), never wrong help from a
+            // foreign same-named class. The newtype answers through
+            // the mint arm (never the marker sweep — the engine's
+            // `Ctx::class_ctors` law: a newtype never registers; the
+            // synthesized label mentions the param name so the
+            // alignment check holds); the designated ctor answers with
+            // its verbatim impl signature from the class's OWN file
+            // (the compiler's inherent-impl rule), `is_method = false`
+            // (a ctor takes no receiver — its params ARE the call's
+            // args). Anything else stays a miss — no help, never wrong
+            // help.
             _ => {
                 if !crate::world::infer::is_cap(name) {
                     return None;
                 }
-                let mint = ctx
-                    .chain
-                    .type_decl(name)
-                    .filter(|t| t.is_newtype())
-                    .and_then(|t| t.mint_sig().map(|label| (label, t.mint_params())));
-                if let Some((label, params)) = mint {
-                    (label, params, Vec::new(), cd.args.clone(), false)
+                let t = ctx.chain.type_decl(name)?;
+                if t.is_newtype() {
+                    let label = t.mint_sig()?;
+                    (label, t.mint_params(), Vec::new(), cd.args.clone(), false)
                 } else {
-                    let f = ctx.chain.constructor_of(name)?;
+                    let f = ctx.chain.constructor_of(t)?;
                     (f.src(), f.params(), f.doc_lines(), cd.args.clone(), false)
                 }
             }

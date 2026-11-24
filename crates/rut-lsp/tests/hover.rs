@@ -2575,10 +2575,12 @@ fn the_self_lanes_carry_no_ctor_section() {
 
 both_uri_shapes! {
 #[test]
-fn a_foreign_ctor_impl_names_its_home() {
-    // the ctor's impl lives in ANOTHER file: the section carries the
-    // impl's provenance + its own doc lines (the queried file's own
-    // block above already carries its own)
+fn a_cross_module_ctor_impl_is_no_ctor_of_the_class() {
+    // the compiler REFUSES an inherent impl outside the class's own
+    // module ("an inherent impl for `Logger` must live in `Logger`'s
+    // module") — a cross-module `[constructor]` impl is NOT a ctor of
+    // that class: hover shows the class block with NO ctor section
+    // (never-wrong; the diagnostics panel owns the refusal)
     let mut s = S::boot();
     s.index_file(
         "file:///ws/lib/log.rut",
@@ -2587,10 +2589,9 @@ fn a_foreign_ctor_impl_names_its_home() {
     let src = "class Logger {\n    msg: str;\n}\nentry fn main() -> nil {\n    let l = Logger(\"hello\");\n}\n";
     let md = markdown(s.hover_in("file:///t/main.rut", src, "= Logger(", 1, 2));
     assert!(md.contains("class Logger {"), "{md}");
-    assert!(md.contains("constructor:"), "{md}");
-    assert!(md.contains("[constructor] pub fn new(msg: str) -> Self"), "{md}");
-    assert!(md.contains("log.rut"), "the impl's provenance: {md}");
-    assert!(md.contains("the maker"), "the ctor's own doc lines ride: {md}");
+    assert!(!md.contains("constructor:"), "a foreign impl is no ctor: {md}");
+    assert!(!md.contains("log.rut"), "no foreign provenance: {md}");
+    assert!(!md.contains("the maker"), "{md}");
 }
 }
 
@@ -2618,5 +2619,118 @@ fn a_qualified_ctor_callee_appends_the_section() {
     let md = markdown(s.hover_in(uri, doc, "shape::Logger(", 1, 2));
     assert!(md.contains("file module"), "{md}");
     assert!(!md.contains("constructor:"), "{md}");
+}
+}
+
+// ---- the file-scope law on the ctor door (review round 1): the ctor
+//      is the RESOLVED class's own file's, never a name-keyed flat
+//      sweep over the chain ----
+
+both_uri_shapes! {
+#[test]
+fn the_bound_packages_class_donates_the_ctor_section() {
+    // P1 — two packages each carry `class Logger` with a DIFFERENT
+    // ctor; the file binds each in turn (`use aaa::{Logger}` /
+    // `use bbb::{Logger}`) and the section is the BOUND package's, in
+    // both mount orders — chain order must not decide
+    let aaa = "pub class Logger {\n    n: i32;\n}\nimpl Logger {\n    [constructor] pub fn mk(n: i32) -> Self { return Self { n: n }; }\n}\n";
+    let bbb = "pub class Logger {\n    msg: str;\n}\nimpl Logger {\n    [constructor] pub fn build(msg: str) -> Self { return Self { msg: msg }; }\n}\n";
+    for aaa_first in [true, false] {
+        let mut s = S::boot();
+        if aaa_first {
+            s.index_file("file:///ws/aaa.rut", aaa);
+            s.index_file("file:///ws/bbb.rut", bbb);
+        } else {
+            s.index_file("file:///ws/bbb.rut", bbb);
+            s.index_file("file:///ws/aaa.rut", aaa);
+        }
+        let src = "use aaa::{Logger};\nentry fn main() -> nil {\n    let l = Logger(1);\n}\n";
+        let md = markdown(s.hover_in("file:///t/main.rut", src, "= Logger(", 1, 2));
+        assert!(md.contains("n: i32"), "aaa's class block: {md}");
+        assert!(!md.contains("msg: str"), "never bbb's fields: {md}");
+        assert!(md.contains("constructor:"), "{md}");
+        assert!(
+            md.contains("[constructor] pub fn mk(n: i32) -> Self"),
+            "aaa's ctor: {md}"
+        );
+        assert!(!md.contains("fn build"), "never bbb's ctor: {md}");
+        let src = "use bbb::{Logger};\nentry fn main() -> nil {\n    let l = Logger(\"x\");\n}\n";
+        let md = markdown(s.hover_in("file:///t/main.rut", src, "= Logger(", 1, 2));
+        assert!(md.contains("msg: str"), "bbb's class block: {md}");
+        assert!(!md.contains("n: i32"), "{md}");
+        assert!(
+            md.contains("[constructor] pub fn build(msg: str) -> Self"),
+            "bbb's ctor: {md}"
+        );
+        assert!(!md.contains("fn mk"), "{md}");
+    }
+}
+}
+
+both_uri_shapes! {
+#[test]
+fn a_foreign_same_named_class_donates_nothing_to_the_files_own_no_ctor_class() {
+    // P4 — the file's OWN no-ctor `class Logger` beside a mounted
+    // foreign `Logger` with a ctor: the compiler refuses the call
+    // ("`Logger` constructs through its class methods") — the foreign
+    // ctor must not donate a section
+    let mut s = S::boot();
+    s.index_file(
+        "file:///ws/aaa.rut",
+        "pub class Logger {\n    n: i32;\n}\nimpl Logger {\n    [constructor] pub fn mk(n: i32) -> Self { return Self { n: n }; }\n}\n",
+    );
+    let src = "class Logger {\n    msg: str;\n}\nentry fn main() -> nil {\n    let l = Logger(\"x\");\n}\n";
+    let md = markdown(s.hover_in("file:///t/main.rut", src, "= Logger(", 1, 2));
+    assert!(md.contains("msg: str"), "the file's own class block: {md}");
+    assert!(!md.contains("n: i32"), "{md}");
+    assert!(!md.contains("constructor:"), "no foreign ctor donates: {md}");
+}
+}
+
+both_uri_shapes! {
+#[test]
+fn an_unbound_class_name_hovers_nothing() {
+    // P2's hover half — an unbound capitalized name that is a class
+    // elsewhere answers nothing (the file scope's law; sig help was
+    // the leak, hover was already gated)
+    let mut s = S::boot();
+    s.index_file(
+        "file:///ws/aaa.rut",
+        "pub class Widget {\n    v: i32;\n}\nimpl Widget {\n    [constructor] pub fn new(v: i32) -> Self { return Self { v: v }; }\n}\n",
+    );
+    let src = "entry fn main() -> nil {\n    let w = Widget(1);\n}\n";
+    let h = s.hover_in("file:///t/main.rut", src, "= Widget(", 1, 2);
+    assert!(no_hover(&h), "{h}");
+}
+}
+
+both_uri_shapes! {
+#[test]
+fn an_ambiguous_own_class_lists_candidates_with_no_ctor_section() {
+    // D's hover half — two own `class Logger` decls (the one-name law
+    // refuses; a mid-edit state): hover lists the candidates, no ctor
+    // section, never a pick
+    let mut s = S::boot();
+    let src = "class Logger {\n    n: i32;\n}\nclass Logger {\n    msg: str;\n}\nimpl Logger {\n    [constructor] pub fn build(msg: str) -> Self { return Self { msg: msg }; }\n}\nentry fn main() -> nil {\n    let l = Logger(1);\n}\n";
+    let md = markdown(s.hover_in("file:///t/main.rut", src, "= Logger(", 1, 2));
+    assert!(md.contains("multiple definitions"), "{md}");
+    assert!(!md.contains("constructor:"), "{md}");
+}
+}
+
+both_uri_shapes! {
+#[test]
+fn a_generic_newtype_callee_mints_with_its_binder() {
+    // `class Box<T>(T);` — the mint carries the class's generics on
+    // BOTH sides: Box<T>(inner: T) -> Box<T> (the wrapped type is the
+    // desugared field's type text — the binder as written)
+    let mut s = S::boot();
+    let src = "class Box<T>(T);\nentry fn main() -> nil {\n    let b = Box(1);\n}\n";
+    let md = markdown(s.hover_in("file:///t/main.rut", src, "= Box(", 1, 2));
+    assert!(md.contains("class Box<T>(T) {"), "{md}");
+    assert!(
+        md.contains("constructor — the newtype mint: Box<T>(inner: T) -> Box<T>"),
+        "{md}"
+    );
 }
 }

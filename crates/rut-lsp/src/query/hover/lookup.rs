@@ -412,9 +412,9 @@ fn append_ctor_section(
         }
         return;
     }
-    if let Some(ctor) = chain.constructor_of(ty.name()) {
+    if let Some(ctor) = chain.constructor_of(*ty) {
         out.push_str("\n\n");
-        out.push_str(&render_ctor_section(ty, &ctor));
+        out.push_str(&render_ctor_section(&ctor));
     }
 }
 

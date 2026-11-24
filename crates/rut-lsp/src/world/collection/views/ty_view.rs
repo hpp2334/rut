@@ -108,23 +108,36 @@ impl<'a> TyView<'a> {
     }
 
     /// the synthesized mint signature — `Meters(inner: f64) ->
-    /// Meters`: the positional newtype's compiler-provided constructor
-    /// (`compile_newtype_ctor`: exactly one wrapped value, the wrapper
-    /// back). The desugar names the field `inner` (the parser's
-    /// synthesized shape — no source token spells it), the wrapped
-    /// type joins over the OWNING document as written. Source-less BY
+    /// Meters`, `Box<T>(inner: T) -> Box<T>`: the positional newtype's
+    /// compiler-provided constructor (`compile_newtype_ctor`: exactly
+    /// one wrapped value, the wrapper back). The desugar names the
+    /// field `inner` (the parser's synthesized shape — no source token
+    /// spells it), the wrapped type joins over the OWNING document as
+    /// written (a generic wrapper's binder spells the field `T`), and
+    /// the class's own generics ride both sides. Source-less BY
     /// DESIGN: no ctor decl exists to slice (the LSP verbatim law
     /// renders inferred/semantic facts). `None` when the decl carries
     /// no field — a damaged shape mints no line, never a wrong one.
     pub(crate) fn mint_sig(&self) -> Option<String> {
         let f = self.fields().into_iter().next()?;
-        Some(format!(
-            "{}({}: {}) -> {}",
-            self.name(),
-            f.name(),
-            f.ty()?,
-            self.name()
-        ))
+        let ast = self.ast();
+        let generics: Vec<String> = self
+            .h
+            .downcast::<ClassNode>()
+            .map(|c| {
+                c.get(ast)
+                    .generics
+                    .iter()
+                    .map(|&g| ast.name(g).to_string())
+                    .collect()
+            })
+            .unwrap_or_default();
+        let head = if generics.is_empty() {
+            self.name().to_string()
+        } else {
+            format!("{}<{}>", self.name(), generics.join(", "))
+        };
+        Some(format!("{}({}: {}) -> {}", head, f.name(), f.ty()?, head))
     }
 
     /// the mint's parameter names — the desugared `inner` field (the

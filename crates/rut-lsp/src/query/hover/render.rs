@@ -115,20 +115,15 @@ pub(crate) fn render_fn_hits(one: &FnView) -> String {
 
 /// the designated constructor's section — appended to the class block
 /// when the hover rides a class callee: the label, the verbatim impl
-/// slice (`[constructor] pub fn new(..) -> Self` whole), then the
-/// impl's provenance + doc lines when it lives in ANOTHER file (the
-/// queried file's own block above already carries its provenance and
-/// doc).
-pub(crate) fn render_ctor_section(ty: &TyView, ctor: &FnView) -> String {
+/// slice (`[constructor] pub fn new(..) -> Self` whole), the ctor's
+/// doc lines. The door guarantees the impl is the class's OWN file's
+/// (the compiler's inherent-impl rule — a cross-module impl is no
+/// ctor of the class), so no provenance line rides: the class block
+/// above already cites that file.
+pub(crate) fn render_ctor_section(ctor: &FnView) -> String {
     let mut out = format!("constructor:\n{}", code_block(&ctor.src()));
-    if !ctor.file.same_file(ty.file) {
-        let origin = &ctor.file.mount.origin;
-        if !origin.is_empty() {
-            out.push_str(&format!("\n{}", provenance(origin, ctor.line())));
-        }
-        for d in ctor.doc_lines() {
-            out.push_str(&format!("\n\n{d}"));
-        }
+    for d in ctor.doc_lines() {
+        out.push_str(&format!("\n\n{d}"));
     }
     out
 }
