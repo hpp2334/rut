@@ -2,18 +2,12 @@
 //! answer the one-world refactor must preserve, or the answer a named act
 //! flips (that act keeps the scenario, replaces the assertion, renames the test).
 //!
-//! Phase 0 reconciliation at HEAD (post-`ca434c85`): two plan deltas are
-//! already realized — delta 5 (hover lists the candidates for an ambiguous
-//! module let, 21332ebe) and delta 9 (the reference scan stamps each scanned
-//! file with its own context, d9cd1f00) — those pins assert HEAD's answers.
-//! One drift is recorded as-is: the flat package's `use flat::{ x }` leaf
-//! answers nothing (d9cd1f00's identity exclusion dropped the open doc from
-//! the cross-package sweep; the plan's delta-7 After kept one hit — Act 2
-//! rewrites this pin). And the UNSTAMPED cross-package lanes are
-//! uri-shape-keyed: under a project dir whose name never spells the package
-//! they answer nothing (already so at `ca434c85`; the plan's Before values
-//! were measured only in the naming shape) — those pins ride
-//! `both_uri_shapes!` and record both answers, verbatim.
+//! Act 1 (one world) flipped five of the Phase 0 pins in place; the other
+//! six record answers that survive the act. The UNSTAMPED cross-package
+//! lanes are uri-shape-keyed: under a project dir whose name never spells
+//! the package they answer nothing (an `index_file` push carries no
+//! stamp.module, and the pkg-name derivation has nothing to grip) — those
+//! pins ride `both_uri_shapes!` and record both answers, verbatim.
 mod common;
 use common::*;
 
@@ -27,7 +21,7 @@ fn names_shape() -> bool {
 
 both_uri_shapes! {
 #[test]
-fn the_check_lane_compiles_the_indexed_text_of_other_open_files() {
+fn the_check_lane_compiles_every_open_files_live_text() {
     let mut s = S::boot();
     let root = "mod util;\nuse app::util::{ f };\nentry fn main() -> nil {\n    let x: i32 = f();\n}\n";
     let disk = "pub fn f() -> i32 { return 1; }\n";
@@ -36,9 +30,15 @@ fn the_check_lane_compiles_the_indexed_text_of_other_open_files() {
     s.index_mod_at(ru, "app", "", root);
     s.index_mod_at(cu, "app", "util", disk);
     assert!(s.analyze(ru, root)["diags"].as_array().unwrap().is_empty());
-    s.analyze(cu, live); // the buffer edit; the index still holds `disk`
-    assert!(s.analyze(ru, root)["diags"].as_array().unwrap().is_empty()); // Act 1: exactly one diag
-    s.index_mod_at(cu, "app", "util", live); // the control: re-indexing re-arms it
+    s.analyze(cu, live); // the buffer edit; the child file's stamp stands
+    // one world: the check lane compiles the OPEN child's buffer — the
+    // diagnostic appears before any re-index
+    let d = s.analyze(ru, root)["diags"].as_array().unwrap().clone();
+    assert_eq!(d.len(), 1, "{d:?}");
+    assert!(d[0]["message"].as_str().unwrap().contains("but the initializer is `str`"), "{d:?}");
+    assert_eq!(pos_pair(&d[0]["range"]["start"]), (3, 4));
+    // the control: re-indexing (the walk's own lane) answers the same
+    s.index_mod_at(cu, "app", "util", live);
     let d = s.analyze(ru, root)["diags"].as_array().unwrap().clone();
     assert_eq!(d.len(), 1, "{d:?}");
     assert!(d[0]["message"].as_str().unwrap().contains("but the initializer is `str`"), "{d:?}");
@@ -55,21 +55,29 @@ const USE_EXTRA: &str = "use a::{ extra };\nentry fn main() -> nil {\n    let x 
 
 both_uri_shapes! {
 #[test]
-fn cross_file_navigation_reads_the_indexed_copy_of_an_open_file() {
+fn cross_file_navigation_reads_the_live_buffer_of_an_open_file() {
     let mut s = S::boot();
     s.index_file(A_LIB, A_DISK);
     s.analyze(A_LIB, A_LIVE); // open and edited: `make` sits on line 2 char 8 and returns str
     if names_shape() {
-        // the naming shape: the plan's Before — the indexed copy answers
+        // the naming shape: the open file's buffer is the truth — the
+        // live signature at its live line
         let md = markdown(s.hover_at("file:///t/one.rut", USE_MAKE, "make()", 1));
-        assert!(md.contains("pub fn make() -> i32") && md.contains("lib.rut:1"), "{md}"); // Act 1: `-> str`, `lib.rut:3`
+        assert!(md.contains("pub fn make() -> str") && md.contains("lib.rut:3"), "{md}");
         let hits = s.def_at("file:///t/one.rut", USE_MAKE, "make()", 1);
         assert_eq!(hits.len(), 1, "{hits:?}");
-        assert_eq!(pos_pair(&hits[0]["range"]["start"]), (0, 7)); // Act 1: (2, 8)
-        assert!(no_hover(&s.hover_at("file:///t/two.rut", USE_EXTRA, "extra()", 1))); // Act 1: resolves
+        // the plan wrote (2, 8) here; the live buffer spells `pub fn `
+        // before the name — the declaring ident starts at char 7, the
+        // same column the plan's own Before value pinned in the disk
+        // text ((0, 7)). Pinned at the tree's answer.
+        assert_eq!(pos_pair(&hits[0]["range"]["start"]), (2, 7));
+        let md = markdown(s.hover_at("file:///t/two.rut", USE_EXTRA, "extra()", 1));
+        assert!(md.contains("pub fn extra() -> i32"), "{md}");
     } else {
-        // the hiding shape: the unstamped lane answers nothing — the uri
-        // derivation has no `a` to grip (recorded; already so at ca434c85)
+        // the hiding shape: the unstamped cross-package lane still answers
+        // nothing — an `index_file` push carries no stamp.module and the
+        // pkg-name derivation has no `a` to grip (recorded; the lane is a
+        // separate plan's business)
         let h = s.hover_at("file:///t/one.rut", USE_MAKE, "make()", 1);
         assert!(no_hover(&h), "{h:?}");
         assert!(s.def_at("file:///t/one.rut", USE_MAKE, "make()", 1).is_empty());
@@ -80,7 +88,7 @@ fn cross_file_navigation_reads_the_indexed_copy_of_an_open_file() {
 
 both_uri_shapes! {
 #[test]
-fn a_closed_file_falls_back_to_its_indexed_text() {
+fn a_closed_file_keeps_its_last_buffer_text() {
     let mut s = S::boot();
     s.index_file(A_LIB, A_DISK);
     s.analyze(A_LIB, A_LIVE);
@@ -89,15 +97,17 @@ fn a_closed_file_falls_back_to_its_indexed_text() {
     let closed = s.hover_pos(A_LIB, l, c);
     assert!(no_hover(&closed), "{closed:?}"); // stays (both shapes): a closed uri answers null
     if names_shape() {
-        // the naming shape: the plan's Before — the indexed copy answers
+        // the naming shape: the file keeps the buffer it held at close —
+        // the same three live-buffer answers as when it was open
         let md = markdown(s.hover_at("file:///t/one.rut", USE_MAKE, "make()", 1));
-        assert!(md.contains("pub fn make() -> i32") && md.contains("lib.rut:1"), "{md}"); // Act 1: `-> str`, `lib.rut:3`
+        assert!(md.contains("pub fn make() -> str") && md.contains("lib.rut:3"), "{md}");
         let hits = s.def_at("file:///t/one.rut", USE_MAKE, "make()", 1);
-        assert_eq!(pos_pair(&hits[0]["range"]["start"]), (0, 7)); // Act 1: (2, 8)
-        assert!(no_hover(&s.hover_at("file:///t/two.rut", USE_EXTRA, "extra()", 1))); // Act 1: resolves
+        assert_eq!(pos_pair(&hits[0]["range"]["start"]), (2, 7)); // see the sibling pin: the plan's (2, 8) was a miscount
+        let md = markdown(s.hover_at("file:///t/two.rut", USE_EXTRA, "extra()", 1));
+        assert!(md.contains("pub fn extra() -> i32"), "{md}");
     } else {
-        // the hiding shape: the indexed copy's lane is dead too —
-        // null and [] (recorded; already so at ca434c85)
+        // the hiding shape: the unstamped cross-package lane is still dead —
+        // null and [] (recorded; the lane is a separate plan's business)
         let h = s.hover_at("file:///t/one.rut", USE_MAKE, "make()", 1);
         assert!(no_hover(&h), "{h:?}");
         assert!(s.def_at("file:///t/one.rut", USE_MAKE, "make()", 1).is_empty());
@@ -109,7 +119,7 @@ fn a_closed_file_falls_back_to_its_indexed_text() {
 
 both_uri_shapes! {
 #[test]
-fn an_unstamped_surface_counts_as_a_body() {
+fn body_over_decl_applies_to_unstamped_surfaces_too() {
     let surface = "pub host fn make() -> i32;\n";
     let body = "pub fn make() -> i32 { return 1; }\n";
     let src = "use pkg::{ make };\nentry fn main() -> nil {\n    let x = make();\n}\n";
@@ -119,13 +129,15 @@ fn an_unstamped_surface_counts_as_a_body() {
     s.index_file("file:///deps/pkg/mod.rut", body);
     let hits = s.def_in(uri, src, "{ make }", 1, 2);
     if names_shape() {
-        // the naming shape: the plan's Before — both targets answer
-        assert_eq!(hits.len(), 2, "{hits:?}"); // Act 1: 1
-        assert_eq!(hits[0]["uri"], "file:///deps/pkg/pkg.d.rut");
-        assert_eq!(hits[1]["uri"], "file:///deps/pkg/mod.rut");
+        // the naming shape: the unstamped `.d.rut` surface carries its
+        // derived Decl mode — the body answers, once
+        assert_eq!(hits.len(), 1, "{hits:?}");
+        assert_eq!(hits[0]["uri"], "file:///deps/pkg/mod.rut");
+        assert_eq!(pos_pair(&hits[0]["range"]["start"]), (0, 7));
     } else {
         // the hiding shape: the unstamped lane is dead — the derivation
-        // has no `pkg` to grip (recorded; already so at ca434c85)
+        // has no `pkg` to grip (recorded; the lane is a separate plan's
+        // business)
         assert!(hits.is_empty(), "{hits:?}");
     }
     let mut s = S::boot();
@@ -134,6 +146,7 @@ fn an_unstamped_surface_counts_as_a_body() {
     let hits = s.def_in(uri, src, "{ make }", 1, 2);
     assert_eq!(hits.len(), 1, "{hits:?}"); // stays (both shapes): the stamped law
     assert_eq!(hits[0]["uri"], "file:///deps/pkg/mod.rut");
+    assert_eq!(pos_pair(&hits[0]["range"]["start"]), (0, 7));
 }
 }
 
@@ -254,7 +267,7 @@ fn self_hovers_the_enclosing_type_and_defines_nothing() {
 
 both_uri_shapes! {
 #[test]
-fn reference_scans_ignore_the_scanned_file_s_package_context() {
+fn reference_scans_resolve_each_file_under_its_own_package_context() {
     let mut s = S::boot();
     s.index_mod_at("file:///ws/app/mod.rut", "app", "", "mod helper;\nmod x;\n");
     let hsrc = "pub fn two() -> i32 { return 2; }\n";
@@ -268,9 +281,10 @@ fn reference_scans_ignore_the_scanned_file_s_package_context() {
         "use app::helper::{ two };\nentry fn main() -> i32 {\n    return helper::two();\n}\n",
     );
     let hits = s.refs_in("file:///ws/app/helper/mod.rut", hsrc, "two", 1, 0, false);
-    // stays: delta 9 realized by d9cd1f00 — the scan stamps each scanned
-    // file with its own context (the plan's Before was one site; this is
-    // already Act 1's renamed pin's answer)
+    // stays: delta 9 realized by d9cd1f00 and kept by the one-world store —
+    // each scanned file resolves under its own stamp (the plan's Before
+    // was one site under a fake "unknown" context; this is Act 1's
+    // renamed pin's answer)
     assert_eq!(hits.len(), 2, "{hits:?}");
     assert!(hits.iter().all(|l| l["uri"] == "file:///ws/app/x/mod.rut"), "{hits:?}");
     let starts: Vec<(i64, i64)> = hits.iter().map(|l| pos_pair(&l["range"]["start"])).collect();

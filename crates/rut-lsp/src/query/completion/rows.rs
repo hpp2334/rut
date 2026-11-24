@@ -70,7 +70,7 @@ pub(super) trait CompletionRow {
 /// the detail rides the doc's own text join
 pub(super) struct BindRow<'a> {
     pub b: &'a crate::world::Binding,
-    pub doc: &'a crate::world::collection::MountedFile,
+    pub doc: &'a crate::world::File,
     /// the resolver's declared-or-inferred answer (the tier's one
     /// resolver read per row)
     pub ty: Option<String>,

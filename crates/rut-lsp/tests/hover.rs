@@ -963,7 +963,7 @@ fn mod_decl_hover_shows_kind_mount_and_children() {
     mount_gadgets(&mut s);
     let doc = "pub mod layout;\nmod secret;\nentry fn main() -> nil { }\n";
     let uri = "file:///ws/gadgets/main.rut";
-    // stamp the doc's twin so the own-package edges key
+    // stamp the uri (the index lane's push) so the own-package edges key
     s.index_mod_at(uri, "gadgets", "", doc);
     let md = markdown(s.hover_at(uri, doc, "layout", 1));
     assert!(md.contains("pub mod layout;"), "{md}");
@@ -1227,7 +1227,7 @@ fn qualified_path_through_own_mod_edge_hovers() {
 
 #[test]
 fn qualified_path_hovers_from_an_unstamped_doc() {
-    // the open scratch-file shape: no stamped twin — the doc's own
+    // the open scratch-file shape: no stamp laid down — the doc's own
     // `mod layout;` edge reads off the DeclMap and the unnamed-owner
     // law finds the mounted child
     let mut s = S::boot();
@@ -1806,6 +1806,11 @@ both_uri_shapes! {
         );
         // ... from a grandchild, the root's edge two levels up
         let sub = rut_new::at("src/child/sub/mod.rut");
+        // one world: the child's buffer is the truth, and this test's
+        // earlier probes synced other probe texts into it — its own
+        // text rides again before the grandchild names it (the old
+        // answer read the indexed copy behind the open buffer)
+        s.analyze(&uri, rut_new::CHILD_HEAD);
         let md = markdown(s.hover_in(
             &sub,
             "fn k() -> i32 { return m::mk(41).bump(); }\n",
@@ -2431,7 +2436,7 @@ both_uri_shapes! {
         let src = "use app::{ LIMIT };\nfn k() -> i32 { return LIMIT; }\n";
         let md = markdown(s.hover_in(&uri, src, "return LIMIT", 1, 7));
         assert!(md.contains("pub let LIMIT: i32 = 7"), "{md}");
-        // the walk's own twin of the doc's file lags an open edit —
+        // the walk's indexed copy of the doc's file lags an open edit —
         // the live document's decls answer for the doc's own names
         let src = "fn own() -> i32 { return 1; }\nfn k() -> i32 { return own(); }\n";
         let md = markdown(s.hover_in(&uri, src, "return own", 1, 7));

@@ -33,27 +33,28 @@ use ls_types::{
 
 use rut_ast::{ElseBranch, ExprRef, ItemRef, StmtRef};
 
-use crate::world::collection::{Chain, MountedFile};
 use crate::world::types::head_of_ty;
+use crate::world::{FileId, World};
 
-/// everything one inlay query needs — the chain the collection handed
-/// out (the open document at the head; its kept document owns the
+/// everything one inlay query needs — the session's world beside the
+/// queried file's id in it (its kept document owns the
 /// tree, the line index, and the text)
 pub struct Ctx<'a> {
-    /// the document's own mounted file — module-let hints and their
-    /// renders
-    pub doc: &'a MountedFile,
-    /// the lookup chain: the open document first, then the prelude + workspace
-    pub chain: &'a Chain<'a>,
-    /// the doc's file-module context (the stamped twin's pair) — the
-    /// receiver resolution's own-lane key
-    pub doc_mods: &'a crate::world::mods::DocMods,
+    /// the session's world — every file the query reads
+    pub w: &'a World,
+    /// the queried file — its own entry in the world
+    pub file: FileId,
 }
 
 impl Ctx<'_> {
-    /// the open document's tree (the chain head's kept document)
+    /// the queried file's own entry
+    fn doc(&self) -> &'_ crate::world::File {
+        self.w.file(self.file)
+    }
+
+    /// the queried file's tree
     fn ast(&self) -> &rut_ast::Ast {
-        self.doc.doc.ast()
+        self.doc().doc.ast()
     }
 }
 
@@ -75,18 +76,18 @@ pub(crate) struct RawInlay {
 /// (dropped by sync — a new version recomputes), and the range filter
 /// rides the cache (presentation). Sorted by position.
 pub fn hints(ctx: &Ctx, lo: u32, hi: u32) -> Vec<InlayHint> {
-    let (index, src) = (ctx.doc.doc.lines(), ctx.doc.doc.src());
-    let raw = ctx.doc.doc.inlays_view(|| {
+    let doc = ctx.doc();
+    let raw = doc.doc.inlays_view(|| {
         let mut raw: Vec<RawInlay> = Vec::new();
         type_hints(ctx, &mut raw);
         call_hints(ctx, &mut raw);
-        raw.sort_by_key(|h| index.position(src, h.byte));
+        raw.sort_by_key(|h| doc.doc.position(h.byte));
         raw
     });
     raw.iter()
         .filter(|h| h.byte >= lo && h.byte <= hi)
         .map(|h| {
-            let (line, character) = index.position(src, h.byte);
+            let (line, character) = doc.doc.position(h.byte);
             InlayHint {
                 position: Position { line, character },
                 label: InlayHintLabel::String(h.label.clone()),
@@ -112,7 +113,7 @@ pub fn hints(ctx: &Ctx, lo: u32, hi: u32) -> Vec<InlayHint> {
 /// ident (VS Code's dotted-decoration spot). Label: `: Type` — the
 /// server supplies the colon. Tooltip: the hover markdown.
 fn type_hints(ctx: &Ctx, out: &mut Vec<RawInlay>) {
-    let doc = ctx.doc;
+    let doc = ctx.doc();
     for b in doc.doc.bindings() {
         // an unannotated row IS the trigger (`ty_span` absent — a
         // normal absent slot); the label only lands when the resolver
@@ -123,7 +124,9 @@ fn type_hints(ctx: &Ctx, out: &mut Vec<RawInlay>) {
         if !matches!(b.kind, rut_ast::BindKind::Let | rut_ast::BindKind::IterVar) {
             continue;
         }
-        let Some(ty) = ctx.chain.binding_ty(b).filter(|t| !t.trim().is_empty()) else {
+        let Some(ty) = crate::world::collection::binding_ty(ctx.w, ctx.file, b)
+            .filter(|t| !t.trim().is_empty())
+        else {
             continue;
         };
         let name = doc.doc.ast().name(b.name);
@@ -306,9 +309,9 @@ impl CallCx<'_> {
         let name = self.ast().name(segs[0].name.ident);
         let hits: Vec<_> = self
             .ctx
-            .chain
-            .iter()
-            .flat_map(|f| f.fns())
+            .w
+            .chain(self.ctx.file)
+            .flat_map(|id| self.ctx.w.file(id).fns())
             .filter(|f| f.name() == name && f.owner().is_none())
             .collect();
         let [one] = hits.as_slice() else { return };
@@ -333,12 +336,9 @@ impl CallCx<'_> {
         let head = match recv {
             ExprRef::Path(ph) if ph.get(ast).segs.len() == 1 => {
                 let id = ph.get(ast).segs[0].name.ident;
-                self.ctx.chain.named_recv(self.ctx.doc_mods, pos, id)
+                crate::world::collection::named_recv(self.ctx.w, self.ctx.file, pos, id)
             }
-            _ => self
-                .ctx
-                .chain
-                .expr_ty(self.ctx.doc, recv)
+            _ => crate::world::collection::expr_ty(self.ctx.w, self.ctx.file, recv)
                 .map(|t| head_of_ty(&t)),
         };
         let Some(ty_name) = head else { return };
@@ -352,9 +352,7 @@ impl CallCx<'_> {
     /// impl-block methods only, via the shared door (own-surface
     /// methods are FINAL with no hints, never wrong names)
     fn method_params(&self, ty_name: &str, member: &str) -> Option<Vec<String>> {
-        self.ctx
-            .chain
-            .impl_method_fn(ty_name, member)
+        crate::world::collection::impl_method_fn(self.ctx.w, self.ctx.file, ty_name, member)
             .map(|f| f.params())
     }
 

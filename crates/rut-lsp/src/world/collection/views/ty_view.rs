@@ -9,15 +9,15 @@ use rut_ast::{
 };
 
 use super::{decl_src, doc_lines, head_src, MemberView};
-use crate::world::collection::MountedFile;
 use crate::world::types::TyForm;
+use crate::world::File;
 
 /// a type decl view — every fact derives from the node on read: the
 /// head slice joins over the file's own text, the vis/ambient verdicts
 /// ride the modifier chain, the members walk the node's child lists.
 #[derive(Clone, Copy)]
 pub(crate) struct TyView<'a> {
-    pub(crate) file: &'a MountedFile,
+    pub(crate) file: &'a File,
     pub(crate) h: AnyHandle,
 }
 

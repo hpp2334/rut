@@ -27,8 +27,9 @@ use rut_ast::{
     TyRef,
 };
 
-use super::collection::{FnView, MountedFile};
+use super::collection::{prefer_mounted, FnView};
 use super::types::{head_of_ty, ty_src, TyForm};
+use crate::world::File;
 
 /// the type an expression suggests, as display text. `home` is the
 /// document whose bindings resolve the walk's names (the doc the expr
@@ -44,8 +45,8 @@ pub(crate) enum QualHit<'a> {
 }
 
 pub(crate) fn expr_ty<'a>(
-    home: &MountedFile,
-    idxs: &[&'a MountedFile],
+    home: &File,
+    idxs: &[&'a File],
     e: ExprRef,
     qual: &impl Fn(&[String], bool) -> Option<QualHit<'a>>,
 ) -> Option<String> {
@@ -202,8 +203,8 @@ pub(crate) fn expr_ty<'a>(
 /// inferred against the whole chain). `None` when nothing derives —
 /// never wrong text.
 pub(crate) fn binding_ty<'a>(
-    home: &MountedFile,
-    idxs: &[&'a MountedFile],
+    home: &File,
+    idxs: &[&'a File],
     b: &Binding,
     qual: &impl Fn(&[String], bool) -> Option<QualHit<'a>>,
 ) -> Option<String> {
@@ -220,8 +221,8 @@ pub(crate) fn binding_ty<'a>(
 /// `ExprRef::Field` — those resolve as field-of-field reads through
 /// the bindings, never here
 fn path_ty<'a>(
-    home: &MountedFile,
-    idxs: &[&'a MountedFile],
+    home: &File,
+    idxs: &[&'a File],
     pos: u32,
     segs: &[PathSeg],
     qual: &impl Fn(&[String], bool) -> Option<QualHit<'a>>,
@@ -261,8 +262,8 @@ fn path_ty<'a>(
 /// type itself (`let log = Logger("hello");` types `log` as `Logger`,
 /// the positional shape of the `Type::new(..)` arm below)
 fn call_ty<'a>(
-    home: &MountedFile,
-    idxs: &[&'a MountedFile],
+    home: &File,
+    idxs: &[&'a File],
     ast: &Ast,
     callee: ExprRef,
     args: &[ExprRef],
@@ -295,7 +296,11 @@ fn call_ty<'a>(
             // (the verbatim law): `HashMap<i32, i32>()` types the
             // binding `HashMap<i32, i32>`
             if is_cap(name) {
-                if let Some(ty) = super::collection::find_ty(idxs, name) {
+                let ty_hits: Vec<(&File, crate::world::collection::TyView<'_>)> = idxs
+                    .iter()
+                    .filter_map(|f| f.ty(name).map(|t| (*f, t)))
+                    .collect();
+                if let Some(ty) = prefer_mounted(&ty_hits).into_iter().next() {
                     if matches!(
                         ty.form(),
                         TyForm::Class | TyForm::Struct | TyForm::HostStruct
@@ -351,7 +356,7 @@ fn call_ty<'a>(
 /// the OWNING doc's verbatim slice (`Doc::text` over the arg's span,
 /// trimmed), joined with `, `; nested args (`Vec<str>`) ride their own
 /// spans by construction. No type stringifier — a span×src join
-fn generic_name(home: &MountedFile, ast: &Ast, name: &str, args: &[TyRef]) -> String {
+fn generic_name(home: &File, ast: &Ast, name: &str, args: &[TyRef]) -> String {
     let rendered = args
         .iter()
         .map(|&a| home.doc.text(a.span(ast)).trim().to_string())
@@ -368,8 +373,8 @@ fn generic_name(home: &MountedFile, ast: &Ast, name: &str, args: &[TyRef]) -> St
 /// member law's gate)
 #[allow(clippy::too_many_arguments)] // the arity IS the resolver's shape — plumbing, not an API to nest
 fn member_ret<'a>(
-    home: &MountedFile,
-    idxs: &[&'a MountedFile],
+    home: &File,
+    idxs: &[&'a File],
     ast: &Ast,
     ty_name: &str,
     member: &str,
@@ -385,7 +390,7 @@ fn member_ret<'a>(
 /// the inference window (the chain's `impl_method_fn` law, spelled
 /// over idxs): per file, a same-named own-surface member answers
 /// FINAL with no fn, then the impl fn whose owner is the target
-fn find_member_fn<'a>(idxs: &[&'a MountedFile], ty_name: &str, member: &str) -> Option<FnView<'a>> {
+fn find_member_fn<'a>(idxs: &[&'a File], ty_name: &str, member: &str) -> Option<FnView<'a>> {
     for i in idxs.iter() {
         if let Some(t) = i.ty(ty_name) {
             if t.methods().iter().any(|m| m.name() == member) {
@@ -418,8 +423,8 @@ fn find_member_fn<'a>(idxs: &[&'a MountedFile], ty_name: &str, member: &str) -> 
 /// the written ret, `nil` unwritten (the engine's sugar law); a plain
 /// callee answers `R` (unwritten = a miss, nothing derives)
 fn call_ret<'a>(
-    home: &MountedFile,
-    idxs: &[&'a MountedFile],
+    home: &File,
+    idxs: &[&'a File],
     ast: &Ast,
     f: &FnView,
     written: &[TyRef],
@@ -608,7 +613,7 @@ fn expr_return(ast: &Ast, e: ExprRef) -> Option<ExprRef> {
 }
 
 /// a field's written type — the first file that declares it
-fn field_ty(idxs: &[&MountedFile], ty_name: &str, field: &str) -> Option<String> {
+fn field_ty(idxs: &[&File], ty_name: &str, field: &str) -> Option<String> {
     idxs.iter().copied().find_map(|i| {
         i.ty(ty_name)?
             .fields()
@@ -622,7 +627,7 @@ fn field_ty(idxs: &[&MountedFile], ty_name: &str, field: &str) -> Option<String>
 /// receiver inference (`let TOTAL = ..;` at module scope, read below)
 pub(crate) fn module_let_ty<'a, I>(idxs: I, name: &str) -> Option<String>
 where
-    I: IntoIterator<Item = &'a MountedFile>,
+    I: IntoIterator<Item = &'a File>,
 {
     let hits: Vec<Option<String>> = idxs
         .into_iter()

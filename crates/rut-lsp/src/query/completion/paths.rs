@@ -4,19 +4,20 @@
 
 use super::rows::{push_item, CompletionOut};
 use super::CompletionKind;
-use crate::world::collection::Chain;
-use crate::world::mods::{self, DocMods};
+use crate::world::collection::{self, FileScope};
+use crate::world::mods;
 use crate::world::types::TyForm;
+use crate::world::{FileId, World};
 
 // ---- the qualified-position tier (intra-package) ----
 
 /// The type tier at an annotation boundary — `let x: ⏐`, `id: u⏐`,
 /// `fn f() -> ⏐`: the parser's primitive table (the ONE
 /// `PRIMITIVE_TYS` — enumerated, never a duplicated list), the open
-/// document's own types, the chain's AMBIENT builtin rows, and the
+/// document's own types, the world's AMBIENT builtin rows, and the
 /// foreign types the document already `use`s. Keywords, fns, and
 /// locals stay off: values never ride a type position.
-pub(super) fn type_tier_completions(chain: &Chain) -> Vec<CompletionOut> {
+pub(super) fn type_tier_completions(w: &World, file: FileId) -> Vec<CompletionOut> {
     let mut out: Vec<CompletionOut> = Vec::new();
     for p in crate::semantic::PRIMITIVE_TYS {
         push_item(
@@ -29,16 +30,16 @@ pub(super) fn type_tier_completions(chain: &Chain) -> Vec<CompletionOut> {
             ),
         );
     }
-    let doc = chain.head();
     // the names the document's use edges bind — the file scope's own
     // resolve (the bare tier's imported gate, one home)
-    let bound = chain.use_bound_scope();
-    for f in chain.iter() {
-        let own = std::ptr::eq(f, doc);
+    let bound: FileScope = collection::use_bound_scope(w, file);
+    for id in w.chain(file) {
+        let f = w.file(id);
+        let own = id == file;
         for t in f.types() {
             // the same bare gate the decl tiers read: own types always,
             // foreign types when ambient or bound by a use edge
-            if !own && !t.ambient() && !crate::world::collection::bound_has(&bound, f, t.name()) {
+            if !own && !t.ambient() && !collection::bound_has(&bound, f, t.name()) {
                 continue;
             }
             push_item(
@@ -72,12 +73,12 @@ pub(super) fn type_tier_completions(chain: &Chain) -> Vec<CompletionOut> {
 /// — the filtered list is the answer even when empty (the known-head
 /// law, like the module tier's).
 pub(super) fn type_head_completions(
-    chain: &Chain,
-    doc: &DocMods,
+    w: &World,
+    file: FileId,
     segs: &[String],
 ) -> Option<Vec<CompletionOut>> {
     let (head, rest) = segs.split_first()?;
-    let ty = chain.type_decl(head)?;
+    let ty = collection::type_decl(w, file, head)?;
     let mut out: Vec<CompletionOut> = Vec::new();
     // a deeper walk under a type head descends nothing — types are not
     // namespaces (`Color::Red::` answers empty, final)
@@ -111,7 +112,7 @@ pub(super) fn type_head_completions(
                     // own modifier chain, never a string match on the
                     // rendered slice
                     if m.is_static() {
-                        if class && !chain.member_dial_allows(doc, m.file, m.vis()) {
+                        if class && !collection::member_dial_allows(w, file, m.file, m.vis()) {
                             continue;
                         }
                         push_item(
@@ -125,10 +126,10 @@ pub(super) fn type_head_completions(
                         );
                     }
                 }
-                for f in chain.iter() {
-                    for fv in f.fns() {
+                for id in w.chain(file) {
+                    for fv in w.file(id).fns() {
                         if fv.owner().as_deref() != Some(head.as_str())
-                            || !chain.member_dial_allows(doc, fv.file, fv.vis())
+                            || !collection::member_dial_allows(w, file, fv.file, fv.vis())
                         {
                             continue;
                         }
@@ -150,19 +151,14 @@ pub(super) fn type_head_completions(
     Some(out)
 }
 
-/// the leaf scope for a resolved mod path — the open document itself
+/// the leaf scope for a resolved mod path — the queried file itself
 /// when the path IS its own module (the pkg head resolving to the
-/// root from the root), else the chain file stamped for it
-fn scope_index<'a>(
-    chain: &'a Chain<'a>,
-    doc: &DocMods,
-    pkg: Option<&str>,
-    path: &str,
-) -> Option<&'a crate::world::collection::MountedFile> {
-    if doc.mod_path.as_deref() == Some(path) {
-        return Some(chain.head());
+/// root from the root), else the world file stamped for it
+fn scope_index(w: &World, file: FileId, pkg: Option<&str>, path: &str) -> Option<FileId> {
+    if w.file(file).stamp.mod_path.as_deref() == Some(path) {
+        return Some(file);
     }
-    mods::find_mod(chain, pkg, path)
+    mods::find_mod(w, pkg, path)
 }
 
 /// A use of the DOC that bound `head` as a member of a NAMED dep
@@ -172,19 +168,16 @@ fn scope_index<'a>(
 /// index (a module-leaf binding the engine resolves through the
 /// dep-module lane); a use that bound a plain name answers nothing
 /// here — its module resolution never lands.
-fn use_bound_dep_module(
-    chain: &Chain,
-    doc_file: &crate::world::collection::MountedFile,
-    head: &str,
-) -> Option<(String, String)> {
+fn use_bound_dep_module(w: &World, file: FileId, head: &str) -> Option<(String, String)> {
+    let doc_file = w.file(file);
     for u in doc_file.uses() {
         if u.name() != head || u.path().is_empty() {
             continue;
         }
         // the dep must be mounted and named (a named file answers for it)
-        if !chain
-            .iter()
-            .any(|f| f.mount.module.as_deref() == Some(u.pkg()))
+        if !w
+            .chain(file)
+            .any(|id| w.file(id).stamp.module.as_deref() == Some(u.pkg()))
         {
             continue;
         }
@@ -199,7 +192,7 @@ fn use_bound_dep_module(
         };
         // the binding must land on a MODULE of the dep (a fn/const
         // leaf heads no path)
-        if !mods::find_mod(chain, Some(u.pkg()), &path).is_some() {
+        if mods::find_mod(w, Some(u.pkg()), &path).is_none() {
             continue;
         }
         return Some((u.pkg().to_string(), path));
@@ -220,40 +213,38 @@ fn use_bound_dep_module(
 /// `math::sqrt(x)` / `math::PI` resolution. `None` = the head did not
 /// resolve to a module (the caller falls through).
 pub(super) fn position_path_completions(
-    chain: &Chain,
-    doc: &DocMods,
+    w: &World,
+    file: FileId,
     segs: &[String],
 ) -> Option<Vec<CompletionOut>> {
     let (head, rest) = segs.split_first()?;
-    let doc_file = chain.head();
-    let (pkg, start) = match mods::resolve_position_head(doc, doc_file, chain, head) {
-        Some(start) => (doc.pkg.clone().unwrap_or_default(), start),
-        None => use_bound_dep_module(chain, doc_file, head)?,
+    let doc_file = w.file(file);
+    let (pkg, start) = match mods::resolve_position_head(w, file, head) {
+        Some(start) => (doc_file.stamp.module.clone().unwrap_or_default(), start),
+        None => use_bound_dep_module(w, file, head)?,
     };
     let pkg = pkg.as_str();
-    let path = mods::walk_position_mods(chain, Some(pkg), &start, rest)?;
-    let from = doc.mod_path.as_deref().unwrap_or("");
-    let Some(scope) = scope_index(chain, doc, Some(pkg), &path) else {
+    let path = mods::walk_position_mods(w, Some(pkg), &start, rest)?;
+    let from = doc_file.stamp.mod_path.as_deref().unwrap_or("");
+    let Some(scope) = scope_index(w, file, Some(pkg), &path) else {
         return Some(Vec::new());
     };
+    let scope_file = w.file(scope);
     let mut out: Vec<CompletionOut> = Vec::new();
     // the walkable children — any declared edge (intra-package)
-    for m in scope.mods() {
+    for m in scope_file.mods() {
         let child = mods::child_path(&path, m.name());
         push_item(
             &mut out,
             CompletionOut::plain(
                 m.name().to_string(),
-                format!(
-                    "file module — {}",
-                    mods::display_of(chain, Some(pkg), &child)
-                ),
+                format!("file module — {}", mods::display_of(w, Some(pkg), &child)),
                 m.doc_lines(),
                 CompletionKind::Module,
             ),
         );
     }
-    for t in scope.types() {
+    for t in scope_file.types() {
         if !mods::vis_allows(from, &path, t.vis()) {
             continue;
         }
@@ -270,7 +261,7 @@ pub(super) fn position_path_completions(
             ),
         );
     }
-    for f in scope.fns() {
+    for f in scope_file.fns() {
         if f.owner().is_some() || !mods::vis_allows(from, &path, f.vis()) {
             continue;
         }
@@ -284,7 +275,7 @@ pub(super) fn position_path_completions(
             ),
         );
     }
-    for l in scope.lets() {
+    for l in scope_file.lets() {
         if !mods::vis_allows(from, &path, l.vis()) {
             continue;
         }
@@ -303,7 +294,7 @@ pub(super) fn position_path_completions(
     // use's declared vis (the engine's leaf gate reads the same row).
     // The cap law picks the icon until real resolution (same as the
     // use classifier)
-    for u in scope.uses() {
+    for u in scope_file.uses() {
         if !mods::vis_allows(from, &path, u.vis()) {
             continue;
         }

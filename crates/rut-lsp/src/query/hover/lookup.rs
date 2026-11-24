@@ -15,12 +15,11 @@ use super::render::{
 };
 use crate::semantic::Span;
 use crate::world::collection::{
-    enclosing_type, CandRow, Candidate, Chain, FnView, MemberHit, MemberTarget, ModView,
-    MountedFile, TyView,
+    enclosing_type, CandRow, Candidate, FnView, MemberHit, MemberTarget, ModView, TyView,
 };
 use crate::world::infer::is_cap;
-use crate::world::mods::DocMods;
 use crate::world::types::TyForm;
+use crate::world::{FileId, World};
 use rut_ast::{
     AnyHandle, CallNode, EnumMemberNode, ExprRef, FieldDeclNode, FieldNode, MethodNode,
     ModDeclNode, ModuleLetNode, ParamNode, PathNode, SelfNode, SelfTyNode, UseNode,
@@ -39,13 +38,11 @@ pub struct HoverOut {
     pub span: Span,
 }
 
-/// The chain is the world: the open document first (its fresh entry),
-/// then the ambient prelude, then the rest of the workspace. `doc` is
-/// the open document's file-module context (the face's knowledge): an
-/// own-package use-path segment hover resolves through it, the default
-/// keeps the cross-package lanes only.
-pub fn hover(chain: &Chain, doc: &DocMods, pos: u32) -> Option<HoverOut> {
-    let d = chain.head();
+/// The world is the answer: the queried file first (its own entry —
+/// an open document's buffer is the truth), then the ambient prelude,
+/// then the rest of the workspace.
+pub fn hover(w: &World, file: FileId, pos: u32) -> Option<HoverOut> {
+    let d = w.file(file);
     let ast = d.doc.ast();
     // the cursor's node — the byte under it, else the byte just before
     // (a cursor sitting on a token's end reads that token — the old
@@ -86,7 +83,7 @@ pub fn hover(chain: &Chain, doc: &DocMods, pos: u32) -> Option<HoverOut> {
     // namespace edge (a use site never matches). Rendering is
     // TREE-LOCAL: `ast.parent(decl)` is the owning type, and the
     // head/docs/verbatim read from the nodes + `text(span)` joins.
-    if let Some(md_span) = decl_site_hover(chain, h, pos) {
+    if let Some(md_span) = decl_site_hover(w, file, h, pos) {
         return Some(HoverOut {
             markdown: md_span.0,
             span: md_span.1,
@@ -96,7 +93,7 @@ pub fn hover(chain: &Chain, doc: &DocMods, pos: u32) -> Option<HoverOut> {
     // use-path segments — the cursor rides one of the document's `use
     // pkg::a::b::{ .. }` edges' own path spans: hover the resolved
     // module through the dep tree (a miss is no hover)
-    if let Some(md_span) = use_segment_hover(chain, doc, h, pos) {
+    if let Some(md_span) = use_segment_hover(w, file, h, pos) {
         return Some(HoverOut {
             markdown: md_span.0,
             span: md_span.1,
@@ -109,7 +106,7 @@ pub fn hover(chain: &Chain, doc: &DocMods, pos: u32) -> Option<HoverOut> {
     // name search: a miss there is a use-gated interface member or a
     // genuine miss — either way the member answer is final.
     if member_position(ast, h, pos) {
-        match chain.member(pos, h, doc) {
+        match crate::world::collection::member(w, file, pos, h) {
             MemberHit::Found(target) => {
                 return Some(HoverOut {
                     markdown: render_target(target),
@@ -129,7 +126,7 @@ pub fn hover(chain: &Chain, doc: &DocMods, pos: u32) -> Option<HoverOut> {
     // (a qualified name is not the doc's own bare name). A
     // mid-segment cursor renders the module the walk lands at; a
     // walk that fails keeps the pre-existing fall-through there.
-    if let Some(answer) = qualified_path_hover(chain, doc, ast, h, pos) {
+    if let Some(answer) = qualified_path_hover(w, file, ast, h, pos) {
         return answer.map(|(md, span)| HoverOut { markdown: md, span });
     }
 
@@ -141,14 +138,14 @@ pub fn hover(chain: &Chain, doc: &DocMods, pos: u32) -> Option<HoverOut> {
     let name = ast.name(name_id);
     {
         // the FILE SCOPE's answers (the one home — the flat doors
-        // delegate to `Chain::file_scope`): a capitalized name
+        // delegate to `file_scope`): a capitalized name
         // resolves through the queried file's own decls, its use
         // edges, and the ambient prelude — a name the file never
         // binds answers nothing below, never a foreign decl
         if is_cap(name) || crate::semantic::is_primitive_ty(name) {
-            if let Some(ty) = chain.type_decl(name) {
+            if let Some(ty) = crate::world::collection::type_decl(w, file, name) {
                 let mut md = render_ty(&ty);
-                append_ctor_section(chain, ast, h, &ty, &mut md);
+                append_ctor_section(ast, h, &ty, &mut md);
                 return Some(HoverOut {
                     markdown: md,
                     span: name_span,
@@ -166,7 +163,7 @@ pub fn hover(chain: &Chain, doc: &DocMods, pos: u32) -> Option<HoverOut> {
 
         // identifier hover — the binding layer's shadow-correct resolve
         // (params, lets, loop variables; decl and use sites alike)
-        if let Some(md) = binding_hover(chain, pos, name_id) {
+        if let Some(md) = binding_hover(w, file, pos, name_id) {
             return Some(HoverOut {
                 markdown: md,
                 span: name_span,
@@ -181,7 +178,7 @@ pub fn hover(chain: &Chain, doc: &DocMods, pos: u32) -> Option<HoverOut> {
         // source, which glob), never a pick. Definition stays silent
         // on the same name. (A local binding answered above — inner
         // layer wins, legal shadowing.)
-        if let Some(candidates) = chain.ambiguous_scope(name) {
+        if let Some(candidates) = crate::world::collection::ambiguous_scope(w, file, name) {
             return Some(HoverOut {
                 markdown: render_candidates(&candidates),
                 span: name_span,
@@ -189,7 +186,7 @@ pub fn hover(chain: &Chain, doc: &DocMods, pos: u32) -> Option<HoverOut> {
         }
 
         // module-let use sites — the file scope's unique match
-        if let Some(md) = module_let_hover(chain, name) {
+        if let Some(md) = module_let_hover(w, file, name) {
             return Some(HoverOut {
                 markdown: md,
                 span: name_span,
@@ -200,7 +197,7 @@ pub fn hover(chain: &Chain, doc: &DocMods, pos: u32) -> Option<HoverOut> {
         // the scope bound the name to more than one of its own fns →
         // the candidates list (a free fn beside an impl method of one
         // name — methods are type-scoped, the law never meets them)
-        let hits: Vec<FnView> = chain.functions(name);
+        let hits: Vec<FnView> = crate::world::collection::functions(w, file, name);
         match hits.as_slice() {
             [] => {}
             [one] => {
@@ -293,7 +290,7 @@ fn name_at(ast: &rut_ast::Ast, h: AnyHandle, pos: u32) -> Option<(rut_ast::Ident
         return None;
     }
     // a use edge's LEAF names are name positions (the imported name
-    // resolves through the chain like any use site)
+    // resolves through the world like any use site)
     if let Some(u) = h.downcast::<UseNode>() {
         let d = u.get(ast);
         for n in &d.names {
@@ -314,7 +311,7 @@ fn name_at(ast: &rut_ast::Ast, h: AnyHandle, pos: u32) -> Option<(rut_ast::Ident
         return None;
     }
     // the decl nodes: the cursor on a declared NAME is a name position
-    // (the type/fn/let/mod lanes answer through the chain)
+    // (the type/fn/let/mod lanes answer through the world)
     macro_rules! decl_name {
         ($t:ty) => {
             if let Some(d) = h.downcast::<$t>() {
@@ -395,13 +392,7 @@ fn ctor_callee_position(ast: &rut_ast::Ast, h: AnyHandle) -> bool {
 /// law: a newtype never registers). Every other shape — a non-class,
 /// a no-ctor class, a cursor that is not a callee (type position,
 /// decl site, argument path, `Logger::new` tail) — appends nothing.
-fn append_ctor_section(
-    chain: &Chain<'_>,
-    ast: &rut_ast::Ast,
-    h: AnyHandle,
-    ty: &TyView,
-    out: &mut String,
-) {
+fn append_ctor_section(ast: &rut_ast::Ast, h: AnyHandle, ty: &TyView, out: &mut String) {
     if !ctor_callee_position(ast, h) || ty.form() != TyForm::Class {
         return;
     }
@@ -412,7 +403,7 @@ fn append_ctor_section(
         }
         return;
     }
-    if let Some(ctor) = chain.constructor_of(*ty) {
+    if let Some(ctor) = crate::world::collection::constructor_of(*ty) {
         out.push_str("\n\n");
         out.push_str(&render_ctor_section(&ctor));
     }
@@ -465,8 +456,8 @@ fn qualified_at(ast: &rut_ast::Ast, h: AnyHandle, pos: u32) -> Option<QualifiedP
 /// position); a mid-segment cursor renders the module the walk lands
 /// at, decorating the ridden segment.
 fn qualified_path_hover(
-    chain: &Chain<'_>,
-    doc_mods: &DocMods,
+    w: &World,
+    file: FileId,
     ast: &rut_ast::Ast,
     h: AnyHandle,
     pos: u32,
@@ -476,12 +467,15 @@ fn qualified_path_hover(
     if q.k + 1 != q.segs.len() {
         // a mid-segment cursor — the module the walk lands at
         let names: Vec<String> = q.segs[..=q.k].iter().map(|(n, _)| n.clone()).collect();
-        let target = chain.qualified_module(doc_mods, &names, q.is_ty)?;
-        let md = render_module_target(target, crate::world::mods::mod_path_of(target));
+        let target = crate::world::collection::qualified_module(w, file, &names, q.is_ty)?;
+        let md = render_module_target(
+            w.file(target),
+            crate::world::mods::mod_path_of(w.file(target)),
+        );
         return Some(Some((md, span)));
     }
     let names: Vec<String> = q.segs.iter().map(|(n, _)| n.clone()).collect();
-    let Some(scope) = chain.qualified_scope(doc_mods, &names, q.is_ty) else {
+    let Some(scope) = crate::world::collection::qualified_scope(w, file, &names, q.is_ty) else {
         return Some(None); // an unbound head opens nothing
     };
     // hover's layer order — types in a type position; type → let →
@@ -497,7 +491,7 @@ fn qualified_path_hover(
                 // block stays primary, the ctor section appends (the
                 // same one home the bare callee lane rides)
                 let mut md = render_ty(t);
-                append_ctor_section(chain, ast, h, t, &mut md);
+                append_ctor_section(ast, h, t, &mut md);
                 md
             })
             .or_else(|| match scope.lets.as_slice() {
@@ -520,8 +514,8 @@ fn qualified_path_hover(
 
 /// a local binding's hover — the shadow-correct resolve, the type
 /// declared-or-inferred (the resolver reads the doc's bindings)
-fn binding_hover(chain: &Chain<'_>, pos: u32, id: rut_ast::IdentId) -> Option<String> {
-    let d = chain.head();
+fn binding_hover(w: &World, file: FileId, pos: u32, id: rut_ast::IdentId) -> Option<String> {
+    let d = w.file(file);
     // the shadow-correct resolve — or the DECL site: the cursor rides a
     // row's declaring ident (a param head sits before its scope body,
     // so the scope-containment resolve can't see it; definition's
@@ -534,16 +528,16 @@ fn binding_hover(chain: &Chain<'_>, pos: u32, id: rut_ast::IdentId) -> Option<St
             }
         })
     })?;
-    let ty = chain.binding_ty(b);
+    let ty = crate::world::collection::binding_ty(w, file, b);
     let name = d.doc.ast().name(b.name);
     Some(binding_markdown(b, name, ty))
 }
 
 /// the decl node at the cursor — the name-position downcasts, the
-/// owning type read off `ast.parent` (tree-local rendering, no chain
+/// owning type read off `ast.parent` (tree-local rendering, no world
 /// sweep). Returns the rendered markdown + the hover span.
-fn decl_site_hover(chain: &Chain<'_>, h: AnyHandle, pos: u32) -> Option<(String, Span)> {
-    let d = chain.head();
+fn decl_site_hover(w: &World, file: FileId, h: AnyHandle, pos: u32) -> Option<(String, Span)> {
+    let d = w.file(file);
     let ast = d.doc.ast();
     if let Some(fh) = h.downcast::<FieldDeclNode>() {
         let fd = fh.get(ast);
@@ -588,13 +582,13 @@ fn decl_site_hover(chain: &Chain<'_>, h: AnyHandle, pos: u32) -> Option<(String,
                 crate::world::mods::mod_path_of(d),
                 ast.name(md_node.name.ident),
             );
-            let mounted = mounted_child(chain, d, &child);
+            let mounted = mounted_child(w, file, &child);
             return Some((
                 render_mod(
                     d,
                     &m,
-                    &crate::world::mods::display_of(chain, d.mount.module.as_deref(), &child),
-                    mounted.map(|c| c.mods().len()),
+                    &crate::world::mods::display_of(w, d.stamp.module.as_deref(), &child),
+                    mounted.map(|c| w.file(c).mods().len()),
                 ),
                 md_node.name.span,
             ));
@@ -619,20 +613,16 @@ fn decl_site_hover(chain: &Chain<'_>, h: AnyHandle, pos: u32) -> Option<(String,
     None
 }
 
-/// the chain file a mod edge's child resolves to — the (module,
+/// the world file a mod edge's child resolves to — the (module,
 /// mod_path) pair when the owner is named; an unnamed owner (an open
 /// workspace file) answers any file stamped at the child's mod path
-/// (the dep walk's twins — display only: the child count)
-fn mounted_child<'a>(
-    chain: &'a Chain<'a>,
-    owner: &MountedFile,
-    child: &str,
-) -> Option<&'a MountedFile> {
-    match crate::world::mods::find_mod(chain, owner.mount.module.as_deref(), child) {
+/// (the dep walk's stamps — display only: the child count)
+fn mounted_child(w: &World, owner: FileId, child: &str) -> Option<FileId> {
+    match crate::world::mods::find_mod(w, w.file(owner).stamp.module.as_deref(), child) {
         Some(c) => Some(c),
-        None if owner.mount.module.is_none() => chain
-            .iter()
-            .find(|i| crate::world::mods::mod_path_of(i) == child),
+        None if w.file(owner).stamp.module.is_none() => w
+            .chain(owner)
+            .find(|id| crate::world::mods::mod_path_of(w.file(*id)) == child),
         None => None,
     }
 }
@@ -646,14 +636,9 @@ fn mounted_child<'a>(
 /// mod edges — commits to the intra-package walk (any declared edge;
 /// the doc's own rows read for its own scope). A non-walking path is
 /// no hover, never wrong text.
-fn use_segment_hover(
-    chain: &Chain<'_>,
-    doc: &DocMods,
-    h: AnyHandle,
-    pos: u32,
-) -> Option<(String, Span)> {
+fn use_segment_hover(w: &World, file: FileId, h: AnyHandle, pos: u32) -> Option<(String, Span)> {
     let uh = h.downcast::<UseNode>()?;
-    let di = chain.head();
+    let di = w.file(file);
     let ast = di.doc.ast();
     let u_node = uh.get(ast);
     let segs: Vec<String> = u_node
@@ -661,6 +646,7 @@ fn use_segment_hover(
         .iter()
         .map(|n| ast.name(n.ident).to_string())
         .collect();
+    let doc_stamp = &di.stamp;
     for (k, seg) in u_node.path.iter().enumerate() {
         if !on_name(seg.span, pos) {
             continue;
@@ -669,36 +655,36 @@ fn use_segment_hover(
         // the OWN lane — committed once the head speaks for the
         // doc's own package: `k == 0` answers the resolved start
         // module, deeper segments walk intra-package
-        if let Some(start) = crate::world::mods::resolve_position_head(doc, di, chain, &pkg) {
+        if let Some(start) = crate::world::mods::resolve_position_head(w, file, &pkg) {
             let path = if k == 0 {
                 start
             } else {
                 crate::world::mods::walk_position_mods(
-                    chain,
-                    doc.pkg.as_deref(),
+                    w,
+                    doc_stamp.module.as_deref(),
                     &start,
                     &segs[1..=k],
                 )?
             };
-            let target = if doc.mod_path.as_deref() == Some(path.as_str()) {
-                di
+            let target: FileId = if doc_stamp.mod_path.as_deref() == Some(path.as_str()) {
+                file
             } else {
-                crate::world::mods::find_mod(chain, doc.pkg.as_deref(), &path)?
+                crate::world::mods::find_mod(w, doc_stamp.module.as_deref(), &path)?
             };
-            return Some((render_module_target(target, &path), seg.span));
+            return Some((render_module_target(w.file(target), &path), seg.span));
         }
         let walked = if k == 0 {
             Some(String::new())
         } else {
-            crate::world::mods::walk_use_mods(chain, &pkg, &segs[1..=k])
+            crate::world::mods::walk_use_mods(w, &pkg, &segs[1..=k])
         };
         let path = walked?;
         let target = if path.is_empty() {
-            crate::world::mods::pkg_root_file(chain, &pkg)?
+            crate::world::mods::pkg_root_file(w, file, &pkg)?
         } else {
-            crate::world::mods::find_mod(chain, Some(&pkg), &path)?
+            crate::world::mods::find_mod(w, Some(&pkg), &path)?
         };
-        return Some((render_module_target(target, &path), seg.span));
+        return Some((render_module_target(w.file(target), &path), seg.span));
     }
     // a LEAF that names a module (`use calc::{ math }`) renders the
     // module like a path segment does; inside a package a module is no
@@ -709,25 +695,25 @@ fn use_segment_hover(
             continue;
         }
         let pkg = segs[0].clone();
-        if crate::world::mods::resolve_position_head(doc, di, chain, &pkg).is_some() {
+        if crate::world::mods::resolve_position_head(w, file, &pkg).is_some() {
             return None;
         }
         let path = if u_node.path.len() == 1 {
             String::new()
         } else {
-            crate::world::mods::walk_use_mods(chain, &pkg, &segs[1..])?
+            crate::world::mods::walk_use_mods(w, &pkg, &segs[1..])?
         };
         let (target, child) =
-            crate::world::mods::use_module_leaf(chain, &pkg, &path, ast.name(n.ident))?;
-        return Some((render_module_target(target, &child), n.span));
+            crate::world::mods::use_module_leaf(w, &pkg, &path, ast.name(n.ident))?;
+        return Some((render_module_target(w.file(target), &child), n.span));
     }
     None
 }
 
 /// module-let use sites: the queried file's unique match renders the
 /// decl; ambiguity stays a miss (the file scope's honesty rule)
-fn module_let_hover(chain: &Chain<'_>, name: &str) -> Option<String> {
-    chain.module_let(name).map(|l| render_let(&l))
+fn module_let_hover(w: &World, file: FileId, name: &str) -> Option<String> {
+    crate::world::collection::module_let(w, file, name).map(|l| render_let(&l))
 }
 
 /// the markdown a resolved member target renders to (hover's half of

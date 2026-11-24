@@ -4,14 +4,14 @@
 use rut_ast::{AnyHandle, Ast, EnumMemberNode, FieldDeclNode, MethodDeclNode, Vis};
 
 use super::{decl_src, doc_lines, sig_src, TyView};
-use crate::world::collection::MountedFile;
 use crate::world::types::ty_src;
+use crate::world::File;
 
 /// a member view — a field, a method, or an enum member of
 /// [`TyView`]'s body
 #[derive(Clone, Copy)]
 pub(crate) struct MemberView<'a> {
-    pub(crate) file: &'a MountedFile,
+    pub(crate) file: &'a File,
     /// the owning type decl
     pub(crate) ty: TyView<'a>,
     pub(crate) h: AnyHandle,

@@ -1004,8 +1004,8 @@ fn position_path_completion_offers_the_module_members_by_tier() {
 both_uri_shapes! {
 #[test]
 fn the_use_path_tier_answers_an_own_package_head() {
-    // the open document IS the gadgets root (its stamped twin is the
-    // ONE root in the world): `use gadgets::layout::⏐` rides the own
+    // the open document IS the gadgets root (the index lane's stamp
+    // names it the ONE root in the world): `use gadgets::layout::⏐` rides the own
     // lane — the position machinery's visible-members gate, so
     // `pub(super)` reaches the root where the cross-package tier's
     // pub-crossing law stays shut
@@ -1017,8 +1017,8 @@ fn the_use_path_tier_answers_an_own_package_head() {
         "layout",
         "pub mod grid;\npub struct Column {\n    w: i32;\n}\nfn internal() -> i32 { return 2; }\npub(super) fn for_parent() -> i32 { return 3; }\n",
     );
-    // the open document IS the gadgets root (its stamped twin keys the
-    // own lane; the doc carries the use it types)
+    // the open document IS the gadgets root (the stamp the index lane
+    // laid down keys the own lane; the doc carries the use it types)
     let doc =
         "pub mod layout;\npub mod secret;\nuse gadgets::layout::\nentry fn main() -> nil {\n}\n";
     s.index_mod_at(uri, "gadgets", "", doc);

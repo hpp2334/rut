@@ -912,7 +912,7 @@ fn the_mod_tree_spellings_mount_and_hint_on_both() {
         "the single-file spelling mounts"
     );
     // the mod EDGE itself jumps at the mounted child — the doc AT the
-    // root file's own origin (its stamped twin keys the lane)
+    // root file's own origin (the uri's stamp keys the lane)
     let root_src = walk_path(&root, "../gadgets/src/mod.rut");
     let root_doc = "pub mod dirform;\npub mod fileform;\npub mod both;\n";
     let uris = def_uris_at(&lsp, &mut pool, &root_src, root_doc, "dirform");

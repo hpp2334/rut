@@ -1,28 +1,25 @@
-//! the session state — one instance per editing session (the
-//! language core's accumulated facts): the open documents (the
-//! versioned cache), the mounted-file world, the walk lane's ledgers.
-//! The loop task owns this value exclusively (see
+//! The session — one instance per editing session (the language
+//! core's accumulated facts): ONE world of files (the prelude, the
+//! walked deps, the workspace pushes, the open documents), the walk
+//! lane's ledgers. The loop task owns this value exclusively (see
 //! [`crate::event_loop`]); the host's `Lsp` is only the inbox handle,
 //! and no caller ever borrows the state.
 
-use std::collections::{BTreeMap, HashMap, HashSet};
+use std::collections::{BTreeMap, HashSet};
 
 use crate::env;
 use crate::event_loop;
 use crate::wire;
-use crate::world::{DefIndexCollection, Mount, MountedFile};
+use crate::world::{File, FileId, World};
 
-pub(crate) struct SessionState {
-    /// open documents by URI (the LSP's full-text sync) — the
-    /// VERSIONED CACHE: each entry is the document's [`MountedFile`]
-    /// (the [`crate::semantic::Document`] + its stamp + its decl map),
-    /// synced once per change (the incremental `Doc::edit` pipeline)
-    /// and rebuilt there — so the query burst riding one version
-    /// re-derives nothing (per-uri parse happens once per change,
-    /// never per query).
-    pub(crate) docs: HashMap<String, MountedFile>,
-    /// the core prelude + walked/workspace files, in lookup order
-    pub(crate) defs: DefIndexCollection,
+pub(crate) struct Session {
+    /// ONE world — every file the session knows (the prelude boots
+    /// first; the dep walk, the workspace scan, and the open documents
+    /// mount under their origins; an open document adopts the file its
+    /// loader lane laid down and its buffer is the truth), in store
+    /// order. Rebuilt never — the world mutates in place per
+    /// mount/sync/close.
+    pub(crate) world: World,
     /// url → pin, from the workspace root's `rut.lock` (the host reads
     /// the file and hands the bytes to `set_lock`; the manifest
     /// grammar carries no pins). `parse_manifest` stamps the rows
@@ -51,19 +48,16 @@ pub(crate) struct SessionState {
     pub(crate) walk_task: Option<event_loop::DeferTask>,
 }
 
-impl SessionState {
-    /// the session state as it boots — the engine prelude pre-mounted
+impl Session {
+    /// the session as it boots — the engine prelude pre-mounted
     /// (`core` alone, the ONE ambient entry; every other std pkg rides
     /// the dep lane like any third-party lib), no session facts yet. The loop
     /// task owns this value exclusively; both constructors (`new` the
     /// wasm face, `spawn_native` the native harness) hand a fresh one
     /// to [`event_loop::run`].
-    pub(crate) fn boot() -> SessionState {
-        let mut defs = DefIndexCollection::new();
-        defs.mount(crate::prelude::index());
-        SessionState {
-            docs: HashMap::new(),
-            defs,
+    pub(crate) fn boot() -> Session {
+        Session {
+            world: World::new(crate::prelude::index()),
             lock_pins: BTreeMap::new(),
             direct_deps: HashSet::new(),
             hints_shown: HashSet::new(),
@@ -74,47 +68,40 @@ impl SessionState {
     // ---- the sync lane (the doc-sync law: text arrives → sync →
     // queries read) ----
 
-    /// one document change in, a coherent session out: the stored
-    /// entry syncs (the incremental `Doc::edit` pipeline + the UTF-16
-    /// view rebuild + the lazy views drop) and its decl map rebuilds —
-    /// THE one parse per change, never per query. The entry's stamped
-    /// mount — the (module, mod_path, mode) identity a walk lane laid
-    /// down on the same uri — survives untouched; a fresh uri mounts
-    /// with the open-doc stamp (origin only).
-    pub(crate) fn sync(&mut self, uri: &str, src: &str) {
-        match self.docs.get_mut(uri) {
-            Some(f) => f.doc.sync(src),
-            None => {
-                let mount = Mount::doc(uri);
-                self.docs.insert(
-                    uri.to_string(),
-                    MountedFile::from_document(
-                        crate::semantic::Document::parse(
-                            crate::semantic::mode_of(uri),
-                            src.to_string(),
-                        ),
-                        mount,
-                    ),
-                );
-            }
-        }
-        let f = self.docs.get_mut(uri).expect("just synced");
-        f.decls = crate::world::collection::decls_of(&f.doc);
+    /// one document change in, a coherent session out, the file's id
+    /// answered. THE ONE-WORLD LAW: a file under `uri` that is open
+    /// syncs in place (the incremental `Doc::edit` pipeline + the
+    /// UTF-16 view rebuild + the lazy views drop + the decl map
+    /// rebuild — one parse per change, never per query); a file under
+    /// `uri` that is closed REOPENS — `open = true` and the same sync
+    /// over the text it kept (its stamp survives untouched); no file
+    /// under the uri mounts
+    /// [`File::open_scratch`](crate::world::File::open_scratch) — an
+    /// open document no loader ever stamped.
+    pub(crate) fn sync(&mut self, uri: &str, src: &str) -> FileId {
+        let id = match self.world.open(uri).or_else(|| self.world.get(uri)) {
+            Some(id) => id,
+            None => return self.world.mount(File::open_scratch(uri, src.to_string())),
+        };
+        let f = self.world.file_mut(id);
+        f.open = true;
+        f.doc.sync(src);
+        f.decls = crate::world::decls_of(&f.doc);
+        id
     }
 
-    /// the document at `uri`, if open
-    pub(crate) fn doc(&self, uri: &str) -> Option<&crate::semantic::Document> {
-        self.docs.get(uri).map(|f| &f.doc)
+    /// the file at `uri`, only when open — the position queries' gate
+    /// (a closed file answers no position query)
+    pub(crate) fn open_file(&self, uri: &str) -> Option<FileId> {
+        self.world.open(uri)
     }
 
-    /// the query chain — the open document's entry at the head (the
-    /// fresh version the sync lane keeps), the mounted world after
-    /// (the prelude + workspace; a stamped twin of the SAME uri keeps
-    /// its place — the definition layer's dedupe law handles the
-    /// doubled answer). `None` = the doc is unknown.
-    pub(crate) fn chain(&self, uri: &str) -> Option<crate::world::collection::Chain<'_>> {
-        let head = self.docs.get(uri)?;
-        Some(self.defs.chain_with(head))
+    /// close: the file under `uri` closes — a loader-stamped file
+    /// keeps its last buffer text (a later read answers from it); a
+    /// never-stamped scratch file leaves the world (a file no loader
+    /// mounted is still removed).
+    pub(crate) fn close(&mut self, uri: &str) {
+        self.world.close(uri);
     }
 
     // ---- the lanes the ABI handlers and the dep walk SHARE (the
@@ -147,14 +134,17 @@ impl SessionState {
     /// mount (`mod_path` `None`).
     pub(crate) fn index_named_at(&mut self, uri: &str, name: &str, src: String) {
         let file = crate::deps::mount_file(name, uri, None, src);
-        self.defs.mount(file);
+        self.world.mount(file);
     }
 
     /// [`event_loop::Cmd::IndexModAt`]'s body: mount one dep source
     /// file at a MOD PATH (the pkg root `""`, a mounted child its
     /// `<path>`), answering the parsed file's own `mod` declarations —
     /// the walk's next hop (structure lives in the parse, never in
-    /// path munging).
+    /// path munging). The reply describes the PUSHED text even when
+    /// the file is open (the host walks what is on disk): the decls
+    /// read off the built file BEFORE the mount — an open file keeps
+    /// its buffer and drops the incoming text.
     pub(crate) fn index_mod_at(
         &mut self,
         uri: &str,
@@ -162,7 +152,10 @@ impl SessionState {
         mod_path: &str,
         src: String,
     ) -> Vec<wire::ModDecl> {
-        let file = crate::deps::mount_file(pkg, uri, Some(mod_path), src);
+        let file = File::from_src(
+            crate::world::Stamp::workspace(uri, Some(pkg), Some(mod_path)),
+            src,
+        );
         let decls: Vec<wire::ModDecl> = file
             .mods()
             .iter()
@@ -175,8 +168,18 @@ impl SessionState {
                 },
             })
             .collect();
-        self.defs.mount(file);
+        self.world.mount(file);
         decls
+    }
+
+    /// the host's workspace scan push: mount one file under its
+    /// open-doc-capable workspace stamp (unstamped — the pkg name is
+    /// the uri's derivation business). Re-indexing a uri replaces its
+    /// entry; an OPEN file keeps its buffer (the incoming text
+    /// drops).
+    pub(crate) fn index_file(&mut self, uri: &str, src: String) {
+        let file = File::from_src(crate::world::Stamp::workspace(uri, None, None), src);
+        self.world.mount(file);
     }
 
     /// the once-per-reason hint gate: the first `key` notifies, every
@@ -188,27 +191,11 @@ impl SessionState {
         }
     }
 
-    /// the open document's file-module context, read off the STAMPED
-    /// twin in the mounted world: whichever face mounted the file
-    /// under its real uri (the extension's dep walk / workspace
-    /// indexer) laid down the (module, mod_path) pair. Unstamped files
-    /// answer the default (position-path completion off; nothing else
-    /// reads this).
-    pub(crate) fn doc_mods_of(&self, uri: &str) -> crate::world::mods::DocMods {
-        match self.defs.file_for(uri) {
-            Some(f) => crate::world::mods::DocMods {
-                mod_path: f.mount.mod_path.clone(),
-                pkg: f.mount.module.clone(),
-            },
-            None => crate::world::mods::DocMods::default(),
-        }
-    }
-
-    /// the completion query's body over the STORED document — TYPED:
+    /// the completion query's body over the OPEN document — TYPED:
     /// the state layer speaks values, and the calling arm owns the
     /// envelope (one law with every other query: JSON writes happen
     /// once, at the `Reply::Text` boundary). The doc-sync law: the
-    /// caller synced FIRST, so the chain head's document IS the text
+    /// caller synced FIRST, so the file's document IS the text
     /// the cursor sits in. `io` is the stored host env (the loop's
     /// capability) — the mod-name slot's disk probe reads it; `None`
     /// and that slot simply answers empty.
@@ -219,26 +206,26 @@ impl SessionState {
         ch: u32,
         io: Option<&dyn env::Io>,
     ) -> Vec<ls_types::CompletionItem> {
-        let Some(chain) = self.chain(uri) else {
+        let Some(f) = self.open_file(uri) else {
             return Vec::new();
         };
-        let head = chain.head();
-        let byte = head.doc.lines().byte(head.doc.src(), line, ch);
-        let doc = self.doc_mods_of(uri);
+        let file = self.world.file(f);
+        let byte = file.doc.byte(line, ch);
         let dir = crate::walk::file_dir(uri);
-        let file = crate::query::completion::DocFile {
+        let facts = crate::query::completion::DocFile {
             dir: dir.as_deref(),
-            // the flavor is `mode_of`'s — the filename convention, THE
-            // authority (never a basename match)
-            decl: crate::semantic::mode_of(uri) == crate::semantic::Mode::Decl,
+            // the flavor is the file's own stamp — the lane's word
+            // (`.d.rut` Decl, everything else Impl), THE authority
+            // (never a basename match)
+            decl: file.stamp.mode == crate::semantic::Mode::Decl,
             io,
         };
         crate::query::completion::complete(
-            &chain,
+            &self.world,
+            f,
             byte,
-            head.doc.src(),
-            &doc,
-            &file,
+            file.doc.src(),
+            &facts,
             &self.direct_deps,
         )
         .into_iter()

@@ -3,14 +3,14 @@
 use rut_ast::{AnyHandle, Ast, ModuleLetNode, Vis};
 
 use super::doc_lines;
-use crate::world::collection::MountedFile;
 use crate::world::infer;
 use crate::world::types::ty_src;
+use crate::world::File;
 
 /// a module-scope `let` view
 #[derive(Clone, Copy)]
 pub(crate) struct LetView<'a> {
-    pub(crate) file: &'a MountedFile,
+    pub(crate) file: &'a File,
     pub(crate) h: AnyHandle,
 }
 

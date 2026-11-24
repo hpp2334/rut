@@ -4,14 +4,14 @@
 use rut_ast::{AnyHandle, Ast, FnNode, ImplNode, MethodDeclNode, ParamRef, SurfaceFnNode, Vis};
 
 use super::{doc_lines, param_names, sig_src};
-use crate::world::collection::MountedFile;
 use crate::world::types::{ty_head, ty_src};
+use crate::world::File;
 
 /// a fn view — a free fn, a surface fn, or an impl-block method (the
 /// owner derives from the parent impl's target)
 #[derive(Clone, Copy)]
 pub(crate) struct FnView<'a> {
-    pub(crate) file: &'a MountedFile,
+    pub(crate) file: &'a File,
     pub(crate) h: AnyHandle,
 }
 

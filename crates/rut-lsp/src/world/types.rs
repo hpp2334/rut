@@ -1,12 +1,11 @@
-//! The decl layer's shared vocabulary — the mount stamp, the type
-//! forms, and the type-text helpers the views and the queries join
-//! with. The row types (`TyDef`/`FnDef`/`LetDef`/`UseDef`/`ModDef`/
-//! `MemberSrc`) are GONE: every decl fact derives from a view over
-//! `(Doc, AnyHandle)` at read (see [`super::collection`]) — verbatim
+//! The decl layer's shared vocabulary — the type forms and the
+//! type-text helpers the views and the queries join with. The row
+//! types (`TyDef`/`FnDef`/`LetDef`/`UseDef`/`ModDef`/`MemberSrc`) are
+//! GONE: every decl fact derives from a view over
+//! `(Doc, AnyHandle)` at read (see [`super::decls`]) — verbatim
 //! slices are span×src joins on the owning file, and the
 //! `ambient`/`is_pub`/`static` verdicts ride the modifier chains.
 
-use crate::semantic::Mode;
 use rut_ast::{Ast, TyRef};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -28,67 +27,6 @@ pub enum TyForm {
     HostStruct,
     /// `type X = A;` — a transparent alias
     Alias,
-}
-
-/// Where one mounted file sits in the session's world — the lanes'
-/// identity stamps, ONE record built in ONE expression at the mount
-/// site and handed up front (identity is never patched on after the
-/// fact). A plain record: many construction sites, no invariant.
-#[derive(Debug, Default, Clone)]
-pub struct Mount {
-    /// label for provenance lines — the file's path, or `core`; the
-    /// defs store's replace-by-origin key
-    pub origin: String,
-    /// the true repo-relative path of an EMBEDDED source (the
-    /// prelude's `include_str!` origin: `rut/core/src/core.d.rut`) — the
-    /// definition layer jumps there instead of the provenance label,
-    /// so a workspace that is the rut repo lands in the real file
-    pub src_path: Option<String>,
-    /// the module's explicit manifest name (`pouch` — what a `use`
-    /// path spells). Named files answer the use graph FIRST: a
-    /// `Some` here is the whole match; `None` (open documents) falls
-    /// back to the origin path-segment / file-stem derivation,
-    /// byte-for-byte the old behavior
-    pub module: Option<String>,
-    /// which of the package's file modules THIS file is — the full
-    /// mod path (`""` = the pkg root's `mod.rut`, `"layout/grid"` =
-    /// that child). The (module, mod_path) pair is the whole key the
-    /// mod-aware queries walk; `None` is the flat single-file shape.
-    /// Stamped by the faces that mount a package's mod tree (the dep
-    /// walk, the bundle loader); never derived from text.
-    pub mod_path: Option<String>,
-    /// which parse mode this file was BUILT in — `Some(Decl)` marks a
-    /// `.d.rut` surface (a dep's `entry.type`, a host pkg's whole
-    /// file), `Some(Impl)` the body (`mod.rut`); `None` = unknown
-    /// (open documents, any builder that does not stamp). The
-    /// definition layer prefers body hits over decl-surface hits when
-    /// a package indexes both — never derived from text.
-    pub mode: Option<Mode>,
-}
-
-impl Mount {
-    /// an open document — origin only; mode stays `None` (the doc
-    /// lanes' exact shape)
-    pub fn doc(uri: &str) -> Mount {
-        Mount {
-            origin: uri.to_string(),
-            ..Mount::default()
-        }
-    }
-
-    /// a mounted dep file — the flat shape (`mod_path` `None`) or one
-    /// file module of a mod-carrying pkg (`Some(path)`, `""` = the
-    /// pkg root); the parse mode derives from the uri's filename
-    /// convention
-    pub fn dep(name: &str, uri: &str, mod_path: Option<&str>) -> Mount {
-        Mount {
-            origin: uri.to_string(),
-            module: Some(name.to_string()),
-            mod_path: mod_path.map(str::to_string),
-            mode: Some(crate::semantic::mode_of(uri)),
-            ..Mount::default()
-        }
-    }
 }
 
 /// head segment text of a type node (`Circle`, `Vec` in `Vec<T>`)

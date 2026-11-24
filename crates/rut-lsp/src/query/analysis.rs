@@ -1,11 +1,11 @@
-//! Per-document analysis — the LSP values over the session's versioned
-//! cache: the entry's document (one parse per change — the sync lane's)
-//! is the single source for diags / tokens / symbols, and every query
-//! reads it through the collection's chain. The server layer only
+//! Per-document analysis — the LSP values over the session's world:
+//! the queried file's document (one parse per change — the sync
+//! lane's) is the single source for diags / tokens / symbols, and
+//! every query reads it through the world. The server layer only
 //! routes and publishes; nothing here re-parses per request.
 
-use crate::semantic::{Diag, LineIndex, Span};
-use crate::world::collection::Chain;
+use crate::semantic::{Diag, Span};
+use crate::world::{File, FileId, World};
 use ls_types::*;
 
 use crate::query::check;
@@ -38,28 +38,13 @@ pub fn analysis_of(doc: &crate::semantic::Document) -> Analysis {
 
 // ---- spans -> LSP ranges ----
 
-pub fn range_of(index: &LineIndex, src: &str, span: Span) -> Range {
-    let (l1, c1) = index.position(src, span.lo);
-    let (l2, c2) = index.position(src, span.hi);
-    Range {
-        start: Position {
-            line: l1,
-            character: c1,
-        },
-        end: Position {
-            line: l2,
-            character: c2,
-        },
-    }
-}
-
-/// the doc-door range — both ends through `Document::position`, no
-/// manual `lines()`+`src()` pairing at the call site (the lanes above
-/// hold parts — definition's spans over a mounted file — and keep
-/// [`range_of`])
-fn range_on(doc: &crate::semantic::Document, span: Span) -> Range {
-    let (l1, c1) = doc.position(span.lo);
-    let (l2, c2) = doc.position(span.hi);
+/// THE span→range door over a world file — both ends through the
+/// file's own document. One converter: the lanes above hold a file
+/// (definition's spans over a target, a hover's decoration) and join
+/// through this.
+pub fn range(file: &File, span: Span) -> Range {
+    let (l1, c1) = file.doc.position(span.lo);
+    let (l2, c2) = file.doc.position(span.hi);
     Range {
         start: Position {
             line: l1,
@@ -111,10 +96,26 @@ pub(crate) fn to_diagnostic(d: &Diag, doc: &crate::semantic::Document) -> Diagno
 
 /// The diagnostic builder over PARTS — the check lane's shape: its
 /// compiler-diag rows name DIFFERENT files (one per-text `LineIndex`
-/// each), so they never hold one `Document` to ride its doors.
-pub(crate) fn to_diagnostic_parts(d: &Diag, src: &str, index: &LineIndex) -> Diagnostic {
+/// each — no `Document` to ride a door), so the positions construct
+/// here.
+pub(crate) fn to_diagnostic_parts(
+    d: &Diag,
+    src: &str,
+    index: &crate::semantic::LineIndex,
+) -> Diagnostic {
+    let (l1, c1) = index.position(src, d.span.lo);
+    let (l2, c2) = index.position(src, d.span.hi);
     Diagnostic {
-        range: range_of(index, src, d.span),
+        range: Range {
+            start: Position {
+                line: l1,
+                character: c1,
+            },
+            end: Position {
+                line: l2,
+                character: c2,
+            },
+        },
         severity: Some(DiagnosticSeverity::ERROR),
         code: None,
         code_description: None,
@@ -147,76 +148,46 @@ pub fn merge_diags(base: Vec<Diagnostic>, extra: Vec<Diagnostic>) -> Vec<Diagnos
 // ---- document-level queries (the hosts' entry points) ----
 //
 // The wasm-bindgen bodies in lib.rs and the tests run the *same*
-// hover / completion queries over the same chains — defined here
+// hover / completion queries over the same world — defined here
 // once, so no host can grow its own dialect. Every query reads the
-// session's SYNCED entry (the chain head's kept document) — the old
-// per-request lex→parse→index pipeline is gone.
+// session's SYNCED entry (the queried file's kept document) — the
+// old per-request lex→parse→index pipeline is gone.
 
-/// byte offset of an LSP position over the document's own text
-fn byte_at(doc: &crate::semantic::Document, line: u32, ch: u32) -> u32 {
-    doc.lines().byte(doc.src(), line, ch)
-}
-
-/// hover at an LSP position: the open document first, then the
-/// mounted world. Returns the full LSP value — hosts hand it to their
-/// client as-is. `dm` is the open document's file-module context (the
-/// face's knowledge) — an own-package use-path segment hover resolves
-/// through it; the default keeps the cross-package lanes only.
-pub fn hover_on(
-    doc: &crate::semantic::Document,
-    chain: &Chain,
-    dm: &crate::world::mods::DocMods,
-    line: u32,
-    ch: u32,
-) -> Option<Hover> {
-    let h = crate::query::hover::hover(chain, dm, byte_at(doc, line, ch))?;
+/// hover at an LSP position: the queried file first, then the world.
+/// Returns the full LSP value — hosts hand it to their client as-is.
+pub fn hover_on(w: &World, file: FileId, line: u32, ch: u32) -> Option<Hover> {
+    let f = w.file(file);
+    let h = crate::query::hover::hover(w, file, f.doc.byte(line, ch))?;
     Some(Hover {
         contents: HoverContents::Markup(MarkupContent {
             kind: MarkupKind::Markdown,
             value: h.markdown,
         }),
-        range: Some(range_of(doc.lines(), doc.src(), h.span)),
+        range: Some(range(f, h.span)),
     })
 }
 
 /// definitions at an LSP position: the survey §3.3 layers (binding pass
-/// → decl layer → use graph → the mounted world). Empty = nothing
+/// → decl layer → use graph → the world). Empty = nothing
 /// resolves; multiple entries = the candidate list. Targets carry the
 /// doc URI, a workspace origin, or the prelude's true `rut/...` source
 /// path — the face resolves them (server: against the workspace root;
-/// wasm shim: the extension does). `dm` is the open document's
-/// file-module context — the mod-edge clicks and the own-package use
-/// lanes key on it; the default keeps them off.
-pub fn definition_on(
-    doc: &crate::semantic::Document,
-    chain: &Chain,
-    dm: &crate::world::mods::DocMods,
-    line: u32,
-    ch: u32,
-) -> Vec<definition::DefLocation> {
-    let ctx = definition::Ctx {
-        doc_uri: chain.head().origin(),
-        chain,
-        doc_mods: dm,
-    };
-    definition::get_definition(&ctx, byte_at(doc, line, ch))
+/// wasm shim: the extension does).
+pub fn definition_on(w: &World, file: FileId, line: u32, ch: u32) -> Vec<definition::DefLocation> {
+    let ctx = definition::Ctx { w, file };
+    definition::get_definition(&ctx, w.file(file).doc.byte(line, ch))
 }
 
 /// type definitions at an LSP position: the expression's type head →
 /// that type's declaration (the cheap shape the survey priced)
 pub fn type_definition_on(
-    doc: &crate::semantic::Document,
-    chain: &Chain,
-    dm: &crate::world::mods::DocMods,
+    w: &World,
+    file: FileId,
     line: u32,
     ch: u32,
 ) -> Vec<definition::DefLocation> {
-    let ctx = definition::Ctx {
-        doc_uri: chain.head().origin(),
-        chain,
-        doc_mods: dm,
-    };
-    definition::get_type_definition(&ctx, byte_at(doc, line, ch))
+    let ctx = definition::Ctx { w, file };
+    definition::get_type_definition(&ctx, w.file(file).doc.byte(line, ch))
 }
 
 /// inlay hints over a document range (the survey §4.3): TYPE hints on
@@ -224,20 +195,11 @@ pub fn type_definition_on(
 /// the same text hover shows), PARAMETER hints at exact-arity call
 /// sites. Returns full LSP values; hosts hand them to their
 /// client as-is.
-pub fn inlay_hints_on(
-    doc: &crate::semantic::Document,
-    chain: &Chain,
-    dm: &crate::world::mods::DocMods,
-    range: Range,
-) -> Vec<InlayHint> {
-    let ctx = inlay::Ctx {
-        doc: chain.head(),
-        chain,
-        doc_mods: dm,
-    };
-    let index = doc.lines();
-    let lo = index.byte(doc.src(), range.start.line, range.start.character);
-    let hi = index.byte(doc.src(), range.end.line, range.end.character);
+pub fn inlay_hints_on(w: &World, file: FileId, range: Range) -> Vec<InlayHint> {
+    let ctx = inlay::Ctx { w, file };
+    let doc = w.file(file);
+    let lo = doc.doc.byte(range.start.line, range.start.character);
+    let hi = doc.doc.byte(range.end.line, range.end.character);
     inlay::hints(&ctx, lo, hi)
 }
 
@@ -245,22 +207,17 @@ pub fn inlay_hints_on(
 /// index read BACKWARDS — a token is a reference iff go-to-definition
 /// from it lands on the declaration under the cursor. Within-file
 /// through the binding pass (shadow-aware), cross-file through the use
-/// graph's reverse edges — over the mounted files' KEPT documents (no
+/// graph's reverse edges — over the world files' KEPT documents (no
 /// re-parse lane). `include_declaration` per the LSP spec.
 pub fn references_on(
-    doc: &crate::semantic::Document,
-    chain: &Chain,
-    dm: &crate::world::mods::DocMods,
+    w: &World,
+    file: FileId,
     line: u32,
     ch: u32,
     include_declaration: bool,
 ) -> Vec<definition::DefLocation> {
-    let ctx = definition::Ctx {
-        doc_uri: chain.head().origin(),
-        chain,
-        doc_mods: dm,
-    };
-    references::references(&ctx, byte_at(doc, line, ch), include_declaration)
+    let ctx = definition::Ctx { w, file };
+    references::references(&ctx, w.file(file).doc.byte(line, ch), include_declaration)
 }
 
 /// signature help at an LSP position (the survey §4.4): the callee
@@ -269,40 +226,30 @@ pub fn references_on(
 /// signature renders verbatim, the active parameter comes from the
 /// comma/paren depth at the request position. Ambiguity or arity
 /// mismatch → no help, never wrong help.
-pub fn signature_help_on(
-    chain: &Chain,
-    dm: &crate::world::mods::DocMods,
-    line: u32,
-    ch: u32,
-) -> Option<SignatureHelp> {
-    let head = chain.head();
-    let ctx = signature_help::Ctx {
-        chain,
-        doc_mods: dm,
-    };
-    signature_help::signature_help(&ctx, head.doc.lines().byte(head.doc.src(), line, ch))
+pub fn signature_help_on(w: &World, file: FileId, line: u32, ch: u32) -> Option<SignatureHelp> {
+    let ctx = signature_help::Ctx { w, file };
+    signature_help::signature_help(&ctx, w.file(file).doc.byte(line, ch))
 }
 
-/// the check lane's merged answer for one document — the mounted
-/// world's package groups feed the compiler run; the doc's package
-/// context (its stamped twin names it) decides parse-only vs merged.
+/// the check lane's merged answer for one document — the world's
+/// package groups feed the compiler run; the file's own package
+/// context (its stamp names it) decides parse-only vs merged.
 pub(crate) fn merged_diags_for(
-    uri: &str,
-    src: &str,
-    dm: &crate::world::mods::DocMods,
-    files: &[crate::world::collection::MountedFile],
+    w: &World,
+    file: FileId,
     parse_diags: Vec<Diagnostic>,
 ) -> Vec<Diagnostic> {
-    let groups = if dm.pkg.is_some() {
-        check::groups_from_files(files)
+    let f = w.file(file);
+    let groups = if f.stamp.module.is_some() {
+        check::groups_from_files(w)
     } else {
         Vec::new()
     };
     check::merged_doc_diags(
-        uri,
-        src,
-        dm.pkg.clone(),
-        dm.mod_path.clone(),
+        &f.stamp.origin,
+        f.doc.src(),
+        f.stamp.module.clone(),
+        f.stamp.mod_path.clone(),
         groups,
         parse_diags,
     )
@@ -322,14 +269,36 @@ fn symbols_on(doc: &crate::semantic::Document, raw: &[Symbol]) -> Vec<DocumentSy
 fn convert(r: Symbol, doc: &crate::semantic::Document) -> DocumentSymbol {
     // selection ⊆ range holds by construction at every symbol site and is
     // test-gated (semantic tests + the lsp-wasm corpus check) — no clamp here
+    let (rl1, rc1) = doc.position(r.range.lo);
+    let (rl2, rc2) = doc.position(r.range.hi);
+    let (sl1, sc1) = doc.position(r.selection.lo);
+    let (sl2, sc2) = doc.position(r.selection.hi);
     DocumentSymbol {
         name: r.name,
         detail: None,
         kind: symbol_kind(r.kind),
         tags: None,
         deprecated: None,
-        range: range_on(doc, r.range),
-        selection_range: range_on(doc, r.selection),
+        range: Range {
+            start: Position {
+                line: rl1,
+                character: rc1,
+            },
+            end: Position {
+                line: rl2,
+                character: rc2,
+            },
+        },
+        selection_range: Range {
+            start: Position {
+                line: sl1,
+                character: sc1,
+            },
+            end: Position {
+                line: sl2,
+                character: sc2,
+            },
+        },
         children: if r.children.is_empty() {
             None
         } else {

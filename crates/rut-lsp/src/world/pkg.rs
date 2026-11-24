@@ -1,31 +1,31 @@
 //! Package identity and file identity — the world facts the
-//! use-graph gates read. [`matches_pkg`] decides which mounted files
+//! use-graph gates read. [`matches_pkg`] decides which world files
 //! speak for a package name (the FLAT sweeps' question — never a
 //! mod-tree lookup's, which keys on the stamp); [`file_key`] is one
 //! physical file's identity however the lanes spelled its origin;
 //! [`import_map`] is the document's imported (name, pkg) set (the
 //! auto-import tier's dedup and typeDefinition's computed-head gate —
-//! the file-scope lanes answer through `Chain::file_scope` instead).
+//! the file-scope lanes answer through the file scope instead).
 
 use std::collections::HashMap;
 
-use crate::world::collection::{Chain, MountedFile};
+use crate::world::{File, FileId, World};
 
 /// does this file speak for `pkg`? — the explicit manifest module
-/// name FIRST (`Mount::module`, the dep/prelude file's `Some`); on
+/// name FIRST (`Stamp::module`, the dep/prelude file's `Some`); on
 /// `None` the old derivation verbatim: exact origin, a path segment
 /// named `pkg` (…/pouch/pouch.rut), or the file stem
 /// (…/gadgets/lib.rut for pkg `gadgets`). This is the FLAT sweeps'
 /// question ("which unnamed files answer for this package name") —
 /// never a mod-tree lookup's: a package-scoped module lookup keys on
-/// the stamp ([`crate::world::mods::matches_mod`]), so the open
-/// document's unstamped entry cannot land a package's root because
-/// its path happens to name the package.
-pub fn matches_pkg(f: &MountedFile, pkg: &str) -> bool {
-    if let Some(m) = &f.mount.module {
+/// the stamp ([`crate::world::mods::matches_mod`]), so an unstamped
+/// file cannot land a package's root because its path happens to name
+/// the package.
+pub fn matches_pkg(f: &File, pkg: &str) -> bool {
+    if let Some(m) = &f.stamp.module {
         return m == pkg;
     }
-    let hay = f.mount.src_path.as_deref().unwrap_or(&f.mount.origin);
+    let hay = f.stamp.src_path.as_deref().unwrap_or(&f.stamp.origin);
     if hay == pkg {
         return true;
     }
@@ -70,24 +70,22 @@ pub(crate) fn file_key(origin: &str) -> String {
 /// (name, pkg) set shape the auto-import tier dedups against (and
 /// typeDefinition's computed-head gate restricts by; the bare/type
 /// tiers offer through the file scope's own resolve,
-/// `Chain::use_bound_scope`). The explicit leaves answer exactly as
+/// `use_bound_scope`). The explicit leaves answer exactly as
 /// before (leaf →
 /// head); a glob leaf (`use pkg::*`) binds every pub name the walked
-/// path exports — enumerated through the chain (the same surface walk
+/// path exports — enumerated through the world (the same surface walk
 /// the use tier offers), keyed to the pkg each name declares in (the
 /// head itself on the direct shape), inserted ONLY when the key is
 /// absent (explicit wins; stable first-occurrence merge).
-pub(crate) fn import_map<'a>(
-    chain: &'a Chain<'a>,
-    doc: &'a MountedFile,
-) -> HashMap<&'a str, &'a str> {
+pub(crate) fn import_map<'a>(w: &'a World, file: FileId) -> HashMap<&'a str, &'a str> {
+    let doc = w.file(file);
     let mut out: HashMap<&'a str, &'a str> = doc
         .uses()
         .into_iter()
         .map(|u| (u.name(), u.pkg()))
         .collect();
     for g in doc.glob_uses() {
-        for (name, pkg) in chain.surface_names(g.pkg, &g.interior) {
+        for (name, pkg) in crate::world::collection::surface_names(w, file, g.pkg, &g.interior) {
             out.entry(name).or_insert(pkg);
         }
     }

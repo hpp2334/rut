@@ -166,6 +166,13 @@ impl Document {
         self.lines.position(self.src(), byte)
     }
 
+    /// (line, UTF-16 column) -> byte offset over the artifact's src —
+    /// the position joins' one door (no consumer pairs
+    /// `lines()`+`src()` by hand)
+    pub fn byte(&self, line: u32, ch: u32) -> u32 {
+        self.lines.byte(self.src(), line, ch)
+    }
+
     /// the 0-based line `byte` sits on — the Doc's own line geometry
     /// (the per-row scan this replaces built a table for; the geometry
     /// was lexed once and lives in the pipeline)

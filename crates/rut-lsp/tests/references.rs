@@ -276,6 +276,11 @@ fn cross_file_refs_find_the_importing_files() {
 fn refs_from_the_decl_side_reach_the_importing_doc() {
     let mut s = S::boot();
     s.index_file("file:///t/main.rut", widget_user_src());
+    // the lib rides the workspace scan's lane too — one world: a file
+    // only an open document carries answers its own query, never other
+    // files' resolution (the old scan lent every candidate the query's
+    // own chain; hover from the importer and the reverse edge disagreed)
+    s.index_file(WIDGET_URI, WIDGET_SRC);
     let norm = widget_user_src();
     // query from the LIB's decl ident, doc = the lib: the scan's
     // reverse edge finds the importing doc's two sites

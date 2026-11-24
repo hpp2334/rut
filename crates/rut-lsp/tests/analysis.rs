@@ -131,7 +131,8 @@ fn no_package_context_is_parse_only_and_a_parse_error_is_never_doubled() {
     let n = plain["diags"].as_array().unwrap().len();
     assert!(n > 0, "the parse error surfaces: {plain}");
 
-    // stamped (the doc's twin names its package): the checker runs,
+    // stamped (the uri's stamp names its package — opening adopts
+    // what the index lane laid down): the checker runs,
     // the merge collapses the re-parsed duplicates onto the parse set
     let app_uri = "file:///ws/dbl/app/mod.rut";
     s.index_mod_at(app_uri, "dbl", "", bad);

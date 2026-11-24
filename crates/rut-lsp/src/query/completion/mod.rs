@@ -10,13 +10,13 @@
 //! foreign**. Heuristic, like hover: a
 //! miss is an empty list, never wrong text.
 //!
-//! The use-path tiers: at `use <cursor>` the chain's nameable module
+//! The use-path tiers: at `use <cursor>` the world's nameable module
 //! names compete (the document's own manifest rows + the ambient
 //! prelude — mounting is transitive, nameability declaration-scoped);
 //! at `use mod::<cursor>` that module's exported public names. The
 //! bare position rides the compiler's bare-name law: the
 //! fn-local bindings ahead of the keyword table, then the document's
-//! own decls + the chain's ambient builtin rows + the names the
+//! own decls + the world's ambient builtin rows + the names the
 //! document already `use`s — every other foreign name rides only the
 //! auto-import tier (with the `use mod::Name;` insert, sorted after
 //! the local items). Annotation boundaries (`let x: ⏐`, `-> T⏐`) get
@@ -63,9 +63,9 @@ use std::collections::HashSet;
 use rut_ast::{AnyHandle, ExprRef, IdentId, PathNode, Span, TyRef};
 
 use crate::env::Io;
-use crate::world::collection::Chain;
-use crate::world::mods::DocMods;
+use crate::world::{File, FileId, World};
 
+use crate::world::collection::{members, members_for, use_exports};
 use auto_import::auto_import_completions;
 use edge::typing_edge;
 use paths::{position_path_completions, type_head_completions, type_tier_completions};
@@ -142,16 +142,16 @@ pub(crate) struct DocFile<'a> {
 /// `direct_deps` is the open document's own dep set (its manifest's
 /// rows) — the auto-import tier derives its gate from it live.
 pub fn complete(
-    chain: &Chain,
+    w: &World,
+    file: FileId,
     pos: u32,
     src: &str,
-    doc: &DocMods,
-    file: &DocFile<'_>,
+    facts: &DocFile<'_>,
     direct_deps: &HashSet<String>,
 ) -> Vec<CompletionOut> {
-    let head = chain.head();
+    let head = w.file(file);
     let ast = head.doc.ast();
-    match typing_edge(chain, pos, src) {
+    match typing_edge(w, file, pos, src) {
         Edge::Use { node, segs, prefix } => {
             // the OWN lane first — a head that speaks for the doc's own
             // package (its own name, or an own mod edge) rides the
@@ -159,10 +159,10 @@ pub fn complete(
             // visible-members gate, exactly what the compiler's own-use
             // check accepts (`use imp::⏐` offers the module's visible
             // members). A foreign head keeps the cross-package tier.
-            if let Some(out) = position_path_completions(chain, doc, &segs) {
+            if let Some(out) = position_path_completions(w, file, &segs) {
                 return filtered(out, &prefix);
             }
-            use_tier_out(chain, chain.use_exports(node, pos, direct_deps), &prefix)
+            use_tier_out(w, use_exports(w, file, node, pos, direct_deps), &prefix)
         }
         // a lone `:` (or the `->` arrow) under the cursor is the
         // annotation boundary — the type tier answers it: the primitive
@@ -170,26 +170,27 @@ pub fn complete(
         // (no keywords, fns, or locals — values never ride a type
         // position). `Vec<⏐` stays ambiguous (`<` vs the comparison)
         // and is not this tier.
-        Edge::Annotation { prefix } => filtered(type_tier_completions(chain), &prefix),
+        Edge::Annotation { prefix } => filtered(type_tier_completions(w, file), &prefix),
         Edge::Qualified { segs, prefix } => {
-            if let Some(out) = position_path_completions(chain, doc, &segs) {
+            if let Some(out) = position_path_completions(w, file, &segs) {
                 return filtered(out, &prefix);
             }
             // the head did not resolve to a module — the `::` law's
             // other member lists ride the same trigger: enum members,
             // namespace statics, a type head's associated fns (the
             // member-vis dial rides the site context too)
-            if let Some(out) = type_head_completions(chain, doc, &segs) {
+            if let Some(out) = type_head_completions(w, file, &segs) {
                 return filtered(out, &prefix);
             }
             // the head resolved to nothing known — `::` in an unknown
             // context falls through to the tiers below, the typed
             // prefix riding along (the bare tier does not filter; the
             // auto-import tier does)
-            let mut out = local_completions(chain, pos);
-            out.extend(bare_tier_out(chain));
+            let mut out = local_completions(w, file, pos);
+            out.extend(bare_tier_out(w, file));
             out.extend(auto_import_completions(
-                chain,
+                w,
+                file,
                 ast,
                 src,
                 &prefix,
@@ -200,12 +201,11 @@ pub fn complete(
             out
         }
         Edge::TypeDot { head, tail, prefix } => {
-            if let Some(out) = position_path_completions(chain, doc, &head) {
+            if let Some(out) = position_path_completions(w, file, &head) {
                 return filtered(out, &prefix);
             }
             member_tier_out(
-                chain
-                    .members_for(pos, crate::world::collection::RecvNode::Seg(tail), doc)
+                members_for(w, file, pos, crate::world::collection::RecvNode::Seg(tail))
                     .unwrap_or_default(),
                 &prefix,
             )
@@ -222,7 +222,7 @@ pub fn complete(
                 if segs.len() == 1 {
                     let name = ast.name(segs[0].name.ident).to_string();
                     if let Some(out) =
-                        position_path_completions(chain, doc, std::slice::from_ref(&name))
+                        position_path_completions(w, file, std::slice::from_ref(&name))
                     {
                         return filtered(out, &prefix);
                     }
@@ -232,13 +232,13 @@ pub fn complete(
             // door types the receiver INSIDE — field reads, chained
             // calls, loop variables); the member-vis dial reads the
             // site context
-            member_tier_out(chain.members(pos, node, doc).unwrap_or_default(), &prefix)
+            member_tier_out(members(w, file, pos, node).unwrap_or_default(), &prefix)
         }
         // FINAL: the mod-name slot answers module candidates only — a
         // miss is an empty list, never the bare keyword dump (the use
-        // tier's law). The tier does not read DocMods: no stamp is
+        // tier's law). The tier reads no stamp: none is
         // involved, the disk beside the document is the answer.
-        Edge::ModName { node, prefix } => mod_name_tier_out(chain, file, node, &prefix),
+        Edge::ModName { node, prefix } => mod_name_tier_out(w, file, facts, node, &prefix),
         Edge::Bare { prefix } => {
             // the dot guard: the request sits after a `.` the tree
             // could not shape into a member node (a fence swallowed the
@@ -251,10 +251,11 @@ pub fn complete(
             }
             // the locals tier rides AHEAD of the keyword table — the
             // name being typed is most often a binding just declared
-            let mut out = local_completions(chain, pos);
-            out.extend(bare_tier_out(chain));
+            let mut out = local_completions(w, file, pos);
+            out.extend(bare_tier_out(w, file));
             out.extend(auto_import_completions(
-                chain,
+                w,
+                file,
                 ast,
                 src,
                 &prefix,
@@ -281,7 +282,7 @@ fn on_name(sp: Span, pos: u32) -> bool {
 /// the typed part of `sp` — the slice up to the cursor (a cursor past
 /// the span's end typed the whole name and moved on: the prefix is the
 /// whole name, the tier filters on it)
-fn partial_text(head: &crate::world::collection::MountedFile, sp: Span, pos: u32) -> String {
+fn partial_text(head: &File, sp: Span, pos: u32) -> String {
     let end = (pos as usize).clamp(sp.lo as usize, sp.hi as usize);
     head.doc.text(Span::new(sp.lo, end as u32)).to_string()
 }
@@ -290,11 +291,7 @@ fn partial_text(head: &crate::world::collection::MountedFile, sp: Span, pos: u32
 /// segment (a single-seg partial is the annotation tier's prefix; a
 /// multi-seg path's tail is the qualified tier's, which the walk
 /// answered before this lane)
-fn ty_slot_prefix(
-    head: &crate::world::collection::MountedFile,
-    t: TyRef,
-    pos: u32,
-) -> Option<String> {
+fn ty_slot_prefix(head: &File, t: TyRef, pos: u32) -> Option<String> {
     let TyRef::Path(h) = t else {
         return None;
     };
@@ -314,7 +311,7 @@ fn ty_slot_prefix(
 /// slot's own segments (text-backed, the dot guard's precedent: the
 /// TYPE grammar spells no `.` access, so the punct lives in the
 /// statement's recovery region)
-fn ty_slot_dot(head: &crate::world::collection::MountedFile, t: TyRef, pos: u32) -> Option<Edge> {
+fn ty_slot_dot(head: &File, t: TyRef, pos: u32) -> Option<Edge> {
     let TyRef::Path(h) = t else {
         return None;
     };
@@ -353,12 +350,7 @@ fn ty_slot_dot(head: &crate::world::collection::MountedFile, t: TyRef, pos: u32)
 /// does the text between `from` and `pos` spell the boundary punct
 /// before any `=`? (the annotation probe — the tree records the
 /// slots, not the punct that introduced them)
-fn gap_spells(
-    head: &crate::world::collection::MountedFile,
-    from: u32,
-    pos: u32,
-    punct: char,
-) -> bool {
+fn gap_spells(head: &File, from: u32, pos: u32, punct: char) -> bool {
     if pos <= from {
         return false;
     }
@@ -376,12 +368,7 @@ fn gap_spells(
 /// the bare tiers' prefix: the partial ident the cursor sits in
 /// (`Ve⏐` → `Ve`), from the tree — a path segment, a let/param name —
 /// else the fence residue (`Doc::name_at`)
-fn bare_prefix_walk(
-    head: &crate::world::collection::MountedFile,
-    p0: rut_ast::AnyHandle,
-    pos: u32,
-    src: &str,
-) -> String {
+fn bare_prefix_walk(head: &File, p0: rut_ast::AnyHandle, pos: u32, src: &str) -> String {
     let ast = head.doc.ast();
     if let Some(p) = p0.downcast::<PathNode>() {
         for s in &p.get(ast).segs {

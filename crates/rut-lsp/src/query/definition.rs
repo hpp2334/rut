@@ -18,20 +18,21 @@
 //!    name the file neither declares nor imports is no jump, never a
 //!    foreign decl). An OWN
 //!    package head — the doc's own pkg name, or one of its own mod
-//!    edges (the ancestor-walk spelling, the doc context keyed) — rides
+//!    edges (the ancestor-walk spelling, the doc's own stamp keyed) —
+//!    rides
 //!    the intra-package lanes instead: the head opens the resolved
 //!    module's file top, a middle segment lands on its mounting edge,
 //!    the leaf on the walked mod path's decl;
 //! 4. **the ambient prelude** — the one embedded file's
 //!    `include_str!` origin carries the true `rut/...` path
-//!    (`Mount::src_path`), so a jump lands in the real source file.
+//!    (`Stamp::src_path`), so a jump lands in the real source file.
 //!
 //! Layering mirrors `hover` exactly (decl sites, then member position
 //! with the known-receiver-is-final law, then type position, then the
 //! binding pass, then the bare-name file scope) so the two queries can't
 //! disagree about what an ident means. The bare-name layers (4/6/7)
 //! answer through the ONE file-scope home
-//! ([`Chain::file_scope`] — the queried file's own decls ∪ its use
+//! ([`file_scope`](crate::world::collection) — the queried file's own decls ∪ its use
 //! edges ∪ the ambient prelude); the use-edge targeting here (layer 2
 //! and typeDefinition's computed heads) is navigation, not a spelling
 //! question, and keeps its own walked-path lanes.
@@ -42,7 +43,7 @@
 //! `textDocument/declaration` request (the three-lane ABI is frozen),
 //! so the door has no caller and does not exist; the family's
 //! body-vs-surface pick policy lives in the ONE decision point
-//! (`DefIndexCollection::prefer_bodies`), and the declaration flavor is
+//! (`prefer_bodies`), and the declaration flavor is
 //! this walk with that policy inverted — it lands the day a face grows
 //! the request, with no other change. Multiple hits come back as
 //! multiple locations — the LSP-native candidate list (a peek), never a
@@ -53,11 +54,11 @@
 use std::collections::HashMap;
 
 use crate::semantic::Span;
-use crate::world::collection::{Chain, MemberHit, MemberTarget, MountedFile};
+use crate::world::collection::{MemberHit, MemberTarget};
 use crate::world::infer::QualHit;
-use crate::world::mods::DocMods;
 use crate::world::pkg::{import_map, matches_pkg};
 use crate::world::types::head_of_ty;
+use crate::world::{File, FileId, World};
 use ls_types::Range;
 
 /// one resolved jump target — the uri is the doc itself, a workspace
@@ -69,61 +70,35 @@ pub struct DefLocation {
     pub range: Range,
 }
 
-/// everything one query needs — the collection's chain (the open
-/// document at the head) plus the face's knowledge of where the
-/// document sits. `references` builds the same shape per candidate
-/// file, so the matcher runs unchanged there.
+/// everything one query needs — the session's world beside the
+/// queried file's id in it (the open document's own entry; its
+/// buffer is the truth). `references` builds the same shape per
+/// candidate file, so the matcher runs unchanged there.
 pub struct Ctx<'a> {
-    pub doc_uri: &'a str,
-    /// the lookup chain: the open document first, then the prelude + workspace
-    /// (the head's kept document owns the tree the walk reads)
-    pub chain: &'a Chain<'a>,
-    /// the face's knowledge of the open document's place in its
-    /// package's mod tree — keys the OWN-package lanes (the
-    /// `mod NAME;` edge click, an own-pkg/own-mod use head); the
-    /// default (unknown) keeps them off
-    pub doc_mods: &'a DocMods,
+    /// the session's world — every file the query reads
+    pub w: &'a World,
+    /// the queried file — its own entry in the world
+    pub file: FileId,
 }
 
 impl<'a> Ctx<'a> {
-    /// the document's own mounted file — the chain head
-    pub(crate) fn doc_file(&self) -> &'a MountedFile {
-        self.chain.head()
+    /// the queried file — its own entry in the world
+    pub(crate) fn doc_file(&self) -> &'a File {
+        self.w.file(self.file)
     }
 }
 
-/// byte span -> LSP range over the TARGET file's own text
-pub(crate) fn loc_at(doc_uri: &str, f: &MountedFile, span: Span) -> DefLocation {
-    // the queried file — by identity: either spelling of its path
-    let uri =
-        if crate::world::pkg::file_key(&f.mount.origin) == crate::world::pkg::file_key(doc_uri) {
-            doc_uri.to_string()
-        } else {
-            f.mount
-                .src_path
-                .clone()
-                .unwrap_or_else(|| origin_uri(&f.mount.origin))
-        };
+/// byte span -> LSP range over the TARGET file's own text — a
+/// location's uri is its file's (`src_path`, else the origin spelled
+/// through [`origin_uri`])
+pub(crate) fn loc_at(f: &File, span: Span) -> DefLocation {
     DefLocation {
-        uri,
-        range: range_of(f.doc.lines(), f.doc.src(), span),
-    }
-}
-
-/// byte span -> LSP range (the analysis layer's converter, inlined here
-/// so the module stays face-agnostic)
-pub(crate) fn range_of(index: &crate::semantic::LineIndex, src: &str, span: Span) -> Range {
-    let (l1, c1) = index.position(src, span.lo);
-    let (l2, c2) = index.position(src, span.hi);
-    Range {
-        start: ls_types::Position {
-            line: l1,
-            character: c1,
-        },
-        end: ls_types::Position {
-            line: l2,
-            character: c2,
-        },
+        uri: f
+            .stamp
+            .src_path
+            .clone()
+            .unwrap_or_else(|| origin_uri(&f.stamp.origin)),
+        range: crate::query::analysis::range(f, span),
     }
 }
 
@@ -140,27 +115,31 @@ fn origin_uri(origin: &str) -> String {
     }
 }
 
-/// the chain restricted to the pkg that declares `name` — the
+/// the world restricted to the pkg that declares `name` — the
 /// computed-head lane's gate (typeDefinition's value-reached type
 /// heads; the spelling lanes answer through the file scope instead).
-/// An import the chain cannot satisfy falls back to the flat chain
+/// An import the world cannot satisfy falls back to the flat world
 /// (navigation for a computed head: better a broad answer than none)
 fn chain_for<'a>(
-    chain: &'a Chain<'a>,
+    w: &'a World,
+    file: FileId,
     imported: &HashMap<&str, &str>,
     name: &str,
-) -> Vec<&'a MountedFile> {
+) -> Vec<&'a File> {
     match imported.get(name) {
         Some(pkg) => {
-            let filtered: Vec<&MountedFile> =
-                chain.iter().filter(|f| matches_pkg(f, pkg)).collect();
+            let filtered: Vec<&File> = w
+                .chain(file)
+                .map(|id| w.file(id))
+                .filter(|f| matches_pkg(f, pkg))
+                .collect();
             if filtered.is_empty() {
-                chain.iter().collect()
+                w.chain(file).map(|id| w.file(id)).collect()
             } else {
                 filtered
             }
         }
-        None => chain.iter().collect(),
+        None => w.chain(file).map(|id| w.file(id)).collect(),
     }
 }
 
@@ -189,27 +168,12 @@ pub(crate) fn fn_span(f: &crate::world::collection::FnView) -> Span {
 /// policy's single decision point makes the inverted walk a local
 /// change when one arrives.
 pub fn get_definition(ctx: &Ctx, pos: u32) -> Vec<DefLocation> {
-    dedupe_hits(get_definition_targets(ctx, pos))
-}
-
-/// identical answers are one answer. The chain lawfully carries a
-/// doc's stamped twin beside its own entry (the twin may lag an open
-/// edit; the doc entry is freshest), and a name both carry resolves to
-/// the same (uri, span) twice. The ambiguity layers answer every hit
-/// ON PURPOSE — a peek, not a guess — but a doubled target is not a
-/// peek; only DISTINCT targets ride.
-fn dedupe_hits(locs: Vec<DefLocation>) -> Vec<DefLocation> {
-    let mut out: Vec<DefLocation> = Vec::with_capacity(locs.len());
-    for l in locs {
-        if !out.iter().any(|e| e.uri == l.uri && e.range == l.range) {
-            out.push(l);
-        }
-    }
-    out
+    get_definition_targets(ctx, pos)
 }
 
 fn get_definition_targets(ctx: &Ctx, pos: u32) -> Vec<DefLocation> {
-    let chain = ctx.chain;
+    let w = ctx.w;
+    let file = ctx.file;
     let doc = ctx.doc_file();
     let ast = doc.doc.ast();
     // the cursor's node — the byte under it, else the byte just before
@@ -232,10 +196,7 @@ fn get_definition_targets(ctx: &Ctx, pos: u32) -> Vec<DefLocation> {
     //    free fns, impl methods, `[constructor]`s alike): the
     //    declaration IS the answer (go-to-def on a decl → itself)
     if let Some(name_span) = decl_site_span(ast, h, pos) {
-        return vec![DefLocation {
-            uri: ctx.doc_uri.to_string(),
-            range: range_of(doc.doc.lines(), doc.doc.src(), name_span),
-        }];
+        return vec![loc_at(doc, name_span)];
     }
 
     // 1b. the mod-edge click — the cursor rides a `mod NAME;` edge's
@@ -263,9 +224,9 @@ fn get_definition_targets(ctx: &Ctx, pos: u32) -> Vec<DefLocation> {
     //    falls through (the use-gate law hover established), an
     //    unknown one keeps the bare-name fallback
     if member_name_span(ast, h, pos).is_some() {
-        match chain.member(pos, h, ctx.doc_mods) {
+        match crate::world::collection::member(w, file, pos, h) {
             MemberHit::Found(target) => {
-                return member_locations(ctx, &target);
+                return member_locations(&target);
             }
             MemberHit::None => return Vec::new(),
             MemberHit::UnknownReceiver => {} // fall through to the name layers
@@ -291,15 +252,12 @@ fn get_definition_targets(ctx: &Ctx, pos: u32) -> Vec<DefLocation> {
     let name = ast.name(name_id).to_string();
 
     // 4. type position — the file scope's spelled type (the ONE home):
-    //    the head's own decl, its use-bound decl, or the ambient
+    //    the file's own decl, its use-bound decl, or the ambient
     //    prelude row; a name the file never binds is no jump
     if crate::world::infer::is_cap(&name) || crate::semantic::is_primitive_ty(&name) {
-        let tys = chain.file_scope(&name).types;
+        let tys = crate::world::collection::file_scope(w, file, &name).types;
         if !tys.is_empty() {
-            return tys
-                .iter()
-                .map(|t| loc_at(ctx.doc_uri, t.file, ty_span(t)))
-                .collect();
+            return tys.iter().map(|t| loc_at(t.file, ty_span(t))).collect();
         }
         // a primitive token with no surface decl (i32, bool …) is a
         // miss — never a wrong jump
@@ -312,28 +270,25 @@ fn get_definition_targets(ctx: &Ctx, pos: u32) -> Vec<DefLocation> {
     //    (the doc's rows read internally); the declaring ident span is
     //    the span-first contract
     if let Some(b) = rut_ast::resolve_binding(doc.doc.bindings(), pos, name_id) {
-        return vec![DefLocation {
-            uri: ctx.doc_uri.to_string(),
-            range: range_of(doc.doc.lines(), doc.doc.src(), b.decl_ident_span),
-        }];
+        return vec![loc_at(doc, b.decl_ident_span)];
     }
 
     // an AMBIGUOUS name — two distinct bindings, a one-name violation
     // the checker refuses — jumps NOWHERE at a use site (never a pick
     // between them; the hover lists the candidates). Decl sites
     // answered at layer 1, locals at layer 5 — both exact.
-    if chain.one_name_refused(&name) {
+    if crate::world::collection::one_name_refused(w, file, &name) {
         return Vec::new();
     }
 
     // 6. module-let use sites — the file scope's lets (the door),
     //    every hit (the candidate list)
-    let scope = chain.file_scope(&name);
+    let scope = crate::world::collection::file_scope(w, file, &name);
     if !scope.lets.is_empty() {
         return scope
             .lets
             .iter()
-            .map(|l| loc_at(ctx.doc_uri, l.file, l.name_span().unwrap_or(l.span())))
+            .map(|l| loc_at(l.file, l.name_span().unwrap_or(l.span())))
             .collect();
     }
 
@@ -342,7 +297,7 @@ fn get_definition_targets(ctx: &Ctx, pos: u32) -> Vec<DefLocation> {
     scope
         .fns
         .iter()
-        .map(|f| loc_at(ctx.doc_uri, f.file, fn_span(f)))
+        .map(|f| loc_at(f.file, fn_span(f)))
         .collect()
 }
 
@@ -351,11 +306,12 @@ fn get_definition_targets(ctx: &Ctx, pos: u32) -> Vec<DefLocation> {
 /// declared types, binding types, module lets), then jump to that
 /// type's declaration. The same layers, one step further.
 pub fn get_type_definition(ctx: &Ctx, pos: u32) -> Vec<DefLocation> {
-    dedupe_hits(get_type_definition_targets(ctx, pos))
+    get_type_definition_targets(ctx, pos)
 }
 
 fn get_type_definition_targets(ctx: &Ctx, pos: u32) -> Vec<DefLocation> {
-    let chain = ctx.chain;
+    let w = ctx.w;
+    let file = ctx.file;
     let doc = ctx.doc_file();
     let ast = doc.doc.ast();
     let Some(h) = cursor_node(ast, pos) else {
@@ -365,14 +321,14 @@ fn get_type_definition_targets(ctx: &Ctx, pos: u32) -> Vec<DefLocation> {
     {
         return Vec::new();
     }
-    let imported = import_map(ctx.chain, doc);
+    let imported = import_map(w, file);
 
     // member position: the member's DECLARED type — `w.item` (a
     // `?Circle` field) jumps to the `Circle` decl; a resolved receiver
     // is final (the use-gate law)
     if let Some(name_span) = member_name_span(ast, h, pos) {
         let _ = name_span;
-        match chain.member(pos, h, ctx.doc_mods) {
+        match crate::world::collection::member(w, file, pos, h) {
             MemberHit::Found(target) => {
                 let ty_text = match &target {
                     MemberTarget::Member(_, m, _)
@@ -383,7 +339,7 @@ fn get_type_definition_targets(ctx: &Ctx, pos: u32) -> Vec<DefLocation> {
                 return ty_text
                     .as_deref()
                     .map(head_of_ty)
-                    .and_then(|head| ty_name_locations(ctx, chain, &imported, &head))
+                    .and_then(|head| ty_name_locations(ctx, &imported, &head))
                     .unwrap_or_default();
             }
             MemberHit::None => return Vec::new(),
@@ -403,17 +359,12 @@ fn get_type_definition_targets(ctx: &Ctx, pos: u32) -> Vec<DefLocation> {
     // other spelling of the name jumps nowhere (never a pick between
     // the bindings)
     if crate::world::infer::is_cap(&name) || crate::semantic::is_primitive_ty(&name) {
-        if chain.one_name_refused(&name) {
+        if crate::world::collection::one_name_refused(w, file, &name) {
             return decl_site_span(ast, h, pos)
-                .map(|sp| {
-                    vec![DefLocation {
-                        uri: ctx.doc_uri.to_string(),
-                        range: range_of(doc.doc.lines(), doc.doc.src(), sp),
-                    }]
-                })
+                .map(|sp| vec![loc_at(doc, sp)])
                 .unwrap_or_default();
         }
-        if let Some(locs) = ty_name_locations(ctx, chain, &imported, &name) {
+        if let Some(locs) = ty_name_locations(ctx, &imported, &name) {
             return locs;
         }
         if crate::semantic::is_primitive_ty(&name) {
@@ -423,9 +374,9 @@ fn get_type_definition_targets(ctx: &Ctx, pos: u32) -> Vec<DefLocation> {
 
     // locals / module lets — their type head's declaration
     if let Some(b) = rut_ast::resolve_binding(doc.doc.bindings(), pos, name_id) {
-        let files: Vec<&MountedFile> = chain.iter().collect();
+        let files: Vec<&File> = w.chain(file).map(|id| w.file(id)).collect();
         let qual = |segs: &[String], is_ty: bool| -> Option<QualHit> {
-            let scope = chain.qualified_scope(ctx.doc_mods, segs, is_ty)?;
+            let scope = crate::world::collection::qualified_scope(w, file, segs, is_ty)?;
             Some(if is_ty {
                 QualHit::Ty(scope.types.first()?.name().to_string())
             } else {
@@ -435,13 +386,19 @@ fn get_type_definition_targets(ctx: &Ctx, pos: u32) -> Vec<DefLocation> {
         return crate::world::infer::binding_ty(doc, &files, b, &qual)
             .as_deref()
             .map(head_of_ty)
-            .and_then(|head| ty_name_locations(ctx, chain, &imported, &head))
+            .and_then(|head| ty_name_locations(ctx, &imported, &head))
             .unwrap_or_default();
     }
-    match crate::world::infer::module_let_ty(chain.iter(), &name) {
-        Some(head) => ty_name_locations(ctx, chain, &imported, &head).unwrap_or_default(),
+    match crate::world::infer::module_let_ty(files_of(w, file), &name) {
+        Some(head) => ty_name_locations(ctx, &imported, &head).unwrap_or_default(),
         None => Vec::new(),
     }
+}
+
+/// the query chain as a plain file window — the inference pass's
+/// shape (the queried file first, the world after)
+pub(crate) fn files_of(w: &World, file: FileId) -> Vec<&File> {
+    w.chain(file).map(|id| w.file(id)).collect()
 }
 
 // ---- the cursor walk ----
@@ -713,10 +670,11 @@ fn qualified_tail_locations(
     if q.k + 1 != q.segs.len() {
         return module_segment_target(ctx, &q.segs[..=q.k], q.is_ty);
     }
-    let Some(scope) = ctx.chain.qualified_scope(ctx.doc_mods, &q.segs, q.is_ty) else {
+    let Some(scope) = crate::world::collection::qualified_scope(ctx.w, ctx.file, &q.segs, q.is_ty)
+    else {
         return Some(Vec::new());
     };
-    let mut hits: Vec<(&MountedFile, Span)> = Vec::new();
+    let mut hits: Vec<(&File, Span)> = Vec::new();
     if q.is_ty {
         for t in &scope.types {
             hits.push((t.file, ty_span(t)));
@@ -732,39 +690,40 @@ fn qualified_tail_locations(
             hits.push((f.file, fn_span(f)));
         }
     }
-    Some(
-        hits.into_iter()
-            .map(|(f, sp)| loc_at(ctx.doc_uri, f, sp))
-            .collect(),
-    )
+    Some(hits.into_iter().map(|(f, sp)| loc_at(f, sp)).collect())
 }
 
 /// a qualified path's head/mid segment — the module the prefix names:
 /// its mounting edge, or the package root's file top
 fn module_segment_target(ctx: &Ctx, segs: &[String], is_ty: bool) -> Option<Vec<DefLocation>> {
-    let target = ctx.chain.qualified_module(ctx.doc_mods, segs, is_ty)?;
-    let path = ctx.chain.mod_path_of(target);
+    let w = ctx.w;
+    let target = crate::world::collection::qualified_module(w, ctx.file, segs, is_ty)?;
+    let path = crate::world::mods::mod_path_of(w.file(target));
     if path.is_empty() {
         // the package's own name — the root module, at its file top
         // (`Span::new(0, 0)`, the pkg-head convention)
-        return Some(vec![loc_at(ctx.doc_uri, target, Span::new(0, 0))]);
+        return Some(vec![loc_at(w.file(target), Span::new(0, 0))]);
     }
     // a `mod NAME;` edge in the parent module's file — inside the
     // TARGET's own package (the queried file's own entry when the
     // parent is the open document)
     let name = path.rsplit('/').next()?;
     let parent_path = crate::world::mods::parent_of(path);
-    let parent = if ctx.doc_mods.pkg.as_deref() == target.mount.module.as_deref()
-        && ctx.doc_mods.mod_path.as_deref() == Some(parent_path)
+    let parent = if w.file(ctx.file).stamp.module.as_deref()
+        == w.file(target).stamp.module.as_deref()
+        && w.file(ctx.file).stamp.mod_path.as_deref() == Some(parent_path)
     {
-        ctx.doc_file()
+        ctx.file
     } else {
-        crate::world::mods::find_mod(ctx.chain, ctx.chain.pkg_of(target), parent_path)?
+        crate::world::mods::find_mod(w, w.file(target).stamp.module.as_deref(), parent_path)?
     };
-    let edge = parent.mods().into_iter().find(|m| m.name() == name)?;
+    let edge = w
+        .file(parent)
+        .mods()
+        .into_iter()
+        .find(|m| m.name() == name)?;
     Some(vec![loc_at(
-        ctx.doc_uri,
-        parent,
+        w.file(parent),
         edge.name_span().unwrap_or(edge.span()),
     )])
 }
@@ -774,67 +733,72 @@ fn module_segment_target(ctx: &Ctx, segs: &[String], is_ty: bool) -> Option<Vec<
 /// (a member's declared type, a binding's inferred head, a module
 /// let's), not spelled at the cursor, so the file-scope law does not
 /// gate it — the use graph restricts the search (the pkg the name is
-/// imported from, else the flat chain), and `None` when the name has
+/// imported from, else the flat world), and `None` when the name has
 /// no indexed decl anywhere (a bare miss, kept distinct from an empty
 /// hit list). Spelled type tokens answer through the file scope
-/// (layer 4 — [`Chain::file_scope`]).
+/// (layer 4 — [`file_scope`](crate::world::collection)).
 fn ty_name_locations(
     ctx: &Ctx,
-    chain: &Chain,
     imported: &HashMap<&str, &str>,
     name: &str,
 ) -> Option<Vec<DefLocation>> {
-    let scoped = chain_for(chain, imported, name);
-    let hits: Vec<(&MountedFile, Span)> = scoped
+    let scoped = chain_for(ctx.w, ctx.file, imported, name);
+    let hits: Vec<(&File, Span)> = scoped
         .iter()
         .filter_map(|f| f.ty(name).map(|t| (*f, ty_span(&t))))
         .collect();
     // the body over the decl surface (`prefer_bodies`), so a
     // both-files dep's type lands in the body here too
-    let hits = chain.prefer_bodies(&hits);
+    let hits = crate::world::collection::prefer_bodies(&hits);
     match hits.as_slice() {
         [] => None,
-        _ => Some(
-            hits.iter()
-                .map(|(f, sp)| loc_at(ctx.doc_uri, f, *sp))
-                .collect(),
-        ),
+        _ => Some(hits.iter().map(|(f, sp)| loc_at(f, *sp)).collect()),
     }
 }
 
 /// where an imported name declares — strictly inside the named pkg's
 /// files AND inside the walked mod path (`use pouch::a::b::{ C }`
-/// resolves C only in pouch's module `a/b`; a walk the chain cannot
+/// resolves C only in pouch's module `a/b`; a walk the world cannot
 /// satisfy falls back to the flat pkg — better a broad answer than
 /// none, the `chain_for` law). Only `pub` rows bind a cross-package
 /// leaf (the compiler's leaf gate — a private or `pub(pkg)` row the
 /// use line refuses), and the queried file itself never exports to
 /// its own import (layer 1 speaks for it).
 fn use_graph_targets<'a>(
-    chain: &'a Chain<'a>,
+    w: &'a World,
+    file: FileId,
     pkg: &str,
     mod_path: Option<&str>,
     name: &str,
-) -> Vec<(&'a MountedFile, Span)> {
-    let in_scope: Vec<&MountedFile> = match mod_path {
+) -> Vec<(&'a File, Span)> {
+    let in_scope: Vec<FileId> = match mod_path {
         Some(p) => {
-            let scoped: Vec<&MountedFile> = chain
-                .iter()
-                .filter(|f| matches_pkg(f, pkg) && crate::world::mods::mod_path_of(f) == p)
+            let scoped: Vec<FileId> = w
+                .chain(file)
+                .filter(|id| {
+                    matches_pkg(w.file(*id), pkg)
+                        && crate::world::mods::mod_path_of(w.file(*id)) == p
+                })
                 .collect();
             if scoped.is_empty() {
-                chain.iter().filter(|f| matches_pkg(f, pkg)).collect()
+                w.chain(file)
+                    .filter(|id| matches_pkg(w.file(*id), pkg))
+                    .collect()
             } else {
                 scoped
             }
         }
-        None => chain.iter().filter(|f| matches_pkg(f, pkg)).collect(),
+        None => w
+            .chain(file)
+            .filter(|id| matches_pkg(w.file(*id), pkg))
+            .collect(),
     };
-    let mut out: Vec<(&MountedFile, Span)> = Vec::new();
-    for f in in_scope {
-        if f.same_file(chain.head()) {
+    let mut out: Vec<(&File, Span)> = Vec::new();
+    for id in in_scope {
+        if id == file {
             continue;
         }
+        let f = w.file(id);
         if let Some(t) = f.ty(name).filter(|t| t.vis() == rut_ast::Vis::Pub) {
             out.push((f, ty_span(&t)));
         }
@@ -856,11 +820,11 @@ fn use_graph_targets<'a>(
     // the body over the decl surface (`prefer_bodies`): a pkg indexing
     // both its `.d.rut` and its `mod.rut` resolves the leaf from the
     // body — the surface is the fallback when it is all there is
-    chain.prefer_bodies(&out)
+    crate::world::collection::prefer_bodies(&out)
 }
 
 /// the pkg's ROOT file — where a pkg-head click lands. Among the
-/// chain's `matches_pkg` files only the root-shaped ones count: the
+/// world's `matches_pkg` files only the root-shaped ones count: the
 /// lib root `mod.rut` (`mod_path == Some("")` — how a dep walk /
 /// bundle loader stamps the root) first, then the flat roots
 /// (`mod_path == None` — how a host `calc.d.rut` and a flat dep's
@@ -871,22 +835,23 @@ fn use_graph_targets<'a>(
 /// embed answering for a name nothing mounted — the mount wins, the
 /// embed is the fallback. No root-shaped file → `None` — an honest
 /// miss, never a wrong jump.
-fn pkg_root_index<'a>(chain: &'a Chain<'a>, pkg: &str) -> Option<&'a MountedFile> {
-    // the open document is no package's root by a path coincidence (a
+fn pkg_root_index(w: &World, file: FileId, pkg: &str) -> Option<FileId> {
+    // the queried file is no package's root by a path coincidence (a
     // document that IS the root rides the own lane before this door)
-    let mut roots: Vec<&MountedFile> = chain
-        .iter()
-        .filter(|f| {
-            !f.same_file(chain.head())
-                && matches_pkg(f, pkg)
-                && crate::world::mods::mod_path_of(f).is_empty()
+    let mut roots: Vec<FileId> = w
+        .chain(file)
+        .filter(|id| {
+            *id != file
+                && matches_pkg(w.file(*id), pkg)
+                && crate::world::mods::mod_path_of(w.file(*id)).is_empty()
         })
         .collect();
-    roots.sort_by_key(|f| {
+    roots.sort_by_key(|id| {
+        let f = w.file(*id);
         (
-            f.mount.mod_path.is_none(),
-            f.mount.mode == Some(crate::semantic::Mode::Decl),
-            !f.mount.origin.contains("://"),
+            f.stamp.mod_path.is_none(),
+            f.stamp.mode == crate::semantic::Mode::Decl,
+            !f.stamp.origin.contains("://"),
         )
     });
     roots.into_iter().next()
@@ -903,8 +868,9 @@ fn pkg_root_index<'a>(chain: &'a Chain<'a>, pkg: &str) -> Option<&'a MountedFile
 /// an honest empty, never a foreign fallback.
 fn use_site_targets(ctx: &Ctx, h: rut_ast::AnyHandle, pos: u32) -> Option<Vec<DefLocation>> {
     let uh = h.downcast::<rut_ast::UseNode>()?;
+    let w = ctx.w;
+    let file = ctx.file;
     let doc = ctx.doc_file();
-    let chain = ctx.chain;
     let ast = doc.doc.ast();
     let u_node = uh.get(ast);
     let segs: Vec<String> = u_node
@@ -921,7 +887,7 @@ fn use_site_targets(ctx: &Ctx, h: rut_ast::AnyHandle, pos: u32) -> Option<Vec<De
         // the one-name refusal: a leaf the file binds twice is a use
         // line the compiler refuses — it jumps nowhere (the bare-name
         // lanes answer nothing for it either)
-        if ctx.chain.one_name_refused(name) {
+        if crate::world::collection::one_name_refused(w, file, name) {
             return Some(Vec::new());
         }
         let pkg = segs[0].clone();
@@ -929,8 +895,8 @@ fn use_site_targets(ctx: &Ctx, h: rut_ast::AnyHandle, pos: u32) -> Option<Vec<De
         // declared edge; the doc's own rows read for its own scope)
         if let Some(start) = own_lane_start(ctx, &pkg) {
             let walked = crate::world::mods::walk_position_mods(
-                chain,
-                ctx.doc_mods.pkg.as_deref(),
+                w,
+                w.file(file).stamp.module.as_deref(),
                 &start,
                 &segs[1..],
             );
@@ -942,22 +908,17 @@ fn use_site_targets(ctx: &Ctx, h: rut_ast::AnyHandle, pos: u32) -> Option<Vec<De
         let walked = if u_node.path.len() == 1 {
             Some(String::new())
         } else {
-            crate::world::mods::walk_use_mods(chain, &pkg, &segs[1..])
+            crate::world::mods::walk_use_mods(w, &pkg, &segs[1..])
         };
-        let targets = use_graph_targets(chain, &pkg, walked.as_deref(), name);
+        let targets = use_graph_targets(w, file, &pkg, walked.as_deref(), name);
         if !targets.is_empty() {
-            return Some(
-                targets
-                    .into_iter()
-                    .map(|(f, sp)| loc_at(ctx.doc_uri, f, sp))
-                    .collect(),
-            );
+            return Some(targets.into_iter().map(|(f, sp)| loc_at(f, sp)).collect());
         }
         // a MODULE leaf (`use calc::{ math }`): the walked module's
         // `pub` child opens at its file top — the pkg-head convention
         if let Some(p) = walked {
-            if let Some((child, _)) = crate::world::mods::use_module_leaf(chain, &pkg, &p, name) {
-                return Some(vec![loc_at(ctx.doc_uri, child, Span::new(0, 0))]);
+            if let Some((child, _)) = crate::world::mods::use_module_leaf(w, &pkg, &p, name) {
+                return Some(vec![loc_at(w.file(child), Span::new(0, 0))]);
             }
         }
         return Some(Vec::new());
@@ -976,13 +937,13 @@ fn use_site_targets(ctx: &Ctx, h: rut_ast::AnyHandle, pos: u32) -> Option<Vec<De
         if let Some(start) = own_lane_start(ctx, &pkg) {
             return Some(if k == 0 {
                 match own_scope(ctx, &start) {
-                    Some(f) => vec![loc_at(ctx.doc_uri, f, Span::new(0, 0))],
+                    Some(f) => vec![loc_at(w.file(f), Span::new(0, 0))],
                     None => Vec::new(),
                 }
             } else {
                 match crate::world::mods::walk_position_mods(
-                    chain,
-                    ctx.doc_mods.pkg.as_deref(),
+                    w,
+                    w.file(file).stamp.module.as_deref(),
                     &start,
                     &segs[1..=k],
                 ) {
@@ -995,22 +956,22 @@ fn use_site_targets(ctx: &Ctx, h: rut_ast::AnyHandle, pos: u32) -> Option<Vec<De
         }
         if k == 0 {
             return Some(
-                pkg_root_index(chain, &pkg)
-                    .map(|f| vec![loc_at(ctx.doc_uri, f, Span::new(0, 0))])
+                pkg_root_index(w, file, &pkg)
+                    .map(|f| vec![loc_at(w.file(f), Span::new(0, 0))])
                     .unwrap_or_default(),
             );
         }
-        let walked = crate::world::mods::walk_use_mods(chain, &pkg, &segs[1..=k])?;
-        let parent = crate::world::mods::find_mod(
-            chain,
-            Some(&pkg),
-            crate::world::mods::parent_of(&walked),
-        )?;
+        let walked = crate::world::mods::walk_use_mods(w, &pkg, &segs[1..=k])?;
+        let parent =
+            crate::world::mods::find_mod(w, Some(&pkg), crate::world::mods::parent_of(&walked))?;
         let edge_name = ast.name(u_node.path[k].ident);
-        let edge = parent.mods().into_iter().find(|m| m.name() == edge_name)?;
+        let edge = w
+            .file(parent)
+            .mods()
+            .into_iter()
+            .find(|m| m.name() == edge_name)?;
         return Some(vec![loc_at(
-            ctx.doc_uri,
-            parent,
+            w.file(parent),
             edge.name_span().unwrap_or(edge.span()),
         )]);
     }
@@ -1024,19 +985,19 @@ fn use_site_targets(ctx: &Ctx, h: rut_ast::AnyHandle, pos: u32) -> Option<Vec<De
 /// the compiler's bare-head law). `None` = a foreign head; the caller
 /// rides the cross-package lanes.
 fn own_lane_start(ctx: &Ctx, head: &str) -> Option<String> {
-    crate::world::mods::resolve_position_head(ctx.doc_mods, ctx.doc_file(), ctx.chain, head)
+    crate::world::mods::resolve_position_head(ctx.w, ctx.file, head)
 }
 
-/// the scope file for a resolved own mod path — the open document's
-/// own entry when the path IS its own module (the freshest decls — the
-/// sync lane keeps it fresher than any stamped twin), else the chain
-/// file stamped for the `(pkg, path)` pair. `None` = nothing speaks for
+/// the scope file for a resolved own mod path — the queried file's
+/// own entry when the path IS its own module, else the world file
+/// stamped for the `(pkg, path)` pair. `None` = nothing speaks for
 /// the path (an unmounted module — the callers answer empty).
-fn own_scope<'a>(ctx: &Ctx<'a>, walked: &str) -> Option<&'a MountedFile> {
-    if ctx.doc_mods.mod_path.as_deref() == Some(walked) {
-        return Some(ctx.doc_file());
+fn own_scope(ctx: &Ctx, walked: &str) -> Option<FileId> {
+    let w = ctx.w;
+    if w.file(ctx.file).stamp.mod_path.as_deref() == Some(walked) {
+        return Some(ctx.file);
     }
-    crate::world::mods::find_mod(ctx.chain, ctx.doc_mods.pkg.as_deref(), walked)
+    crate::world::mods::find_mod(w, w.file(ctx.file).stamp.module.as_deref(), walked)
 }
 
 /// the own-lane leaf: the walked mod path's scope answers the
@@ -1050,29 +1011,29 @@ fn own_leaf_targets(ctx: &Ctx, walked: &str, name: &str) -> Vec<DefLocation> {
     let Some(f) = own_scope(ctx, walked) else {
         return Vec::new();
     };
-    let from = ctx.doc_mods.mod_path.as_deref().unwrap_or("");
+    let w = ctx.w;
+    let from = w.file(ctx.file).stamp.mod_path.as_deref().unwrap_or("");
     let allows = |vis: rut_ast::Vis| crate::world::mods::vis_allows(from, walked, vis);
-    let mut hits: Vec<(&MountedFile, Span)> = Vec::new();
-    if let Some(t) = f.ty(name).filter(|t| allows(t.vis())) {
-        hits.push((f, ty_span(&t)));
+    let mut hits: Vec<(&File, Span)> = Vec::new();
+    let scope = w.file(f);
+    if let Some(t) = scope.ty(name).filter(|t| allows(t.vis())) {
+        hits.push((scope, ty_span(&t)));
     }
-    if let Some(l) = f
+    if let Some(l) = scope
         .lets()
         .into_iter()
         .find(|l| l.name() == name && allows(l.vis()))
     {
-        hits.push((f, l.name_span().unwrap_or(l.span())));
+        hits.push((scope, l.name_span().unwrap_or(l.span())));
     }
-    for fv in f
+    for fv in scope
         .fns()
         .into_iter()
         .filter(|f| f.name() == name && f.owner().is_none() && allows(f.vis()))
     {
-        hits.push((f, fn_span(&fv)));
+        hits.push((scope, fn_span(&fv)));
     }
-    hits.into_iter()
-        .map(|(f, sp)| loc_at(ctx.doc_uri, f, sp))
-        .collect()
+    hits.into_iter().map(|(f, sp)| loc_at(f, sp)).collect()
 }
 
 /// the own-lane interior segment: the walked path's mounting `mod
@@ -1082,10 +1043,14 @@ fn own_edge_target(ctx: &Ctx, walked: &str) -> Option<DefLocation> {
     let parent_path = crate::world::mods::parent_of(walked);
     let name = walked.rsplit('/').next()?;
     let parent = own_scope(ctx, parent_path)?;
-    let edge = parent.mods().into_iter().find(|m| m.name() == name)?;
+    let edge = ctx
+        .w
+        .file(parent)
+        .mods()
+        .into_iter()
+        .find(|m| m.name() == name)?;
     Some(loc_at(
-        ctx.doc_uri,
-        parent,
+        ctx.w.file(parent),
         edge.name_span().unwrap_or(edge.span()),
     ))
 }
@@ -1094,33 +1059,35 @@ fn own_edge_target(ctx: &Ctx, walked: &str) -> Option<DefLocation> {
 /// edges' recorded name spans: the child's mod path is
 /// `child_path(doc's mod path, NAME)` and the jump opens the mounted
 /// child at its file top (`Span::new(0, 0)`, the pkg-head convention).
-/// Honest misses: an unstamped doc answers nothing; a child the chain
+/// Honest misses: an unstamped doc answers nothing; a child the world
 /// does not carry an empty jump; the `(pkg, mod_path)` pair keys the
 /// match — another package's same-path child never leaks in.
 fn mod_edge_target(ctx: &Ctx, h: rut_ast::AnyHandle, pos: u32) -> Option<DefLocation> {
     let mh = h.downcast::<rut_ast::ModDeclNode>()?;
+    let w = ctx.w;
     let doc = ctx.doc_file();
     let ast = doc.doc.ast();
     let m = mh.get(ast);
     on_name(m.name.span, pos).then_some(())?;
     let name = ast.name(m.name.ident);
-    let from = ctx.doc_mods.mod_path.as_deref()?;
+    let from = w.file(ctx.file).stamp.mod_path.as_deref()?;
     let child = crate::world::mods::child_path(from, name);
-    let mounted = crate::world::mods::find_mod(ctx.chain, ctx.doc_mods.pkg.as_deref(), &child)?;
-    Some(loc_at(ctx.doc_uri, mounted, Span::new(0, 0)))
+    let mounted =
+        crate::world::mods::find_mod(w, w.file(ctx.file).stamp.module.as_deref(), &child)?;
+    Some(loc_at(w.file(mounted), Span::new(0, 0)))
 }
 
-fn member_locations(ctx: &Ctx, target: &MemberTarget) -> Vec<DefLocation> {
+fn member_locations(target: &MemberTarget) -> Vec<DefLocation> {
     match target {
         MemberTarget::Member(ty, m, _)
         | MemberTarget::EnumMember(ty, m)
         | MemberTarget::IfaceMember(ty, m) => match m.name_span() {
-            Some(sp) => vec![loc_at(ctx.doc_uri, ty.file, sp)],
+            Some(sp) => vec![loc_at(ty.file, sp)],
             // a member whose name span is missing on a degenerate parse
             // has no span to jump to — an empty answer, never a wrong
             // jump
             None => Vec::new(),
         },
-        MemberTarget::ImplFn(f) => vec![loc_at(ctx.doc_uri, f.file, fn_span(f))],
+        MemberTarget::ImplFn(f) => vec![loc_at(f.file, fn_span(f))],
     }
 }

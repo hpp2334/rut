@@ -3,7 +3,7 @@
 //! reading only through the injected host environment
 //! ([`crate::env::Io`]): pure reads, one fast handler turn, no walk
 //! task, no awaits (the actor seam's law — the walk is a sync body
-//! over `&mut SessionState` exactly like every other handler). This
+//! over `&mut Session` exactly like every other handler). This
 //! module is also the home of the mod-name completion slot's disk
 //! probe ([`list_child_mods`] — the module files beside the current
 //! file), the env capability's second pure read.
@@ -17,7 +17,7 @@
 //!   clears the previous root's ledger silently (multi-root
 //!   precedence: root order decides).
 //! - **entries + mod trees index through the ABI's own lanes** — the
-//!   [`SessionState::index_named_at`] / [`SessionState::index_mod_at`] bodies the
+//!   [`Session::index_named_at`] / [`Session::index_mod_at`] bodies the
 //!   `index_mod_at` handler runs, so a walked dep
 //!   resolves in hover/completion/definition exactly like a
 //!   host-indexed one (one store, replace-by-origin, no drift). The
@@ -53,7 +53,7 @@ use std::collections::HashSet;
 
 use crate::deps::{DepRow, DepSource};
 use crate::env::Io;
-use crate::state::SessionState;
+use crate::state::Session;
 
 /// the manifest recursion cap — the extension's `MAX_DEP_DEPTH`
 /// mirrored (a guest, not an indexer daemon)
@@ -107,7 +107,7 @@ struct WalkCtx<'a> {
 /// its manifest. One fast handler turn; the state ends in the walked
 /// world (the ledger of the LAST root fed, the defs replace-by-origin,
 /// the direct-dep set accumulated).
-pub(crate) fn resolve(state: &mut SessionState, io: &dyn Io, roots: &[String]) -> WalkOut {
+pub(crate) fn resolve(state: &mut Session, io: &dyn Io, roots: &[String]) -> WalkOut {
     let mut out = WalkOut::default();
     let mut mounted: HashSet<String> = HashSet::new();
     for root in roots {
@@ -130,7 +130,7 @@ pub(crate) fn resolve(state: &mut SessionState, io: &dyn Io, roots: &[String]) -
 /// a MISSING lock hands over empty bytes — clearing the previous
 /// root's ledger silently (multi-root precedence: root order decides,
 /// and the miss lane is expected, not a hint).
-fn feed_lock(state: &mut SessionState, io: &dyn Io, root: &str) {
+fn feed_lock(state: &mut Session, io: &dyn Io, root: &str) {
     let path = format!("{root}/rut.lock");
     match io.read(&path) {
         None => {
@@ -152,7 +152,7 @@ fn feed_lock(state: &mut SessionState, io: &dyn Io, root: &str) {
 /// law: a dep's dev table never enters a consumer's world). ONE
 /// grammar everywhere: a store tree's manifest parses like any
 /// directory's.
-fn walk_manifest(ctx: &mut WalkCtx, state: &mut SessionState, dir: &str, depth: usize) {
+fn walk_manifest(ctx: &mut WalkCtx, state: &mut Session, dir: &str, depth: usize) {
     // the caps truncate: the referenced set stays incomplete, never a
     // failure
     if depth > MAX_DEP_DEPTH || ctx.files == 0 {
@@ -239,7 +239,7 @@ fn walk_manifest(ctx: &mut WalkCtx, state: &mut SessionState, dir: &str, depth: 
 /// one dep row's mount door: url rows go through the store lane, path
 /// rows recurse into the directory beside the manifest (OUTSIDE the
 /// walk root is the point).
-fn mount_row(ctx: &mut WalkCtx, state: &mut SessionState, dir: &str, row: &DepRow, depth: usize) {
+fn mount_row(ctx: &mut WalkCtx, state: &mut Session, dir: &str, row: &DepRow, depth: usize) {
     if ctx.files == 0 {
         return; // the budget died — the set stays incomplete
     }
@@ -275,7 +275,7 @@ fn mount_row(ctx: &mut WalkCtx, state: &mut SessionState, dir: &str, row: &DepRo
 /// (a surface-only dev state).
 fn mount_mod_tree(
     ctx: &mut WalkCtx,
-    state: &mut SessionState,
+    state: &mut Session,
     pkg_dir: &str,
     module: &str,
     entries: &[(&str, crate::semantic::Mode)],
@@ -349,7 +349,7 @@ fn mount_mod_tree(
 #[allow(clippy::too_many_arguments)] // the walk threads exactly this state
 fn mount_child_mod(
     ctx: &mut WalkCtx,
-    state: &mut SessionState,
+    state: &mut Session,
     declaring_dir: &str,
     module: &str,
     name: &str,
@@ -530,7 +530,7 @@ fn is_mod_name(name: &str) -> bool {
 /// resolve into them). Anything else is ONE hint per dep naming
 /// `rut install`; never fetched, never written, never evicted — the
 /// store owns all of that.
-fn mount_url_dep(ctx: &mut WalkCtx, state: &mut SessionState, row: &DepRow, depth: usize) {
+fn mount_url_dep(ctx: &mut WalkCtx, state: &mut Session, row: &DepRow, depth: usize) {
     let DepSource::Url {
         url,
         sha256,

@@ -4,13 +4,13 @@
 use rut_ast::{AnyHandle, UseNode, Vis};
 
 use super::decl_src;
-use crate::world::collection::MountedFile;
+use crate::world::File;
 
 /// one imported name of a use edge (a brace list's names share the
 /// node; each is its own row)
 #[derive(Clone, Copy)]
 pub(crate) struct UseView<'a> {
-    pub(crate) file: &'a MountedFile,
+    pub(crate) file: &'a File,
     pub(crate) h: AnyHandle,
     /// the name's index within the use node's names
     pub(crate) i: usize,
@@ -66,7 +66,7 @@ impl<'a> UseView<'a> {
 
 /// one glob leaf — `use pkg::*` (the brace star rides beside the
 /// names too: `use pkg::{ A, * }` fans the named rows above AND this
-/// row). A glob fans out NO name rows in [`MountedFile::uses`] — the
+/// row). A glob fans out NO name rows in [`File::uses`] — the
 /// star is never offered — so the glob lanes (the import expansion in
 /// `import_map`, the re-export arm in the use tier) read these rows.
 #[derive(Clone)]

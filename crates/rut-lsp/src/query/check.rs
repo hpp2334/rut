@@ -35,7 +35,7 @@
 use std::collections::BTreeMap;
 
 use crate::semantic::Diag;
-use crate::world::collection::MountedFile;
+use crate::world::World;
 use ls_types::Diagnostic;
 use rut_ast::{ItemRef, Vis};
 use rut_driver::{lower_decl_module, Manifest, ModSource, Mounted, RutRun};
@@ -60,7 +60,7 @@ pub struct FileSrc {
     pub vis: Vis,
 }
 
-/// The dep world off the mounted-file store: every (module,
+/// The dep world off the world store: every (module,
 /// mod_path)-stamped file joins its module's group (first-wins per mod
 /// path — a re-walk or a bundle twin never doubles a file). Unstamped
 /// files (plain workspace entries, the server's scan) are nobody's
@@ -68,21 +68,19 @@ pub struct FileSrc {
 /// real prelude). Group order follows first appearance — deterministic
 /// runs; pkgs mount namespace-free, always (the mechanism died — module
 /// paths and bare consts are the spellings).
-pub fn groups_from_files(files: &[MountedFile]) -> Vec<PkgFiles> {
+pub fn groups_from_files(w: &World) -> Vec<PkgFiles> {
     let mut order: Vec<String> = Vec::new();
     let mut groups: BTreeMap<String, PkgFiles> = BTreeMap::new();
-    for f in files {
-        let Some(module) = f.mount.module.clone() else {
+    for id in w.files() {
+        let f = w.file(id);
+        let Some(module) = f.stamp.module.clone() else {
             continue;
         };
         if module == "core" {
             continue;
         }
-        let path = f.mount.mod_path.clone().unwrap_or_default();
-        let mode = f
-            .mount
-            .mode
-            .unwrap_or_else(|| crate::semantic::mode_of(&f.mount.origin));
+        let path = f.stamp.mod_path.clone().unwrap_or_default();
+        let mode = f.stamp.mode;
         let name = module.clone();
         if !groups.contains_key(&name) {
             order.push(name.clone());
@@ -98,11 +96,11 @@ pub fn groups_from_files(files: &[MountedFile]) -> Vec<PkgFiles> {
         if g.files.contains_key(&path) {
             continue;
         }
-        let vis = edge_vis(files, &g.module, &path);
+        let vis = edge_vis(w, &g.module, &path);
         g.files.insert(
             path,
             FileSrc {
-                uri: f.mount.origin.clone(),
+                uri: f.stamp.origin.clone(),
                 text: f.doc.src().to_string(),
                 mode,
                 vis,
@@ -115,17 +113,18 @@ pub fn groups_from_files(files: &[MountedFile]) -> Vec<PkgFiles> {
         .collect()
 }
 
-/// The `mod` edge a child file was mounted under, read off its parent's
-/// mounted file (`pub mod layout;`). An unreadable parent is optimistic
+/// The `mod` edge a child file was mounted under, read off its parent
+/// world file (`pub mod layout;`). An unreadable parent is optimistic
 /// (`Pub`): a wrong-priv edge costs a lint, a false "`x` is not a pub
 /// module of `y`" squiggle costs trust.
-fn edge_vis(files: &[MountedFile], module: &str, path: &str) -> Vis {
+fn edge_vis(w: &World, module: &str, path: &str) -> Vis {
     let (parent, name) = match path.rsplit_once('/') {
         Some((p, n)) => (p, n),
         None => ("", path),
     };
-    for f in files {
-        if f.mount.module.as_deref() == Some(module) && crate::world::mods::mod_path_of(f) == parent
+    for id in w.files() {
+        let f = w.file(id);
+        if f.stamp.module.as_deref() == Some(module) && crate::world::mods::mod_path_of(f) == parent
         {
             if let Some(e) = f.mods().into_iter().find(|m| m.name() == name) {
                 return e.vis();

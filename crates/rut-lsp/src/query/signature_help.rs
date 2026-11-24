@@ -44,24 +44,22 @@ use ls_types::{
 
 use rut_ast::{CallNode, ExprRef, MethodNode};
 
-use crate::world::collection::Chain;
+use crate::world::{FileId, World};
 
-/// everything one signature-help query needs — the chain the
-/// collection handed out (the open document at the head; its kept
-/// document owns the tree)
+/// everything one signature-help query needs — the session's world
+/// beside the queried file's id in it (its kept document owns the tree)
 pub struct Ctx<'a> {
-    /// the lookup chain: the open document first, then the prelude + workspace
-    pub chain: &'a Chain<'a>,
-    /// the doc's file-module context (the stamped twin's pair) — the
-    /// receiver resolution's own-lane key
-    pub doc_mods: &'a crate::world::mods::DocMods,
+    /// the session's world — every file the query reads
+    pub w: &'a World,
+    /// the queried file — its own entry in the world
+    pub file: FileId,
 }
 
 /// `textDocument/signatureHelp` at an LSP position (already converted to
 /// a byte offset). `None` when there is no call to help with, or when
 /// the callee does not resolve to exactly one known signature.
 pub fn signature_help(ctx: &Ctx, pos: u32) -> Option<SignatureHelp> {
-    let d = ctx.chain.head();
+    let d = ctx.w.file(ctx.file);
     let ast = d.doc.ast();
     // the cursor's node — the byte under it, else the byte just before
     // (a cursor sitting on a token's end reads that token) — then the
@@ -122,10 +120,11 @@ pub fn signature_help(ctx: &Ctx, pos: u32) -> Option<SignatureHelp> {
         if crate::semantic::is_keyword(recv_text) {
             return None;
         }
-        let ty_name = ctx.chain.named_recv(ctx.doc_mods, pos, recv_id)?;
+        let ty_name = crate::world::collection::named_recv(ctx.w, ctx.file, pos, recv_id)?;
         // own-surface finality: `None` here is FINAL — no help, never
         // a same-named impl fn's signature
-        let f = ctx.chain.impl_method_fn(&ty_name, ast.name(name))?;
+        let f =
+            crate::world::collection::impl_method_fn(ctx.w, ctx.file, &ty_name, ast.name(name))?;
         (f.src(), f.params(), f.doc_lines(), md.args.clone(), true)
     } else {
         let cd = call.downcast::<CallNode>()?.get(ast);
@@ -140,9 +139,9 @@ pub fn signature_help(ctx: &Ctx, pos: u32) -> Option<SignatureHelp> {
         }?;
         let name = ast.name(callee_id);
         let hits: Vec<_> = ctx
-            .chain
-            .iter()
-            .flat_map(|f| f.fns())
+            .w
+            .chain(ctx.file)
+            .flat_map(|id| ctx.w.file(id).fns())
             .filter(|f| f.name() == name && f.owner().is_none())
             .collect();
         match hits.as_slice() {
@@ -173,12 +172,12 @@ pub fn signature_help(ctx: &Ctx, pos: u32) -> Option<SignatureHelp> {
                 if !crate::world::infer::is_cap(name) {
                     return None;
                 }
-                let t = ctx.chain.type_decl(name)?;
+                let t = crate::world::collection::type_decl(ctx.w, ctx.file, name)?;
                 if t.is_newtype() {
                     let label = t.mint_sig()?;
                     (label, t.mint_params(), Vec::new(), cd.args.clone(), false)
                 } else {
-                    let f = ctx.chain.constructor_of(t)?;
+                    let f = crate::world::collection::constructor_of(t)?;
                     (f.src(), f.params(), f.doc_lines(), cd.args.clone(), false)
                 }
             }
@@ -240,7 +239,7 @@ pub fn signature_help(ctx: &Ctx, pos: u32) -> Option<SignatureHelp> {
 /// written; the paren itself = the first slot). A surface fn's view
 /// resolves through the same index the call lane reads.
 fn signature_help_at_decl(ctx: &Ctx, probe: rut_ast::AnyHandle, pos: u32) -> Option<SignatureHelp> {
-    let d = ctx.chain.head();
+    let d = ctx.w.file(ctx.file);
     let ast = d.doc.ast();
     for a in ast.ancestors(probe) {
         if a.is::<rut_ast::ModuleNode>() {
@@ -280,12 +279,15 @@ fn signature_help_at_decl(ctx: &Ctx, probe: rut_ast::AnyHandle, pos: u32) -> Opt
                 p.downcast::<rut_ast::InterfaceNode>()
                     .map(|t| ast.name(t.get(ast).name.ident).to_string())
             })?;
-            (ctx.chain.impl_method_fn(&owner, name_text)?, true)
+            (
+                crate::world::collection::impl_method_fn(ctx.w, ctx.file, &owner, name_text)?,
+                true,
+            )
         } else {
             let hits: Vec<_> = ctx
-                .chain
-                .iter()
-                .flat_map(|i| i.fns())
+                .w
+                .chain(ctx.file)
+                .flat_map(|id| ctx.w.file(id).fns())
                 .filter(|v| v.name() == name_text && v.owner().is_none())
                 .collect();
             let [one] = hits.as_slice() else {

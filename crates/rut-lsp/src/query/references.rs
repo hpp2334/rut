@@ -13,9 +13,9 @@
 //!   shadow-aware by construction (a shadowing decl and its uses resolve
 //!   to the shadow, never to the outer binding) and scope-exit correct;
 //! * cross-file: for a module-level name (a fn, a type, a module let)
-//!   EVERY mounted file is a candidate — each of its tokens naming the
+//!   EVERY world file is a candidate — each of its tokens naming the
 //!   name runs through the same `definition()` call IN THAT FILE'S OWN
-//!   CONTEXT (its file-module stamp — the own-package lanes key on it,
+//!   CONTEXT (its own stamp — the own-package lanes key on it,
 //!   so a sibling's `use m::{ x }` and its `app::x` both resolve), and
 //!   counts iff the answer is the target. No import-map pre-filter: a
 //!   qualified spelling, a glob binding, and a pkg-rooted dep path all
@@ -23,14 +23,14 @@
 //! * `include_declaration` per the LSP spec: the declaring ident joins
 //!   the set when the client asks for it.
 //!
-//! Honest limits (recorded, never wrong): unimported (flat-chain) names
-//! are scanned in the asking file and the declaring file only — the flat
-//! chain does not pull the whole workspace in; a member reference needs
+//! Honest limits (recorded, never wrong): unimported (flat-world) names
+//! are scanned in the asking file and the declaring file only — the
+//! flat sweep does not pull the whole workspace in; a member reference needs
 //! the receiver to resolve exactly where definition resolves it. Field /
 //! enum-member / local targets never cross files (locals can't escape;
 //! imports carry type and fn names, not members).
 //!
-//! Every candidate file is a [`MountedFile`] — its document and tree are
+//! Every candidate is a world [`File`] — its document and tree are
 //! KEPT, so the old re-parse lane (candidate source re-lexed and
 //! re-parsed per query) is gone: the scan rides each file's own tokens.
 
@@ -38,8 +38,7 @@ use std::collections::HashSet;
 
 use crate::query::definition::{self, Ctx, DefLocation};
 use crate::semantic::Span;
-use crate::world::collection::MountedFile;
-use crate::world::mods::DocMods;
+use crate::world::{File, FileId};
 
 /// what the ident at `pos` was resolved to — drives how far the scan
 /// reaches (locals stay in the doc; module-level names ride the use
@@ -59,7 +58,9 @@ enum Kind {
 }
 
 struct Target<'a> {
-    file: &'a MountedFile,
+    file: &'a File,
+    /// the target's own id in the world (the candidate list keys on it)
+    id: FileId,
     /// the declaring ident's span — the include_declaration location and
     /// the matcher's expected answer
     span: Span,
@@ -69,6 +70,7 @@ struct Target<'a> {
 /// `textDocument/references` — every position whose definition is the
 /// declaration under `pos`. Sorted by uri then position; deduplicated.
 pub fn references(ctx: &Ctx, pos: u32, include_decl: bool) -> Vec<DefLocation> {
+    let w = ctx.w;
     let doc = ctx.doc_file();
     let ast = doc.doc.ast();
     // the cursor's node — the byte under it, else the byte just before
@@ -101,31 +103,28 @@ pub fn references(ctx: &Ctx, pos: u32, include_decl: bool) -> Vec<DefLocation> {
     }
 
     // 2. the files worth scanning — the asking document first, each
-    // target's own file; a module-level name (a fn, a type, a module
-    // let) reaches every mounted file (a sibling's bare use binding,
-    // its qualified spelling, a glob, a pkg-rooted dep path — all are
-    // references, none spells a leaf an import map could pre-filter
-    // on); locals stay in the doc and members add only their
-    // declaring file. One entry per physical file; the doc's stamped
-    // twin never scans (the live doc speaks for its uri).
+    //    target's own file; a module-level name (a fn, a type, a module
+    //    let) reaches every world file (a sibling's bare use binding,
+    //    its qualified spelling, a glob, a pkg-rooted dep path — all are
+    //    references, none spells a leaf an import map could pre-filter
+    //    on); locals stay in the doc and members add only their
+    //    declaring file. One entry per file (the store's own law — one
+    //    entry per origin, nothing to dedupe beyond the id set).
     let module_level = targets
         .iter()
         .any(|tg| matches!(tg.kind, Kind::ModuleLet | Kind::Type | Kind::Fn));
-    let mut cand: Vec<&MountedFile> = vec![ctx.doc_file()];
+    let mut cand: Vec<FileId> = vec![ctx.file];
     for tg in &targets {
-        cand.push(tg.file);
+        cand.push(tg.id);
     }
     if module_level {
-        cand.extend(ctx.chain.iter());
+        cand.extend(w.files());
     }
-    let mut seen: HashSet<String> = HashSet::new();
-    let mut files: Vec<&MountedFile> = Vec::new();
-    for f in cand {
-        if f.same_file(ctx.doc_file()) && !std::ptr::eq(f, ctx.doc_file()) {
-            continue; // the doc's stamped twin
-        }
-        if seen.insert(f.key()) {
-            files.push(f);
+    let mut seen: HashSet<FileId> = HashSet::new();
+    let mut files: Vec<FileId> = Vec::new();
+    for id in cand {
+        if seen.insert(id) {
+            files.push(id);
         }
     }
 
@@ -139,7 +138,7 @@ pub fn references(ctx: &Ctx, pos: u32, include_decl: bool) -> Vec<DefLocation> {
 
     if include_decl {
         for tg in &targets {
-            let loc = definition::loc_at(ctx.doc_uri, tg.file, tg.span);
+            let loc = definition::loc_at(tg.file, tg.span);
             if seen_locs.insert(loc_key(&loc)) {
                 out.push(loc);
             }
@@ -181,12 +180,12 @@ fn loc_key(l: &DefLocation) -> (String, u32, u32, u32, u32) {
 /// are checked first; everything else resolves through `definition()`
 /// and keeps its candidate-list honesty.
 fn targets<'a>(ctx: &Ctx<'a>, pos: u32, name: &str, name_id: rut_core::IdentId) -> Vec<Target<'a>> {
-    let doc = ctx.doc_file();
+    let w = ctx.w;
     // 0. decl positions of the doc's own decl layers — the declaring
     //    ident IS the answer (the tree's own name-position downcasts,
     //    mirroring definition's decl-site + binding-decl precedence,
     //    extended to fn/type name spans)
-    if let Some(sp) = decl_pos(doc, pos, name, name_id) {
+    if let Some(sp) = decl_pos(ctx.doc_file(), ctx.file, pos, name, name_id) {
         return vec![sp];
     }
 
@@ -195,14 +194,16 @@ fn targets<'a>(ctx: &Ctx<'a>, pos: u32, name: &str, name_id: rut_core::IdentId) 
         return Vec::new();
     }
     let mut out = Vec::new();
-    for f in ctx.chain.iter() {
-        let is_doc = std::ptr::eq(f, doc);
+    for id in w.chain(ctx.file) {
+        let f = w.file(id);
+        let is_doc = id == ctx.file;
         // the binding layer — the doc's locals/params/iter-vars
         if is_doc {
             for b in f.doc.bindings().iter().filter(|b| b.name == name_id) {
-                if hits.contains(&definition::loc_at(ctx.doc_uri, f, b.decl_ident_span)) {
+                if hits.contains(&definition::loc_at(f, b.decl_ident_span)) {
                     out.push(Target {
                         file: f,
+                        id,
                         span: b.decl_ident_span,
                         kind: Kind::Local,
                     });
@@ -211,9 +212,10 @@ fn targets<'a>(ctx: &Ctx<'a>, pos: u32, name: &str, name_id: rut_core::IdentId) 
         }
         for l in f.lets().into_iter().filter(|l| l.name() == name) {
             let sp = l.name_span().unwrap_or(l.span());
-            if hits.contains(&definition::loc_at(ctx.doc_uri, f, sp)) {
+            if hits.contains(&definition::loc_at(f, sp)) {
                 out.push(Target {
                     file: f,
+                    id,
                     span: sp,
                     kind: Kind::ModuleLet,
                 });
@@ -221,9 +223,10 @@ fn targets<'a>(ctx: &Ctx<'a>, pos: u32, name: &str, name_id: rut_core::IdentId) 
         }
         for ty in f.types().iter().filter(|t| t.name() == name) {
             let sp = definition::ty_span(ty);
-            if hits.contains(&definition::loc_at(ctx.doc_uri, f, sp)) {
+            if hits.contains(&definition::loc_at(f, sp)) {
                 out.push(Target {
                     file: f,
+                    id,
                     span: sp,
                     kind: Kind::Type,
                 });
@@ -231,9 +234,10 @@ fn targets<'a>(ctx: &Ctx<'a>, pos: u32, name: &str, name_id: rut_core::IdentId) 
         }
         for fv in f.fns().into_iter().filter(|f| f.name() == name) {
             let sp = definition::fn_span(&fv);
-            if hits.contains(&definition::loc_at(ctx.doc_uri, f, sp)) {
+            if hits.contains(&definition::loc_at(f, sp)) {
                 out.push(Target {
                     file: f,
+                    id,
                     span: sp,
                     kind: Kind::Fn,
                 });
@@ -247,9 +251,10 @@ fn targets<'a>(ctx: &Ctx<'a>, pos: u32, name: &str, name_id: rut_core::IdentId) 
                     continue;
                 }
                 if let Some(sp) = m.name_span() {
-                    if hits.contains(&definition::loc_at(ctx.doc_uri, f, sp)) {
+                    if hits.contains(&definition::loc_at(f, sp)) {
                         out.push(Target {
                             file: f,
+                            id,
                             span: sp,
                             kind: Kind::Member,
                         });
@@ -265,7 +270,8 @@ fn targets<'a>(ctx: &Ctx<'a>, pos: u32, name: &str, name_id: rut_core::IdentId) 
 /// name-position downcasts (binding rows, module lets, types, fns,
 /// members)
 fn decl_pos<'a>(
-    doc: &'a MountedFile,
+    doc: &'a File,
+    id: FileId,
     pos: u32,
     name: &str,
     name_id: rut_core::IdentId,
@@ -276,6 +282,7 @@ fn decl_pos<'a>(
         if b.name == name_id && on(b.decl_ident_span) {
             return Some(Target {
                 file: doc,
+                id,
                 span: b.decl_ident_span,
                 kind: Kind::Local,
             });
@@ -286,6 +293,7 @@ fn decl_pos<'a>(
             if l.name() == name && on(sp) {
                 return Some(Target {
                     file: doc,
+                    id,
                     span: sp,
                     kind: Kind::ModuleLet,
                 });
@@ -296,6 +304,7 @@ fn decl_pos<'a>(
         if ty.name() == name && on(definition::ty_span(&ty)) {
             return Some(Target {
                 file: doc,
+                id,
                 span: definition::ty_span(&ty),
                 kind: Kind::Type,
             });
@@ -305,6 +314,7 @@ fn decl_pos<'a>(
         if f.name() == name && on(definition::fn_span(&f)) {
             return Some(Target {
                 file: doc,
+                id,
                 span: definition::fn_span(&f),
                 kind: Kind::Fn,
             });
@@ -315,6 +325,7 @@ fn decl_pos<'a>(
             if m.name() == name && m.name_span().is_some_and(on) {
                 return Some(Target {
                     file: doc,
+                    id,
                     span: m.name_span()?,
                     kind: Kind::Member,
                 });
@@ -331,7 +342,7 @@ fn decl_pos<'a>(
 /// decl layers' recorded name spans, plus the file's binding decl
 /// idents, are therefore excluded from the scan (a use-statement name
 /// span stays eligible — importing IS a reference).
-fn decl_ident_spans(f: &MountedFile) -> HashSet<(u32, u32)> {
+fn decl_ident_spans(f: &File) -> HashSet<(u32, u32)> {
     let mut out: HashSet<(u32, u32)> = HashSet::new();
     let put = |out: &mut HashSet<(u32, u32)>, sp: Option<Span>| {
         if let Some(sp) = sp {
@@ -361,42 +372,33 @@ fn decl_ident_spans(f: &MountedFile) -> HashSet<(u32, u32)> {
 /// rides (the mount lane's law: the tree is kept, nothing re-parses).
 /// The positions enumerated are the tree's own name inventory
 /// (`name_positions` — every recorded name span); no token scan.
+/// Each candidate resolves under ITS OWN STAMP (`Ctx { w, file: cand }`
+/// — one world, one store: a file's own-package lanes key on the pair
+/// its loader lane laid down, exactly as when that file is the open
+/// document; the asking doc keeps its own for its idents).
 fn scan_files(
     ctx: &Ctx,
-    files: &[&MountedFile],
+    files: &[FileId],
     targets: &[Target],
     name: &str,
     out: &mut Vec<DefLocation>,
     seen: &mut HashSet<(String, u32, u32, u32, u32)>,
 ) {
-    for f in files {
-        let is_doc = std::ptr::eq(*f, ctx.doc_file());
-        // the file's own lookup chain: itself first, then the rest — no
-        // file speaks twice in one chain. Its own-package context is
-        // the asking doc's query's for the doc (the two queries cannot
-        // disagree about the doc's idents), another file's own mount
-        // stamp for the rest — its `use m::{ x }` and `app::x` resolve
-        // exactly as they do when that file is the open document
-        let stamp = if is_doc {
-            ctx.doc_mods.clone()
-        } else {
-            stamp_of(f)
-        };
-        let chain = candidate_chain(ctx.chain, f, stamp);
+    for id in files {
+        let f = ctx.w.file(*id);
         let f_ctx = Ctx {
-            doc_uri: f.mount.origin.as_str(),
-            chain: &chain,
-            doc_mods: chain.stamp(),
+            w: ctx.w,
+            file: *id,
         };
         let decls = decl_ident_spans(f);
         let ast = f.doc.ast();
 
-        for (sp, id) in rut_ast::name_positions(ast) {
-            if ast.name(id) != name
+        for (sp, ident) in rut_ast::name_positions(ast) {
+            if ast.name(ident) != name
                 || decls.contains(&(sp.lo, sp.hi))
                 || targets
                     .iter()
-                    .any(|tg| tg.span == sp && std::ptr::eq(tg.file, *f))
+                    .any(|tg| tg.span == sp && std::ptr::eq(tg.file, f))
             {
                 continue; // not the name, or a declaring ident (include_declaration adds the target's)
             }
@@ -405,9 +407,9 @@ fn scan_files(
                 continue;
             }
             for tg in targets {
-                let expected = definition::loc_at(f.mount.origin.as_str(), tg.file, tg.span);
+                let expected = definition::loc_at(tg.file, tg.span);
                 if ans.iter().any(|l| l == &expected) {
-                    let loc = definition::loc_at(f.mount.origin.as_str(), f, sp);
+                    let loc = definition::loc_at(f, sp);
                     if seen.insert(loc_key(&loc)) {
                         out.push(loc);
                     }
@@ -415,26 +417,6 @@ fn scan_files(
                 }
             }
         }
-    }
-}
-
-/// the candidate file's own chain — itself first, then the rest of the
-/// query chain (no file speaks twice). The chain order keeps the
-/// collection's law (the prelude and the workspace ride after).
-fn candidate_chain<'a>(
-    chain: &'a crate::world::collection::Chain<'a>,
-    f: &'a MountedFile,
-    stamp: DocMods,
-) -> crate::world::collection::Chain<'a> {
-    crate::world::collection::Chain::reordered(chain, f, stamp)
-}
-
-/// a mounted file's own file-module context — its mount's stamp (a
-/// stamped file speaks for itself; an unstamped one is nowhere's)
-fn stamp_of(f: &MountedFile) -> DocMods {
-    DocMods {
-        mod_path: f.mount.mod_path.clone(),
-        pkg: f.mount.module.clone(),
     }
 }
 

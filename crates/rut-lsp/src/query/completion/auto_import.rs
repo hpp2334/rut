@@ -10,8 +10,8 @@ use rut_ast::{Ast, ItemRef};
 use super::rows::CompletionOut;
 use super::CompletionKind;
 use crate::semantic::LineIndex;
-use crate::world::collection::Chain;
 use crate::world::types::TyForm;
+use crate::world::{File, FileId, World};
 
 // ---- the auto-import tier ----
 
@@ -25,8 +25,8 @@ use crate::world::types::TyForm;
 /// the compiler's ambient split, mirrored).
 ///
 /// `direct_deps` is the open document's own dep set — its manifest's
-/// `deps`/`dev-deps` rows, state-derived FACT threaded the
-/// [`DocMods`](crate::world::mods::DocMods) way (never the state itself). The
+/// `deps`/`dev-deps` rows, a state-derived FACT threaded beside the
+/// world (never the state itself). The
 /// direct-dep gate DERIVES here, at the read, never stamped on the
 /// index: the compiler's closure check (`Session::resolve_use` →
 /// `declares`) refuses `use` of a mounted-but-undeclared package (the
@@ -35,7 +35,8 @@ use crate::world::types::TyForm;
 /// only on mounted dep indexes (a named module); plain workspace
 /// files never ride this tier.
 pub(super) fn auto_import_completions(
-    chain: &Chain,
+    w: &World,
+    file: FileId,
     ast: &Ast,
     src: &str,
     prefix: &str,
@@ -44,9 +45,9 @@ pub(super) fn auto_import_completions(
     // the gate itself: the ambient prelude (origin `core` — a walked
     // dep's origin is always a uri, never the bare label, so no
     // collision) or a module the document's own manifest names
-    let direct = |f: &crate::world::collection::MountedFile| {
-        f.mount.origin == "core"
-            || f.mount
+    let direct = |f: &File| {
+        f.stamp.origin == "core"
+            || f.stamp
                 .module
                 .as_deref()
                 .is_some_and(|m| direct_deps.contains(m))
@@ -54,14 +55,17 @@ pub(super) fn auto_import_completions(
     // the (name, pkg) set the glob-aware import map spells — a name a
     // glob leaf already bound is imported, exactly like an explicit
     // leaf: never re-offered with an insert edit
-    let imported: HashSet<(&str, &str)> = crate::world::pkg::import_map(chain, chain.head())
-        .into_iter()
+    let imported: HashSet<(&str, &str)> =
+        crate::world::pkg::import_map(w, file).into_iter().collect();
+    let gated: HashSet<String> = w
+        .chain(file)
+        .flat_map(|id| w.file(id).pub_gated())
         .collect();
-    let gated: HashSet<String> = chain.iter().flat_map(|f| f.pub_gated()).collect();
     let insert = import_insert(src, ast);
     let mut out: Vec<CompletionOut> = Vec::new();
-    for f in chain.iter().skip(1) {
-        let Some(m) = &f.mount.module else { continue };
+    for id in w.chain(file).skip(1) {
+        let f = w.file(id);
+        let Some(m) = &f.stamp.module else { continue };
         if !direct(f) {
             continue; // a transitive-only dep — `use` of it is the D5 error
         }

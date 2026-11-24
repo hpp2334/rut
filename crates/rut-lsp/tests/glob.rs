@@ -156,7 +156,7 @@ fn the_glob_conflict_diag_surfaces_through_analyze() {
         "",
         "pub fn shadow() -> i32 { return 2; }\n",
     );
-    // the open document IS pkg app's root (its stamped twin keys the
+    // the open document IS pkg app's root (the stamp the index lane laid down keys
     // check lane); the two globs bind `shadow` from both heads — the
     // driver's conflict errors at the SECOND use line and the merged
     // set publishes it on this document

@@ -30,7 +30,7 @@ use rut_driver::bundle::Manifest;
 use crate::semantic::Mode;
 use sha2::{Digest, Sha256};
 
-use crate::world::MountedFile;
+use crate::world::{File, Stamp};
 
 /// One entry source a dep indexes: the manifest-relative file path and
 /// the mode it parses in (`entry.type` → Decl, the `mod.rut` root →
@@ -224,15 +224,15 @@ fn dep_table_of(m: Manifest) -> Result<DepTable, String> {
 /// today's single-file packages) or one file module of a mod-carrying
 /// pkg (`Some(path)`, `""` = the pkg root's `mod.rut`): the ordinary
 /// parse over `src`, the mount — origin, module name, mod path, parse
-/// mode — riding ONE [`Mount`] built up front. The surface `pub let`
+/// mode — riding ONE [`Stamp`] built up front. The surface `pub let`
 /// rows ride the ordinary ModuleLet path; the module-qualified forms
 /// ride the dep's own `mod` tree.
-pub fn mount_file(name: &str, uri: &str, mod_path: Option<&str>, src: String) -> MountedFile {
+pub fn mount_file(name: &str, uri: &str, mod_path: Option<&str>, src: String) -> File {
     // `mode_of(uri)` spells the filename convention (every caller
     // already derived it that way). `src` BY VALUE: it moves into the
     // doc (a fresh walk read moves for free, a borrowed text clones to
     // move)
-    MountedFile::from_src(crate::world::Mount::dep(name, uri, mod_path), src)
+    File::from_src(Stamp::dep(name, uri, mod_path), src)
 }
 
 // (the minted manifest-const rows are gone — the retired `consts`

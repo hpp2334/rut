@@ -1,17 +1,18 @@
 //! The tier outs — the bare/locals/member/use tiers. Enumeration and
-//! the gates live in the collection doors (`Chain::members`,
-//! `Chain::bare`, `Chain::use_exports`, keyed on the walk's node);
+//! the gates live in the collection doors (`members`,
+//! `bare`, `use_exports`, keyed on the walk's node);
 //! each tier here maps the rows it found to the wire items and
 //! applies the typed prefix (presentation, at the call site).
 
 use super::rows::{filtered, push_item, BindRow, CompletionOut, Row};
 use super::{CompletionKind, DocFile};
-use crate::world::collection::Chain;
+use crate::world::collection;
 use crate::world::mods;
+use crate::world::{FileId, World};
 use rut_ast::AnyHandle;
 
 /// The member tier — the enumeration and the gates live in the
-/// collection door (`Chain::members`, keyed on the walk's node); this
+/// collection door (`members`, keyed on the walk's node); this
 /// maps its view rows to the wire items and applies the typed prefix
 /// (presentation, at the call site).
 pub(super) fn member_tier_out(
@@ -42,8 +43,8 @@ pub(super) fn member_tier_out(
 /// declaration). Emitted ahead of the keyword table — the name being
 /// typed is most often a binding just declared. The doc's own pass is
 /// read internally (`Doc::bindings()` — lazy per version).
-pub(super) fn local_completions(chain: &Chain, pos: u32) -> Vec<CompletionOut> {
-    let doc = chain.head();
+pub(super) fn local_completions(w: &World, file: FileId, pos: u32) -> Vec<CompletionOut> {
+    let doc = w.file(file);
     let mut best: Vec<&crate::world::Binding> = Vec::new();
     for b in doc.doc.bindings() {
         if b.decl_ident_span.lo > pos || !(b.scope_span.lo <= pos && pos < b.scope_span.hi) {
@@ -67,7 +68,7 @@ pub(super) fn local_completions(chain: &Chain, pos: u32) -> Vec<CompletionOut> {
             let row = Row::Bind(BindRow {
                 b,
                 doc,
-                ty: chain.binding_ty(b),
+                ty: collection::binding_ty(w, file, b),
             });
             CompletionOut::of(&row)
         })
@@ -78,14 +79,14 @@ pub(super) fn local_completions(chain: &Chain, pos: u32) -> Vec<CompletionOut> {
 
 /// The bare tier — the keyword table (the grammar's reserved set, one
 /// canonical list) ahead of the collection door's visible decls
-/// (`Chain::bare`: the bare-name gates — own, ambient, used-from —
+/// (`bare`: the bare-name gates — own, ambient, used-from —
 /// live inside). The label filter is the call site's.
-pub(super) fn bare_tier_out(chain: &Chain) -> Vec<CompletionOut> {
+pub(super) fn bare_tier_out(w: &World, file: FileId) -> Vec<CompletionOut> {
     let mut out: Vec<CompletionOut> = Vec::new();
     for kw in crate::semantic::RESERVED_KW {
         out.push(CompletionOut::of(&Row::Kw(kw)));
     }
-    let bare = chain.bare();
+    let bare = collection::bare(w, file);
     for t in bare.types {
         push_item(&mut out, CompletionOut::of(&Row::Ty(t)));
     }
@@ -107,20 +108,20 @@ pub(super) fn bare_tier_out(chain: &Chain) -> Vec<CompletionOut> {
 /// duplicate `mod` is an error) — EXCEPT the decl under the cursor,
 /// whose own typed name stays a candidate.
 pub(super) fn mod_name_tier_out(
-    chain: &Chain,
-    file: &DocFile<'_>,
+    w: &World,
+    file: FileId,
+    facts: &DocFile<'_>,
     node: AnyHandle,
     prefix: &str,
 ) -> Vec<CompletionOut> {
-    let (Some(dir), Some(io)) = (file.dir, file.io) else {
+    let (Some(dir), Some(io)) = (facts.dir, facts.io) else {
         return Vec::new();
     };
     let mut out: Vec<CompletionOut> = Vec::new();
-    for c in crate::walk::list_child_mods(io, dir, file.decl) {
+    for c in crate::walk::list_child_mods(io, dir, facts.decl) {
         // the declared gate — another `mod` decl of the open doc
         // owning the name kills the candidate
-        if chain
-            .head()
+        if w.file(file)
             .mods()
             .iter()
             .any(|m| m.h != node && m.name() == c.name)
@@ -140,11 +141,11 @@ pub(super) fn mod_name_tier_out(
 }
 
 /// The use tier — the enumeration, the walk and the pub gates live in
-/// the collection door (`Chain::use_exports`, keyed on the walk's use
+/// the collection door (`use_exports`, keyed on the walk's use
 /// node); this maps its view rows to the wire items and applies the
 /// typed prefix (presentation, at the call site).
 pub(super) fn use_tier_out(
-    chain: &Chain,
+    w: &World,
     ux: Option<crate::world::collection::UseExports>,
     prefix: &str,
 ) -> Vec<CompletionOut> {
@@ -172,7 +173,7 @@ pub(super) fn use_tier_out(
                             m.name().to_string(),
                             format!(
                                 "file module — {}",
-                                mods::display_of(chain, Some(pkg.as_str()), &child)
+                                mods::display_of(w, Some(pkg.as_str()), &child)
                             ),
                             m.doc_lines(),
                             CompletionKind::Module,

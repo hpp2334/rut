@@ -3,12 +3,12 @@
 use rut_ast::{AnyHandle, ModDeclNode, Vis};
 
 use super::{decl_src, doc_lines};
-use crate::world::collection::MountedFile;
+use crate::world::File;
 
 /// a `mod NAME;` namespace edge view
 #[derive(Clone, Copy)]
 pub(crate) struct ModView<'a> {
-    pub(crate) file: &'a MountedFile,
+    pub(crate) file: &'a File,
     pub(crate) h: AnyHandle,
 }
 

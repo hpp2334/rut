@@ -7,9 +7,10 @@
 
 use crate::world::bindings::{BindKind, Binding};
 use crate::world::collection::{
-    CandRow, Candidate, FnView, LetView, MemberView, ModView, MountedFile, TyView, Via,
+    CandRow, Candidate, FnView, LetView, MemberView, ModView, TyView, Via,
 };
 use crate::world::types::TyForm;
+use crate::world::File;
 
 fn code_block(body: &str) -> String {
     format!("```rut\n{body}\n```")
@@ -68,7 +69,7 @@ pub(crate) fn render_ty(t: &TyView) -> String {
             }
         }
     }
-    let origin = &t.file.mount.origin;
+    let origin = &t.file.stamp.origin;
     if !origin.is_empty() {
         out.push_str(&format!("\n{}", provenance(origin, t.line())));
     }
@@ -88,7 +89,7 @@ pub(crate) fn render_member(m: &MemberView, via: Option<String>) -> String {
         }
         None => out.push_str(&format!("\nin `{}`", ty.name())),
     }
-    let origin = &m.file.mount.origin;
+    let origin = &m.file.stamp.origin;
     if !origin.is_empty() {
         out.push_str(&format!("\n{}", provenance(origin, m.line())));
     }
@@ -103,7 +104,7 @@ pub(crate) fn render_fn_hits(one: &FnView) -> String {
     if let Some(o) = one.owner() {
         out.push_str(&format!("\nin `{o}`"));
     }
-    let origin = &one.file.mount.origin;
+    let origin = &one.file.stamp.origin;
     if !origin.is_empty() {
         out.push_str(&format!("\n{}", provenance(origin, one.line())));
     }
@@ -169,12 +170,12 @@ impl Candidate<'_> {
                     TyForm::Alias => "alias",
                 }
                 .to_string(),
-                Some((t.file.mount.origin.clone(), t.line())),
+                Some((t.file.stamp.origin.clone(), t.line())),
             ),
             CandRow::Let(l) => (
                 l.src(),
                 "module let".to_string(),
-                Some((l.file.mount.origin.clone(), l.line())),
+                Some((l.file.stamp.origin.clone(), l.line())),
             ),
             CandRow::Fn(f) => (
                 f.src(),
@@ -182,19 +183,19 @@ impl Candidate<'_> {
                     Some(o) => format!("fn (method of `{o}`)"),
                     None => "fn".to_string(),
                 },
-                Some((f.file.mount.origin.clone(), f.line())),
+                Some((f.file.stamp.origin.clone(), f.line())),
             ),
             CandRow::Mod(m) => (
                 m.src(),
                 "module".to_string(),
-                Some((m.file.mount.origin.clone(), m.line())),
+                Some((m.file.stamp.origin.clone(), m.line())),
             ),
             // a use leaf that binds nothing: no row of its own — the
             // spelling is the candidate
             CandRow::Leaf(u) => (
                 u.src(),
                 "use leaf (nothing binds)".to_string(),
-                Some((u.file.mount.origin.clone(), u.line())),
+                Some((u.file.stamp.origin.clone(), u.line())),
             ),
         };
         let mut out = format!("`{}` — {kind}", src.replace('\n', " "));
@@ -296,7 +297,7 @@ pub(crate) fn render_let(l: &LetView) -> String {
     if let Some(ty) = l.ty() {
         out.push_str(&format!(" — `{ty}`"));
     }
-    let origin = &l.file.mount.origin;
+    let origin = &l.file.stamp.origin;
     if !origin.is_empty() {
         out.push_str(&format!("\n{}", provenance(origin, l.line())));
     }
@@ -310,7 +311,7 @@ pub(crate) fn render_let(l: &LetView) -> String {
 /// any resolved module): the mounted file as the subject (the REAL
 /// name for a single-file module — the origin's basename), the child
 /// count, provenance
-pub(crate) fn render_module_target(f: &MountedFile, path: &str) -> String {
+pub(crate) fn render_module_target(f: &File, path: &str) -> String {
     let file = crate::world::mods::display_of_single(f, path);
     let mut out = code_block(&file);
     out.push_str("\nfile module");
@@ -319,8 +320,8 @@ pub(crate) fn render_module_target(f: &MountedFile, path: &str) -> String {
         1 => out.push_str("\n1 child module"),
         n => out.push_str(&format!("\n{n} child modules")),
     }
-    if !f.mount.origin.is_empty() {
-        out.push_str(&format!("\n{}", provenance(&f.mount.origin, 1)));
+    if !f.stamp.origin.is_empty() {
+        out.push_str(&format!("\n{}", provenance(&f.stamp.origin, 1)));
     }
     out
 }
@@ -331,12 +332,7 @@ pub(crate) fn render_module_target(f: &MountedFile, path: &str) -> String {
 /// walkable path segments beneath it). `children` is `None` when the
 /// mounted file is not in the chain (an honest dash, never a wrong
 /// count).
-pub(crate) fn render_mod(
-    f: &MountedFile,
-    m: &ModView,
-    mounted: &str,
-    children: Option<usize>,
-) -> String {
+pub(crate) fn render_mod(f: &File, m: &ModView, mounted: &str, children: Option<usize>) -> String {
     let mut out = code_block(&format!("{};", m.src()));
     out.push_str(&format!("\nfile module — `{}`", mounted));
     if let Some(n) = children {
@@ -346,8 +342,8 @@ pub(crate) fn render_mod(
             n => format!("\n{n} child modules"),
         });
     }
-    if !f.mount.origin.is_empty() {
-        out.push_str(&format!("\n{}", provenance(&f.mount.origin, m.line())));
+    if !f.stamp.origin.is_empty() {
+        out.push_str(&format!("\n{}", provenance(&f.stamp.origin, m.line())));
     }
     for d in m.doc_lines() {
         out.push_str(&format!("\n\n{d}"));

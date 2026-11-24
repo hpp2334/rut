@@ -9,8 +9,8 @@
 //! Every method on [`Lsp`] is an ASYNC RPC bridge (the actor seam):
 //! the call posts one [`event_loop::Msg`] on the loop's mpsc inbox and
 //! awaits a oneshot reply, while ONE long-lived loop task owns the
-//! `SessionState` exclusively and answers messages FIFO — sync
-//! handlers over `&mut SessionState` (see [`event_loop`]). A dropped
+//! `Session` exclusively and answers messages FIFO — sync
+//! handlers over `&mut Session` (see [`event_loop`]). A dropped
 //! loop answers the error envelope; a panicked handler isolates to its
 //! own reply channel. Every text answer is the JSON envelope:
 //!
@@ -33,7 +33,7 @@
 //!                                              the url rows it refused —
 //!                                              informational rows for
 //!                                              hosts) out; every mounted dep
-//!                                              lands in the SAME defs store
+//!                                              lands in the SAME world store
 //!                                              the index lanes write (see
 //!                                              `walk`) — the EAGER manual
 //!                                              door
@@ -88,16 +88,16 @@
 //! semantics the env cannot); and the dep pull (`set_env` +
 //! `resolve_deps`/`reload_deps`). NO entry mutates dep state except through
 //! the injected env — the lock feed, the direct-dep stamp, and the named
-//! index lanes are SessionState internals the walk drives, not messages. The
+//! index lanes are session internals the walk drives, not messages. The
 //! old push family (`set_lock`, `set_direct_deps`, `add_def_named`,
 //! `add_bundle`, `extract_bundle`, `extract_srczip`, `doc_len`) lived
 //! in the blind-wasm era and is gone; its behaviors survive through
 //! the walk (see `walk` and its tests).
 //!
 //! An LSP serves a long-lived editing session, so the instance OWNS
-//! its session state (open docs + the index) for its lifetime — the
+//! its session state (the one world) for its lifetime — the
 //! host holds one [`Lsp`] per boot and mutates it per request. The
-//! state lives in `SessionState` (see [`state`]), owned exclusively by
+//! state lives in `Session` (see [`state`]), owned exclusively by
 //! the loop task ([`event_loop`]); the host's [`Lsp`] is the inbox
 //! handle. Calls serialize on the loop's FIFO — concurrent unresolved
 //! calls resolve in send order, and no caller ever borrows the state.
@@ -114,9 +114,9 @@ mod event_loop;
 mod walk;
 mod wire;
 
-// ---- the session state — the editing session's accumulated facts,
+// ---- the session — the editing session's accumulated facts,
 // moved whole to `state`; the loop and the boot doors spell
-// `state::SessionState` ----
+// `state::Session` ----
 mod state;
 
 // ---- the language core — the queries and the values ----
@@ -144,10 +144,10 @@ mod semantic;
 mod world;
 
 /// the language core as the host holds it — one per editing session.
-/// Not the state itself: the INBOX HANDLE. The loop task owns `SessionState`
+/// Not the state itself: the INBOX HANDLE. The loop task owns `Session`
 /// exclusively; every entry posts one `event_loop::Msg` and awaits the
 /// oneshot reply (the actor seam — the handlers are sync bodies over
-/// `&mut SessionState`, so no bridge can borrow across an await and no handler
+/// `&mut Session`, so no bridge can borrow across an await and no handler
 /// can post).
 pub struct Lsp {
     tx: futures::channel::mpsc::UnboundedSender<event_loop::Msg>,
@@ -164,7 +164,7 @@ impl Lsp {
     pub fn boot(spawn: impl FnOnce(Pin<Box<dyn Future<Output = ()>>>)) -> Lsp {
         let (tx, rx) = event_loop::pair();
         spawn(Box::pin(event_loop::run(
-            state::SessionState::boot(),
+            state::Session::boot(),
             tx.clone(),
             rx,
         )));
@@ -214,7 +214,7 @@ impl Lsp {
     /// open / FULL-sync change: store the document, return one analysis —
     /// `{diags, tokens, symbols}` (the values the LSP face would push over
     /// the wire). The diags are the MERGED set (B1+B2): the parse lane's
-    /// diags plus the check lane's — the doc's package (its stamped twin
+    /// diags plus the check lane's — the doc's package (its own stamp
     /// names it) compiles with its dep closure and the checker's per-file
     /// diags map back through the file stamps. No package context →
     /// parse-only, exactly the pre-B1 answer.
@@ -223,7 +223,7 @@ impl Lsp {
             .await
     }
 
-    /// close: drop the document (the prelude/workspace index stays). The
+    /// close: drop the document (the world keeps the file's last text). The
     /// await is ordering only — this lane answers no payload.
     pub async fn forget(&self, uri: String) {
         let _ = self
@@ -263,7 +263,7 @@ impl Lsp {
     /// resolves. Targets carry the doc URI, a workspace origin, or the prelude's
     /// true `rut/...` source path (relative — the extension
     /// resolves it against the workspace). The doc's file-module context
-    /// rides from its stamped twin (see `doc_mods_of`) — the mod-edge
+    /// is its own world entry's stamp — the mod-edge
     /// clicks and the own-package use lanes key on it.
     pub async fn definition(&self, uri: String, line: u32, ch: u32) -> String {
         self.text(|tx| event_loop::Msg::Cmd(event_loop::Cmd::Definition { uri, line, ch, tx }))
@@ -470,7 +470,7 @@ impl Lsp {
         // SetEnv arm installs captures it (the clock's tick re-enters
         // this loop), while `tx` moves to the host handle
         pool.spawner()
-            .spawn_local(event_loop::run(state::SessionState::boot(), tx.clone(), rx))
+            .spawn_local(event_loop::run(state::Session::boot(), tx.clone(), rx))
             .expect("the loop parks on the fresh pool");
         (Lsp { tx }, pool)
     }

@@ -5,7 +5,7 @@
 
 use rut_ast::{AnyHandle, Ast, FieldNode, MethodNode, ModDeclNode, NodeKindId, PathNode, UseNode};
 
-use crate::world::collection::Chain;
+use crate::world::{File, FileId, World};
 
 use super::{
     bare_prefix_walk, gap_spells, on_name, partial_text, ty_slot_dot, ty_slot_prefix, Edge,
@@ -17,8 +17,8 @@ use super::{
 /// tree's `member: None` shape; the annotation boundary reads the one
 /// punct the tree does not record (the `:`/`->` between the binding
 /// head and the cursor — a text probe, the dot guard's precedent).
-pub(super) fn typing_edge(chain: &Chain, pos: u32, src: &str) -> Edge {
-    let head = chain.head();
+pub(super) fn typing_edge(w: &World, file: FileId, pos: u32, src: &str) -> Edge {
+    let head = w.file(file);
     let ast = head.doc.ast();
     // the byte before the cursor names the context. A STRUCTURAL
     // wrapper (the block, the fn, the root) under the cursor means the
@@ -237,13 +237,7 @@ pub(super) fn typing_edge(chain: &Chain, pos: u32, src: &str) -> Edge {
 /// seg as the prefix; a leaf name (brace list or flat form) walks the
 /// FULL path with the partial name as the prefix; past a separator
 /// with nothing typed, the full path and an empty prefix.
-fn use_edge(
-    head: &crate::world::collection::MountedFile,
-    ast: &Ast,
-    node: AnyHandle,
-    u: &UseNode,
-    pos: u32,
-) -> Edge {
+fn use_edge(head: &File, ast: &Ast, node: AnyHandle, u: &UseNode, pos: u32) -> Edge {
     // the walk carries the path BEFORE the segment the cursor rides
     // (the riding segment is the typed prefix — `use po⏐` is the
     // module-NAME tier; a sync that ran past the incomplete leaf can
@@ -292,13 +286,7 @@ fn use_edge(
 /// ident as its name — so the edge keys on the head text and the
 /// cursor, never on "the name is absent". Anything else is `None`
 /// (the bare tier stands).
-fn mod_name_edge(
-    head: &crate::world::collection::MountedFile,
-    ast: &Ast,
-    p0: AnyHandle,
-    pos: u32,
-    src: &str,
-) -> Option<Edge> {
+fn mod_name_edge(head: &File, ast: &Ast, p0: AnyHandle, pos: u32, src: &str) -> Option<Edge> {
     // item level only: the decl (or its fence) hangs straight off the
     // root module
     if ast.parent(p0) != Some(ast.root().any()) {

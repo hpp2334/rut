@@ -3,7 +3,8 @@
 //! the `definition`/`typeDefinition` envelopes and the workspace-scan
 //! push lane. Pins: the shadow-aware targets, the body-over-decl
 //! preference, the mounted-over-ambient law, the own-package lanes
-//! keyed on the stamped twin, the module matcher's derivation, and the
+//! keyed on the stamp the index lane laid down on the uri (opening
+//! adopts it), the module matcher's derivation, and the
 //! misses that stay misses.
 
 mod common;
@@ -196,7 +197,7 @@ fn un_imported_names_answer_nothing() {
 #[test]
 fn sibling_duplicates_answer_the_file_own_decl() {
     // Act 1 made sibling same-name decls legal — the queried file's
-    // own binding IS the answer; the twins contribute nothing (the
+    // own binding IS the answer; the siblings contribute nothing (the
     // old flat chain answered a candidate list)
     let mut s = S::boot();
     s.index_file("file:///t/a.rut", "fn make() -> i32 { return 1; }\n");
@@ -337,14 +338,14 @@ fn a_fn_decl_click_answers_itself_despite_a_foreign_twin() {
 }
 
 #[test]
-fn a_doubled_twin_answer_is_one_answer() {
-    // an open doc is indexed by its analyze lane AND stamped by the
-    // scan lane at the same origin — a name both carry resolved twice.
-    // Identical answers are one answer; the ambiguity peek is for
-    // DISTINCT targets
+fn an_indexed_file_opened_under_its_own_uri_answers_once() {
+    // a file indexed by the scan lane at its own uri, then opened —
+    // opening ADOPTS the stamp the index lane laid down: one entry,
+    // and a name both lanes carry resolves once. The ambiguity peek
+    // is for DISTINCT targets
     let mut s = S::boot();
     let src = "class Widget {\n    id: i32;\n}\n";
-    s.index_file("file:///t/main.rut", src); // the stamped twin
+    s.index_file("file:///t/main.rut", src); // the index lane's stamp, which opening adopts
     let hits = s.def_at("file:///t/main.rut", src, "Widget", 1);
     assert_eq!(hits.len(), 1, "{hits:?}");
     assert_eq!(hits[0]["uri"], "file:///t/main.rut");
@@ -408,7 +409,7 @@ fn a_pkg_head_with_no_indexed_pkg_is_an_honest_miss() {
     assert!(hits.is_empty(), "{hits:?}");
 }
 
-// ---- the own-package lanes (the stamped twin keys them) ----
+// ---- the own-package lanes (the uri's stamp keys them) ----
 
 const APP_ROOT: &str = "mod helpers;\nentry fn main() -> nil {\n}\n";
 const APP_URI: &str = "file:///ws/app/mod.rut";
@@ -431,7 +432,7 @@ fn an_edge_click_opens_the_child_file_top() {
 both_uri_shapes! {
 #[test]
 fn an_edge_click_on_an_unstamped_doc_is_a_miss() {
-    // no stamped twin — the own lanes stay off
+    // no stamp laid down on this uri — the own lanes stay off
     let mut s = S::boot();
     s.index_mod_at(HELPERS_URI, "app", "helpers", HELPERS_SRC);
     let hits = s.def_at("file:///ws/scratch.rut", APP_ROOT, "mod helpers;", 1);
@@ -501,7 +502,7 @@ fn an_own_pkg_use_path_resolves_intra_package() {
     let doc = "mod helpers;\nuse app::helpers::{ Slot };\nentry fn main() -> nil {\n}\n";
     let uri = APP_URI;
     s.index_mod_at(uri, "app", "", doc);
-    // the lagging on-disk twin (the doc's own rows must win)
+    // the stale indexed text (the doc's own rows must win)
     s.index_mod_at(
         "file:///ws/app/on-disk/mod.rut",
         "app",
@@ -509,7 +510,7 @@ fn an_own_pkg_use_path_resolves_intra_package() {
         "mod helpers;\n",
     );
     s.index_mod_at(HELPERS_URI, "app", "helpers", HELPERS_SRC);
-    // the pkg-name head: the doc's own file top (never the twin)
+    // the pkg-name head: the doc's own file top (the open buffer's truth)
     let hits = s.def_in(uri, doc, "use app::", 1, 4);
     assert_eq!(hits.len(), 1, "{hits:?}");
     assert_eq!(hits[0]["uri"], uri);
@@ -909,11 +910,7 @@ fn qualified_annotation_receiver_resolves_members() {
 /// one jump target: `uri`, and exactly the DECLARED NAME's span (the
 /// last non-keyword word of `needle`) over the TARGET file's own text
 fn assert_jump(hits: &[Value], uri: &str, target: &str, needle: &str, occ: usize, what: &str) {
-    assert_eq!(
-        hits.len(),
-        1,
-        "{what}: one target, never a doubled twin: {hits:?}"
-    );
+    assert_eq!(hits.len(), 1, "{what}: one target, exactly: {hits:?}");
     assert_eq!(hits[0]["uri"], uri, "{what}: {}", hits[0]["uri"]);
     const KW: [&str; 8] = ["pub", "fn", "let", "struct", "mod", "class", "impl", "pkg"];
     let (off, len) = needle
@@ -1026,6 +1023,11 @@ both_uri_shapes! {
         // ... from a grandchild, and the ancestor itself through the
         // root's edge
         let sub = rut_new::at("src/child/sub/mod.rut");
+        // one world: the child's buffer is the truth, and this test's
+        // earlier probes synced other probe texts into it — its own
+        // text rides again before the grandchild names it (the old
+        // answer read the indexed copy behind the open buffer)
+        s.analyze(&uri, rut_new::CHILD_HEAD);
         assert_jump(
             &s.def_in(&sub, "fn k() -> i32 { return m::mk(41).bump(); }\n", "m::mk", 1, 3),
             &m,
