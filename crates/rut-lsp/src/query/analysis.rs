@@ -153,11 +153,11 @@ pub fn merge_diags(base: Vec<Diagnostic>, extra: Vec<Diagnostic>) -> Vec<Diagnos
 // session's SYNCED entry (the queried file's kept document) — the
 // old per-request lex→parse→index pipeline is gone.
 
-/// hover at an LSP position: the queried file first, then the world.
+/// hover at a byte position: the queried file first, then the world.
 /// Returns the full LSP value — hosts hand it to their client as-is.
-pub fn hover_on(w: &World, file: FileId, line: u32, ch: u32) -> Option<Hover> {
+pub fn hover_on(w: &World, file: FileId, pos: u32) -> Option<Hover> {
     let f = w.file(file);
-    let h = crate::query::hover::hover(w, file, f.doc.byte(line, ch))?;
+    let h = crate::query::hover::hover(w, file, pos)?;
     Some(Hover {
         contents: HoverContents::Markup(MarkupContent {
             kind: MarkupKind::Markdown,
@@ -167,27 +167,20 @@ pub fn hover_on(w: &World, file: FileId, line: u32, ch: u32) -> Option<Hover> {
     })
 }
 
-/// definitions at an LSP position: the survey §3.3 layers (binding pass
-/// → decl layer → use graph → the world). Empty = nothing
-/// resolves; multiple entries = the candidate list. Targets carry the
-/// doc URI, a workspace origin, or the prelude's true `rut/...` source
-/// path — the face resolves them (server: against the workspace root;
-/// wasm shim: the extension does).
-pub fn definition_on(w: &World, file: FileId, line: u32, ch: u32) -> Vec<definition::DefLocation> {
-    let ctx = definition::Ctx { w, file };
-    definition::get_definition(&ctx, w.file(file).doc.byte(line, ch))
+/// definitions at a byte position: the unified walk's answer located
+/// (the survey §3.3 layers, one walk). Empty = nothing resolves;
+/// multiple entries = the candidate list. Targets carry the doc URI,
+/// a workspace origin, or the prelude's true `rut/...` source path —
+/// the face resolves them (server: against the workspace root; wasm
+/// shim: the extension does).
+pub fn definition_on(w: &World, file: FileId, pos: u32) -> Vec<definition::DefLocation> {
+    definition::get_definition(&definition::Ctx { w, file }, pos)
 }
 
-/// type definitions at an LSP position: the expression's type head →
+/// type definitions at a byte position: the expression's type head →
 /// that type's declaration (the cheap shape the survey priced)
-pub fn type_definition_on(
-    w: &World,
-    file: FileId,
-    line: u32,
-    ch: u32,
-) -> Vec<definition::DefLocation> {
-    let ctx = definition::Ctx { w, file };
-    definition::get_type_definition(&ctx, w.file(file).doc.byte(line, ch))
+pub fn type_definition_on(w: &World, file: FileId, pos: u32) -> Vec<definition::DefLocation> {
+    definition::get_type_definition(&definition::Ctx { w, file }, pos)
 }
 
 /// inlay hints over a document range (the survey §4.3): TYPE hints on

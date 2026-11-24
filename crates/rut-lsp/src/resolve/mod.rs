@@ -1,7 +1,14 @@
-//! The shared mod laws — the LSP's adapters over rut-lir's pure walks.
-//! Every language law here has ONE home (a `rut_lir::check` function);
-//! this module only translates the session's world into the tree the
-//! laws walk and calls them — no walk is spelled twice. Act 3 adds the
-//! rest of the module (the caret's resolution).
+//! The resolver layer — the one classification of a caret
+//! ([`cursor`]), the one walk from a caret to declarations
+//! ([`walk::resolve`]) answering the typed [`Def`], and the adapters
+//! that carry the world's stamped files into rut-lir's pure mod laws
+//! ([`mods`]). Every language law has ONE home; the features above
+//! (hover, definition, references) classify, resolve, and render —
+//! they never walk on their own.
 
+pub(crate) mod cursor;
+pub(crate) mod def;
 pub(crate) mod mods;
+pub(crate) mod walk;
+
+pub(crate) use def::{Def, DefLocation};

@@ -497,9 +497,9 @@ pub(crate) fn json_envelope<T: serde::Serialize>(value: T) -> String {
 }
 
 /// the definition-target envelope — `DefLocation` is serde-free in the
-/// queries (they carry no serializer), so this module spells
+/// resolver layer (it carries no serializer), so this module spells
 /// the LSP `Location` JSON: `{ uri, range }`
-pub(crate) fn locations_envelope(locs: &[crate::query::definition::DefLocation]) -> String {
+pub(crate) fn locations_envelope(locs: &[crate::resolve::DefLocation]) -> String {
     let value: Vec<wire::Location> = locs
         .iter()
         .map(|l| wire::Location {

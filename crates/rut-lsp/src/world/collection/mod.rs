@@ -25,13 +25,13 @@ mod views;
 
 pub(crate) use member::{
     binding_ty, constructor_of, enclosing_type, expr_ty, iface_decl, impl_method_fn, member,
-    member_at, member_dial_allows, named_recv, recv_ty_name, used_ifaces, MemberHit, MemberTarget,
-    RecvNode,
+    member_at, member_dial_allows, member_gated, named_recv, recv_ty_name, used_ifaces, MemberHit,
+    MemberTarget,
 };
 pub(crate) use tiers::{
-    ambiguous_scope, bare, bound_has, file_scope, functions, module_let, one_name_refused,
-    qualified_module, qualified_scope, type_decl, type_via_imports, use_bound_scope, use_exports,
-    CandRow, Candidate, ExportRow, FileScope, MemberRow, UseExports, Via,
+    ambiguous_scope, bare, bound_has, file_scope, functions, one_name_refused, qualified_module,
+    qualified_scope, type_decl, type_via_imports, use_bound_scope, use_exports, CandRow, Candidate,
+    ExportRow, FileScope, MemberRow, UseExports, Via,
 };
 pub(crate) use tiers::{members, members_for, prefer_mounted, surface_names};
 pub(crate) use views::{FnView, GlobUse, LetView, MemberView, ModView, TyView, UseView};

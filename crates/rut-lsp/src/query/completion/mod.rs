@@ -207,7 +207,7 @@ pub fn complete(
                 return filtered(out, &prefix);
             }
             member_tier_out(
-                members_for(w, file, pos, crate::world::collection::RecvNode::Seg(tail))
+                members_for(w, file, pos, crate::resolve::cursor::Recv::Seg(tail))
                     .unwrap_or_default(),
                 &prefix,
             )
@@ -276,11 +276,6 @@ pub fn complete(
     }
 }
 
-/// the name-position convention: a name ends its own position
-fn on_name(sp: Span, pos: u32) -> bool {
-    sp.lo <= pos && pos <= sp.hi
-}
-
 /// the typed part of `sp` — the slice up to the cursor (a cursor past
 /// the span's end typed the whole name and moved on: the prefix is the
 /// whole name, the tier filters on it)
@@ -303,7 +298,7 @@ fn ty_slot_prefix(head: &File, t: TyRef, pos: u32) -> Option<String> {
         return None; // multi-seg: the qualified lane answers
     }
     let sp = segs[0].name.span;
-    on_name(sp, pos).then(|| partial_text(head, sp, pos))
+    crate::semantic::on_name(sp, pos).then(|| partial_text(head, sp, pos))
 }
 
 /// the type slot's `.`-qualified spelling — positions qualify with `.`
@@ -371,6 +366,7 @@ fn gap_spells(head: &File, from: u32, pos: u32, punct: char) -> bool {
 /// (`Ve⏐` → `Ve`), from the tree — a path segment, a let/param name —
 /// else the fence residue (`Doc::name_at`)
 fn bare_prefix_walk(head: &File, p0: rut_ast::AnyHandle, pos: u32, src: &str) -> String {
+    use crate::semantic::on_name;
     let ast = head.doc.ast();
     if let Some(p) = p0.downcast::<PathNode>() {
         for s in &p.get(ast).segs {

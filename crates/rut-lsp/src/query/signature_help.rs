@@ -66,9 +66,7 @@ pub fn signature_help(ctx: &Ctx, pos: u32) -> Option<SignatureHelp> {
     // innermost call ancestor: nested calls each answer at their own
     // depth, and a control paren (`if (`) is no call at all — its
     // condition simply walks up PAST it
-    let probe = ast
-        .node_at(pos)
-        .or_else(|| pos.checked_sub(1).and_then(|p| ast.node_at(p)))?;
+    let probe = crate::semantic::node_at_caret(&d.doc, pos)?;
     // the cursor ON a callee's name belongs to the ENCLOSING call
     // (the old paren scan's adjacency: pos before the callee's `(` is
     // not inside its arg list) — a callee whose own name covers pos is
@@ -257,7 +255,7 @@ fn signature_help_at_decl(ctx: &Ctx, probe: rut_ast::AnyHandle, pos: u32) -> Opt
         } else {
             continue;
         };
-        let on_slot = crate::query::definition::on_name(nsp, pos)
+        let on_slot = crate::semantic::on_name(nsp, pos)
             || param_spans
                 .iter()
                 .any(|pm| pm.span(ast).lo <= pos && pos <= pm.span(ast).hi);

@@ -22,12 +22,6 @@ impl<'a> ModView<'a> {
         ast.name(self.d().get(ast).name.ident)
     }
 
-    /// byte span of the name identifier — the decl-site hover /
-    /// definition target
-    pub(crate) fn name_span(&self) -> Option<rut_lexer::span::Span> {
-        Some(self.d().get(self.file.doc.ast()).name.span)
-    }
-
     /// the edge's declared visibility (`Vis::Self_` = bare `mod`)
     pub(crate) fn vis(&self) -> Vis {
         self.d().get(self.file.doc.ast()).vis()

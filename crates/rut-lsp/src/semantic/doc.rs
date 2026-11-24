@@ -21,7 +21,7 @@
 use std::cell::OnceCell;
 
 use rut_ast::parser::Mode;
-use rut_ast::{Ast, Doc};
+use rut_ast::{AnyHandle, Ast, Doc};
 use rut_lexer::diag::Diag;
 use rut_lexer::source::Edit;
 use rut_lexer::span::Span;
@@ -59,6 +59,22 @@ pub struct Document {
     /// per-version lazy view (dropped by sync; the viewport filter is
     /// the caller's presentation)
     inlays: OnceCell<Vec<crate::query::inlay::RawInlay>>,
+}
+
+/// the caret's node — the byte under it, else the byte just before (a
+/// cursor sitting on a token's end reads that token — the old token
+/// scan's boundary convention). THE one probe: every feature's
+/// classification ([`crate::resolve::cursor`]) rides it.
+pub(crate) fn node_at_caret(doc: &Document, pos: u32) -> Option<AnyHandle> {
+    let ast = doc.ast();
+    ast.node_at(pos)
+        .or_else(|| pos.checked_sub(1).and_then(|p| ast.node_at(p)))
+}
+
+/// the name-position convention the old token scan kept: a name ends
+/// its own position
+pub(crate) fn on_name(sp: Span, pos: u32) -> bool {
+    sp.lo <= pos && pos <= sp.hi
 }
 
 impl Document {

@@ -77,21 +77,6 @@ pub(crate) fn find_mod(w: &World, pkg: Option<&str>, path: &str) -> Option<FileI
 /// answers by the path derivation ([`crate::world::pkg::matches_pkg`]) only when no
 /// stamped root stands. The queried file never lands here (its own
 /// package rides the own lanes; a path coincidence is no root) — and
-/// where the own lanes refuse it (the compiler's flat law:
-/// `mod_head` refuses a flat tree), no root answers at all.
-pub(crate) fn pkg_root_file(w: &World, from: FileId, pkg: &str) -> Option<FileId> {
-    if w.file(from).stamp.module.as_deref() == Some(pkg) {
-        return None;
-    }
-    find_mod(w, Some(pkg), "").or_else(|| {
-        w.chain(from).find(|id| {
-            *id != from
-                && w.file(*id).stamp.module.is_none()
-                && crate::world::pkg::matches_pkg(w.file(*id), pkg)
-        })
-    })
-}
-
 /// a use leaf that names a MODULE — `use calc::{ math }`: the walked
 /// module's `pub mod math;` child, its file beside its mod path. The
 /// cross-package door only (a module is no import inside a package —

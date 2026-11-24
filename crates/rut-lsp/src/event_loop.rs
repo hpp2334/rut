@@ -407,7 +407,8 @@ fn dispatch(l: &mut Loop, cmd: Cmd) {
             let answer = match l.session.open_file(&uri) {
                 None => "null".to_string(),
                 Some(f) => {
-                    let out = crate::query::analysis::hover_on(&l.session.world, f, line, ch);
+                    let pos = l.session.world.file(f).doc.byte(line, ch);
+                    let out = crate::query::analysis::hover_on(&l.session.world, f, pos);
                     json_envelope(serde_json::json!(out))
                 }
             };
@@ -434,7 +435,8 @@ fn dispatch(l: &mut Loop, cmd: Cmd) {
             let answer = match l.session.open_file(&uri) {
                 None => "null".to_string(),
                 Some(f) => {
-                    let locs = crate::query::analysis::definition_on(&l.session.world, f, line, ch);
+                    let pos = l.session.world.file(f).doc.byte(line, ch);
+                    let locs = crate::query::analysis::definition_on(&l.session.world, f, pos);
                     locations_envelope(&locs)
                 }
             };
@@ -444,8 +446,8 @@ fn dispatch(l: &mut Loop, cmd: Cmd) {
             let answer = match l.session.open_file(&uri) {
                 None => "null".to_string(),
                 Some(f) => {
-                    let locs =
-                        crate::query::analysis::type_definition_on(&l.session.world, f, line, ch);
+                    let pos = l.session.world.file(f).doc.byte(line, ch);
+                    let locs = crate::query::analysis::type_definition_on(&l.session.world, f, pos);
                     locations_envelope(&locs)
                 }
             };

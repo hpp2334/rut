@@ -194,6 +194,16 @@ impl World {
         &mut self.files[id as usize]
     }
 
+    /// the id of a file in the store — the resolver family's views
+    /// carry `&File`, the typed answer (`resolve::Def`) keys files by
+    /// id, so a collected view joins back through identity
+    pub(crate) fn id_of(&self, f: &File) -> FileId {
+        self.files
+            .iter()
+            .position(|x| std::ptr::eq(x, f))
+            .expect("a view's file is a world file") as FileId
+    }
+
     /// THE BINDING REPLACE LAW — mount `file` under its origin:
     ///
     /// - No file under that origin: push at the end, return the new id.

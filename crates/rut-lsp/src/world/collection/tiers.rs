@@ -10,9 +10,8 @@ use std::collections::HashSet;
 use crate::world::types::TyForm;
 use rut_ast::{AnyHandle, UseNode, Vis};
 
-use super::{
-    used_ifaces, FnView, GlobUse, LetView, MemberView, ModView, RecvNode, TyView, UseView,
-};
+use super::{used_ifaces, FnView, GlobUse, LetView, MemberView, ModView, TyView, UseView};
+use crate::resolve::cursor::Recv;
 use crate::world::{File, FileId, World};
 
 pub(crate) use super::prefer_bodies;
@@ -146,12 +145,10 @@ pub(crate) fn members_for<'a>(
     w: &'a World,
     file: FileId,
     pos: u32,
-    recv: RecvNode,
+    recv: Recv,
 ) -> Option<Vec<MemberRow<'a>>> {
     let ty_name = super::recv_ty_name(w, file, pos, recv).or_else(|| match recv {
-        RecvNode::Expr(e) => {
-            super::expr_ty(w, file, e).map(|t| crate::world::types::head_of_ty(&t))
-        }
+        Recv::Expr(e) => super::expr_ty(w, file, e).map(|t| crate::world::types::head_of_ty(&t)),
         _ => None,
     });
     let Some(ty_name) = ty_name else {
@@ -559,16 +556,6 @@ pub(crate) fn type_decl<'a>(w: &'a World, file: FileId, name: &str) -> Option<Ty
 /// `owner()`)
 pub(crate) fn functions<'a>(w: &'a World, file: FileId, name: &str) -> Vec<FnView<'a>> {
     file_scope(w, file, name).fns
-}
-
-/// the module let named `name` in the queried file's view —
-/// unique-or-none inside (ambiguity stays a miss, the honesty
-/// rule)
-pub(crate) fn module_let<'a>(w: &'a World, file: FileId, name: &str) -> Option<LetView<'a>> {
-    match file_scope(w, file, name).lets.as_slice() {
-        [one] => Some(*one),
-        _ => None,
-    }
 }
 
 /// THE mid-edit candidates — the file binds `name` twice by

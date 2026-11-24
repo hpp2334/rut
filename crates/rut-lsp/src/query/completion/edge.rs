@@ -5,11 +5,10 @@
 
 use rut_ast::{AnyHandle, Ast, FieldNode, MethodNode, ModDeclNode, NodeKindId, PathNode, UseNode};
 
+use crate::semantic::on_name;
 use crate::world::{File, FileId, World};
 
-use super::{
-    bare_prefix_walk, gap_spells, on_name, partial_text, ty_slot_dot, ty_slot_prefix, Edge,
-};
+use super::{bare_prefix_walk, gap_spells, partial_text, ty_slot_dot, ty_slot_prefix, Edge};
 
 /// the typing edge — the walk: the byte before the cursor lands the
 /// probe, and the probe's own node kind (or its ancestors') names the

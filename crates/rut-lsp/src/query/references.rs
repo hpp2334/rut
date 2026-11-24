@@ -71,11 +71,11 @@ struct Target<'a> {
 /// declaration under `pos`. Sorted by uri then position; deduplicated.
 pub fn references(ctx: &Ctx, pos: u32, include_decl: bool) -> Vec<DefLocation> {
     let w = ctx.w;
-    let doc = ctx.doc_file();
+    let doc = w.file(ctx.file);
     let ast = doc.doc.ast();
     // the cursor's node — the byte under it, else the byte just before
-    // (the token scan's boundary convention)
-    let Some(h) = definition::cursor_node(ast, pos) else {
+    // (the boundary convention — the one probe)
+    let Some(h) = crate::semantic::node_at_caret(&doc.doc, pos) else {
         return Vec::new();
     };
     if h.is::<rut_ast::ErrorNode>() || h.is::<rut_ast::SelfNode>() || h.is::<rut_ast::SelfTyNode>()
@@ -185,7 +185,7 @@ fn targets<'a>(ctx: &Ctx<'a>, pos: u32, name: &str, name_id: rut_core::IdentId) 
     //    ident IS the answer (the tree's own name-position downcasts,
     //    mirroring definition's decl-site + binding-decl precedence,
     //    extended to fn/type name spans)
-    if let Some(sp) = decl_pos(ctx.doc_file(), ctx.file, pos, name, name_id) {
+    if let Some(sp) = decl_pos(w.file(ctx.file), ctx.file, pos, name, name_id) {
         return vec![sp];
     }
 

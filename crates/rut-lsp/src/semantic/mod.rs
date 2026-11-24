@@ -24,6 +24,7 @@ use self::recover::finalize;
 use self::tokens::classify_token;
 
 pub use self::doc::{mode_of, Document};
+pub(crate) use self::doc::{node_at_caret, on_name};
 pub use self::legend::{is_keyword, is_primitive_ty, TokenType};
 pub(crate) use self::symbols::symbols;
 pub use self::symbols::{SymKind, Symbol};

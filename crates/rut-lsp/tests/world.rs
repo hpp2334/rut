@@ -152,7 +152,7 @@ fn body_over_decl_applies_to_unstamped_surfaces_too() {
 
 both_uri_shapes! {
 #[test]
-fn hover_is_silent_on_an_ambiguous_module_let() {
+fn hover_lists_the_candidates_for_an_ambiguous_module_let() {
     let mut s = S::boot();
     let src = "let A: i32 = 1;\nlet A: i32 = 2;\nfn f() -> i32 {\n    return A;\n}\n";
     let uri = "file:///t/amb.rut";
@@ -161,11 +161,12 @@ fn hover_is_silent_on_an_ambiguous_module_let() {
         md,
         "multiple definitions:\n- `let A: i32 = 1;` — module let — file:///t/amb.rut:1\n- `let A: i32 = 2;` — module let — file:///t/amb.rut:2",
         "{md}"
-    ); // stays: delta 5 realized by 21332ebe — hover lists the candidates (Act 3 renames this pin)
+    ); // stays: delta 5 realized by 21332ebe — hover lists the candidates
     // stays (HEAD's law, beyond the plan's After): 21332ebe's
     // `one_name_refused` gate — an ambiguous name jumps NOWHERE (never a
     // pick between the bindings; the hover lists them). The plan's Before
-    // was 2 targets; Act 3's unified walk re-answers this.
+    // was 2 targets; Act 3's unified walk keeps the silence (rule B: the
+    // gate rides get_definition at the same logical point).
     let amb = s.def_in(uri, src, "return A;", 1, 7);
     assert!(amb.is_empty(), "{amb:?}");
     let src2 = "fn g() -> i32 { return 1; }\nfn g() -> i32 { return 2; }\nfn f() -> i32 {\n    return g();\n}\n";
@@ -175,15 +176,51 @@ fn hover_is_silent_on_an_ambiguous_module_let() {
 
 both_uri_shapes! {
 #[test]
-fn definition_answers_nothing_on_a_middle_path_segment() {
+fn definition_on_a_middle_path_segment_opens_the_module() {
     let mut s = S::boot();
     let doc = "mod layout;\nentry fn main() -> i32 { return layout::span(); }\n";
     let uri = "file:///ws/app/mod.rut";
     s.index_mod_at("file:///ws/app/layout/mod.rut", "app", "layout", "pub fn span() -> i32 { return 1; }\n");
     let md = markdown(s.hover_in(uri, doc, "layout::span", 1, 2));
     assert!(md.contains("layout/mod.rut") && md.contains("file module"), "{md}"); // stays
-    assert!(s.def_in(uri, doc, "layout::span", 1, 2).is_empty()); // Act 3: the module file top, (0, 0)
+    // Act 3: delta 6 — the middle segment opens the module's file top
+    let hits = s.def_in(uri, doc, "layout::span", 1, 2);
+    assert_eq!(hits.len(), 1, "{hits:?}");
+    assert_eq!(hits[0]["uri"], "file:///ws/app/layout/mod.rut");
+    assert_eq!(pos_pair(&hits[0]["range"]["start"]), (0, 0));
     assert_eq!(s.def_in(uri, doc, "layout::span", 1, 9).len(), 1); // stays
+}
+}
+
+both_uri_shapes! {
+#[test]
+fn definition_on_an_unknown_receiver_falls_through_to_the_name_lanes() {
+    // Act 3 delta: the unified walk keeps the more informative answer —
+    // a member whose receiver resolves to no type falls through to the
+    // bare-name lanes on the member's name (hover always did; definition
+    // answered [] — today's two walks disagreed, listed here with a pin)
+    let mut s = S::boot();
+    let src = "fn bump() -> i32 { return 1; }\nentry fn main() -> i32 {\n    let x = 1;\n    return x.bump();\n}\n";
+    let uri = "file:///t/recv.rut";
+    let hits = s.def_in(uri, src, "x.bump", 1, 2);
+    assert_eq!(hits.len(), 1, "{hits:?}");
+    assert_eq!(pos_pair(&hits[0]["range"]["start"]), (0, 3), "{hits:?}");
+}
+}
+
+both_uri_shapes! {
+#[test]
+fn definition_on_a_surface_fn_decl_site_answers_itself() {
+    // Act 3 delta: the classification's decl family covers the whole
+    // fn family (the surface rows included — hover always rendered
+    // them as decl sites), so definition's self-jump law reaches them
+    // too (today's decl-site probe missed the surface node kind: [])
+    let mut s = S::boot();
+    let surface = "pub host fn sqrt(x: f64) -> f64;\n";
+    s.index_file("file:///deps/calc/calc.d.rut", surface);
+    let hits = s.def_in("file:///t/main.rut", surface, "fn sqrt", 1, 3);
+    assert_eq!(hits.len(), 1, "{hits:?}");
+    assert_eq!(pos_pair(&hits[0]["range"]["start"]), (0, 12), "{hits:?}");
 }
 }
 

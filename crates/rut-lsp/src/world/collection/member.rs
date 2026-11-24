@@ -12,20 +12,12 @@ use rut_ast::{
 };
 
 use super::{FnView, MemberView, TyView};
+use crate::resolve::cursor::Recv;
 use crate::semantic::Span;
 use crate::world::bindings::{BindKind, Binding};
 use crate::world::infer::QualHit;
 use crate::world::types::TyForm;
 use crate::world::{File, FileId, World};
-
-/// a member door's receiver — the node-derived spelling: the receiver
-/// expression (a method/field access), or the `::` path segment
-/// immediately before the member
-#[derive(Clone, Copy)]
-pub(crate) enum RecvNode {
-    Expr(ExprRef),
-    Seg(IdentId),
-}
 
 /// THE MEMBER DOOR — where a member of the receiver actually
 /// declares, gated by the member-vis law. Doors consume NODES, not
@@ -43,7 +35,20 @@ pub(crate) enum RecvNode {
 /// [`impl_method_fn`] UNGATED: a
 /// call site spelling a refused member is already a panel error.
 pub(crate) fn member<'a>(w: &'a World, file: FileId, pos: u32, node: AnyHandle) -> MemberHit<'a> {
-    match member_hit(w, file, pos, node) {
+    member_gated(w, file, pos, member_at(w, file, pos, node))
+}
+
+/// the gated resolve over an ALREADY-derived (member, receiver) — the
+/// classification's record feeds it (the cursor carries both; one
+/// derivation, no re-walk), the member-vis gate on top. `None`'s
+/// member is the typing edge.
+pub(crate) fn member_gated<'a>(
+    w: &'a World,
+    file: FileId,
+    pos: u32,
+    derived: Option<(Option<IdentId>, Recv)>,
+) -> MemberHit<'a> {
+    match member_derived(w, file, pos, derived) {
         // the member-vis gate: a resolved target the site cannot
         // see is a MISS — hover/definition agree with the compile
         MemberHit::Found(target) if !target_visible(w, file, &target) => MemberHit::None,
@@ -52,13 +57,14 @@ pub(crate) fn member<'a>(w: &'a World, file: FileId, pos: u32, node: AnyHandle) 
 }
 
 /// the ungated resolve — the member law's walk (the gated
-/// [`member`] wraps this)
-fn member_hit<'a>(w: &'a World, file: FileId, pos: u32, node: AnyHandle) -> MemberHit<'a> {
+/// [`member_gated`] wraps this)
+fn member_derived<'a>(
+    w: &'a World,
+    file: FileId,
+    pos: u32,
+    derived: Option<(Option<IdentId>, Recv)>,
+) -> MemberHit<'a> {
     let ast = w.file(file).doc.ast();
-    // the member + the receiver, from the node itself — the
-    // cursor's own segment decides for a path (the head segment is
-    // a name position, never a member lane)
-    let derived = member_at(w, file, pos, node);
     let Some((member, recv)) = derived else {
         return MemberHit::UnknownReceiver;
     };
@@ -73,7 +79,7 @@ fn member_hit<'a>(w: &'a World, file: FileId, pos: u32, node: AnyHandle) -> Memb
     // types through its call's written ret, the same door the
     // completion tier rides)
     let Some(ty_name) = recv_ty_name(w, file, pos, recv).or_else(|| match recv {
-        RecvNode::Expr(e) => expr_ty(w, file, e).map(|t| crate::world::types::head_of_ty(&t)),
+        Recv::Expr(e) => expr_ty(w, file, e).map(|t| crate::world::types::head_of_ty(&t)),
         _ => None,
     }) else {
         return MemberHit::UnknownReceiver;
@@ -95,7 +101,7 @@ fn member_hit<'a>(w: &'a World, file: FileId, pos: u32, node: AnyHandle) -> Memb
             .into_iter()
             .find(|m| m.name() == member_text)
         {
-            return MemberHit::Found(MemberTarget::IfaceMember(iface, m));
+            return MemberHit::Found(MemberTarget::IfaceMember(m));
         }
         return MemberHit::None;
     }
@@ -111,17 +117,17 @@ fn member_hit<'a>(w: &'a World, file: FileId, pos: u32, node: AnyHandle) -> Memb
     };
     // own surface first
     if let Some(m) = ty.methods().into_iter().find(|m| m.name() == member_text) {
-        return MemberHit::Found(MemberTarget::Member(ty, m, None));
+        return MemberHit::Found(MemberTarget::Member(m));
     }
     if ty.form() == TyForm::Enum {
         // `Color::Red` — the member IS an enum member; hover shows the enum
         if let Some(m) = ty.fields().into_iter().find(|f| f.name() == member_text) {
-            return MemberHit::Found(MemberTarget::EnumMember(ty, m));
+            return MemberHit::Found(MemberTarget::EnumMember(m));
         }
         return MemberHit::None;
     }
     if let Some(m) = ty.fields().into_iter().find(|f| f.name() == member_text) {
-        return MemberHit::Found(MemberTarget::Member(ty, m, None));
+        return MemberHit::Found(MemberTarget::Member(m));
     }
     // inherent impl-block methods — where methods live since type
     // bodies went fields-only; the owner string IS the target
@@ -162,7 +168,7 @@ fn member_hit<'a>(w: &'a World, file: FileId, pos: u32, node: AnyHandle) -> Memb
 fn target_visible(w: &World, file: FileId, target: &MemberTarget<'_>) -> bool {
     match target {
         MemberTarget::EnumMember(..) | MemberTarget::IfaceMember(..) => true,
-        MemberTarget::Member(ty, m, _) => match ty.form() {
+        MemberTarget::Member(m) => match m.ty.form() {
             TyForm::Class => member_dial_allows(w, file, m.file, m.vis()),
             _ => true,
         },
@@ -199,7 +205,7 @@ pub(crate) fn member_at(
     file: FileId,
     pos: u32,
     node: AnyHandle,
-) -> Option<(Option<IdentId>, RecvNode)> {
+) -> Option<(Option<IdentId>, Recv)> {
     let ast = w.file(file).doc.ast();
     if let Some(m) = node.downcast::<MethodNode>() {
         let d = m.get(ast);
@@ -208,10 +214,10 @@ pub(crate) fn member_at(
         // the shape is the TYPING EDGE (absent member, `recv.`):
         // a member position with nothing resolved yet
         return match d.member {
-            None => Some((None, RecvNode::Expr(d.recv))),
+            None => Some((None, Recv::Expr(d.recv))),
             Some(n) => {
                 let on_member = n.span.lo <= pos && pos <= n.span.hi;
-                on_member.then_some((Some(n.ident), RecvNode::Expr(d.recv)))
+                on_member.then_some((Some(n.ident), Recv::Expr(d.recv)))
             }
         };
     }
@@ -219,7 +225,7 @@ pub(crate) fn member_at(
         let d = f.get(ast);
         let on_member = d.name.span.lo <= pos && pos <= d.name.span.hi;
         return if on_member {
-            Some((Some(d.name.ident), RecvNode::Expr(d.recv)))
+            Some((Some(d.name.ident), Recv::Expr(d.recv)))
         } else {
             None
         };
@@ -233,10 +239,7 @@ pub(crate) fn member_at(
             {
                 if i + 1 == segs.len() {
                     // the tail segment IS the member lane
-                    return Some((
-                        Some(segs[i].name.ident),
-                        RecvNode::Seg(segs[i - 1].name.ident),
-                    ));
+                    return Some((Some(segs[i].name.ident), Recv::Seg(segs[i - 1].name.ident)));
                 }
             }
         }
@@ -249,10 +252,10 @@ pub(crate) fn member_at(
 /// (capitalized and primitive names spell themselves, locals ride
 /// the bindings — read internally, never a caller-run pass — then
 /// module lets)
-pub(crate) fn recv_ty_name(w: &World, file: FileId, pos: u32, recv: RecvNode) -> Option<String> {
+pub(crate) fn recv_ty_name(w: &World, file: FileId, pos: u32, recv: Recv) -> Option<String> {
     let ast = w.file(file).doc.ast();
     match recv {
-        RecvNode::Expr(e) => match e {
+        Recv::Expr(e) => match e {
             ExprRef::Self_(h) if !h.get(ast).is_ty => {
                 // the enclosing type lives in the HOME file — the
                 // only file whose spans index the cursor's
@@ -276,7 +279,7 @@ pub(crate) fn recv_ty_name(w: &World, file: FileId, pos: u32, recv: RecvNode) ->
             ExprRef::FStr(_) => Some("str".to_string()),
             _ => None,
         },
-        RecvNode::Seg(id) => named_recv(w, file, pos, id),
+        Recv::Seg(id) => named_recv(w, file, pos, id),
     }
 }
 
@@ -520,18 +523,18 @@ pub(crate) enum MemberHit<'a> {
 }
 
 /// where a member of `recv` actually declares — the shared resolver
-/// behind hover AND definition
+/// behind hover AND definition (the member/enum-member views carry
+/// the owning type; the vis gate reads it off the view)
 pub(crate) enum MemberTarget<'a> {
-    /// a method/field of the type's own surface (`via` renders a
-    /// qualifying member's provenance when it came through a chain)
-    Member(TyView<'a>, MemberView<'a>, Option<String>),
+    /// a method/field of the type's own surface
+    Member(MemberView<'a>),
     /// an enum member — hover shows the whole enum's block
-    EnumMember(TyView<'a>, MemberView<'a>),
+    EnumMember(MemberView<'a>),
     /// an impl-block method (`impl T { fn m(self) ... }`)
     ImplFn(FnView<'a>),
     /// an interface's declared member, observed through the interface
     /// (the receiver's static type IS the interface)
-    IfaceMember(TyView<'a>, MemberView<'a>),
+    IfaceMember(MemberView<'a>),
 }
 
 /// interface names the open document `use`s — the use-both gate's
