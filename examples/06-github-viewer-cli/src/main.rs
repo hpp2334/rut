@@ -33,6 +33,8 @@ use std::task::{Context, Poll};
 use rut_vm::interp::Vm;
 use rut_vm::Trap;
 
+mod world;
+
 /// The std-only driver for the Loader's future: the remote's fetch
 /// futures come back READY (its wire runs on its own worker thread),
 /// so one noop-waker poll settles them.
@@ -104,19 +106,16 @@ fn main() {
     for p in async_pkgs {
         chain = chain.mount(p);
     }
-    let chain = rgh_host
-        .pkgs
-        .iter()
-        .fold(
-            chain.mount(
-                rut_native::tree_pkg("calc_host").expect("the toolchain tree's rut/calc_host"),
-            ),
-            |r, p| r.mount(p.clone()),
-        )
-        .pkg(rut_std::math::pkg())
-        .pkg(rut_std::nmap::pkg())
-        .pkg(rut_std::async_host::pkg())
-        .pkg(rut_std::http::pkg());
+    let chain = rgh_host.pkgs.iter().fold(
+        chain.mount(rut_native::tree_pkg("calc_host").expect("the toolchain tree's rut/calc_host")),
+        |r, p| r.mount(p.clone()),
+    );
+    // the body installs are the ONE world's (src/world.rs — the suite
+    // reads the same home); only the http lane is the binary's own
+    // choice — the real reqwest side, UA + redirects live in rut-std
+    let chain = world::host_pkgs(rut_std::http::pkg())
+        .into_iter()
+        .fold(chain, |r, p| r.pkg(p));
     let compiled = match chain.entrypoint(&root).compile() {
         Ok(c) => c,
         Err(e) => {
@@ -149,17 +148,16 @@ fn main() {
         interrupt_every: 1024,
     };
 
-    // the installs rode the chain (calc's Math surface, the nmap
-    // table's rows, the async engine's launcher set, the std HTTP
-    // lane — the reqwest side, UA + redirects live in rut-std); the
-    // compiled registry takes the example's own raw CLI-I/O rows
-    // (registered under their full `rgh_host::` names — this host's
-    // own pkg, bound by hand)
+    // the installs rode the chain (the ONE world's body set —
+    // src/world.rs, the home the suite reads too); the compiled
+    // registry takes the example's own raw CLI-I/O rows (registered
+    // under their full `rgh_host::` names — this host's own pkg,
+    // bound by hand)
     // the decl ↔ the bodies, loudly: every mounted pkg's host rows
-    // must have a binding with the declared signature
-    let mut world: Vec<rut_driver::Mounted> = loaded.pkgs.clone();
-    world.extend(rgh_host.pkgs.iter().cloned());
-    let expected = rut_driver::declared_host_fns(&world);
+    // must have a binding with the declared signature — the expected
+    // table reads the SAME home the suite reads (src/world.rs), so
+    // the binary and its tests cannot drift apart again
+    let expected = world::expected();
     let mut compiled2 = compiled;
     let hosts = &mut compiled2.hosts;
     rut_vm::register!(hosts, "rgh_host::out", (&str,) -> (),

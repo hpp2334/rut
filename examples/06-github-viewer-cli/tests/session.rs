@@ -38,6 +38,12 @@ use rut_std::http::{FixtureReply, HttpFixture};
 use rut_vm::interp::Vm;
 use rut_vm::Trap;
 
+// the example's ONE world (src/world.rs) — the body installs and the
+// expected table the BINARY reads too; the suite varies only the http
+// lane (the fixture `pkg_with` below)
+#[path = "../src/world.rs"]
+mod world;
+
 const SRC: &str = include_str!("../src/mod.rut");
 const TREE_JSON: &str = include_str!("fixtures/tree.json");
 const BOUNDARY_JSON: &str = include_str!("fixtures/tree-boundaries.json");
@@ -98,35 +104,6 @@ impl Sinks {
 
 // -------------------------------------------------------------- boot ---
 
-/// The world the brain needs, as walked pkgs: the tree pkgs (pouch,
-/// nmapset, json, the http pair) + rgh_host + the async pair — every
-/// one a walked pkg riding its real rut.jsonc manifest. Offer with
-/// `.pkg(..)`, first-pkg-wins.
-fn world_pkgs() -> Vec<rut_driver::Mounted> {
-    let tree = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../rut");
-    let mut pkgs = Vec::new();
-    for d in ["pouch", "nmapset", "json", "http_host", "http"] {
-        pkgs.extend(
-            rut_native::dir_pkgs(&tree.join(d))
-                .expect("mount tree pkg")
-                .pkgs,
-        );
-    }
-    pkgs.extend(
-        rut_native::dir_pkgs(&std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("rgh_host"))
-            .expect("mount rgh_host")
-            .pkgs,
-    );
-    pkgs.extend(
-        rut_native::dir_pkgs(
-            &std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../rut/futures"),
-        )
-        .expect("the async pair walks")
-        .pkgs,
-    );
-    pkgs
-}
-
 /// The brain pkg with its REAL manifest: `rut.jsonc` parsed once — the
 /// single source of truth the walk lane (`load_path_session_with`)
 /// reads. The hand lane never re-resolves the rows (the url row rides
@@ -141,21 +118,19 @@ fn brain(src: &str) -> rut_driver::Mounted {
     rut_driver::Mounted::source("rgh", src).manifest(m)
 }
 
-/// Compile `src` as the brain over the world: the walked pkgs (each
-/// carrying its manifest) + calc (the embedder's host-install base
-/// offer — the Math bodies' decl surface; nothing `use`s it), the core
-/// prelude riding auto, the body installs riding the chain, one
-/// `.compile()` (the gate ran inside).
+/// Compile `src` as the brain over the ONE world (`world::decl_world`
+/// — the walked pkgs, each carrying its manifest, calc's decl surface
+/// included), the core prelude riding auto, the body installs riding
+/// the chain, one `.compile()` (the gate ran inside).
 fn compile_brain(src: &str, extra_hosts: Vec<rut_vm::HostPkg>) -> rut_driver::Compiled {
     let mut chain = rut_driver::RutRun::new();
-    for p in world_pkgs() {
+    for p in world::decl_world() {
         chain = chain.mount(p);
     }
     for hp in extra_hosts {
         chain = chain.pkg(hp);
     }
     let compiled = chain
-        .mount(rut_native::tree_pkg("calc_host").expect("the toolchain tree's rut/calc_host"))
         .mount(brain(src))
         .entrypoint("rgh")
         .compile()
@@ -174,20 +149,14 @@ fn compile_brain(src: &str, extra_hosts: Vec<rut_vm::HostPkg>) -> rut_driver::Co
     compiled
 }
 
-/// The declared rows of the brain's world (calc + the tree pkgs' host
-/// surfaces included) — the raw rows' contract check reads it.
-fn world_expected() -> rut_vm::interp::ExpectedHostFns {
-    let mut world = world_pkgs();
-    world.push(rut_native::tree_pkg("calc_host").expect("the toolchain tree's rut/calc_host"));
-    rut_driver::declared_host_fns(&world)
-}
-
 /// Boot the brain over the fixture lane. Mounts what the embedder
-/// mounts (std + the brain's libs + the example's own host pkg), runs
-/// the peer gate, compiles `mod.rut` (the brain) in Impl mode, verifies, binds
-/// math + nmap + the async engine + the fixture HTTP lane + the
-/// rgh_host rows over the sinks (exit RECORDS — the one-way door is
-/// the embedder's), and checks the decl ↔ bodies contract pre-boot
+/// mounts (the ONE world's decl surface + the brain's libs + the
+/// example's own host pkg), runs the peer gate, compiles `mod.rut`
+/// (the brain) in Impl mode, verifies, binds the one world's body set
+/// (`world::host_pkgs` — the fixture lane passed in as the http
+/// member) + the rgh_host rows over the sinks (exit RECORDS — the
+/// one-way door is the embedder's), and checks the decl ↔ bodies
+/// contract pre-boot
 fn boot(
     fix: impl Fn(&str, &str, &str, &[u8]) -> Result<FixtureReply, String> + 'static,
 ) -> (Vm, Sinks, HttpFixture) {
@@ -196,21 +165,9 @@ fn boot(
     // core prelude auto-rides) with the body installs riding the chain
     let sinks = Sinks::default();
     let (http_pkg, fx) = rut_std::http::pkg_with(fix);
-    let mut compiled = compile_brain(
-        SRC,
-        vec![
-            rut_std::math::pkg(),
-            rut_std::nmap::pkg(),
-            rut_std::async_host::pkg(),
-            // json's writer rides the strbuild pkg — the `strbuild_host`
-            // rows are in this closure's declared set, so the bodies
-            // install here too
-            rut_std::strbuild::pkg(),
-            http_pkg,
-        ],
-    );
+    let mut compiled = compile_brain(SRC, world::host_pkgs(http_pkg));
     rut_vm::verify::verify(compiled.graph.program.as_ref().expect("no binary")).unwrap();
-    let expected = world_expected();
+    let expected = world::expected();
 
     let limits = rut_vm::interp::Limits {
         fuel: Some(250_000_000),
@@ -902,21 +859,9 @@ fn the_one_shot_law_degrades_second_takers() {
             vec![b"ab".to_vec(), b"cd".to_vec()],
         ))
     });
-    let mut compiled = compile_brain(
-        ONESHOT_SRC,
-        vec![
-            rut_std::math::pkg(),
-            rut_std::nmap::pkg(),
-            rut_std::async_host::pkg(),
-            // json's writer rides the strbuild pkg — the `strbuild_host`
-            // rows are in this closure's declared set, so the bodies
-            // install here too
-            rut_std::strbuild::pkg(),
-            http_pkg,
-        ],
-    );
+    let mut compiled = compile_brain(ONESHOT_SRC, world::host_pkgs(http_pkg));
     rut_vm::verify::verify(compiled.graph.program.as_ref().expect("no binary")).unwrap();
-    let expected = world_expected();
+    let expected = world::expected();
     let limits = rut_vm::interp::Limits {
         fuel: Some(4_000_000),
         heap_limit_bytes: Some(16 * 1024 * 1024),
@@ -1036,20 +981,13 @@ fn live_smoke_over_the_real_cdn() {
         return;
     }
     // the embedder's own boot, but the observations ride the sinks and
-    // `exit` records: reqwest lane (http::pkg()), the real DNS,
-    // the real CDN, the engine's driving loop
+    // `exit` records: the ONE world's body set over the real reqwest
+    // lane (http::pkg()), the real DNS, the real CDN, the engine's
+    // driving loop
     let sinks = Sinks::default();
-    let mut compiled = compile_brain(
-        SRC,
-        vec![
-            rut_std::math::pkg(),
-            rut_std::nmap::pkg(),
-            rut_std::async_host::pkg(),
-            rut_std::http::pkg(), // the reqwest lane
-        ],
-    );
+    let mut compiled = compile_brain(SRC, world::host_pkgs(rut_std::http::pkg()));
     rut_vm::verify::verify(compiled.graph.program.as_ref().expect("no binary")).unwrap();
-    let expected = world_expected();
+    let expected = world::expected();
     let limits = rut_vm::interp::Limits {
         fuel: Some(250_000_000),
         heap_limit_bytes: Some(64 * 1024 * 1024),

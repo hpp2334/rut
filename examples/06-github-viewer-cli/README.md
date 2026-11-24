@@ -165,6 +165,17 @@ reader, stream-then-drain degrades to empty), exit codes throughout,
 and the fuel budget (the real tree lists in ~1.9M fuel against the
 embedder's 250M).
 
+The example's world is spelled ONCE — `src/world.rs` (the body
+installs + the declared host-fn table); the binary, the suite, and
+the live smoke all read it, the suite varying only the http lane
+(the fixture `pkg_with` vs the real `pkg()`). That one home is what
+the boot gate (`tests/boot.rs`) guards: it runs the BUILT binary
+with no args and asserts the brain's usage law (exit 2 + the usage
+text — a boot panic at the decl↔bodies join is exit 101 and fails).
+It skips, never fails, when the global dep store is cold for the
+pinned bundle (`rut install` here warms it); on a warm store the
+walk is cache-only, so the gate still networks at nothing.
+
 The live smoke is opt-in and hits the real CDN through the embedder's
 reqwest lane (the recording `exit`, the engine's driving loop):
 
