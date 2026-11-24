@@ -183,26 +183,34 @@ impl Response {
 
 `src/main.rs` shows the whole program closure in one chain — the walk
 feeds the run, the async pair and `calc` offer beside it, and the
-host bodies ride `pkg(Offer::Host(..))` — `pkg(hp)` coerces:
+host bodies install through `world::host_pkgs(..)` — the example's
+ONE world (`src/world.rs`), the same home the offline suite and the
+live smoke read; `pkg(hp)` coerces:
 
 ```rust
 let loaded = block_on(rut_native::load_path_session_with(base, &remote))?;
-let rgh_host = rut_native::dir_pkgs(&base::join("rgh_host"))?;   // example-local rows
+let rgh_host = rut_native::dir_pkgs(&base.join("rgh_host"))?;   // example-local rows
 
-let mut chain = loaded.pkgs.iter().fold(rut_driver::RutRun::new(), |r, p| r.pkg(p.clone()));
-chain = chain
-    .pkg(rut_native::tree_pkg("calc_host")?)
-    .pkg(rut_std::math::pkg())
-    .pkg(rut_std::nmap::pkg())
-    .pkg(rut_std::async_host::pkg())
-    .pkg(rut_std::http::pkg());
+let mut chain = loaded.pkgs.iter().fold(rut_driver::RutRun::new(), |r, p| r.mount(p.clone()));
+let chain = rgh_host.pkgs.iter().fold(
+    chain.mount(rut_native::tree_pkg("calc_host")?),
+    |r, p| r.mount(p.clone()),
+);
+// the ONE world's body installs (src/world.rs): math, nmap, strbuild
+// (json's writer rides it), async_host — and the http lane the binary
+// names itself (the real reqwest side)
+let chain = world::host_pkgs(rut_std::http::pkg())
+    .into_iter()
+    .fold(chain, |r, p| r.pkg(p));
 let compiled = chain.entrypoint(&root).compile()?;
 ```
 
 The walk pulls json's own `deps` along — `strbuild`, `pouch`,
 `nmapset` — so the whole serde surface, wrapper families included, is
 in the closure ([Dependency
-kinds](../reference/dependency-kinds.md)). The HTTP
+kinds](../reference/dependency-kinds.md)); the `strbuild_host` rows
+the writer declares are bound in the same home (`strbuild::pkg()`).
+The HTTP
 bodies install through `http::pkg()` (the reqwest lane);
 the example's own rows are CLI I/O only — `out` (stdout), `eprint`,
 the file pair, and `exit` — declared in

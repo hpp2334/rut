@@ -8022,7 +8022,7 @@ msgstr ""
 #: src/examples/00-todolist.md:188 src/examples/01-sort.md:208
 #: src/examples/02-digest.md:199 src/examples/03-plugin.md:216
 #: src/examples/04-custom-async.md:127 src/examples/05-todolist-web.md:245
-#: src/examples/06-github-viewer-cli.md:216
+#: src/examples/06-github-viewer-cli.md:224
 #: src/examples/playground-corpus.md:188
 msgid "Takeaways"
 msgstr ""
@@ -9675,69 +9675,79 @@ msgstr ""
 #: src/examples/06-github-viewer-cli.md:184
 msgid ""
 "`src/main.rs` shows the whole program closure in one chain — the walk feeds "
-"the run, the async pair and `calc` offer beside it, and the host bodies ride "
-"`pkg(Offer::Host(..))` — `pkg(hp)` coerces:"
+"the run, the async pair and `calc` offer beside it, and the host bodies "
+"install through `world::host_pkgs(..)` — the example's ONE world "
+"(`src/world.rs`), the same home the offline suite and the live smoke read; "
+"`pkg(hp)` coerces:"
 msgstr ""
 
-#: src/examples/06-github-viewer-cli.md:190
+#: src/examples/06-github-viewer-cli.md:192
 msgid "\"rgh_host\""
 msgstr ""
 
-#: src/examples/06-github-viewer-cli.md:190
+#: src/examples/06-github-viewer-cli.md:192
 msgid "// example-local rows\n"
 msgstr ""
 
-#: src/examples/06-github-viewer-cli.md:194
+#: src/examples/06-github-viewer-cli.md:196
 msgid "\"calc_host\""
 msgstr ""
 
-#: src/examples/06-github-viewer-cli.md:202
+#: src/examples/06-github-viewer-cli.md:198
+msgid ""
+"// the ONE world's body installs (src/world.rs): math, nmap, strbuild\n"
+"// (json's writer rides it), async_host — and the http lane the binary\n"
+"// names itself (the real reqwest side)\n"
+msgstr ""
+
+#: src/examples/06-github-viewer-cli.md:208
 msgid ""
 "The walk pulls json's own `deps` along — `strbuild`, `pouch`, `nmapset` — so "
 "the whole serde surface, wrapper families included, is in the closure "
-"([Dependency kinds](../reference/dependency-kinds.md)). The HTTP bodies "
-"install through `http::pkg()` (the reqwest lane); the example's own rows are "
-"CLI I/O only — `out` (stdout), `eprint`, the file pair, and `exit` — "
-"declared in the example-local `rgh_host` decl package and verified against "
-"the bindings at boot ([Host fns and declaration "
+"([Dependency kinds](../reference/dependency-kinds.md)); the `strbuild_host` "
+"rows the writer declares are bound in the same home (`strbuild::pkg()`). The "
+"HTTP bodies install through `http::pkg()` (the reqwest lane); the example's "
+"own rows are CLI I/O only — `out` (stdout), `eprint`, the file pair, and "
+"`exit` — declared in the example-local `rgh_host` decl package and verified "
+"against the bindings at boot ([Host fns and declaration "
 "files](../reference/host-fns.md)). One consequence: `rut run` cannot host "
 "rgh itself — its rows are example-local — but ordinary HTTP programs do run "
 "under `rut run`, which offers the std http pair by presence."
 msgstr ""
 
-#: src/examples/06-github-viewer-cli.md:218
+#: src/examples/06-github-viewer-cli.md:226
 msgid ""
 "**An async rut program in production shape**: the brain awaits at the fetch "
 "sites only; the embedder launches, rides the engine's driving loop to idle, "
 "and exits with the brain's code."
 msgstr ""
 
-#: src/examples/06-github-viewer-cli.md:221
+#: src/examples/06-github-viewer-cli.md:229
 msgid ""
 "**Headers-first send + one-shot body/stream** is the whole mental model of "
 "the std http lane — drain JSON in one await, stream files chunk by chunk."
 msgstr ""
 
-#: src/examples/06-github-viewer-cli.md:224
+#: src/examples/06-github-viewer-cli.md:232
 msgid ""
 "**Failures are values end to end**: transport errors, 404s, wire deaths, and "
 "io errors all become messages plus exit codes."
 msgstr ""
 
-#: src/examples/06-github-viewer-cli.md:226
+#: src/examples/06-github-viewer-cli.md:234
 msgid ""
 "**The fixture lane is the test gate**: recorded replies keyed on method + "
 "URL, deterministic chunks on a virtual clock, zero network."
 msgstr ""
 
-#: src/examples/06-github-viewer-cli.md:229
+#: src/examples/06-github-viewer-cli.md:237
 msgid ""
 "The closure is load-bearing here: json's `Vec<T>` serde wrappers are json's "
 "own source, compiled where json compiles — the container packages ride along "
 "as json's plain deps."
 msgstr ""
 
-#: src/examples/06-github-viewer-cli.md:233
+#: src/examples/06-github-viewer-cli.md:241
 msgid ""
 "The lane's declarations live in the std tree; for the runner behind `rut "
 "run`, see [the rut CLI](../reference/cli.md)."
