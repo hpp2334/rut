@@ -12,9 +12,14 @@
 //! * within-file: the binding pass answers locals/params/iter-vars —
 //!   shadow-aware by construction (a shadowing decl and its uses resolve
 //!   to the shadow, never to the outer binding) and scope-exit correct;
-//! * cross-file: the use graph's reverse edges — every mounted file that
-//!   `use`s the name from the declaring pkg (`matches_pkg`, the phase-2
-//!   rule) is scanned with the same matcher;
+//! * cross-file: for a module-level name (a fn, a type, a module let)
+//!   EVERY mounted file is a candidate — each of its tokens naming the
+//!   name runs through the same `definition()` call IN THAT FILE'S OWN
+//!   CONTEXT (its file-module stamp — the own-package lanes key on it,
+//!   so a sibling's `use m::{ x }` and its `app::x` both resolve), and
+//!   counts iff the answer is the target. No import-map pre-filter: a
+//!   qualified spelling, a glob binding, and a pkg-rooted dep path all
+//!   name no leaf the pre-filter could see;
 //! * `include_declaration` per the LSP spec: the declaring ident joins
 //!   the set when the client asks for it.
 //!
@@ -29,12 +34,12 @@
 //! KEPT, so the old re-parse lane (candidate source re-lexed and
 //! re-parsed per query) is gone: the scan rides each file's own tokens.
 
-use std::collections::{BTreeMap, HashMap, HashSet};
+use std::collections::HashSet;
 
 use crate::query::definition::{self, Ctx, DefLocation};
 use crate::semantic::Span;
 use crate::world::collection::MountedFile;
-use crate::world::pkg::{import_map, matches_pkg};
+use crate::world::mods::DocMods;
 
 /// what the ident at `pos` was resolved to — drives how far the scan
 /// reaches (locals stay in the doc; module-level names ride the use
@@ -76,8 +81,11 @@ pub fn references(ctx: &Ctx, pos: u32, include_decl: bool) -> Vec<DefLocation> {
         return Vec::new();
     }
     // the name lanes key on the node's own recorded name; a member
-    // position rides the door through definition's own lane
-    let Some((name_id, _)) = definition::node_name(ast, h, pos) else {
+    // USE (a method call, a field read) is a reference position too —
+    // its member token names the decl through the member door
+    let Some((name_id, _)) =
+        definition::node_name(ast, h, pos).or_else(|| member_ident(ast, h, pos))
+    else {
         return Vec::new();
     };
     let name = ast.name(name_id).to_string();
@@ -92,54 +100,31 @@ pub fn references(ctx: &Ctx, pos: u32, include_decl: bool) -> Vec<DefLocation> {
         return Vec::new();
     }
 
-    // 2. the files worth scanning — the asking document, each target's
-    //    own file, and (module-level names only) the reverse use-graph
-    //    edges: which mounted files import the name from the declaring
-    //    pkg. The edge reads the file's GLOB-AWARE import map — a glob
-    //    leaf fans no name rows, so a named-leaf read alone would make
-    //    a glob import second-class (every OTHER glob-importing file
-    //    silently missed). The live doc speaks for its URI. One map
-    //    per chain file per QUERY: the (file → import map) table is
-    //    built once (keyed by origin, the chain's file identity) and
-    //    reused across every target — only module-level names reach
-    //    for it (locals stay in the doc; members never cross files).
+    // 2. the files worth scanning — the asking document first, each
+    // target's own file; a module-level name (a fn, a type, a module
+    // let) reaches every mounted file (a sibling's bare use binding,
+    // its qualified spelling, a glob, a pkg-rooted dep path — all are
+    // references, none spells a leaf an import map could pre-filter
+    // on); locals stay in the doc and members add only their
+    // declaring file. One entry per physical file; the doc's stamped
+    // twin never scans (the live doc speaks for its uri).
     let module_level = targets
         .iter()
         .any(|tg| matches!(tg.kind, Kind::ModuleLet | Kind::Type | Kind::Fn));
-    let import_maps: BTreeMap<&str, HashMap<&str, &str>> = if module_level {
-        ctx.chain
-            .iter()
-            .map(|f| (f.mount.origin.as_str(), import_map(ctx.chain, f)))
-            .collect()
-    } else {
-        BTreeMap::new()
-    };
     let mut cand: Vec<&MountedFile> = vec![ctx.doc_file()];
     for tg in &targets {
-        match tg.kind {
-            Kind::Local => {}
-            Kind::Member => cand.push(tg.file),
-            Kind::ModuleLet | Kind::Type | Kind::Fn => {
-                cand.push(tg.file);
-                for x in ctx.chain.iter() {
-                    let reverse_edge = import_maps.get(x.mount.origin.as_str()).is_some_and(|m| {
-                        m.iter()
-                            .any(|(&n, &pkg)| n == name && matches_pkg(tg.file, pkg))
-                    });
-                    if reverse_edge {
-                        cand.push(x);
-                    }
-                }
-            }
-        }
+        cand.push(tg.file);
     }
-    let mut seen: HashSet<&str> = HashSet::new();
+    if module_level {
+        cand.extend(ctx.chain.iter());
+    }
+    let mut seen: HashSet<String> = HashSet::new();
     let mut files: Vec<&MountedFile> = Vec::new();
     for f in cand {
-        if f.mount.origin == ctx.doc_uri && !std::ptr::eq(f, ctx.doc_file()) {
-            continue; // the doc's stale mounted twin
+        if f.same_file(ctx.doc_file()) && !std::ptr::eq(f, ctx.doc_file()) {
+            continue; // the doc's stamped twin
         }
-        if seen.insert(f.mount.origin.as_str()) {
+        if seen.insert(f.key()) {
             files.push(f);
         }
     }
@@ -387,17 +372,21 @@ fn scan_files(
     for f in files {
         let is_doc = std::ptr::eq(*f, ctx.doc_file());
         // the file's own lookup chain: itself first, then the rest — no
-        // origin speaks twice in one chain
-        let chain = candidate_chain(ctx.chain, f);
-        // the asking doc's own-package context rides only for its own
-        // tokens (the two queries cannot disagree about the doc's
-        // idents); another file's context is unknown — the default
-        // keeps the own lanes off in its scan
-        let orphan = crate::world::mods::DocMods::default();
+        // file speaks twice in one chain. Its own-package context is
+        // the asking doc's query's for the doc (the two queries cannot
+        // disagree about the doc's idents), another file's own mount
+        // stamp for the rest — its `use m::{ x }` and `app::x` resolve
+        // exactly as they do when that file is the open document
+        let stamp = if is_doc {
+            ctx.doc_mods.clone()
+        } else {
+            stamp_of(f)
+        };
+        let chain = candidate_chain(ctx.chain, f, stamp);
         let f_ctx = Ctx {
             doc_uri: f.mount.origin.as_str(),
             chain: &chain,
-            doc_mods: if is_doc { ctx.doc_mods } else { &orphan },
+            doc_mods: chain.stamp(),
         };
         let decls = decl_ident_spans(f);
         let ast = f.doc.ast();
@@ -430,11 +419,51 @@ fn scan_files(
 }
 
 /// the candidate file's own chain — itself first, then the rest of the
-/// query chain (no origin speaks twice). The chain order keeps the
+/// query chain (no file speaks twice). The chain order keeps the
 /// collection's law (the prelude and the workspace ride after).
 fn candidate_chain<'a>(
     chain: &'a crate::world::collection::Chain<'a>,
     f: &'a MountedFile,
+    stamp: DocMods,
 ) -> crate::world::collection::Chain<'a> {
-    crate::world::collection::Chain::reordered(chain, f)
+    crate::world::collection::Chain::reordered(chain, f, stamp)
+}
+
+/// a mounted file's own file-module context — its mount's stamp (a
+/// stamped file speaks for itself; an unstamped one is nowhere's)
+fn stamp_of(f: &MountedFile) -> DocMods {
+    DocMods {
+        mod_path: f.mount.mod_path.clone(),
+        pkg: f.mount.module.clone(),
+    }
+}
+
+/// the token under the cursor that names a decl without a node of
+/// its own — a method call's member, a field read's name (the member
+/// door's position test), a `use` statement's leaf
+fn member_ident(
+    ast: &rut_ast::Ast,
+    h: rut_ast::AnyHandle,
+    pos: u32,
+) -> Option<(rut_core::IdentId, Span)> {
+    let on = |sp: Span| sp.lo <= pos && pos <= sp.hi;
+    if let Some(m) = h.downcast::<rut_ast::MethodNode>() {
+        let d = m.get(ast);
+        return d.member.filter(|n| on(n.span)).map(|n| (n.ident, n.span));
+    }
+    if let Some(f) = h.downcast::<rut_ast::FieldNode>() {
+        let d = f.get(ast);
+        return on(d.name.span).then_some((d.name.ident, d.name.span));
+    }
+    // a `use` statement's LEAF name (its path segments are module
+    // names — the walk's business, never a decl's references)
+    if let Some(u) = h.downcast::<rut_ast::UseNode>() {
+        let d = u.get(ast);
+        return d
+            .names
+            .iter()
+            .find(|n| on(n.span))
+            .map(|n| (n.ident, n.span));
+    }
+    None
 }

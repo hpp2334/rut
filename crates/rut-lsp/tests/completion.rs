@@ -242,6 +242,7 @@ fn member_completion_gates_foreign_interface_members() {
     assert!(offers(&items, "hi"), "own interface completes");
 }
 
+both_uri_shapes! {
 #[test]
 fn member_completion_gates_a_foreign_class_privates() {
     // the repro's shape: a foreign class with module-private fields
@@ -272,7 +273,9 @@ fn member_completion_gates_a_foreign_class_privates() {
         );
     }
 }
+}
 
+both_uri_shapes! {
 #[test]
 fn member_completion_keeps_a_foreign_struct_fields() {
     // the struct exemption (the TyForm key — the field law has no dial
@@ -291,6 +294,7 @@ fn member_completion_keeps_a_foreign_struct_fields() {
         "a struct's fields never gate: {:?}",
         labels(&items)
     );
+}
 }
 
 #[test]
@@ -318,6 +322,7 @@ fn has(ls: &[String], name: &str) -> bool {
     ls.iter().any(|l| l == name)
 }
 
+both_uri_shapes! {
 #[test]
 fn member_completion_gates_by_the_same_package_dial() {
     // the position-path predicate on member rows: private reaches the
@@ -389,7 +394,9 @@ fn member_completion_gates_by_the_same_package_dial() {
         assert!(has(&ls, want), "a descendant sees `{want}`: {ls:?}");
     }
 }
+}
 
+both_uri_shapes! {
 #[test]
 fn type_head_completion_gates_foreign_statics_and_assoc_fns() {
     // `Registry::⏐` — the `::` lane's statics + associated fns gate by
@@ -420,7 +427,9 @@ fn type_head_completion_gates_foreign_statics_and_assoc_fns() {
         "a private associated fn never completes: {ls:?}"
     );
 }
+}
 
+both_uri_shapes! {
 #[test]
 fn type_head_completion_keeps_enum_variants_and_own_statics() {
     // the exemptions on the `::` lane: a foreign enum's variants still
@@ -444,6 +453,7 @@ fn type_head_completion_keeps_enum_variants_and_own_statics() {
         "the doc's own static stays: {:?}",
         labels(&items)
     );
+}
 }
 
 #[test]
@@ -473,6 +483,7 @@ fn bare_completion_has_the_keyword_table_and_decls() {
     assert!(!ls.contains(&"area"), "{ls:?}");
 }
 
+both_uri_shapes! {
 #[test]
 fn bare_completion_gates_pub_builtin_core_names() {
     // the `pub builtin` rows (the disposal pair and the weak
@@ -513,9 +524,11 @@ fn bare_completion_gates_pub_builtin_core_names() {
         );
     }
 }
+}
 
 // ---- the honest bare scope (A2) ----
 
+both_uri_shapes! {
 #[test]
 fn a_foreign_dep_fn_rides_only_the_import_tier_until_used() {
     // the dep mounts AND the doc's manifest declares it (the walk's
@@ -567,7 +580,9 @@ fn a_foreign_dep_fn_rides_only_the_import_tier_until_used() {
         labels(&items)
     );
 }
+}
 
+both_uri_shapes! {
 #[test]
 fn a_transitive_only_dep_never_auto_imports() {
     // the compiler's closure check refuses `use` of a mounted-but-
@@ -598,6 +613,7 @@ fn a_transitive_only_dep_never_auto_imports() {
         "and no plain offer either: {:?}",
         labels(&items)
     );
+}
 }
 
 #[test]
@@ -650,6 +666,7 @@ fn a_transitive_only_dep_never_rides_the_use_module_tier() {
     );
 }
 
+both_uri_shapes! {
 #[test]
 fn a_name_reachable_two_ways_offers_exactly_one_item() {
     // A4: `tag` completes bare (the doc's `use` names it) AND the
@@ -678,9 +695,11 @@ fn a_name_reachable_two_ways_offers_exactly_one_item() {
         hits[0]
     );
 }
+}
 
 // ---- the brace-form use-path shapes (A6 regression pins) ----
 
+both_uri_shapes! {
 #[test]
 fn the_brace_form_rides_the_names_tier() {
     // `use gadgets::{⏐` — exports; the comma form too; the prefix
@@ -717,6 +736,7 @@ fn the_brace_form_rides_the_names_tier() {
     // an unmounted head stays an honest empty
     let items = s.complete_pos(uri, "use ghost::{", 0, 12);
     assert!(items.is_empty(), "{:?}", labels(&items));
+}
 }
 
 #[test]
@@ -778,6 +798,7 @@ fn use_path_completion_lists_the_modules_exports() {
     assert!(ls.contains(&"HashSet"), "{ls:?}");
 }
 
+both_uri_shapes! {
 #[test]
 fn use_path_completion_lists_the_dep_lets_and_mods() {
     // a dep index (the calc_host shape: surface `pub let` rows) + a
@@ -811,6 +832,7 @@ fn use_path_completion_lists_the_dep_lets_and_mods() {
         "the pub mod child completes: {:?}",
         labels(&items)
     );
+}
 }
 
 // ---- the file-module walk (use-path + position tiers) ----
@@ -887,6 +909,7 @@ fn use_path_completion_walks_the_dep_mod_tree() {
     assert!(items.is_empty(), "{:?}", labels(&items));
 }
 
+both_uri_shapes! {
 #[test]
 fn position_path_completion_offers_the_module_members_by_tier() {
     // the open document IS the gadgets root (stamped through the scan
@@ -976,7 +999,9 @@ fn position_path_completion_offers_the_module_members_by_tier() {
     let ls = labels(&items);
     assert!(!ls.contains(&"Column"), "no doc mods, no mod tier: {ls:?}");
 }
+}
 
+both_uri_shapes! {
 #[test]
 fn the_use_path_tier_answers_an_own_package_head() {
     // the open document IS the gadgets root (its stamped twin is the
@@ -1030,6 +1055,7 @@ fn the_use_path_tier_answers_an_own_package_head() {
         "the own mod edge head rides the same tier: {ls:?}"
     );
     assert!(ls.contains(&"grid"), "{ls:?}");
+}
 }
 
 // ---- the `pub use` re-export tier ----
@@ -1100,6 +1126,7 @@ fn colon2_completion_lists_the_enum_members() {
     assert!(!ls.contains(&"Green"), "{ls:?}");
 }
 
+both_uri_shapes! {
 #[test]
 fn colon2_completion_lists_the_dep_module_statics() {
     // `math::⏐` over the calc dep's stamped module index — the
@@ -1130,6 +1157,7 @@ fn colon2_completion_lists_the_dep_module_statics() {
         "the cap law picks the icon until real resolution: {}",
         pi
     );
+}
 }
 
 #[test]
@@ -1308,6 +1336,7 @@ fn the_type_tier_enumerates_exactly_the_primitive_table() {
     assert_eq!(got, want, "the tier's primitives are exactly PRIMITIVE_TYS");
 }
 
+both_uri_shapes! {
 #[test]
 fn the_type_tier_offers_the_ambient_and_imported_foreign_types() {
     // a foreign doc: its own types plus the ambient builtin row
@@ -1339,6 +1368,7 @@ fn the_type_tier_offers_the_ambient_and_imported_foreign_types() {
         "the imported builtin type completes: {:?}",
         labels(&items)
     );
+}
 }
 
 // ---- the auto-import tier ----
@@ -1684,6 +1714,7 @@ fn the_end_of_buffer_extension_never_leaks_a_closed_block() {
     );
 }
 
+both_uri_shapes! {
 #[test]
 fn member_completion_steps_through_self_ret_chains() {
     // the builder-chain law: an impl method's `-> Self` rung answers
@@ -1714,7 +1745,9 @@ fn member_completion_steps_through_self_ret_chains() {
         "the chain steps through both rungs: {ls:?}"
     );
 }
+}
 
+both_uri_shapes! {
 #[test]
 fn http_builder_chain_completes_after_self_steps() {
     // the regression lock for the report: the REAL std http lane
@@ -1745,4 +1778,55 @@ fn http_builder_chain_completes_after_self_steps() {
         !ls.contains(&"send"),
         "a `Request`-only member must not offer: {ls:?}"
     );
+}
+}
+
+// ---- round 4: the rut-new layout — the enumeration gates ride the
+//      file scope's own resolve ----
+
+both_uri_shapes! {
+    #[test]
+    fn the_bare_and_type_tiers_offer_an_intra_package_use_binding() {
+        // `use m::{ mk }` binds `mk` in this file: the bare tier
+        // offers it like any bound name — with NO import edit (the
+        // auto-import tier's duplicate loses the label dedup); the
+        // type tier offers the use-bound type; the own-package name
+        // as the head binds the same way
+        let (mut s, _io) = rut_new::boot();
+        let uri = rut_new::at("src/child/mod.rut");
+        let src = "use m::{ mk };\nfn k() -> i32 { return mk }\n";
+        let items = s.complete_at(&uri, src, "return mk", 1);
+        let it = item(&items, "mk");
+        assert!(
+            it["additionalTextEdits"].is_null(),
+            "already bound — no import edit: {it}"
+        );
+        let src = "use app::{ rootfn };\nfn k() -> i32 { return root }\n";
+        let items = s.complete_at(&uri, src, "return root", 1);
+        let it = item(&items, "rootfn");
+        assert!(it["additionalTextEdits"].is_null(), "{it}");
+        let src = "use m::{ Counter };\nfn k(c: Cou) -> i32 { return 0; }\n";
+        let items = s.complete_at(&uri, src, "fn k(c: Cou", 1);
+        assert!(offers(&items, "Counter"), "the use-bound type: {items:?}");
+        assert!(!offers(&items, "secret"), "a private never rides: {items:?}");
+    }
+}
+
+both_uri_shapes! {
+    #[test]
+    fn the_own_pkg_head_lists_the_root_never_the_open_document() {
+        // DEFECT 1's completion face: `use app::{ ⏐` and `app::⏐` in a
+        // child list the ROOT module's names — never the open
+        // document's own decls (what the fuzzy root landing offered)
+        let (mut s, _io) = rut_new::boot();
+        let uri = rut_new::at("src/child/mod.rut");
+        let src = "pub fn ownname() -> i32 { return 1; }\nuse app::{ \nfn k() -> i32 { return 0; }\n";
+        let items = s.complete_at(&uri, src, "use app::{ ", 1);
+        assert!(offers(&items, "LIMIT") && offers(&items, "rootfn"), "the root's names: {items:?}");
+        assert!(!offers(&items, "ownname"), "the open document's decl is no export of the root: {items:?}");
+        let src = "pub fn ownname() -> i32 { return 1; }\nfn k() -> i32 { return app:: }\n";
+        let items = s.complete_at(&uri, src, "return app::", 1);
+        assert!(offers(&items, "LIMIT") && offers(&items, "m"), "{items:?}");
+        assert!(!offers(&items, "ownname"), "{items:?}");
+    }
 }

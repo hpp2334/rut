@@ -94,14 +94,16 @@ impl<'a> Ctx<'a> {
 
 /// byte span -> LSP range over the TARGET file's own text
 pub(crate) fn loc_at(doc_uri: &str, f: &MountedFile, span: Span) -> DefLocation {
-    let uri = if f.mount.origin == doc_uri {
-        doc_uri.to_string()
-    } else {
-        f.mount
-            .src_path
-            .clone()
-            .unwrap_or_else(|| origin_uri(&f.mount.origin))
-    };
+    // the queried file — by identity: either spelling of its path
+    let uri =
+        if crate::world::pkg::file_key(&f.mount.origin) == crate::world::pkg::file_key(doc_uri) {
+            doc_uri.to_string()
+        } else {
+            f.mount
+                .src_path
+                .clone()
+                .unwrap_or_else(|| origin_uri(&f.mount.origin))
+        };
     DefLocation {
         uri,
         range: range_of(f.doc.lines(), f.doc.src(), span),
@@ -661,8 +663,11 @@ fn qualified_at(ast: &rut_ast::Ast, h: rut_ast::AnyHandle, pos: u32) -> Option<Q
 /// the qualified tail's locations — `Some(vec![])` is the
 /// authoritative empty (an unbound head opens nothing; the bare-name
 /// layers never run on a qualified tail); `None` = not a qualified
-/// position (or a mid-segment cursor — those keep the pre-existing
-/// layers)
+/// position. A HEAD or MID-segment cursor names a MODULE: a module the
+/// walk lands on jumps to its mounting `mod NAME;` edge (the use
+/// path's segment law, mirrored), a package's own name to its root
+/// file top; a segment the walk cannot land keeps the pre-existing
+/// layers (hover's own fall-through).
 fn qualified_tail_locations(
     ctx: &Ctx,
     ast: &rut_ast::Ast,
@@ -671,7 +676,7 @@ fn qualified_tail_locations(
 ) -> Option<Vec<DefLocation>> {
     let q = qualified_at(ast, h, pos)?;
     if q.k + 1 != q.segs.len() {
-        return None; // a mid-segment cursor keeps the pre-existing layers
+        return module_segment_target(ctx, &q.segs[..=q.k], q.is_ty);
     }
     let Some(scope) = ctx.chain.qualified_scope(ctx.doc_mods, &q.segs, q.is_ty) else {
         return Some(Vec::new());
@@ -697,6 +702,36 @@ fn qualified_tail_locations(
             .map(|(f, sp)| loc_at(ctx.doc_uri, f, sp))
             .collect(),
     )
+}
+
+/// a qualified path's head/mid segment — the module the prefix names:
+/// its mounting edge, or the package root's file top
+fn module_segment_target(ctx: &Ctx, segs: &[String], is_ty: bool) -> Option<Vec<DefLocation>> {
+    let target = ctx.chain.qualified_module(ctx.doc_mods, segs, is_ty)?;
+    let path = ctx.chain.mod_path_of(target);
+    if path.is_empty() {
+        // the package's own name — the root module, at its file top
+        // (`Span::new(0, 0)`, the pkg-head convention)
+        return Some(vec![loc_at(ctx.doc_uri, target, Span::new(0, 0))]);
+    }
+    // a `mod NAME;` edge in the parent module's file — inside the
+    // TARGET's own package (the queried file's own entry when the
+    // parent is the open document)
+    let name = path.rsplit('/').next()?;
+    let parent_path = crate::world::mods::parent_of(path);
+    let parent = if ctx.doc_mods.pkg.as_deref() == target.mount.module.as_deref()
+        && ctx.doc_mods.mod_path.as_deref() == Some(parent_path)
+    {
+        ctx.doc_file()
+    } else {
+        crate::world::mods::find_mod(ctx.chain, ctx.chain.pkg_of(target), parent_path)?
+    };
+    let edge = parent.mods().into_iter().find(|m| m.name() == name)?;
+    Some(vec![loc_at(
+        ctx.doc_uri,
+        parent,
+        edge.name_span().unwrap_or(edge.span()),
+    )])
 }
 
 /// a type head's declaration location(s) — typeDefinition's
@@ -736,7 +771,10 @@ fn ty_name_locations(
 /// files AND inside the walked mod path (`use pouch::a::b::{ C }`
 /// resolves C only in pouch's module `a/b`; a walk the chain cannot
 /// satisfy falls back to the flat pkg — better a broad answer than
-/// none, the `chain_for` law)
+/// none, the `chain_for` law). Only `pub` rows bind a cross-package
+/// leaf (the compiler's leaf gate — a private or `pub(pkg)` row the
+/// use line refuses), and the queried file itself never exports to
+/// its own import (layer 1 speaks for it).
 fn use_graph_targets<'a>(
     chain: &'a Chain<'a>,
     pkg: &str,
@@ -759,16 +797,23 @@ fn use_graph_targets<'a>(
     };
     let mut out: Vec<(&MountedFile, Span)> = Vec::new();
     for f in in_scope {
-        if let Some(t) = f.ty(name) {
+        if f.same_file(chain.head()) {
+            continue;
+        }
+        if let Some(t) = f.ty(name).filter(|t| t.vis() == rut_ast::Vis::Pub) {
             out.push((f, ty_span(&t)));
         }
-        if let Some(l) = f.lets().into_iter().find(|l| l.name() == name) {
+        if let Some(l) = f
+            .lets()
+            .into_iter()
+            .find(|l| l.name() == name && l.vis() == rut_ast::Vis::Pub)
+        {
             out.push((f, l.name_span().unwrap_or(l.span())));
         }
         for fv in f
             .fns()
             .into_iter()
-            .filter(|f| f.name() == name && f.owner().is_none())
+            .filter(|f| f.name() == name && f.owner().is_none() && f.vis() == rut_ast::Vis::Pub)
         {
             out.push((f, fn_span(&fv)));
         }
@@ -792,9 +837,15 @@ fn use_graph_targets<'a>(
 /// embed is the fallback. No root-shaped file → `None` — an honest
 /// miss, never a wrong jump.
 fn pkg_root_index<'a>(chain: &'a Chain<'a>, pkg: &str) -> Option<&'a MountedFile> {
+    // the open document is no package's root by a path coincidence (a
+    // document that IS the root rides the own lane before this door)
     let mut roots: Vec<&MountedFile> = chain
         .iter()
-        .filter(|f| matches_pkg(f, pkg) && crate::world::mods::mod_path_of(f).is_empty())
+        .filter(|f| {
+            !f.same_file(chain.head())
+                && matches_pkg(f, pkg)
+                && crate::world::mods::mod_path_of(f).is_empty()
+        })
         .collect();
     roots.sort_by_key(|f| {
         (
@@ -832,6 +883,12 @@ fn use_site_targets(ctx: &Ctx, h: rut_ast::AnyHandle, pos: u32) -> Option<Vec<De
             continue;
         }
         let name = ast.name(n.ident);
+        // the one-name refusal: a leaf the file binds twice is a use
+        // line the compiler refuses — it jumps nowhere (the bare-name
+        // lanes answer nothing for it either)
+        if ctx.chain.one_name_refused(name) {
+            return Some(Vec::new());
+        }
         let pkg = segs[0].clone();
         // the OWN lane — the walk is the intra-package one (any
         // declared edge; the doc's own rows read for its own scope)
@@ -852,12 +909,23 @@ fn use_site_targets(ctx: &Ctx, h: rut_ast::AnyHandle, pos: u32) -> Option<Vec<De
         } else {
             crate::world::mods::walk_use_mods(chain, &pkg, &segs[1..])
         };
-        return Some(
-            use_graph_targets(chain, &pkg, walked.as_deref(), name)
-                .into_iter()
-                .map(|(f, sp)| loc_at(ctx.doc_uri, f, sp))
-                .collect(),
-        );
+        let targets = use_graph_targets(chain, &pkg, walked.as_deref(), name);
+        if !targets.is_empty() {
+            return Some(
+                targets
+                    .into_iter()
+                    .map(|(f, sp)| loc_at(ctx.doc_uri, f, sp))
+                    .collect(),
+            );
+        }
+        // a MODULE leaf (`use calc::{ math }`): the walked module's
+        // `pub` child opens at its file top — the pkg-head convention
+        if let Some(p) = walked {
+            if let Some((child, _)) = crate::world::mods::use_module_leaf(chain, &pkg, &p, name) {
+                return Some(vec![loc_at(ctx.doc_uri, child, Span::new(0, 0))]);
+            }
+        }
+        return Some(Vec::new());
     }
     // a path segment — the pkg head included: `k == 0` opens the
     // pkg's ROOT file at the file top (`Span::new(0, 0)`, the
@@ -938,22 +1006,32 @@ fn own_scope<'a>(ctx: &Ctx<'a>, walked: &str) -> Option<&'a MountedFile> {
 
 /// the own-lane leaf: the walked mod path's scope answers the
 /// declaring type / module-let / free-fn spans (the use-graph's
-/// collector, scoped to the one module)
+/// collector, scoped to the one module) — each row VISIBLE from the
+/// importing file (`vis_allows`: "import is no visibility bypass" —
+/// a leaf the use line refuses jumps nowhere), the module's `pub use`
+/// rows never followed (the compiler's binding refuses a re-export
+/// import)
 fn own_leaf_targets(ctx: &Ctx, walked: &str, name: &str) -> Vec<DefLocation> {
     let Some(f) = own_scope(ctx, walked) else {
         return Vec::new();
     };
+    let from = ctx.doc_mods.mod_path.as_deref().unwrap_or("");
+    let allows = |vis: rut_ast::Vis| crate::world::mods::vis_allows(from, walked, vis);
     let mut hits: Vec<(&MountedFile, Span)> = Vec::new();
-    if let Some(t) = f.ty(name) {
+    if let Some(t) = f.ty(name).filter(|t| allows(t.vis())) {
         hits.push((f, ty_span(&t)));
     }
-    if let Some(l) = f.lets().into_iter().find(|l| l.name() == name) {
+    if let Some(l) = f
+        .lets()
+        .into_iter()
+        .find(|l| l.name() == name && allows(l.vis()))
+    {
         hits.push((f, l.name_span().unwrap_or(l.span())));
     }
     for fv in f
         .fns()
         .into_iter()
-        .filter(|f| f.name() == name && f.owner().is_none())
+        .filter(|f| f.name() == name && f.owner().is_none() && allows(f.vis()))
     {
         hits.push((f, fn_span(&fv)));
     }

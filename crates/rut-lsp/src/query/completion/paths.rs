@@ -2,8 +2,6 @@
 //! boundary, the `::` member lists whose head is a type, and the
 //! position-path tier (the intra-package walk + the dep-module lane).
 
-use std::collections::HashSet;
-
 use super::rows::{push_item, CompletionOut};
 use super::CompletionKind;
 use crate::world::collection::Chain;
@@ -32,18 +30,15 @@ pub(super) fn type_tier_completions(chain: &Chain) -> Vec<CompletionOut> {
         );
     }
     let doc = chain.head();
-    let imported = crate::world::pkg::import_map(chain, doc);
+    // the names the document's use edges bind — the file scope's own
+    // resolve (the bare tier's imported gate, one home)
+    let bound = chain.use_bound_scope();
     for f in chain.iter() {
         let own = std::ptr::eq(f, doc);
-        let used_from: HashSet<&str> = imported
-            .iter()
-            .filter(|(_, pkg)| crate::world::pkg::matches_pkg(f, pkg))
-            .map(|(name, _)| *name)
-            .collect();
         for t in f.types() {
             // the same bare gate the decl tiers read: own types always,
-            // foreign types when ambient or imported from this package
-            if !own && !t.ambient() && !used_from.contains(t.name()) {
+            // foreign types when ambient or bound by a use edge
+            if !own && !t.ambient() && !crate::world::collection::bound_has(&bound, f, t.name()) {
                 continue;
             }
             push_item(

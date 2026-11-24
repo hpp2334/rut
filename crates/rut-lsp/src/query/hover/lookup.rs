@@ -515,6 +515,22 @@ fn decl_site_hover(chain: &Chain<'_>, h: AnyHandle, pos: u32) -> Option<(String,
             ));
         }
     }
+    // every other decl's own name — a fn, an impl method, a type —
+    // IS the declaration (the decl-site law definition rides: exact,
+    // the doc's own row, never the file scope's layers — a file the
+    // one-name law refuses still hovers the decl under the cursor)
+    if let Some(f) = d.fns().into_iter().find(|f| f.h == h) {
+        return f
+            .name_span()
+            .filter(|sp| on_name(*sp, pos))
+            .map(|sp| (render_fn_hits(&f), sp));
+    }
+    if let Some(t) = d.types().into_iter().find(|t| t.h == h) {
+        return t
+            .name_span()
+            .filter(|sp| on_name(*sp, pos))
+            .map(|sp| (render_ty(&t), sp));
+    }
     None
 }
 
@@ -592,8 +608,33 @@ fn use_segment_hover(
             crate::world::mods::walk_use_mods(chain, &pkg, &segs[1..=k])
         };
         let path = walked?;
-        let target = crate::world::mods::find_mod(chain, Some(&pkg), &path)?;
+        let target = if path.is_empty() {
+            crate::world::mods::pkg_root_file(chain, &pkg)?
+        } else {
+            crate::world::mods::find_mod(chain, Some(&pkg), &path)?
+        };
         return Some((render_module_target(target, &path), seg.span));
+    }
+    // a LEAF that names a module (`use calc::{ math }`) renders the
+    // module like a path segment does; inside a package a module is no
+    // import (the compiler names the walk), so an own head stays with
+    // the bare lanes
+    for n in &u_node.names {
+        if !on_name(n.span, pos) {
+            continue;
+        }
+        let pkg = segs[0].clone();
+        if crate::world::mods::resolve_position_head(doc, di, chain, &pkg).is_some() {
+            return None;
+        }
+        let path = if u_node.path.len() == 1 {
+            String::new()
+        } else {
+            crate::world::mods::walk_use_mods(chain, &pkg, &segs[1..])?
+        };
+        let (target, child) =
+            crate::world::mods::use_module_leaf(chain, &pkg, &path, ast.name(n.ident))?;
+        return Some((render_module_target(target, &child), n.span));
     }
     None
 }

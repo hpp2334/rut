@@ -131,8 +131,15 @@ impl<'a> Chain<'a> {
         // the chain may carry the same owner twice — the dep walk's
         // real origins and the ambient surface answering for a name
         // nothing mounted — and the mount wins
+        // the sweep stays inside the resolved type's OWN package (an
+        // inherent impl lives in its type's module — a same-named type
+        // in another package owns its own methods, never these)
+        let ty_pkg = self.pkg_of(ty.file);
         let mut fallback: Option<FnView<'a>> = None;
         for f in self.iter() {
+            if self.pkg_of(f) != ty_pkg {
+                continue;
+            }
             for f in f.fns() {
                 if f.name() == member_text && f.owner().as_deref() == Some(ty_name.as_str()) {
                     if f.file.mount.src_path.is_none() {
@@ -357,18 +364,29 @@ impl<'a> Chain<'a> {
     /// the resolver family's expression door — the display-side type
     /// of `e`, the chain as the file window (the receiver resolver
     /// generalized: literals → primitives, paths → the bindings (read
-    /// internally) and module lets, calls → the callee's written ret,
-    /// member chains → the member lanes). A module-QUALIFIED callee
+    /// internally) and module let, calls → the callee's written ret,
+    /// member chains → the member lanes). The hook rides the value
+    /// ladder with the doc's OWN stamp ([`Chain::stamp`] — the
+    /// ancestor's edge and the own-pkg head resolve exactly as the
+    /// spelling lanes resolve them): a module-QUALIFIED callee
     /// (`m::mk(..)`) resolves through the module-namespace lane (the
-    /// one home — [`Chain::qualified_scope`]) to its fn, the written
-    /// ret pricing the call; the hook rides the value ladder with the
-    /// doc's place unknown (the references-scan's own-lane-off
-    /// default — the ancestor/pkg-head heads stay off, never wrong)
+    /// one home — [`Chain::qualified_scope`]) to its fn, and a BARE
+    /// callee through the file scope (the one home —
+    /// [`Chain::functions`]: what the doc binds, never the flat
+    /// unique-match a same-named fn elsewhere would break); the
+    /// written ret prices the call either way
     pub(crate) fn expr_ty(&self, home: &MountedFile, e: ExprRef) -> Option<String> {
         let files: Vec<&MountedFile> = self.iter().collect();
-        let doc = DocMods::default();
+        let doc = self.stamp();
         let qual = |segs: &[String], is_ty: bool| -> Option<QualHit<'a>> {
-            let scope = self.qualified_scope(&doc, segs, is_ty)?;
+            if !is_ty && segs.len() == 1 {
+                return self
+                    .functions(&segs[0])
+                    .into_iter()
+                    .find(|f| f.owner().is_none())
+                    .map(QualHit::Fn);
+            }
+            let scope = self.qualified_scope(doc, segs, is_ty)?;
             Some(if is_ty {
                 QualHit::Ty(scope.types.first()?.name().to_string())
             } else {

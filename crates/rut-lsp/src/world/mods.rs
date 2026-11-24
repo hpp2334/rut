@@ -2,12 +2,16 @@
 //! mounted-file chain (the editor face of the phase-3 semantic core).
 //!
 //! A package's mounted files are keyed by the (module, mod_path) pair:
-//! `module` is the bare pkg name a `use` path spells (the
-//! `matches_pkg` fallback laws ride unchanged), `mod_path` is the
+//! `module` is the bare pkg name a `use` path spells, `mod_path` the
 //! full file-module path (`""` = the pkg root's `mod.rut`,
-//! `"layout/grid"` = that child). Each file records the `mod NAME;`
-//! edges its decl map carries; the mounted child lives in its own
-//! file, found through the chain at the child's mod path.
+//! `"layout/grid"` = that child). The pair is a STAMP the mount lanes
+//! lay down — a lookup keys on it exactly ([`matches_mod`]); the
+//! `matches_pkg` URI-segment derivation answers the FLAT sweeps'
+//! question only (which unnamed files speak for a package name) and
+//! never lands a mod-tree lookup, so the open document's unstamped
+//! entry cannot impersonate its package's root. Each file records the
+//! `mod NAME;` edges its decl map carries; the mounted child lives in
+//! its own file, found through the chain at the child's mod path.
 //! Declarations are the graph, exactly as the loader mounts them —
 //! the walk below never reads a directory listing.
 //!
@@ -87,24 +91,42 @@ pub fn vis_allows(from: &str, def_mod: &str, vis: Vis) -> bool {
     }
 }
 
-/// does this file speak for `pkg`'s file module `path`? `pkg`
-/// `None` matches UNNAMED files only (a workspace package's files
-/// — and only where a face STAMPED the mod path, so unrelated
-/// unstamped files can never impersonate a module).
+/// does this file speak for `pkg`'s file module `path`? A mod-tree
+/// lookup keys on the STAMP a mount laid down — the explicit manifest
+/// name beside the mod path — never on a URI-segment derivation: the
+/// open document's entry (`Mount::doc`, unstamped) must not land a
+/// package's root because its path happens to name the package; its
+/// place is its stamped twin's ([`DocMods`]). A flat named file
+/// (`mod_path` `None` — a single-file dep, a package's surface beside
+/// its root) speaks for its package's ROOT only. `pkg` `None` matches
+/// UNNAMED files only, and only where a face STAMPED the mod path.
 pub fn matches_mod(f: &MountedFile, pkg: Option<&str>, path: &str) -> bool {
     match pkg {
-        Some(p) => crate::world::pkg::matches_pkg(f, p) && mod_path_of(f) == path,
+        Some(p) => {
+            f.mount.module.as_deref() == Some(p)
+                && match f.mount.mod_path.as_deref() {
+                    Some(mp) => mp == path,
+                    // the flat shape sits at its package's root
+                    None => path.is_empty(),
+                }
+        }
         None => f.mount.module.is_none() && f.mount.mod_path.as_deref() == Some(path),
     }
 }
 
-/// the chain's file that IS `pkg`'s module `path`
+/// the chain's file that IS `pkg`'s module `path`: the STAMPED tree
+/// entry first (the mounted root's `(pkg, Some(""))` outranks a flat
+/// twin of the same package — a lib's surface beside its body), the
+/// flat shape only when no stamped entry stands.
 pub(crate) fn find_mod<'a>(
-    chain: &'a Chain<'a>,
+    chain: &Chain<'a>,
     pkg: Option<&str>,
     path: &str,
 ) -> Option<&'a MountedFile> {
-    chain.iter().find(|f| matches_mod(f, pkg, path))
+    chain
+        .iter()
+        .find(|f| matches_mod(f, pkg, path) && f.mount.mod_path.is_some())
+        .or_else(|| chain.iter().find(|f| matches_mod(f, pkg, path)))
 }
 
 /// the `mod NAME;` edge `parent` (a mounted file) declares for `name`,
@@ -137,6 +159,41 @@ pub fn walk_use_mods(chain: &Chain, pkg: &str, segs: &[String]) -> Option<String
         cur = path;
     }
     Some(cur)
+}
+
+/// the file that speaks for a FOREIGN package's root — its stamped
+/// root ([`find_mod`]); an UNNAMED flat file the host never named
+/// answers by the path derivation ([`matches_pkg`]) only when no
+/// stamped root stands. The open document never lands here (its own
+/// package rides the own lanes; a path coincidence is no root).
+pub(crate) fn pkg_root_file<'a>(chain: &'a Chain<'a>, pkg: &str) -> Option<&'a MountedFile> {
+    find_mod(chain, Some(pkg), "").or_else(|| {
+        chain.iter().find(|f| {
+            !f.same_file(chain.head())
+                && f.mount.module.is_none()
+                && crate::world::pkg::matches_pkg(f, pkg)
+        })
+    })
+}
+
+/// a use leaf that names a MODULE — `use calc::{ math }`: the walked
+/// module's `pub mod math;` child, its file beside its mod path. The
+/// cross-package door only (a module is no import inside a package —
+/// the compiler names the walk instead); `None` = the leaf is no
+/// module of the walked path.
+pub(crate) fn use_module_leaf<'a>(
+    chain: &'a Chain<'a>,
+    pkg: &str,
+    walked: &str,
+    name: &str,
+) -> Option<(&'a MountedFile, String)> {
+    let parent = find_mod(chain, Some(pkg), walked)?;
+    let edge = parent
+        .mods()
+        .into_iter()
+        .find(|m| m.name() == name && m.vis() == Vis::Pub)?;
+    let path = child_path(walked, edge.name());
+    find_mod(chain, Some(pkg), &path).map(|f| (f, path))
 }
 
 /// The INTRA-PACKAGE head resolution — the phase-3 `resolve_mod_head`
@@ -215,7 +272,7 @@ pub fn display(path: &str) -> String {
 /// origin basename is the flavor's `mod.rut`/`mod.d.rut`).
 pub fn display_of(chain: &Chain, pkg: Option<&str>, child: &str) -> String {
     let mounted = chain.iter().find(|f| {
-        mod_path_of(f) == child && pkg.is_none_or(|p| crate::world::pkg::matches_pkg(f, p))
+        mod_path_of(f) == child && pkg.is_none_or(|p| f.mount.module.as_deref() == Some(p))
     });
     match mounted.and_then(|f| origin_file_name(&f.mount.origin)) {
         Some(name) if name != "mod.rut" && name != rut_driver::decl::DECL_CHILD_FILE => name,

@@ -110,6 +110,7 @@ fn the_cross_package_walk_gates_pub_edges() {
     );
 }
 
+both_uri_shapes! {
 #[test]
 fn the_position_head_walks_ancestors_and_the_pkg_name() {
     // from layout/grid: a sibling resolves through the parent scope;
@@ -151,7 +152,9 @@ fn the_position_head_walks_ancestors_and_the_pkg_name() {
         labels(&items)
     );
 }
+}
 
+both_uri_shapes! {
 #[test]
 fn the_vis_predicate_mirrors_the_compiler_tiers() {
     // pub reaches everywhere, pub(pkg) the whole package, private the
@@ -180,7 +183,9 @@ fn the_vis_predicate_mirrors_the_compiler_tiers() {
         "a private fn of a child stays hidden: {ls:?}"
     );
 }
+}
 
+both_uri_shapes! {
 #[test]
 fn the_pair_keys_and_the_single_file_display() {
     // the (pkg, path) pair keys the walk — another pkg's file at the
@@ -206,6 +211,7 @@ fn the_pair_keys_and_the_single_file_display() {
     let h = s.hover_at(uri, doc2, "ghost", 1);
     let md = markdown(h);
     assert!(md.contains("file module — `ghost/mod.rut`"), "{md}");
+}
 }
 
 // ---- the mod-name slot: the disk probe beside the open document ----

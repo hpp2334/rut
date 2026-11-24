@@ -918,7 +918,9 @@ async function main() {
     // segment) — both the use-statement name and the usage sites
     {
         const libUri = 'file:///ws/gadgets/lib.rut';
-        const libSrc = ['class Widget {', '    id: i32;', '}', ''].join('\n');
+        // the export is `pub` — a cross-package leaf binds only `pub`
+        // rows (the compiler's leaf gate, mirrored by the use tier)
+        const libSrc = ['pub class Widget {', '    id: i32;', '}', ''].join('\n');
         await rut.indexFile(libUri, libSrc);
         const uri = 'file:///ws/e2e-def-cross.rut';
         const src = [
@@ -936,7 +938,7 @@ async function main() {
         }
         const want = {
             uri: libUri,
-            range: identAt(libSrc, /^class Widget \{/, 'Widget'),
+            range: identAt(libSrc, /^pub class Widget \{/, 'Widget'),
             len: 6,
         };
         // the use-statement name — the survey's use-graph edge
@@ -1321,7 +1323,7 @@ async function main() {
     // the doc side AND from the lib-decl side
     {
         const libUri = 'file:///ws/gadgets/lib.rut';
-        const libSrc = 'class Widget {\n    id: i32;\n}\n';
+        const libSrc = 'pub class Widget {\n    id: i32;\n}\n'; // `pub`: the leaf gate
         const mainUri = 'file:///ws/e2e-refs-cross.rut';
         const mainSrc =
             'use gadgets::{ Widget };\nfn main() -> nil {\n    let w = Widget.new();\n}\n';

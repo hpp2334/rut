@@ -11,7 +11,9 @@ mod common;
 use common::*;
 use serde_json::Value;
 
-const WIDGET_SRC: &str = "class Widget {\n    id: i32;\n}\n";
+/// the gadget pkg's export — `pub`: a cross-package leaf binds only
+/// `pub` rows (the compiler's leaf gate, mirrored by the use tier)
+const WIDGET_SRC: &str = "pub class Widget {\n    id: i32;\n}\n";
 const WIDGET_URI: &str = "file:///ws/gadgets/lib.rut";
 
 /// the `occ`-th needle's byte span in the target file must be exactly
@@ -209,6 +211,7 @@ fn sibling_duplicates_answer_the_file_own_decl() {
 
 // ---- the pkg's two files: the body over the decl surface ----
 
+both_uri_shapes! {
 #[test]
 fn a_both_files_dep_answers_from_the_body() {
     // the dep indexes a pkg's `.d.rut` surface (Decl) AND its root
@@ -237,7 +240,9 @@ fn a_both_files_dep_answers_from_the_body() {
     assert_eq!(hits[0]["uri"], "file:///deps/pkg/mod.rut");
     assert_eq!(span_of(body, &hits[0]), (0, 0), "file top: {hits:?}");
 }
+}
 
+both_uri_shapes! {
 #[test]
 fn a_decl_only_host_pkg_lands_in_the_surface() {
     // a host pkg indexes its `.d.rut` surface ALONE (calc's shape):
@@ -256,7 +261,9 @@ fn a_decl_only_host_pkg_lands_in_the_surface() {
     assert_eq!(hits[0]["uri"], "file:///deps/calc/calc.d.rut");
     assert_eq!(span_of(surface, &hits[0]), (0, 0), "file top: {hits:?}");
 }
+}
 
+both_uri_shapes! {
 #[test]
 fn a_mounted_root_beats_the_ambient_surface_twin() {
     // the transitive-mount world: a pkg the walk mounted (a real
@@ -293,6 +300,7 @@ fn a_mounted_root_beats_the_ambient_surface_twin() {
             .starts_with("file:///ws/.rut/deps/")),
         "{hits:?}"
     );
+}
 }
 
 #[test]
@@ -369,6 +377,7 @@ fn a_workspace_member_beats_the_prelude_twin() {
     );
 }
 
+both_uri_shapes! {
 #[test]
 fn a_middle_use_segment_jumps_to_the_mod_edge() {
     // `use gadgets::layout::{ Column };` — the `layout` segment jumps
@@ -389,6 +398,7 @@ fn a_middle_use_segment_jumps_to_the_mod_edge() {
     assert_eq!(hits[0]["uri"], "file:///deps/gadgets/mod.rut");
     assert_target(root, &hits[0], "layout;", 1, 6, "the declaring edge");
 }
+}
 
 #[test]
 fn a_pkg_head_with_no_indexed_pkg_is_an_honest_miss() {
@@ -405,6 +415,7 @@ const APP_URI: &str = "file:///ws/app/mod.rut";
 const HELPERS_SRC: &str = "pub struct Slot {\n    n: i32;\n}\n";
 const HELPERS_URI: &str = "file:///ws/app/helpers/mod.rut";
 
+both_uri_shapes! {
 #[test]
 fn an_edge_click_opens_the_child_file_top() {
     let mut s = S::boot();
@@ -415,7 +426,9 @@ fn an_edge_click_opens_the_child_file_top() {
     assert_eq!(hits[0]["uri"], HELPERS_URI);
     assert_eq!(pos_pair(&hits[0]["range"]["start"]), (0, 0), "the file top");
 }
+}
 
+both_uri_shapes! {
 #[test]
 fn an_edge_click_on_an_unstamped_doc_is_a_miss() {
     // no stamped twin — the own lanes stay off
@@ -424,7 +437,9 @@ fn an_edge_click_on_an_unstamped_doc_is_a_miss() {
     let hits = s.def_at("file:///ws/scratch.rut", APP_ROOT, "mod helpers;", 1);
     assert!(hits.is_empty(), "{hits:?}");
 }
+}
 
+both_uri_shapes! {
 #[test]
 fn an_edge_click_on_an_unmounted_child_is_a_miss() {
     // the doc is stamped but the chain carries no index at the child's
@@ -434,7 +449,9 @@ fn an_edge_click_on_an_unmounted_child_is_a_miss() {
     let hits = s.def_at(APP_URI, APP_ROOT, "mod helpers;", 1);
     assert!(hits.is_empty(), "{hits:?}");
 }
+}
 
+both_uri_shapes! {
 #[test]
 fn a_nested_edge_click_walks_from_the_doc_s_own_path() {
     // the doc IS `helpers` (mounted file-form): its `mod deep;` edge
@@ -454,7 +471,9 @@ fn a_nested_edge_click_walks_from_the_doc_s_own_path() {
     assert_eq!(hits[0]["uri"], "file:///ws/app/helpers/deep.rut");
     assert_eq!(pos_pair(&hits[0]["range"]["start"]), (0, 0));
 }
+}
 
+both_uri_shapes! {
 #[test]
 fn an_edge_click_never_leaks_across_packages() {
     // another pkg's index stamped at the SAME mod path must not
@@ -470,7 +489,9 @@ fn an_edge_click_never_leaks_across_packages() {
     let hits = s.def_at(APP_URI, APP_ROOT, "mod helpers;", 1);
     assert!(hits.is_empty(), "{hits:?}");
 }
+}
 
+both_uri_shapes! {
 #[test]
 fn an_own_pkg_use_path_resolves_intra_package() {
     // `use app::helpers::{ Slot };` in the app root — the pkg-name
@@ -504,7 +525,9 @@ fn an_own_pkg_use_path_resolves_intra_package() {
     assert_eq!(hits[0]["uri"], HELPERS_URI);
     assert_target(HELPERS_SRC, &hits[0], "Slot {", 1, 4, "the child's ident");
 }
+}
 
+both_uri_shapes! {
 #[test]
 fn an_own_mod_edge_use_head_resolves_through_the_ancestor_walk() {
     // `use helpers::deep::{ Gem };` from the app root — the bare head
@@ -536,9 +559,11 @@ fn an_own_mod_edge_use_head_resolves_through_the_ancestor_walk() {
     assert_eq!(hits[0]["uri"], deep_uri);
     assert_target(deep, &hits[0], "Gem {", 1, 3, "the leaf's ident");
 }
+}
 
 // ---- the module matcher (the explicit name, then the derivation) ----
 
+both_uri_shapes! {
 #[test]
 fn the_explicit_module_name_beats_the_path_derivation() {
     // a dep index named `pouch` whose paths spell something else: the
@@ -555,6 +580,7 @@ fn the_explicit_module_name_beats_the_path_derivation() {
     let hits = s.def_at("file:///t/main2.rut", src, "= Widget::new();", 1);
     assert!(hits.is_empty(), "{hits:?}");
 }
+}
 
 #[test]
 fn the_unnamed_fallback_stays_the_path_derivation() {
@@ -563,7 +589,7 @@ fn the_unnamed_fallback_stays_the_path_derivation() {
     // `…/pouch.rut` for `pouch`
     let mut s = S::boot();
     s.index_file(WIDGET_URI, WIDGET_SRC);
-    s.index_file("file:///ws/pouch.rut", "class Bag {\n    n: i32;\n}\n");
+    s.index_file("file:///ws/pouch.rut", "pub class Bag {\n    n: i32;\n}\n");
     let src = "use gadgets::{ Widget };\nfn main() -> nil {\n    let w = Widget::new();\n}\n";
     let hits = s.def_in("file:///t/main.rut", src, "= Widget::new();", 1, 2);
     assert_eq!(hits.len(), 1, "{hits:?}");
@@ -575,6 +601,7 @@ fn the_unnamed_fallback_stays_the_path_derivation() {
 
 // ---- the stdlib dep lane ----
 
+both_uri_shapes! {
 #[test]
 fn std_use_jumps_to_the_true_source_path() {
     // pouch rides the dep lane: the repo's own source mounted as a
@@ -610,6 +637,7 @@ fn std_use_jumps_to_the_true_source_path() {
             "the real source's ident"
         );
     }
+}
 }
 
 // ---- typeDefinition ----
@@ -678,6 +706,7 @@ fn misses_stay_misses() {
     assert!(hits.is_empty(), "{hits:?}");
 }
 
+both_uri_shapes! {
 #[test]
 fn member_definition_gates_the_foreign_privates() {
     // the member-vis law on goto-def: a foreign class's private field
@@ -707,7 +736,9 @@ fn member_definition_gates_the_foreign_privates() {
     let hits = s.def_in("file:///t/own.rut", own, "self.hidden", 1, 5);
     assert_eq!(hits.len(), 1, "own privates still jump: {hits:?}");
 }
+}
 
+both_uri_shapes! {
 #[test]
 fn qualified_paths_resolve_through_the_module_lane() {
     // the qualified spelling is one of the two explicit forms of
@@ -792,7 +823,9 @@ fn qualified_paths_resolve_through_the_module_lane() {
         "an unbound qualified head is no jump: {hits:?}"
     );
 }
+}
 
+both_uri_shapes! {
 #[test]
 fn pkg_rooted_dep_names_resolve() {
     // HIGH 1's definition face: the dep-rooted path lands exactly on
@@ -834,7 +867,9 @@ fn pkg_rooted_dep_names_resolve() {
     let hits = s.def_in("file:///t/flat.rut", flatdoc, "flatdep::top", 1, 10);
     assert!(hits.is_empty(), "a flat dep roots nothing: {hits:?}");
 }
+}
 
+both_uri_shapes! {
 #[test]
 fn qualified_annotation_receiver_resolves_members() {
     // the member face of the receiver-inference law: the annotated
@@ -865,4 +900,338 @@ fn qualified_annotation_receiver_resolves_members() {
         hits.is_empty(),
         "a module let is no jump behind a dep head: {hits:?}"
     );
+}
+}
+
+// ---- round 4: the rut-new layout — the root landing and the
+//      intra-package use edge, through the extension's own mounts ----
+
+/// one jump target: `uri`, and exactly the DECLARED NAME's span (the
+/// last non-keyword word of `needle`) over the TARGET file's own text
+fn assert_jump(hits: &[Value], uri: &str, target: &str, needle: &str, occ: usize, what: &str) {
+    assert_eq!(
+        hits.len(),
+        1,
+        "{what}: one target, never a doubled twin: {hits:?}"
+    );
+    assert_eq!(hits[0]["uri"], uri, "{what}: {}", hits[0]["uri"]);
+    const KW: [&str; 8] = ["pub", "fn", "let", "struct", "mod", "class", "impl", "pkg"];
+    let (off, len) = needle
+        .split(|c: char| !(c.is_ascii_alphanumeric() || c == '_'))
+        .filter(|w| !w.is_empty())
+        .filter(|w| !KW.contains(w))
+        .map(|w| (needle.rfind(w).expect("the word is in the needle"), w.len()))
+        .next_back()
+        .expect("the needle names a declaration");
+    let want = byte_of(target, needle, occ) as usize + off;
+    assert_eq!(
+        span_of(target, &hits[0]),
+        (want, want + len),
+        "{what}: the declared name: {hits:?}"
+    );
+}
+
+both_uri_shapes! {
+    #[test]
+    fn the_own_pkg_head_from_a_child_jumps_into_the_root_module() {
+        // DEFECT 1: `app::LIMIT` from a child — the root's own decl,
+        // never the open document (whose uri names the package)
+        let (mut s, _io) = rut_new::boot();
+        let uri = rut_new::at("src/child/mod.rut");
+        let root = rut_new::at("src/mod.rut");
+        let hits = s.def_in(&uri, "fn k() -> i32 { return app::LIMIT; }\n", "app::LIMIT", 1, 6);
+        assert_jump(&hits, &root, rut_new::ROOT, "pub let LIMIT", 1, "the root's let");
+        let hits = s.def_in(
+            &uri,
+            "fn k() -> i32 { return app::m::mk(41).bump(); }\n",
+            "app::m::mk",
+            1,
+            8,
+        );
+        assert_jump(
+            &hits,
+            &rut_new::at("src/m/mod.rut"),
+            rut_new::M,
+            "pub fn mk(",
+            1,
+            "the module behind the head",
+        );
+        // the head segment is the package's root module — its file top
+        let hits = s.def_in(
+            &uri,
+            "fn k() -> i32 { return app::m::mk(41).bump(); }\n",
+            "app::m::mk",
+            1,
+            1,
+        );
+        assert_eq!(hits.len(), 1, "{hits:?}");
+        assert_eq!(hits[0]["uri"], root, "{hits:?}");
+        assert_eq!(
+            (hits[0]["range"]["start"]["line"].as_u64(), hits[0]["range"]["start"]["character"].as_u64()),
+            (Some(0), Some(0)),
+            "the root file top: {hits:?}"
+        );
+        // the next segment is the ROOT's `mod m;` edge
+        let hits = s.def_in(
+            &uri,
+            "fn k() -> i32 { return app::m::mk(41).bump(); }\n",
+            "app::m::mk",
+            1,
+            6,
+        );
+        assert_jump(&hits, &root, rut_new::ROOT, "mod m;", 1, "the mounting edge");
+        // the compiler refuses these: a private leaf of m from outside
+        // its subtree, the root's re-export row
+        for (src, needle, off) in [
+            ("fn k() -> i32 { return app::m::secret(); }\n", "app::m::secret", 8),
+            ("fn k() -> i32 { return app::mk(41).bump(); }\n", "app::mk", 6),
+        ] {
+            let hits = s.def_in(&uri, src, needle, 1, off);
+            assert!(hits.is_empty(), "[{needle:?}] a refused leaf jumps nowhere: {hits:?}");
+        }
+    }
+}
+
+both_uri_shapes! {
+    #[test]
+    fn a_root_declared_edge_used_from_a_child_jumps() {
+        // DEFECT 1: `mod m;` declared by the ROOT, used from a child
+        let (mut s, _io) = rut_new::boot();
+        let uri = rut_new::at("src/child/mod.rut");
+        let m = rut_new::at("src/m/mod.rut");
+        let hits = s.def_in(&uri, "fn k() -> i32 { return m::mk(41).bump(); }\n", "m::mk", 1, 3);
+        assert_jump(&hits, &m, rut_new::M, "pub fn mk(", 1, "the leaf");
+        // the nested module, and the segments that name modules
+        let src = "fn k() -> i32 { return m::grid::cell(); }\n";
+        let hits = s.def_in(&uri, src, "m::grid::cell", 1, 9);
+        assert_jump(
+            &hits,
+            &rut_new::at("src/m/grid/mod.rut"),
+            rut_new::GRID,
+            "pub fn cell(",
+            1,
+            "the nested leaf",
+        );
+        let hits = s.def_in(&uri, src, "m::grid::cell", 1, 0);
+        assert_jump(
+            &hits,
+            &rut_new::at("src/mod.rut"),
+            rut_new::ROOT,
+            "mod m;",
+            1,
+            "the head: the ROOT's edge",
+        );
+        let hits = s.def_in(&uri, src, "m::grid::cell", 1, 3);
+        assert_jump(&hits, &m, rut_new::M, "pub mod grid;", 1, "the mid segment: m's edge");
+        // ... from a grandchild, and the ancestor itself through the
+        // root's edge
+        let sub = rut_new::at("src/child/sub/mod.rut");
+        assert_jump(
+            &s.def_in(&sub, "fn k() -> i32 { return m::mk(41).bump(); }\n", "m::mk", 1, 3),
+            &m,
+            rut_new::M,
+            "pub fn mk(",
+            1,
+            "the root's edge from a grandchild",
+        );
+        assert_jump(
+            &s.def_in(&sub, "fn k() -> i32 { return child::kid(); }\n", "child::kid", 1, 8),
+            &rut_new::at("src/child/mod.rut"),
+            rut_new::CHILD_HEAD,
+            "pub fn kid(",
+            1,
+            "the ancestor itself",
+        );
+        // refused leaves jump nowhere
+        for (src, needle) in [
+            ("fn k() -> i32 { return m::secret(); }\n", "m::secret"),
+            ("fn k() -> i32 { return m::G; }\n", "m::G"),
+        ] {
+            let hits = s.def_in(&uri, src, needle, 1, 3);
+            assert!(hits.is_empty(), "[{needle:?}]: {hits:?}");
+        }
+    }
+}
+
+both_uri_shapes! {
+    #[test]
+    fn an_intra_package_use_edge_jumps_through_the_module_lane() {
+        // DEFECT 2: the file scope's use tier answers the doc's own
+        // package edge — the call site AND the use leaf, for a fn, a
+        // type, a module let, a nested path, a glob, and the
+        // own-package name as the head
+        let (mut s, _io) = rut_new::boot();
+        let uri = rut_new::at("src/child/mod.rut");
+        let m = rut_new::at("src/m/mod.rut");
+        let grid = rut_new::at("src/m/grid/mod.rut");
+        let root = rut_new::at("src/mod.rut");
+        let src = "use m::{ mk };\nfn k() -> i32 { return mk(41).bump(); }\n";
+        assert_jump(&s.def_in(&uri, src, "mk(41)", 1, 0), &m, rut_new::M, "pub fn mk(", 1, "the call site");
+        assert_jump(&s.def_in(&uri, src, "{ mk }", 1, 2), &m, rut_new::M, "pub fn mk(", 1, "the use leaf");
+        let src = "use m::{ Counter };\nfn k(c: Counter) -> i32 { return c.bump(); }\n";
+        assert_jump(
+            &s.def_in(&uri, src, "c: Counter", 1, 3),
+            &m,
+            rut_new::M,
+            "pub struct Counter",
+            1,
+            "the type at the annotation",
+        );
+        assert_jump(&s.def_in(&uri, src, "{ Counter }", 1, 2), &m, rut_new::M, "pub struct Counter", 1, "the type's leaf");
+        assert_jump(&s.def_in(&uri, src, ".bump()", 1, 1), &m, rut_new::M, "pub fn bump(", 1, "the member behind the use-bound type");
+        let src = "use m::{ STEP };\nfn k() -> i32 { return STEP; }\n";
+        assert_jump(&s.def_in(&uri, src, "return STEP", 1, 7), &m, rut_new::M, "pub let STEP", 1, "the module let");
+        let src = "use m::grid::{ cell };\nfn k() -> i32 { return cell(); }\n";
+        assert_jump(&s.def_in(&uri, src, "cell()", 1, 0), &grid, rut_new::GRID, "pub fn cell(", 1, "the nested path's leaf");
+        assert_jump(&s.def_in(&uri, src, "m::grid:", 1, 3), &m, rut_new::M, "pub mod grid;", 1, "the use path's segment");
+        let src = "use m::*;\nfn k() -> i32 { return mk(41).bump(); }\n";
+        assert_jump(&s.def_in(&uri, src, "mk(41)", 1, 0), &m, rut_new::M, "pub fn mk(", 1, "the glob's binding");
+        let src = "use app::{ LIMIT };\nfn k() -> i32 { return LIMIT; }\n";
+        assert_jump(
+            &s.def_in(&uri, src, "return LIMIT", 1, 7),
+            &root,
+            rut_new::ROOT,
+            "pub let LIMIT",
+            1,
+            "the own-pkg head",
+        );
+        // the pkg head segment of the use path: the root file top
+        let hits = s.def_in(&uri, src, "use app:", 1, 4);
+        assert_eq!(hits.len(), 1, "{hits:?}");
+        assert_eq!(hits[0]["uri"], root, "{}", hits[0]["uri"]);
+        assert_eq!(hits[0]["range"]["start"]["line"], 0, "the file top: {hits:?}");
+    }
+}
+
+both_uri_shapes! {
+    #[test]
+    fn a_use_leaf_the_compiler_refuses_jumps_nowhere() {
+        // each a use line the compiler refuses — a private of the
+        // module, its own private import, a `pub use` row (the
+        // binding refuses it), a dep's private fn: no jump at the call
+        // site and none on the leaf (import is no visibility bypass)
+        let (mut s, _io) = rut_new::boot();
+        let uri = rut_new::at("src/child/mod.rut");
+        for (src, needles) in [
+            ("use m::{ secret };\nfn k() -> i32 { return secret(); }\n", vec![("secret()", 0), ("{ secret }", 2)]),
+            ("use m::{ cell };\nfn k() -> i32 { return cell(); }\n", vec![("cell()", 0), ("{ cell }", 2)]),
+            ("use m::{ G };\nfn k() -> i32 { return G; }\n", vec![("return G", 7), ("{ G }", 2)]),
+            ("use calc::math::{ hidden };\nfn k() -> i32 { return 0; }\n", vec![("{ hidden }", 2)]),
+            ("use calc::math::{ cell };\nfn k() -> i32 { return 0; }\n", vec![("{ cell }", 2)]),
+        ] {
+            for (needle, off) in needles {
+                let hits = s.def_in(&uri, src, needle, 1, off);
+                assert!(hits.is_empty(), "[{src:?} @ {needle:?}] a refused leaf: {hits:?}");
+            }
+        }
+    }
+}
+
+both_uri_shapes! {
+    #[test]
+    fn a_twice_bound_name_jumps_nowhere() {
+        // the one-name shape: two use leaves of one name (same-named
+        // decls in two packages are legal; the second leaf refuses)
+        let (mut s, _io) = rut_new::boot();
+        let uri = rut_new::at("src/child/mod.rut");
+        let math = format!(
+            "{}pub fn mk(n: i32) -> Calc {{ return Calc {{ d: n }}; }}\n",
+            rut_new::CALC_MATH
+        );
+        s.index_mod_at(&rut_new::calc("src/math/mod.rut"), "calc", "math", &math);
+        let src = "use m::{ mk };\nuse calc::math::{ mk };\nfn k() -> i32 { return mk(41).bump(); }\n";
+        for (needle, occ) in [("mk(41)", 1), ("{ mk }", 1), ("{ mk }", 2)] {
+            let off = if needle == "mk(41)" { 0 } else { 2 };
+            let hits = s.def_in(&uri, src, needle, occ, off);
+            assert!(hits.is_empty(), "[{needle} #{occ}] a twice-bound name: {hits:?}");
+        }
+    }
+}
+
+both_uri_shapes! {
+    #[test]
+    fn the_receiver_family_behind_a_root_declared_edge_jumps() {
+        // the annotated, the inferred, the chained, and the field-typed
+        // receiver — the member's decl, through the lane
+        let (mut s, _io) = rut_new::boot();
+        let uri = rut_new::at("src/child/mod.rut");
+        let m = rut_new::at("src/m/mod.rut");
+        for src in [
+            "fn k() -> i32 { let c: m::Counter = m::mk(41); return c.bump(); }\n",
+            "fn k() -> i32 { let c = m::mk(41); return c.bump(); }\n",
+            "fn k() -> i32 { return m::mk(41).bump(); }\n",
+            "struct Holder { c: m::Counter }\nfn k() -> i32 { let h = Holder { c: m::mk(1) }; return h.c.bump(); }\n",
+        ] {
+            assert_jump(&s.def_in(&uri, src, ".bump()", 1, 1), &m, rut_new::M, "pub fn bump(", 1, "the member");
+        }
+    }
+}
+
+both_uri_shapes! {
+    #[test]
+    fn a_dep_roots_own_member_jumps_nowhere() {
+        // `calc::ctop()` refuses ("unknown name `calc::ctop`"): the
+        // pkg-rooted name roots INSIDE the dep's module tree only
+        let (mut s, _io) = rut_new::boot();
+        let uri = rut_new::at("src/child/mod.rut");
+        let hits = s.def_in(&uri, "fn k() -> i32 { return calc::ctop(); }\n", "calc::ctop", 1, 6);
+        assert!(hits.is_empty(), "the dep root's own member: {hits:?}");
+        let hits = s.def_in(
+            &uri,
+            "fn k() -> i32 { return calc::math::cmk(1).deg(); }\n",
+            "calc::math::cmk",
+            1,
+            12,
+        );
+        assert_jump(
+            &hits,
+            &rut_new::calc_uri("src/math/mod.rut"),
+            rut_new::CALC_MATH,
+            "pub fn cmk(",
+            1,
+            "the tree path answers",
+        );
+    }
+}
+
+both_uri_shapes! {
+    #[test]
+    fn a_module_leaf_use_opens_the_module() {
+        // `use calc::{ math }` — the leaf names a module: its file top
+        let (mut s, _io) = rut_new::boot();
+        let uri = rut_new::at("src/child/mod.rut");
+        let src = "use calc::{ math };\nfn k() -> i32 { return math::cmk(1).deg(); }\n";
+        let hits = s.def_in(&uri, src, "{ math }", 1, 2);
+        assert_eq!(hits.len(), 1, "{hits:?}");
+        assert_eq!(hits[0]["uri"], rut_new::calc_uri("src/math/mod.rut"), "{}", hits[0]["uri"]);
+        assert_eq!(hits[0]["range"]["start"]["line"], 0, "the module's file top: {hits:?}");
+    }
+}
+
+both_uri_shapes! {
+    #[test]
+    fn two_lanes_mounting_one_file_answer_one_target() {
+        // the indexer's stamp and the walk's rooted string are ONE
+        // file in the store — a jump is never doubled
+        let (mut s, _io) = rut_new::boot();
+        let uri = rut_new::at("src/child/mod.rut");
+        let src = "use app::m::{ mk };\nfn k() -> i32 { return mk(41).bump(); }\n";
+        assert_jump(
+            &s.def_in(&uri, src, "mk(41)", 1, 0),
+            &rut_new::at("src/m/mod.rut"),
+            rut_new::M,
+            "pub fn mk(",
+            1,
+            "one target for the twice-mounted file",
+        );
+        let src = "use app::{ LIMIT };\nfn k() -> i32 { return LIMIT; }\n";
+        assert_jump(
+            &s.def_in(&uri, src, "return LIMIT", 1, 7),
+            &rut_new::at("src/mod.rut"),
+            rut_new::ROOT,
+            "pub let LIMIT",
+            1,
+            "the root, once",
+        );
+    }
 }

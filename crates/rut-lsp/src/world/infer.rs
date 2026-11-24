@@ -253,8 +253,10 @@ fn path_ty<'a>(
     own.or_else(|| module_let_ty(idxs.iter().copied(), text))
 }
 
-/// `f(..)` — a free fn's declared ret, unique match only (ambiguity is
-/// a miss, never a wrong type); the constructor-call form — a single
+/// `f(..)` — a free fn's declared ret: a bare callee resolves through
+/// the hook first (the file scope — what the queried file binds), the
+/// window's unique match only otherwise (ambiguity is a miss, never a
+/// wrong type); the constructor-call form — a single
 /// CAPITALIZED path segment the index knows as a class/struct — is the
 /// type itself (`let log = Logger("hello");` types `log` as `Logger`,
 /// the positional shape of the `Type::new(..)` arm below)
@@ -270,6 +272,13 @@ fn call_ty<'a>(
         let segs = &h.get(ast).segs;
         if segs.len() == 1 {
             let name = ast.name(segs[0].name.ident);
+            // the ONE home first: what the QUERIED FILE binds by this
+            // name (its own decl, a use leaf, a glob, the ambient rows)
+            // — the flat unique-match below is the hook-less callers'
+            // window only
+            if let Some(QualHit::Fn(fv)) = qual(&[name.to_string()], false) {
+                return call_ret(home, idxs, ast, &fv, &segs[0].generics, args, qual);
+            }
             let hits: Vec<_> = idxs
                 .iter()
                 .flat_map(|f| f.fns())

@@ -104,6 +104,7 @@ fn a_glob_import_completes_bare_and_resolves_into_the_dep() {
 
 // ---- the auto-import suppression ----
 
+both_uri_shapes! {
 #[test]
 fn a_glob_bound_name_is_not_re_offered_by_auto_import() {
     let (io, root) = declare_direct(&["json"]);
@@ -135,9 +136,11 @@ fn a_glob_bound_name_is_not_re_offered_by_auto_import() {
         labels(&items)
     );
 }
+}
 
 // ---- the glob–glob conflict diag through the check lane ----
 
+both_uri_shapes! {
 #[test]
 fn the_glob_conflict_diag_surfaces_through_analyze() {
     let mut s = S::boot();
@@ -178,9 +181,11 @@ fn the_glob_conflict_diag_surfaces_through_analyze() {
         conflict
     );
 }
+}
 
 // ---- references: the glob-aware reverse edge ----
 
+both_uri_shapes! {
 #[test]
 fn references_reach_every_glob_importing_file() {
     // two files both `use json::*;` and both call `parse` — references
@@ -219,9 +224,11 @@ fn references_reach_every_glob_importing_file() {
     // one call site per importer
     assert_eq!(hits.len(), 2, "{hits:?}");
 }
+}
 
 // ---- the glob re-export feeds downstream ----
 
+both_uri_shapes! {
 #[test]
 fn chained_glob_reexports_terminate() {
     // a pub-globs b, b pub-globs a — the real worlds are DAGs, but a
@@ -259,7 +266,9 @@ fn chained_glob_reexports_terminate() {
     let items = s.complete_at(uri, src, "    let x = bf", 1);
     assert!(offers(&items, "bfn"), "{:?}", labels(&items));
 }
+}
 
+both_uri_shapes! {
 #[test]
 fn a_glob_reexport_feeds_downstream() {
     let mut s = S::boot();
@@ -300,4 +309,5 @@ fn a_glob_reexport_feeds_downstream() {
     );
     assert_eq!(hits.len(), 1, "{hits:?}");
     assert_eq!(hits[0]["uri"], "file:///deps/util/mod.rut");
+}
 }

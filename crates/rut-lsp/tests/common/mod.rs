@@ -11,7 +11,7 @@
 
 #![allow(dead_code)] // shared harness — every test binary compiles it and uses a subset
 
-use std::cell::RefCell;
+use std::cell::{Cell, RefCell};
 use std::collections::{HashMap, HashSet};
 use std::future::Future;
 use std::rc::Rc;
@@ -72,11 +72,127 @@ pub mod t {
     pub const OPERATOR: i64 = 14;
 }
 
+// ---- the URI shapes — the ONE flag every named-mount pin runs under ----
+
+/// Where a package's files sit: under a project dir NAMED after the
+/// package (`…/app/src/…` — `rut new`'s layout, the NORMATIVE shape:
+/// the package name appears in every one of its documents' uris), or
+/// under a dir the name never appears in (`…/p1/src/…`). A hand-built
+/// world whose uris never name the package MASKS every matcher defect
+/// that lands a package's root by a path coincidence — so the pins run
+/// in both shapes ([`both_uri_shapes`]): one body, two tests.
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+pub enum Shape {
+    /// the project dir names the package (`file:///ws/app/src/…`)
+    DirNamesThePackage,
+    /// the project dir hides it (`file:///ws/p1/src/…`)
+    DirHidesThePackage,
+}
+
+thread_local! {
+    static SHAPE: Cell<Shape> = const { Cell::new(Shape::DirNamesThePackage) };
+    /// the renamed package dirs of one run — `(the pin's prefix, the
+    /// shaped prefix)`, in first-use order
+    static RENAMED: RefCell<Vec<(String, String)>> = const { RefCell::new(Vec::new()) };
+}
+
+/// run one pin body under `shape`: every uri the harness doors receive
+/// is spelled the shape's way, every uri an answer carries comes back
+/// in the pin's own spelling — the body reads the same under both
+pub fn run_under(shape: Shape, body: impl FnOnce()) {
+    SHAPE.with(|s| s.set(shape));
+    RENAMED.with(|r| r.borrow_mut().clear());
+    body();
+    SHAPE.with(|s| s.set(Shape::DirNamesThePackage));
+    RENAMED.with(|r| r.borrow_mut().clear());
+}
+
+/// the world roots a pin's package dirs sit under
+const URI_ROOTS: [&str; 2] = ["file:///ws/", "file:///deps/"];
+
+/// the uri as the running shape spells it: the package dir (the first
+/// segment under a world root) renames to a neutral `pN` when the
+/// shape hides the package — one dir always renames the same way
+/// within a run, so a mount and its queries stay one file
+pub fn spelled(uri: &str) -> String {
+    if SHAPE.with(|s| s.get()) == Shape::DirNamesThePackage {
+        return uri.to_string();
+    }
+    let Some(root) = URI_ROOTS.iter().find(|r| uri.starts_with(**r)) else {
+        return uri.to_string();
+    };
+    let rest = &uri[root.len()..];
+    let Some((dir, tail)) = rest.split_once('/') else {
+        return uri.to_string();
+    };
+    if dir.is_empty() {
+        return uri.to_string();
+    }
+    let pin_prefix = format!("{root}{dir}/");
+    let shaped_prefix = RENAMED.with(|r| {
+        let mut renamed = r.borrow_mut();
+        if let Some((_, shaped)) = renamed.iter().find(|(pin, _)| *pin == pin_prefix) {
+            return shaped.clone();
+        }
+        let fresh = format!("{root}p{}/", renamed.len() + 1);
+        renamed.push((pin_prefix, fresh.clone()));
+        fresh
+    });
+    format!("{shaped_prefix}{tail}")
+}
+
+/// an answer's uris back to the pin's spelling — every string an
+/// envelope carries (location uris, a hover's provenance line)
+fn unshaped(value: Value) -> Value {
+    let renamed = RENAMED.with(|r| r.borrow().clone());
+    match value {
+        _ if renamed.is_empty() => value,
+        Value::String(text) => Value::String(renamed.iter().fold(text, |text, (pin, shaped)| {
+            // both spellings of the dir: a uri's and a rooted path's
+            // (the dep walk's plain-path origins)
+            let plain = |p: &str| p.trim_start_matches("file://").to_string();
+            text.replace(shaped.as_str(), pin.as_str())
+                .replace(plain(shaped).as_str(), plain(pin).as_str())
+        })),
+        Value::Array(items) => Value::Array(items.into_iter().map(unshaped).collect()),
+        Value::Object(map) => {
+            Value::Object(map.into_iter().map(|(k, v)| (k, unshaped(v))).collect())
+        }
+        other => other,
+    }
+}
+
+/// Run one pin in BOTH URI shapes — `both_uri_shapes! { #[test] fn
+/// name() { ..body.. } }` compiles the body twice: once with the
+/// project dir naming the package (the normative layout), once with a
+/// dir the name never appears in. The body reads the same under both:
+/// the harness doors spell its uris the running shape's way and bring
+/// answer uris back.
+#[macro_export]
+macro_rules! both_uri_shapes {
+    (#[test] fn $name:ident() $body:block) => {
+        mod $name {
+            use super::*;
+
+            #[test]
+            fn the_project_dir_names_the_package() {
+                $crate::common::run_under($crate::common::Shape::DirNamesThePackage, || $body);
+            }
+
+            #[test]
+            fn the_project_dir_hides_the_package() {
+                $crate::common::run_under($crate::common::Shape::DirHidesThePackage, || $body);
+            }
+        }
+    };
+}
+
 // ---- the JSON helpers ----
 
-/// parse one envelope's answer
+/// parse one envelope's answer — its uris spelled back in the pin's
+/// own way (no-op outside a shape-hiding run)
 pub fn take(json: String) -> Value {
-    serde_json::from_str(&json).expect("the envelope is valid JSON")
+    unshaped(serde_json::from_str(&json).expect("the envelope is valid JSON"))
 }
 
 /// an envelope's `contents.value` markdown (hover) — owned, so call
@@ -310,7 +426,7 @@ impl S {
     pub fn analyze(&mut self, uri: &str, src: &str) -> Value {
         take(
             self.pool
-                .run_until(self.lsp.analyze(uri.to_string(), src.to_string())),
+                .run_until(self.lsp.analyze(spelled(uri), src.to_string())),
         )
     }
 
@@ -329,15 +445,12 @@ impl S {
     pub fn hover_at(&mut self, uri: &str, src: &str, needle: &str, occ: usize) -> Value {
         self.analyze(uri, src);
         let (l, c) = pos_of(src, needle, occ);
-        take(self.pool.run_until(self.lsp.hover(uri.to_string(), l, c)))
+        take(self.pool.run_until(self.lsp.hover(spelled(uri), l, c)))
     }
 
     /// hover the stored doc at a raw position
     pub fn hover_pos(&mut self, uri: &str, line: u32, ch: u32) -> Value {
-        take(
-            self.pool
-                .run_until(self.lsp.hover(uri.to_string(), line, ch)),
-        )
+        take(self.pool.run_until(self.lsp.hover(spelled(uri), line, ch)))
     }
 
     /// hover at `off` bytes past the `occ`-th needle's start — the
@@ -358,10 +471,8 @@ impl S {
     /// completions at a raw position over `src`
     pub fn complete_pos(&mut self, uri: &str, src: &str, line: u32, ch: u32) -> Vec<Value> {
         take(
-            self.pool.run_until(
-                self.lsp
-                    .complete(uri.to_string(), src.to_string(), line, ch),
-            ),
+            self.pool
+                .run_until(self.lsp.complete(spelled(uri), src.to_string(), line, ch)),
         )
         .as_array()
         .expect("the completion answer is an array")
@@ -380,7 +491,7 @@ impl S {
     pub fn def_pos(&mut self, uri: &str, line: u32, ch: u32) -> Vec<Value> {
         take(
             self.pool
-                .run_until(self.lsp.definition(uri.to_string(), line, ch)),
+                .run_until(self.lsp.definition(spelled(uri), line, ch)),
         )
         .as_array()
         .expect("the definition answer is an array")
@@ -431,7 +542,7 @@ impl S {
         let (l, c) = pos_of(src, needle, occ);
         take(
             self.pool
-                .run_until(self.lsp.type_definition(uri.to_string(), l, c)),
+                .run_until(self.lsp.type_definition(spelled(uri), l, c)),
         )
         .as_array()
         .expect("the typeDefinition answer is an array")
@@ -451,7 +562,7 @@ impl S {
         let (l, c) = pos_of(src, needle, occ);
         take(
             self.pool
-                .run_until(self.lsp.type_definition(uri.to_string(), l, c + off)),
+                .run_until(self.lsp.type_definition(spelled(uri), l, c + off)),
         )
         .as_array()
         .expect("the typeDefinition answer is an array")
@@ -470,12 +581,10 @@ impl S {
         self.analyze(uri, src);
         let (l, c) = pos_of(src, needle, occ);
         take(
-            self.pool.run_until(self.lsp.references(
-                uri.to_string(),
-                l,
-                c,
-                u32::from(include_decl),
-            )),
+            self.pool.run_until(
+                self.lsp
+                    .references(spelled(uri), l, c, u32::from(include_decl)),
+            ),
         )
         .as_array()
         .expect("the references answer is an array")
@@ -488,10 +597,8 @@ impl S {
         self.analyze(uri, src);
         let (l, c) = pos_of(src, needle, occ);
         take(
-            self.pool.run_until(
-                self.lsp
-                    .signature_help(uri.to_string(), src.to_string(), l, c),
-            ),
+            self.pool
+                .run_until(self.lsp.signature_help(spelled(uri), src.to_string(), l, c)),
         )
     }
 
@@ -499,7 +606,7 @@ impl S {
     pub fn sig_pos(&mut self, uri: &str, src: &str, pos: (u32, u32)) -> Value {
         take(
             self.pool.run_until(self.lsp.signature_help(
-                uri.to_string(),
+                spelled(uri),
                 src.to_string(),
                 pos.0,
                 pos.1,
@@ -509,12 +616,14 @@ impl S {
 
     /// references at a raw position over the stored doc
     pub fn refs_pos(&mut self, uri: &str, pos: (u32, u32), include_decl: bool) -> Vec<Value> {
-        take(self.pool.run_until(self.lsp.references(
-            uri.to_string(),
-            pos.0,
-            pos.1,
-            u32::from(include_decl),
-        )))
+        take(
+            self.pool.run_until(self.lsp.references(
+                spelled(uri),
+                pos.0,
+                pos.1,
+                u32::from(include_decl),
+            )),
+        )
         .as_array()
         .expect("the references answer is an array")
         .clone()
@@ -525,12 +634,10 @@ impl S {
         self.analyze(uri, src);
         let (l, c) = pos_of(src, needle, occ);
         take(
-            self.pool.run_until(self.lsp.signature_help(
-                uri.to_string(),
-                src.to_string(),
-                l,
-                c + off,
-            )),
+            self.pool.run_until(
+                self.lsp
+                    .signature_help(spelled(uri), src.to_string(), l, c + off),
+            ),
         )
     }
 
@@ -540,7 +647,7 @@ impl S {
         let lines = src.matches('\n').count() as u32;
         take(
             self.pool
-                .run_until(self.lsp.inlay(uri.to_string(), 0, 0, lines, 0)),
+                .run_until(self.lsp.inlay(spelled(uri), 0, 0, lines, 0)),
         )
         .as_array()
         .expect("the inlay answer is an array")
@@ -555,7 +662,7 @@ impl S {
         let lines = src.matches('\n').count() as u32;
         take(
             self.pool
-                .run_until(self.lsp.inlay(uri.to_string(), l, c, lines, 0)),
+                .run_until(self.lsp.inlay(spelled(uri), l, c, lines, 0)),
         )
         .as_array()
         .expect("the inlay answer is an array")
@@ -567,14 +674,14 @@ impl S {
     /// index one workspace file under its open-doc stamp
     pub fn index_file(&mut self, uri: &str, src: &str) {
         self.pool
-            .run_until(self.lsp.index_file(uri.to_string(), src.to_string()));
+            .run_until(self.lsp.index_file(spelled(uri), src.to_string()));
     }
 
     /// index one dep source file at a MOD PATH — the envelope answers
     /// the file's own `mod` declarations (the mount walk's next hop)
     pub fn index_mod_at(&mut self, uri: &str, pkg: &str, mod_path: &str, src: &str) -> Value {
         take(self.pool.run_until(self.lsp.index_mod_at(
-            uri.to_string(),
+            spelled(uri),
             pkg.to_string(),
             mod_path.to_string(),
             src.to_string(),
@@ -602,7 +709,143 @@ impl S {
 
     /// close: drop the stored doc
     pub fn forget(&mut self, uri: &str) {
-        self.pool.run_until(self.lsp.forget(uri.to_string()));
+        self.pool.run_until(self.lsp.forget(spelled(uri)));
+    }
+}
+
+// ---- the rut-new world — the extension's own mounts, through the
+//      public doors ----
+
+/// `rut new`'s layout, as the extension mounts it. ONE fixture every
+/// round-4 pin rides: the `app` package on disk as `rut new`
+/// scaffolds it (a project dir named after the package; the root
+/// `src/mod.rut` declaring `mod child;` and `mod m;`; `child`'s own
+/// `mod sub;`; `m`'s nested `grid`), the path dep `calc` beside it
+/// (its own `math` module with a nested `grid`), and BOTH lanes that
+/// mount a workspace file in production — the workspace indexer's
+/// `file://` stamps, then the crate's own dep walk over the same disk
+/// (plain-path origins). The uris spell the NORMATIVE shape (the
+/// package names its project dir); under [`both_uri_shapes`] the
+/// harness renames the dirs for the hiding run.
+pub mod rut_new {
+    use super::*;
+
+    /// the app package's file uris in the PIN's spelling —
+    /// `at("src/mod.rut")` is its root. The harness doors spell a uri
+    /// the running shape's way on the way in and bring answer uris
+    /// back to this spelling, so a pin reads the same under both
+    /// shapes.
+    pub fn at(rel: &str) -> String {
+        format!("file:///ws/app/{rel}")
+    }
+
+    /// the app dir ON DISK — the shape's spelling (the walk mounts
+    /// from it; its plain-path origins key to the same files as the
+    /// indexer's shaped stamps, so both lanes still land one entry
+    /// per file)
+    fn dir() -> String {
+        spelled("file:///ws/app/rut.jsonc")
+            .trim_start_matches("file://")
+            .trim_end_matches("/rut.jsonc")
+            .to_string()
+    }
+
+    /// the dep's files as the WALK stamps their origins — rooted
+    /// paths, the path row's joined `..` carried (the walk's own law):
+    /// a hover's provenance line reads `— /ws/app/../calc/…`. Spelled
+    /// in the PIN's way (the harness brings answer uris back to it,
+    /// whatever dir the hiding run put on disk)
+    pub fn calc(rel: &str) -> String {
+        format!("/ws/app/../calc/{rel}")
+    }
+
+    /// the same file as a jump target — the definition layer's uri
+    /// for a rooted-path origin (`file://` + the path)
+    pub fn calc_uri(rel: &str) -> String {
+        format!("file://{}", calc(rel))
+    }
+
+    pub const ROOT: &str = "mod child;\nmod m;\n\npub let LIMIT: i32 = 7;\nlet HIDDEN: i32 = 3;\n\npub fn rootfn() -> i32 { return 1; }\nfn rootpriv() -> i32 { return 2; }\n\npub struct RootTy {\n    a: i32,\n}\n\nentry fn main() -> nil {\n    let x = m::mk(41).bump();\n}\n";
+
+    /// `child`'s on-disk head (a pin's open document replaces it —
+    /// the twin may lag an open edit, exactly as in the editor)
+    pub const CHILD_HEAD: &str = "mod sub;\n\npub fn kid() -> i32 { return 3; }\n";
+
+    /// the leaf module `m`: the leaf kinds the lanes gate — a fn, a
+    /// type (+ its impl), a module let, a `pub(pkg)` fn, a private
+    /// fn, a nested `grid`, and the use rows (a private import, a
+    /// `pub use` re-export, a glob)
+    pub const M: &str = "pub mod grid;\n\nuse grid::{ cell };\npub use grid::{ G };\nuse grid::*;\n\npub struct Counter {\n    n: i32,\n}\nimpl Counter {\n    pub fn bump(self) -> i32 { return self.n + 1; }\n}\npub fn mk(n: i32) -> Counter { return Counter { n: n }; }\nfn secret() -> i32 { return 5; }\npub(pkg) fn pkgfn() -> i32 { return 6; }\npub let STEP: i32 = 2;\npub struct Box2<T> {\n    v: T,\n}\nimpl<T> Box2<T> {\n    pub fn get(self) -> T { return self.v; }\n}\npub fn mk_box<T>(v: T) -> Box2<T> { return Box2 { v: v }; }\n";
+
+    /// `m`'s nested module
+    pub const GRID: &str =
+        "pub fn cell() -> i32 { return 9; }\npub let G: i32 = 1;\npub let GK: i32 = 1;\n";
+
+    /// `child`'s own child
+    pub const SUB: &str = "pub fn deep() -> i32 { return 4; }\n";
+
+    /// the dep's root: a module tree (`pub mod math;`) and a root fn
+    /// of its own
+    pub const CALC_ROOT: &str = "pub mod math;\npub fn ctop() -> i32 { return 10; }\n";
+
+    /// the dep's `math` module — `m`'s shape under its own names
+    pub const CALC_MATH: &str = "pub mod grid;\n\nuse grid::{ cell };\npub use grid::{ G };\nuse grid::*;\n\npub struct Calc {\n    d: i32,\n}\nimpl Calc {\n    pub fn deg(self) -> i32 { return self.d; }\n}\npub fn cmk(d: i32) -> Calc { return Calc { d: d }; }\nfn hidden() -> i32 { return 0; }\npub(pkg) fn cpkg() -> i32 { return 6; }\npub let CPI: f64 = 3.14;\n";
+
+    pub const CALC_GRID: &str =
+        "pub fn cell() -> i32 { return 9; }\npub let G: i32 = 1;\npub let GK: i32 = 1;\n";
+
+    /// the app package's files: (the uri-relative path, its mod path,
+    /// its text) — what both lanes mount
+    pub const APP_FILES: [(&str, &str, &str); 5] = [
+        ("src/mod.rut", "", ROOT),
+        ("src/child/mod.rut", "child", CHILD_HEAD),
+        ("src/child/sub/mod.rut", "child/sub", SUB),
+        ("src/m/mod.rut", "m", M),
+        ("src/m/grid/mod.rut", "m/grid", GRID),
+    ];
+
+    /// the dep's files on disk (the walk mounts them — plain-path
+    /// origins, the `..` row carried)
+    pub const CALC_FILES: [(&str, &str); 3] = [
+        ("src/mod.rut", CALC_ROOT),
+        ("src/math/mod.rut", CALC_MATH),
+        ("src/math/grid/mod.rut", CALC_GRID),
+    ];
+
+    /// boot the extension's world: the in-memory disk holds the
+    /// package and its dep; the workspace indexer's `file://` stamps
+    /// land first (every `mod.rut` under the owner's `src/`, by its
+    /// declared mod path), then the crate's dep walk runs over the
+    /// same disk from the project dir (the roots the extension hands
+    /// it). Both lanes, one entry per file.
+    pub fn boot() -> (S, Rc<MemIo>) {
+        let mut io = MemIo::default();
+        let app_dir = dir();
+        let calc_dir = lexical(&format!("{app_dir}/../calc"));
+        io.put(
+            &format!("{app_dir}/rut.jsonc"),
+            "{\n  \"name\": \"app\",\n  \"deps\": {\n    \"calc\": { \"path\": \"../calc\" }\n  }\n}\n",
+        );
+        io.put(
+            &format!("{calc_dir}/rut.jsonc"),
+            "{\n  \"name\": \"calc\"\n}\n",
+        );
+        for (rel, _, text) in APP_FILES {
+            io.put(&format!("{app_dir}/{rel}"), text);
+        }
+        for (rel, text) in CALC_FILES {
+            io.put(&format!("{calc_dir}/{rel}"), text);
+        }
+        let io = Rc::new(io);
+        let mut s = S::with_io(&io);
+        // the workspace indexer's stamps
+        for (rel, mod_path, text) in APP_FILES {
+            s.index_mod_at(&at(rel), "app", mod_path, text);
+        }
+        // then the dep walk
+        let root = dir();
+        s.resolve(&[&root]);
+        (s, io)
     }
 }
 
@@ -672,17 +915,39 @@ impl MemIo {
     }
 }
 
+/// a rooted path with `.` dropped and `..` collapsed segment by
+/// segment — the host-normalizes law the walk's joined path rows
+/// ride (`/ws/app/../calc` is `/ws/calc`)
+pub fn lexical(path: &str) -> String {
+    // only a rooted path normalizes — a `file://` uri (the mod-name
+    // slot's probe spells the doc's directory that way) is a key as-is
+    if !path.starts_with('/') {
+        return path.to_string();
+    }
+    let mut out: Vec<&str> = Vec::new();
+    for seg in path.split('/') {
+        match seg {
+            "" | "." => {}
+            ".." => {
+                out.pop();
+            }
+            s => out.push(s),
+        }
+    }
+    format!("/{}", out.join("/"))
+}
+
 impl Io for MemIo {
     fn read(&self, path: &str) -> Option<Vec<u8>> {
         self.reads.borrow_mut().push(path.to_string());
-        self.files.get(path).cloned()
+        self.files.get(&lexical(path)).cloned()
     }
 
     fn read_dir(&self, path: &str) -> Option<Vec<String>> {
         // a real listing over the key map AND the recorded dirs: the
         // first segment under `path/`, sorted, deduped; `None` when
         // empty (the mod-name slot's probe lists through this too)
-        let prefix = format!("{path}/");
+        let prefix = format!("{}/", lexical(path));
         let mut names: Vec<String> = Vec::new();
         for k in self.files.keys().chain(self.dirs.iter()) {
             let Some(rest) = k.strip_prefix(&prefix) else {

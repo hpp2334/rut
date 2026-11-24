@@ -26,7 +26,7 @@ mod tiers;
 mod views;
 
 pub(crate) use member::{enclosing_type, used_ifaces, MemberHit, MemberTarget, RecvNode};
-pub(crate) use tiers::{ExportRow, MemberRow, UseExports};
+pub(crate) use tiers::{bound_has, ExportRow, MemberRow, UseExports};
 pub(crate) use views::{FnView, GlobUse, LetView, MemberView, ModView, TyView, UseView};
 
 use rut_ast::{
@@ -34,6 +34,7 @@ use rut_ast::{
 };
 
 use crate::semantic::{mode_of, Document};
+use crate::world::mods::DocMods;
 use crate::world::types::Mount;
 
 // ---- the decl map — name → node address, one pass per file version ----
@@ -130,9 +131,25 @@ impl MountedFile {
         MountedFile { doc, mount, decls }
     }
 
-    /// the file's origin (the defs store's replace-by-origin key)
+    /// the file's origin (its provenance label; the jump targets'
+    /// uri source)
     pub(crate) fn origin(&self) -> &str {
         &self.mount.origin
+    }
+
+    /// the file's IDENTITY — one physical file however many lanes
+    /// mounted it (the host's scan under its `file://` uri, the dep
+    /// walk under its rooted string): [`crate::world::pkg::file_key`]
+    /// over the origin
+    pub(crate) fn key(&self) -> String {
+        crate::world::pkg::file_key(&self.mount.origin)
+    }
+
+    /// is this the same physical file as `other`? The open document's
+    /// entry and its stamped twin are one file by this test (their
+    /// origins spell the same path).
+    pub(crate) fn same_file(&self, other: &MountedFile) -> bool {
+        std::ptr::eq(self, other) || self.key() == other.key()
     }
 
     // ---- per-file decl views, in source order ----
@@ -266,26 +283,41 @@ impl DefIndexCollection {
         DefIndexCollection { files: Vec::new() }
     }
 
-    /// the defs store's replace-by-origin law — one file per origin,
-    /// re-mounting replaces (the world stays idempotent under re-walks)
-    pub(crate) fn mount(&mut self, file: MountedFile) {
-        match self.files.iter().position(|f| f.origin() == file.origin()) {
-            Some(slot) => self.files[slot] = file,
+    /// the defs store's replace-by-FILE law — one entry per physical
+    /// file, re-mounting replaces (the world stays idempotent under
+    /// re-walks, and the two lanes that may mount one workspace file —
+    /// the host's scan under its `file://` uri, the dep walk under its
+    /// rooted string — collapse into the ONE entry, so a file's decls
+    /// never speak twice). The entry keeps the origin it FIRST mounted
+    /// under (the spelling the open document's lookups key on); its
+    /// stamp and text are the latest lane's — the walk's is the
+    /// loader's law.
+    pub(crate) fn mount(&mut self, mut file: MountedFile) {
+        let key = file.key();
+        match self.files.iter().position(|f| f.key() == key) {
+            Some(slot) => {
+                file.mount.origin = self.files[slot].mount.origin.clone();
+                self.files[slot] = file;
+            }
             None => self.files.push(file),
         }
     }
 
-    /// the file mounted at `origin`, if any
+    /// the file mounted at `origin` (by identity — either spelling of
+    /// its path), if any
     pub(crate) fn file_for(&self, origin: &str) -> Option<&MountedFile> {
-        self.files.iter().find(|f| f.origin() == origin)
+        let key = crate::world::pkg::file_key(origin);
+        self.files.iter().find(|f| f.key() == key)
     }
 
     /// the query chain — `origin`'s file at the head (the open
     /// document first), the rest of the world after. The chain is an
     /// ordering VIEW over the world's files: the open document's entry
-    /// (whose home is the session's versioned cache) rides first, any
-    /// stamped twin of the same uri keeps its place behind it (the
-    /// definition layer's dedupe law handles the doubled answer).
+    /// (whose home is the session's versioned cache) rides first, its
+    /// stamped twin (the store entry of the same physical file — the
+    /// doc's stamp carrier) keeps its place behind it; the doors read
+    /// the head's decls and the twin's stamp, never the twin's decls
+    /// ([`MountedFile::same_file`] is the exclusion).
     pub(crate) fn chain_with<'a>(&'a self, head: &'a MountedFile) -> Chain<'a> {
         let mut files = Vec::with_capacity(1 + self.files.len());
         files.push(head);
@@ -330,13 +362,42 @@ pub(crate) struct Chain<'a> {
     files: Vec<&'a MountedFile>,
     /// the head's position — the open document
     head: usize,
+    /// the head's file-module stamp — where in its package's mod tree
+    /// the head sits (a stamped head speaks for itself; the open
+    /// document's entry is unstamped, its place is its stamped twin's)
+    stamp: DocMods,
+}
+
+/// the head's stamp over a file list: its own mount when the head is
+/// a stamped file, else the stamped twin's — the same physical file's
+/// store entry ([`MountedFile::same_file`])
+fn stamp_of(files: &[&MountedFile]) -> DocMods {
+    let head = files[0];
+    let of = |f: &MountedFile| DocMods {
+        mod_path: f.mount.mod_path.clone(),
+        pkg: f.mount.module.clone(),
+    };
+    if head.mount.module.is_some() {
+        return of(head);
+    }
+    files
+        .iter()
+        .skip(1)
+        .find(|f| f.mount.module.is_some() && head.same_file(f))
+        .map_or_else(DocMods::default, |f| of(f))
 }
 
 impl<'a> Chain<'a> {
-    /// the chain over the files, `files[head]` the open document
+    /// the chain over the files, `files[0]` the queried document —
+    /// its stamp read off the list (the stamped twin rides behind)
     pub(crate) fn new(files: Vec<&'a MountedFile>) -> Chain<'a> {
         assert!(!files.is_empty(), "a chain rides at least its head");
-        Chain { files, head: 0 }
+        let stamp = stamp_of(&files);
+        Chain {
+            files,
+            head: 0,
+            stamp,
+        }
     }
 
     /// the open document's own file — the chain head
@@ -344,24 +405,38 @@ impl<'a> Chain<'a> {
         self.files[self.head]
     }
 
+    /// the head's file-module context — the (pkg, mod path) the
+    /// own-package lanes key on ([`DocMods`]); the default (all
+    /// `None`) for a document no lane stamped
+    pub(crate) fn stamp(&self) -> &DocMods {
+        &self.stamp
+    }
+
+    /// the package a chain file speaks for: a stamped file's own
+    /// manifest name; the open document's entry — its twin's stamp
+    /// ([`Chain::stamp`])
+    pub(crate) fn pkg_of(&self, f: &'a MountedFile) -> Option<&str> {
+        if std::ptr::eq(f, self.head()) {
+            self.stamp.pkg.as_deref()
+        } else {
+            f.mount.module.as_deref()
+        }
+    }
+
+    /// the mod path a chain file sits at: a stamped file's own; the
+    /// open document's entry — its twin's stamp
+    pub(crate) fn mod_path_of(&self, f: &'a MountedFile) -> &str {
+        if std::ptr::eq(f, self.head()) {
+            self.stamp.mod_path.as_deref().unwrap_or("")
+        } else {
+            crate::world::mods::mod_path_of(f)
+        }
+    }
+
     /// the whole chain, doc first — the old `idxs.iter()` shape
     pub(crate) fn iter(&self) -> impl Iterator<Item = &'a MountedFile> + Clone + '_ {
         let (head, tail) = self.files.split_at(self.head + 1);
         head.iter().copied().chain(tail.iter().copied())
-    }
-
-    /// the scan's per-candidate chain — `f` at the head, the rest of
-    /// `base` after (no origin speaks twice; the references scan's law)
-    pub(crate) fn reordered(base: &Chain<'a>, f: &'a MountedFile) -> Chain<'a> {
-        let mut files: Vec<&'a MountedFile> = Vec::with_capacity(base.files.len());
-        files.push(f);
-        files.extend(
-            base.files
-                .iter()
-                .copied()
-                .filter(|x| x.mount.origin != f.mount.origin),
-        );
-        Chain { files, head: 0 }
     }
 
     // ---- the collection's doors — the flat re-spellings of the ONE
@@ -411,6 +486,22 @@ impl<'a> Chain<'a> {
         hits: &[(&'a MountedFile, T)],
     ) -> Vec<(&'a MountedFile, T)> {
         DefIndexCollection::prefer_bodies(hits)
+    }
+
+    /// the scan's per-candidate chain — `f` at the head, the rest of
+    /// `base` after (no file speaks twice; the references scan's law).
+    /// `stamp` is the candidate's own file-module context: the open
+    /// document's is its query's (the two queries cannot disagree
+    /// about the doc's idents), another file's is its own mount's.
+    pub(crate) fn reordered(base: &Chain<'a>, f: &'a MountedFile, stamp: DocMods) -> Chain<'a> {
+        let mut files: Vec<&'a MountedFile> = Vec::with_capacity(base.files.len());
+        files.push(f);
+        files.extend(base.files.iter().copied().filter(|x| !x.same_file(f)));
+        Chain {
+            files,
+            head: 0,
+            stamp,
+        }
     }
 }
 

@@ -954,6 +954,7 @@ fn qualified_type_positions_render_with_colon2() {
     assert!(md.contains("let p: layout::Point"), "{md}");
 }
 
+both_uri_shapes! {
 #[test]
 fn mod_decl_hover_shows_kind_mount_and_children() {
     // `pub mod layout;` in the doc — kind, the mounted file, the
@@ -973,6 +974,7 @@ fn mod_decl_hover_shows_kind_mount_and_children() {
     assert!(md.contains("\nmod secret;"), "{md}");
     assert!(md.contains("file module — `secret/mod.rut`"), "{md}");
     assert!(md.contains("no child modules"), "{md}");
+}
 }
 
 #[test]
@@ -1032,6 +1034,7 @@ fn host_fn_surface_signature_cuts_at_its_own_semicolon() {
     );
 }
 
+both_uri_shapes! {
 #[test]
 fn host_fn_hover_via_the_calc_fixture_has_no_next_decl_artifact() {
     // calc rides the PUBLIC dep lane — the repo's own source mounted
@@ -1059,6 +1062,7 @@ fn host_fn_hover_via_the_calc_fixture_has_no_next_decl_artifact() {
         "{md}"
     );
     assert!(!md.contains(";pub"), "the next-decl artifact leaked: {md}");
+}
 }
 
 #[test]
@@ -1142,6 +1146,7 @@ fn the_async_family_hovers_engine_true_texts() {
     assert!(md.contains("const v: i32"), "{md}");
 }
 
+both_uri_shapes! {
 #[test]
 fn member_hover_gates_the_foreign_privates() {
     // the member-vis law on hover: a foreign class's private field is
@@ -1172,6 +1177,7 @@ fn member_hover_gates_the_foreign_privates() {
     let md = markdown(s.hover_in("file:///t/own.rut", own, "self.hidden", 1, 5));
     assert!(md.contains("hidden"), "own privates still hover: {md}");
 }
+}
 
 // ---- qualified paths: the module namespace lane ----
 
@@ -1193,6 +1199,7 @@ fn mount_layout_pkg(s: &mut S) {
     );
 }
 
+both_uri_shapes! {
 #[test]
 fn qualified_path_through_own_mod_edge_hovers() {
     // `layout::span()` with only `mod layout;` — the compiler resolves
@@ -1215,6 +1222,7 @@ fn qualified_path_through_own_mod_edge_hovers() {
     let md = markdown(s.hover_in(uri, doc, "layout::span()", 1, 3));
     assert!(md.contains("file module"), "{md}");
     assert!(md.contains("layout/mod.rut"), "{md}");
+}
 }
 
 #[test]
@@ -1240,6 +1248,7 @@ fn qualified_type_position_answers_through_the_lane() {
     assert!(md.contains("pub struct Point"), "{md}");
 }
 
+both_uri_shapes! {
 #[test]
 fn qualified_path_through_use_bound_module_hovers() {
     // `math::sqrt(x)` with only `use calc::{ math };` — the use-bound
@@ -1270,7 +1279,9 @@ fn qualified_path_through_use_bound_module_hovers() {
         "a module let is silent behind a use-bound head: {h}"
     );
 }
+}
 
+both_uri_shapes! {
 #[test]
 fn qualified_path_walks_nested_modules() {
     // `layout::grid::cell()` — the walk crosses both mod edges and
@@ -1284,7 +1295,9 @@ fn qualified_path_walks_nested_modules() {
     assert!(md.contains("pub fn cell() -> i32"), "{md}");
     assert!(md.contains("grid.rut"), "{md}");
 }
+}
 
+both_uri_shapes! {
 #[test]
 fn qualified_path_through_the_own_pkg_head_hovers() {
     // the stamped doc's own package name opens its root module — the
@@ -1297,7 +1310,9 @@ fn qualified_path_through_the_own_pkg_head_hovers() {
     let md = markdown(s.hover_in(uri, doc, "pkg::layout::span", 1, 15));
     assert!(md.contains("pub fn span() -> i32"), "{md}");
 }
+}
 
+both_uri_shapes! {
 #[test]
 fn qualified_path_without_the_binding_answers_nothing() {
     // scope-true: the file binds no `layout` (no mod edge, no use) —
@@ -1321,7 +1336,9 @@ fn qualified_path_without_the_binding_answers_nothing() {
         "an unbound qualified head answers nothing: {h}"
     );
 }
+}
 
+both_uri_shapes! {
 #[test]
 fn pkg_rooted_dep_name_answers_through_the_lane() {
     // HIGH 1: `calc::math::sqrt(x)` with calc ONLY a declared dep —
@@ -1379,7 +1396,9 @@ fn pkg_rooted_dep_name_answers_through_the_lane() {
     let h = s.hover_in("file:///t/flat.rut", flatdoc, "flatdep::top", 1, 10);
     assert!(no_hover(&h), "a flat dep roots nothing: {h}");
 }
+}
 
+both_uri_shapes! {
 #[test]
 fn qualified_leaves_are_the_module_own_decls_only() {
     // HIGH 2: the qualified leaf is DECLS-ONLY — the target's use
@@ -1441,7 +1460,9 @@ fn qualified_leaves_are_the_module_own_decls_only() {
     let h = s.hover_in(ROOT_URI, internal, "layout::internal", 1, 9);
     assert!(no_hover(&h), "a private leaf is silent from outside: {h}");
 }
+}
 
+both_uri_shapes! {
 #[test]
 fn qualified_leaf_inside_the_declaring_subtree_answers() {
     // the visibility matrix's inside-the-subtree cell: grid's own
@@ -1462,7 +1483,9 @@ fn qualified_leaf_inside_the_declaring_subtree_answers() {
     let md = markdown(s.hover_in(grid_uri, grid, "grid::secret", 1, 9));
     assert!(md.contains("fn secret() -> i32"), "{md}");
 }
+}
 
+both_uri_shapes! {
 #[test]
 fn qualified_tail_never_falls_through_to_the_file_own_name() {
     // the nastiest scope-false shape: the doc DECLARES its own
@@ -1487,7 +1510,9 @@ fn qualified_tail_never_falls_through_to_the_file_own_name() {
         "never the file's own same-named fn: {hits:?}"
     );
 }
+}
 
+both_uri_shapes! {
 #[test]
 fn qualified_path_through_an_ancestor_edge_hovers() {
     // the ancestor's edge opens the sibling module (the own lane's
@@ -1522,6 +1547,7 @@ fn qualified_path_through_an_ancestor_edge_hovers() {
     let h = s.hover_in(deep_uri, deep, "other::thing", 1, 9);
     assert!(no_hover(&h), "a sibling's private leaf is silent: {h}");
 }
+}
 
 /// the counter module world — the receiver-inference shapes' fixture
 /// (the driver's D2 world: the compiler accepts every shape probed)
@@ -1534,6 +1560,7 @@ fn mount_counter_pkg(s: &mut S) {
     );
 }
 
+both_uri_shapes! {
 #[test]
 fn qualified_annotation_receiver_resolves_members() {
     // `let c: m::Counter = m::mk(41); c.bump()` — the annotation
@@ -1549,7 +1576,9 @@ fn qualified_annotation_receiver_resolves_members() {
     assert!(md.contains("pub fn bump(self) -> i32"), "{md}");
     assert!(md.contains("in `Counter`"), "the owner: {md}");
 }
+}
 
+both_uri_shapes! {
 #[test]
 fn qualified_inferred_receiver_resolves_members() {
     // `let c = m::mk(41); c.bump()` — the qualified callee's written
@@ -1568,7 +1597,9 @@ fn qualified_inferred_receiver_resolves_members() {
     assert!(md.contains("pub fn bump(self) -> i32"), "{md}");
     assert!(md.contains("in `Counter`"), "{md}");
 }
+}
 
+both_uri_shapes! {
 #[test]
 fn qualified_chained_receiver_resolves_members() {
     // `m::mk(41).bump()` — the chained callee's ret drives the member
@@ -1581,7 +1612,9 @@ fn qualified_chained_receiver_resolves_members() {
     assert!(md.contains("pub fn bump(self) -> i32"), "{md}");
     assert!(md.contains("in `Counter`"), "{md}");
 }
+}
 
+both_uri_shapes! {
 #[test]
 fn use_bound_bare_call_receiver_resolves_members() {
     // `use m::{ mk }; let c = mk(41); c.bump()` — the bare callee's
@@ -1596,7 +1629,9 @@ fn use_bound_bare_call_receiver_resolves_members() {
     assert!(md.contains("pub fn bump(self) -> i32"), "{md}");
     assert!(md.contains("in `Counter`"), "{md}");
 }
+}
 
+both_uri_shapes! {
 #[test]
 fn unknown_member_on_a_resolved_receiver_stays_silent() {
     // the negative: the receiver resolves, the member does not exist
@@ -1611,7 +1646,9 @@ fn unknown_member_on_a_resolved_receiver_stays_silent() {
     let hits = s.def_in(uri, doc, "c.nonexist();", 1, 2);
     assert!(hits.is_empty(), "no jump: {hits:?}");
 }
+}
 
+both_uri_shapes! {
 #[test]
 fn field_typed_receiver_with_a_sibling_module_type_resolves_members() {
     // the field row: a qualified FIELD annotation (`c: m::Counter`)
@@ -1631,7 +1668,9 @@ fn field_typed_receiver_with_a_sibling_module_type_resolves_members() {
     assert!(md.contains("pub fn bump(self) -> i32"), "{md}");
     assert!(md.contains("in `Counter`"), "{md}");
 }
+}
 
+both_uri_shapes! {
 #[test]
 fn is_cast_narrowed_receiver_resolves_members() {
     // the is-cast row (the cast's type operand is a SPELLING: the
@@ -1646,7 +1685,9 @@ fn is_cast_narrowed_receiver_resolves_members() {
     assert!(md.contains("pub fn bump(self) -> i32"), "{md}");
     assert!(md.contains("in `Counter`"), "{md}");
 }
+}
 
+both_uri_shapes! {
 #[test]
 fn generic_qualified_receiver_resolves_members() {
     // the generic row: a qualified generic annotation
@@ -1666,7 +1707,9 @@ fn generic_qualified_receiver_resolves_members() {
     assert!(md.contains("pub fn get(self) -> T"), "{md}");
     assert!(md.contains("in `Box2`"), "{md}");
 }
+}
 
+both_uri_shapes! {
 #[test]
 fn intra_package_module_let_answers_through_the_lane() {
     // the LET cell behind the own edge: module lets cross no package
@@ -1692,4 +1735,437 @@ fn intra_package_module_let_answers_through_the_lane() {
     let hits = s.def_in(uri, doc, "core_mod::LIMIT", 1, 13);
     assert_eq!(hits.len(), 1, "{hits:?}");
     assert_eq!(hits[0]["uri"], "file:///deps/gadgets/src/core_mod.rut");
+}
+}
+
+// ---- round 4: the rut-new layout — the root landing and the
+//      intra-package use edge, through the extension's own mounts ----
+
+both_uri_shapes! {
+    #[test]
+    fn the_own_pkg_head_from_a_child_lands_the_root_module() {
+        // DEFECT 1: `app::LIMIT` from a child of the rut-new layout —
+        // the compiler compiles it, and the own-package head names the
+        // ROOT module. The open document's uri names the package too
+        // (that is the layout); it must never land the head's root
+        // lookup — the answer is the root's own decl, with the root
+        // file's provenance
+        let (mut s, _io) = rut_new::boot();
+        let uri = rut_new::at("src/child/mod.rut");
+        let root = rut_new::at("src/mod.rut");
+        let md = markdown(s.hover_in(
+            &uri,
+            "fn k() -> i32 { return app::LIMIT; }\n",
+            "app::LIMIT",
+            1,
+            6,
+        ));
+        assert!(md.contains("pub let LIMIT: i32 = 7"), "{md}");
+        assert!(
+            md.contains(&format!("— {root}:4")),
+            "the ROOT's decl, never the open document: {md}"
+        );
+        let md = markdown(s.hover_in(
+            &uri,
+            "fn k() -> i32 { return app::rootfn(); }\n",
+            "app::rootfn",
+            1,
+            6,
+        ));
+        assert!(md.contains("pub fn rootfn() -> i32"), "{md}");
+        let md = markdown(s.hover_in(
+            &uri,
+            "fn k(t: app::RootTy) -> i32 { return 0; }\n",
+            "app::RootTy",
+            1,
+            6,
+        ));
+        assert!(md.contains("pub struct RootTy"), "{md}");
+        // the root's private fn: a descendant sees its ancestors'
+        // privates (the compiler compiles it)
+        let md = markdown(s.hover_in(
+            &uri,
+            "fn k() -> i32 { return app::rootpriv(); }\n",
+            "app::rootpriv",
+            1,
+            6,
+        ));
+        assert!(md.contains("fn rootpriv() -> i32"), "{md}");
+        // ... and the module the root declares, behind the head
+        let md = markdown(s.hover_in(
+            &uri,
+            "fn k() -> i32 { return app::m::mk(41).bump(); }\n",
+            "app::m::mk",
+            1,
+            8,
+        ));
+        assert!(md.contains("pub fn mk(n: i32) -> Counter"), "{md}");
+        assert!(
+            md.contains(&format!("— {}:13", rut_new::at("src/m/mod.rut"))),
+            "{md}"
+        );
+        // ... from a grandchild, the root's edge two levels up
+        let sub = rut_new::at("src/child/sub/mod.rut");
+        let md = markdown(s.hover_in(
+            &sub,
+            "fn k() -> i32 { return m::mk(41).bump(); }\n",
+            "m::mk",
+            1,
+            3,
+        ));
+        assert!(md.contains("pub fn mk(n: i32) -> Counter"), "{md}");
+        // ... and the ancestor itself, named through the root's edge
+        let md = markdown(s.hover_in(&sub, "fn k() -> i32 { return child::kid(); }\n", "child::kid", 1, 8));
+        assert!(md.contains("pub fn kid() -> i32"), "{md}");
+        // ... and from the root document itself (it IS the root — its
+        // own entry answers, the lane lands on it by its stamp)
+        let root_doc = format!("{}fn k() -> i32 {{ return app::m::mk(41).bump(); }}\n", rut_new::ROOT);
+        let md = markdown(s.hover_in(&root, &root_doc, "app::m::mk", 1, 8));
+        assert!(md.contains("pub fn mk(n: i32) -> Counter"), "{md}");
+        assert!(md.contains(&format!("— {}:13", rut_new::at("src/m/mod.rut"))), "{md}");
+        // the own-family negatives the compiler refuses: a private
+        // leaf of m from outside its subtree, the root's re-export row
+        // (`pub use m::{ mk }` is no declaration of the root)
+        for (src, needle, off) in [
+            ("fn k() -> i32 { return app::m::secret(); }\n", "app::m::secret", 8),
+            ("fn k() -> i32 { return app::mk(41).bump(); }\n", "app::mk", 6),
+        ] {
+            let h = s.hover_in(&uri, src, needle, 1, off);
+            assert!(no_hover(&h), "[{needle:?}] a refused leaf hovers nothing: {h:?}");
+        }
+    }
+}
+
+both_uri_shapes! {
+    #[test]
+    fn a_root_declared_edge_used_from_a_child_hovers() {
+        // DEFECT 1: `mod m;` declared by the ROOT, used from a child —
+        // the compiler resolves the leaf through the ancestor walk
+        // (`unknown name `m::mk`` was the pre-fix silence)
+        let (mut s, _io) = rut_new::boot();
+        let uri = rut_new::at("src/child/mod.rut");
+        let m = rut_new::at("src/m/mod.rut");
+        let md = markdown(s.hover_in(
+            &uri,
+            "fn k() -> i32 { return m::mk(41).bump(); }\n",
+            "m::mk",
+            1,
+            3,
+        ));
+        assert!(md.contains("pub fn mk(n: i32) -> Counter"), "{md}");
+        assert!(md.contains(&format!("— {m}:13")), "{md}");
+        let md = markdown(s.hover_in(&uri, "fn k() -> i32 { return m::STEP; }\n", "m::STEP", 1, 3));
+        assert!(md.contains("pub let STEP: i32 = 2"), "{md}");
+        let md = markdown(s.hover_in(
+            &uri,
+            "fn k() -> i32 { return m::pkgfn(); }\n",
+            "m::pkgfn",
+            1,
+            3,
+        ));
+        assert!(md.contains("pub(pkg) fn pkgfn() -> i32"), "{md}");
+        let md = markdown(s.hover_in(
+            &uri,
+            "fn k(c: m::Counter) -> i32 { return 0; }\n",
+            "m::Counter",
+            1,
+            3,
+        ));
+        assert!(md.contains("pub struct Counter"), "{md}");
+        // the nested module's fn, and the segments that name modules
+        let src = "fn k() -> i32 { return m::grid::cell(); }\n";
+        let md = markdown(s.hover_in(&uri, src, "m::grid::cell", 1, 9));
+        assert!(md.contains("pub fn cell() -> i32"), "{md}");
+        let md = markdown(s.hover_in(&uri, src, "m::grid::cell", 1, 0));
+        assert!(md.contains("file module"), "the head is m: {md}");
+        assert!(md.contains(&format!("— {m}:1")), "{md}");
+        let md = markdown(s.hover_in(&uri, src, "m::grid::cell", 1, 3));
+        assert!(md.contains("file module"), "the mid segment is grid: {md}");
+        assert!(md.contains(&format!("— {}:1", rut_new::at("src/m/grid/mod.rut"))), "{md}");
+        // the leaf kinds the compiler refuses through a qualified
+        // position: a private of m from a sibling subtree, m's use
+        // rows (its private import, its `pub use`, a glob-bound name),
+        // an ambient name
+        for (src, needle) in [
+            ("fn k() -> i32 { return m::secret(); }\n", "m::secret"),
+            ("fn k() -> i32 { return m::cell(); }\n", "m::cell"),
+            ("fn k() -> i32 { return m::G; }\n", "m::G"),
+            ("fn k() -> i32 { return m::GK; }\n", "m::GK"),
+            ("fn k() -> nil { m::panic(\"x\"); }\n", "m::panic"),
+        ] {
+            let h = s.hover_in(&uri, src, needle, 1, 3);
+            assert!(no_hover(&h), "[{needle:?}] a refused leaf hovers nothing: {h:?}");
+        }
+    }
+}
+
+both_uri_shapes! {
+    #[test]
+    fn the_receiver_family_behind_a_root_declared_edge_hovers() {
+        // the member lane behind the ROOT's edge: the annotated, the
+        // inferred, the chained, and the field-typed receiver — all
+        // compile, all answer (the inference's qualified hook reads
+        // the doc's own stamp now)
+        let (mut s, _io) = rut_new::boot();
+        let uri = rut_new::at("src/child/mod.rut");
+        let m = rut_new::at("src/m/mod.rut");
+        let bump = |s: &mut S, src: &'static str, needle: &'static str, off: u32| {
+            let md = markdown(s.hover_in(&uri, src, needle, 1, off));
+            assert!(md.contains("pub fn bump(self) -> i32"), "{md}");
+            assert!(md.contains("in `Counter`"), "{md}");
+            assert!(md.contains(&format!("— {m}:11")), "{md}");
+        };
+        bump(
+            &mut s,
+            "fn k() -> i32 { let c: m::Counter = m::mk(41); return c.bump(); }\n",
+            ".bump()",
+            1,
+        );
+        let src = "fn k() -> i32 { let c = m::mk(41); return c.bump(); }\n";
+        bump(&mut s, src, ".bump()", 1);
+        let md = markdown(s.hover_in(&uri, src, "let c", 1, 4));
+        assert!(md.contains("let c: Counter"), "the inferred binding: {md}");
+        bump(
+            &mut s,
+            "fn k() -> i32 { return m::mk(41).bump(); }\n",
+            ".bump()",
+            1,
+        );
+        bump(
+            &mut s,
+            "struct Holder { c: m::Counter }\nfn k() -> i32 { let h = Holder { c: m::mk(1) }; return h.c.bump(); }\n",
+            ".bump()",
+            1,
+        );
+        // the `is`-test receiver, and the own-package head in the
+        // annotation
+        bump(
+            &mut s,
+            "use m::{ Counter };\nfn k() -> i32 { let q = m::mk(41); if (q is Counter) { return q.bump(); } return 0; }\n",
+            "q.bump()",
+            2,
+        );
+        bump(
+            &mut s,
+            "fn k() -> i32 { let c: app::m::Counter = app::m::mk(41); return c.bump(); }\n",
+            ".bump()",
+            1,
+        );
+        // a generic receiver
+        let md = markdown(s.hover_in(
+            &uri,
+            "fn k() -> i32 { let b: m::Box2<i32> = m::mk_box(41); return b.get(); }\n",
+            ".get()",
+            1,
+            1,
+        ));
+        assert!(md.contains("pub fn get(self) -> T"), "{md}");
+        assert!(md.contains("in `Box2`"), "{md}");
+        assert!(md.contains(&format!("— {m}:21")), "{md}");
+    }
+}
+
+both_uri_shapes! {
+    #[test]
+    fn a_dep_roots_own_member_is_no_leaf_of_a_position() {
+        // `calc::ctop()` — the dep root's OWN fn behind the pkg-rooted
+        // name — refuses in the compiler ("unknown name `calc::ctop`",
+        // a tree dep and a flat dep alike: the use is the only door to
+        // a root's members); the lane roots INSIDE the dep's tree only
+        let (mut s, _io) = rut_new::boot();
+        let uri = rut_new::at("src/child/mod.rut");
+        let h = s.hover_in(
+            &uri,
+            "fn k() -> i32 { return calc::ctop(); }\n",
+            "calc::ctop",
+            1,
+            6,
+        );
+        assert!(no_hover(&h), "the dep root's own member: {h:?}");
+        // the control: the tree path answers
+        let md = markdown(s.hover_in(
+            &uri,
+            "fn k() -> i32 { return calc::math::cmk(1).deg(); }\n",
+            "calc::math::cmk",
+            1,
+            12,
+        ));
+        assert!(md.contains("pub fn cmk(d: i32) -> Calc"), "{md}");
+        assert!(
+            md.contains(&format!("— {}:13", rut_new::calc("src/math/mod.rut"))),
+            "{md}"
+        );
+    }
+}
+
+both_uri_shapes! {
+    #[test]
+    fn an_intra_package_use_edge_hovers_through_the_module_lane() {
+        // DEFECT 2: `use m::{ mk }` — the compiler's intra-package
+        // import; the file scope's use tier answers it through the
+        // module lane (the own-package head walks, the leaf is the
+        // module's own visible decl) — at the call site AND on the
+        // use leaf
+        let (mut s, _io) = rut_new::boot();
+        let uri = rut_new::at("src/child/mod.rut");
+        let m = rut_new::at("src/m/mod.rut");
+        let grid = rut_new::at("src/m/grid/mod.rut");
+        let root = rut_new::at("src/mod.rut");
+        // a fn
+        let src = "use m::{ mk };\nfn k() -> i32 { return mk(41).bump(); }\n";
+        for (needle, off) in [("mk(41)", 0), ("{ mk }", 2)] {
+            let md = markdown(s.hover_in(&uri, src, needle, 1, off));
+            assert!(md.contains("pub fn mk(n: i32) -> Counter"), "[{needle}] {md}");
+            assert!(md.contains(&format!("— {m}:13")), "[{needle}] {md}");
+        }
+        // a type — and the member behind it
+        let src = "use m::{ Counter };\nfn k(c: Counter) -> i32 { return c.bump(); }\n";
+        for (needle, off) in [("c: Counter", 3), ("{ Counter }", 2)] {
+            let md = markdown(s.hover_in(&uri, src, needle, 1, off));
+            assert!(md.contains("pub struct Counter"), "[{needle}] {md}");
+        }
+        let md = markdown(s.hover_in(&uri, src, ".bump()", 1, 1));
+        assert!(md.contains("pub fn bump(self) -> i32"), "{md}");
+        // a module let
+        let src = "use m::{ STEP };\nfn k() -> i32 { return STEP; }\n";
+        let md = markdown(s.hover_in(&uri, src, "return STEP", 1, 7));
+        assert!(md.contains("pub let STEP: i32 = 2"), "{md}");
+        let md = markdown(s.hover_in(&uri, src, "{ STEP }", 1, 2));
+        assert!(md.contains("pub let STEP: i32 = 2"), "{md}");
+        // nested: `use m::grid::{ cell }` — and the path's segments
+        let src = "use m::grid::{ cell };\nfn k() -> i32 { return cell(); }\n";
+        let md = markdown(s.hover_in(&uri, src, "cell()", 1, 0));
+        assert!(md.contains("pub fn cell() -> i32"), "{md}");
+        assert!(md.contains(&format!("— {grid}:1")), "{md}");
+        let md = markdown(s.hover_in(&uri, src, "use m", 1, 4));
+        assert!(md.contains("file module") && md.contains(&format!("— {m}:1")), "{md}");
+        let md = markdown(s.hover_in(&uri, src, "m::grid:", 1, 3));
+        assert!(md.contains("file module") && md.contains(&format!("— {grid}:1")), "{md}");
+        // the glob: `use m::*` binds the module's visible own decls
+        for (call, needle, off, text) in [
+            ("mk(41).bump()", "mk(41)", 0, "pub fn mk(n: i32) -> Counter"),
+            ("STEP", "return STEP", 7, "pub let STEP: i32 = 2"),
+            ("pkgfn()", "return pkgfn", 7, "pub(pkg) fn pkgfn() -> i32"),
+        ] {
+            let src = format!("use m::*;\nfn k() -> i32 {{ return {call}; }}\n");
+            let md = markdown(s.hover_in(&uri, &src, needle, 1, off));
+            assert!(md.contains(text), "[{call}] {md}");
+        }
+        // the own-package NAME as the use head, from a child
+        let src = "use app::{ LIMIT };\nfn k() -> i32 { return LIMIT; }\n";
+        let md = markdown(s.hover_in(&uri, src, "return LIMIT", 1, 7));
+        assert!(md.contains("pub let LIMIT: i32 = 7"), "{md}");
+        assert!(md.contains(&format!("— {root}:4")), "{md}");
+        // ... and the ancestor's edge from a grandchild
+        let sub = rut_new::at("src/child/sub/mod.rut");
+        let src = "use m::{ mk };\nfn k() -> i32 { return mk(41).bump(); }\n";
+        let md = markdown(s.hover_in(&sub, src, "mk(41)", 1, 0));
+        assert!(md.contains("pub fn mk(n: i32) -> Counter"), "{md}");
+    }
+}
+
+both_uri_shapes! {
+    #[test]
+    fn a_use_leaf_the_compiler_refuses_hovers_nothing() {
+        // the negatives, each a use line the compiler refuses: a
+        // private of the module (import is no visibility bypass), the
+        // module's own private import, a `pub use` re-export row (the
+        // compiler's binding refuses it today), a glob-bound name of
+        // the module; cross-package: a dep's private fn and its
+        // private import. Silent at the call site AND on the leaf.
+        let (mut s, _io) = rut_new::boot();
+        let uri = rut_new::at("src/child/mod.rut");
+        for (src, needles) in [
+            ("use m::{ secret };\nfn k() -> i32 { return secret(); }\n", vec![("secret()", 0), ("{ secret }", 2)]),
+            ("use m::{ cell };\nfn k() -> i32 { return cell(); }\n", vec![("cell()", 0), ("{ cell }", 2)]),
+            ("use m::{ G };\nfn k() -> i32 { return G; }\n", vec![("return G", 7), ("{ G }", 2)]),
+            ("use m::*;\nfn k() -> i32 { return G; }\n", vec![("return G", 7)]),
+            ("use calc::math::{ hidden };\nfn k() -> i32 { return 0; }\n", vec![("{ hidden }", 2)]),
+            ("use calc::math::{ cell };\nfn k() -> i32 { return 0; }\n", vec![("{ cell }", 2)]),
+        ] {
+            for (needle, off) in needles {
+                let h = s.hover_in(&uri, src, needle, 1, off);
+                assert!(no_hover(&h), "[{src:?} @ {needle:?}] a refused leaf: {h:?}");
+            }
+        }
+    }
+}
+
+both_uri_shapes! {
+    #[test]
+    fn a_twice_bound_name_hovers_nothing() {
+        // the one-name shape: a file scope that binds a name TWICE is
+        // a file the compiler refuses at the second spelling (two use
+        // leaves of one name; an own decl beside a leaf) — the name
+        // answers nothing, never a pick between the bindings
+        let (mut s, _io) = rut_new::boot();
+        let uri = rut_new::at("src/child/mod.rut");
+        // two same-named decls in two packages are legal; two leaves
+        // of one name in a third file refuse
+        let math = format!("{}pub fn mk(n: i32) -> Calc {{ return Calc {{ d: n }}; }}\n", rut_new::CALC_MATH);
+        s.index_mod_at(&rut_new::calc("src/math/mod.rut"), "calc", "math", &math);
+        let src = "use m::{ mk };\nuse calc::math::{ mk };\nfn k() -> i32 { return mk(41).bump(); }\n";
+        for (needle, occ, off) in [("mk(41)", 1, 0), ("{ mk }", 1, 2), ("{ mk }", 2, 2)] {
+            let h = s.hover_in(&uri, src, needle, occ, off);
+            assert!(no_hover(&h), "[{needle} #{occ}] a twice-bound name: {h:?}");
+        }
+        // an own decl beside a leaf: the registry refuses the file
+        let src = "use m::{ mk };\nfn mk(n: i32) -> i32 { return n; }\nfn k() -> i32 { return mk(41); }\n";
+        let h = s.hover_in(&uri, src, "mk(41)", 1, 0);
+        assert!(no_hover(&h), "the call site answers nothing: {h:?}");
+        // the decl SITE stays exact (decl-site navigation)
+        let md = markdown(s.hover_in(&uri, src, "fn mk(", 1, 3));
+        assert!(md.contains("fn mk(n: i32) -> i32"), "the decl itself: {md}");
+        // the shadowing the law admits resolves to the winner: an own
+        // decl over a glob
+        let src = "use m::*;\nfn mk(n: i32) -> i32 { return n; }\nfn k() -> i32 { return mk(41); }\n";
+        let md = markdown(s.hover_in(&uri, src, "mk(41)", 1, 0));
+        assert!(md.contains("fn mk(n: i32) -> i32"), "the own decl wins: {md}");
+    }
+}
+
+both_uri_shapes! {
+    #[test]
+    fn a_module_leaf_use_hovers_the_module() {
+        // `use calc::{ math }` — the leaf names a module (the
+        // compiler's module-leaf binding): it renders like a path
+        // segment does, the walked module's own file
+        let (mut s, _io) = rut_new::boot();
+        let uri = rut_new::at("src/child/mod.rut");
+        let src = "use calc::{ math };\nfn k() -> i32 { return math::cmk(1).deg(); }\n";
+        let md = markdown(s.hover_in(&uri, src, "{ math }", 1, 2));
+        assert!(md.contains("file module"), "{md}");
+        assert!(
+            md.contains(&format!("— {}:1", rut_new::calc("src/math/mod.rut"))),
+            "{md}"
+        );
+        let md = markdown(s.hover_in(&uri, src, "calc::{ m", 1, 1));
+        assert!(md.contains("file module"), "the pkg head: {md}");
+    }
+}
+
+both_uri_shapes! {
+    #[test]
+    fn two_lanes_mounting_one_file_never_double_a_binding() {
+        // the extension mounts every workspace file TWICE — the
+        // indexer's `file://` stamp and the walk's rooted string — one
+        // entry per file (the store's replace-by-FILE law); a name
+        // bound once never hovers `multiple definitions`, and a module
+        // let stays unique-or-none's ONE
+        let (mut s, _io) = rut_new::boot();
+        let uri = rut_new::at("src/child/mod.rut");
+        let src = "use app::m::{ mk };\nfn k() -> i32 { return mk(41).bump(); }\n";
+        let md = markdown(s.hover_in(&uri, src, "mk(41)", 1, 0));
+        assert!(md.contains("pub fn mk(n: i32) -> Counter"), "{md}");
+        assert!(!md.contains("multiple definitions"), "{md}");
+        let src = "use app::{ LIMIT };\nfn k() -> i32 { return LIMIT; }\n";
+        let md = markdown(s.hover_in(&uri, src, "return LIMIT", 1, 7));
+        assert!(md.contains("pub let LIMIT: i32 = 7"), "{md}");
+        // the walk's own twin of the doc's file lags an open edit —
+        // the live document's decls answer for the doc's own names
+        let src = "fn own() -> i32 { return 1; }\nfn k() -> i32 { return own(); }\n";
+        let md = markdown(s.hover_in(&uri, src, "return own", 1, 7));
+        assert!(md.contains("fn own() -> i32"), "{md}");
+        assert!(md.contains(&format!("— {uri}:1")), "the live document's own row: {md}");
+    }
 }

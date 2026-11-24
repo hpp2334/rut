@@ -8,7 +8,9 @@ mod common;
 use common::*;
 use serde_json::Value;
 
-const WIDGET_SRC: &str = "class Widget {\n    id: i32;\n}\n";
+/// the gadget pkg's export — `pub`: a cross-package leaf binds only
+/// `pub` rows (the compiler's leaf gate, mirrored by the use tier)
+const WIDGET_SRC: &str = "pub class Widget {\n    id: i32;\n}\n";
 const WIDGET_URI: &str = "file:///ws/gadgets/lib.rut";
 
 /// byte starts of the reference Locations that point into `src`'s uri
@@ -351,6 +353,7 @@ fn misses_stay_empty() {
     assert!(hits.is_empty(), "unknown names too: {hits:?}");
 }
 
+both_uri_shapes! {
 #[test]
 fn qualified_paths_reference_through_the_module_lane() {
     // the qualified spelling's reference set rides the module lane
@@ -384,7 +387,9 @@ fn qualified_paths_reference_through_the_module_lane() {
         "the module's decl ident joins: {hits:?}"
     );
 }
+}
 
+both_uri_shapes! {
 #[test]
 fn qualified_leaves_never_leak_through_use_rows() {
     // HIGH 2 through the matcher: the qualified tail resolves
@@ -413,7 +418,9 @@ fn qualified_leaves_never_leak_through_use_rows() {
         "a use-row leaf has no references: {hits:?}"
     );
 }
+}
 
+both_uri_shapes! {
 #[test]
 fn cross_package_module_lets_have_no_references() {
     // the references face of the lets rule: a module let behind a
@@ -439,4 +446,154 @@ fn cross_package_module_lets_have_no_references() {
         hits.is_empty(),
         "a cross-package module let has no references: {hits:?}"
     );
+}
+}
+
+// ---- round 4: the rut-new layout — references across the own-package
+//      lanes, through the extension's own mounts ----
+
+both_uri_shapes! {
+    #[test]
+    fn references_reach_a_qualified_site_through_the_own_pkg_head() {
+        // DEFECT 1: `app::LIMIT` from a child — the site is a
+        // reference of the root's let (queried from the site, and
+        // from the declaration: the scan resolves the child's token
+        // in the CHILD's own context)
+        let (mut s, _io) = rut_new::boot();
+        let uri = rut_new::at("src/child/mod.rut");
+        let root = rut_new::at("src/mod.rut");
+        let src = "fn k() -> i32 { return app::LIMIT; }\n";
+        let site = byte_of(src, "app::LIMIT", 1) + 5;
+        assert_refs(&mut s, &uri, src, "app::LIMIT", 1, 6, &[site]);
+        // include_declaration joins the root's own ident
+        let hits = s.refs_in(&uri, src, "app::LIMIT", 1, 6, true);
+        assert_eq!(hits.len(), 2, "{hits:?}");
+        assert!(hits.iter().any(|l| l["uri"] == root), "{hits:?}");
+        // from the declaration: the sibling file's qualified site
+        s.index_mod_at(&uri, "app", "child", src);
+        let hits = s.refs_in(&root, rut_new::ROOT, "pub let LIMIT", 1, 8, false);
+        assert_eq!(hits.len(), 1, "the child's site: {hits:?}");
+        assert_eq!(hits[0]["uri"], uri, "{hits:?}");
+        assert_eq!(span_of(src, &hits[0]), (site as usize, site as usize + 5), "{hits:?}");
+    }
+}
+
+both_uri_shapes! {
+    #[test]
+    fn references_of_a_root_declared_edge_leaf_span_every_file() {
+        // `mod m;` declared by the ROOT: every spelling of its leaf is
+        // a reference — a grandchild's bare use binding, a child's
+        // qualified call, the root's own call
+        let (mut s, _io) = rut_new::boot();
+        let child = rut_new::at("src/child/mod.rut");
+        let sub = rut_new::at("src/child/sub/mod.rut");
+        let root = rut_new::at("src/mod.rut");
+        let child_src = "fn k() -> i32 { return m::mk(41).bump(); }\n";
+        s.index_mod_at(&child, "app", "child", child_src);
+        let sub_src = "use m::{ mk };\nfn k3() -> i32 { return mk(1).bump(); }\n";
+        s.index_mod_at(&sub, "app", "child/sub", sub_src);
+        let hits = s.refs_in(
+            &rut_new::at("src/m/mod.rut"),
+            rut_new::M,
+            "fn mk(",
+            1,
+            3,
+            false,
+        );
+        assert_eq!(
+            ref_offsets(child_src, &child, &hits),
+            vec![byte_of(child_src, "m::mk", 1) + 3],
+            "{hits:?}"
+        );
+        assert_eq!(
+            ref_offsets(sub_src, &sub, &hits),
+            vec![byte_of(sub_src, "{ mk }", 1) + 2, byte_of(sub_src, "mk(1)", 1)],
+            "{hits:?}"
+        );
+        assert_eq!(
+            ref_offsets(rut_new::ROOT, &root, &hits),
+            vec![byte_of(rut_new::ROOT, "m::mk(41)", 1) + 3],
+            "{hits:?}"
+        );
+        assert_eq!(hits.len(), 4, "no other site: {hits:?}");
+        // queried at a site: itself (and the declaration on request)
+        let hits = s.refs_in(&child, child_src, "m::mk", 1, 3, false);
+        // — the whole set (every reference of the name, the queried
+        // site among them)
+        assert_eq!(hits.len(), 4, "{hits:?}");
+    }
+}
+
+both_uri_shapes! {
+    #[test]
+    fn references_span_an_intra_package_use_edge() {
+        // DEFECT 2: `use m::{ mk }` — the leaf and the call site are
+        // references of the module's fn (the use tier answers the
+        // bare name, so the scan's matcher lands on the declaration)
+        let (mut s, _io) = rut_new::boot();
+        let uri = rut_new::at("src/child/mod.rut");
+        let src = "use m::{ mk };\nfn k() -> i32 { return mk(41).bump(); }\n";
+        let want = [byte_of(src, "{ mk }", 1) + 2, byte_of(src, "mk(41)", 1)];
+        assert_refs(&mut s, &uri, src, "mk(41)", 1, 0, &want);
+        assert_refs(&mut s, &uri, src, "{ mk }", 1, 2, &want);
+        // and from the declaration: the sibling's two sites beside
+        // the root's own qualified call (`m::mk(41)` in main)
+        s.index_mod_at(&uri, "app", "child", src);
+        let hits = s.refs_in(
+            &rut_new::at("src/m/mod.rut"),
+            rut_new::M,
+            "fn mk(",
+            1,
+            3,
+            false,
+        );
+        assert_eq!(
+            ref_offsets(src, &uri, &hits),
+            want,
+            "{hits:?}"
+        );
+        assert_eq!(hits.len(), 3, "the root's own call too: {hits:?}");
+    }
+}
+
+both_uri_shapes! {
+    #[test]
+    fn a_twice_bound_name_has_no_references() {
+        // the one-name shape: two use leaves of one name — nothing
+        // counts as a reference of either binding
+        let (mut s, _io) = rut_new::boot();
+        let uri = rut_new::at("src/child/mod.rut");
+        let math = format!(
+            "{}pub fn mk(n: i32) -> Calc {{ return Calc {{ d: n }}; }}\n",
+            rut_new::CALC_MATH
+        );
+        s.index_mod_at(&rut_new::calc("src/math/mod.rut"), "calc", "math", &math);
+        let src = "use m::{ mk };\nuse calc::math::{ mk };\nfn k() -> i32 { return mk(41).bump(); }\n";
+        for (needle, occ, off) in [("mk(41)", 1, 0), ("{ mk }", 1, 2), ("{ mk }", 2, 2)] {
+            let hits = s.refs_in(&uri, src, needle, occ, off, true);
+            assert!(hits.is_empty(), "[{needle} #{occ}]: {hits:?}");
+        }
+    }
+}
+
+both_uri_shapes! {
+    #[test]
+    fn a_member_call_site_is_a_reference_position() {
+        // find-references ON a member use (a method call) answers the
+        // call sites (and the declaration on request) — the member
+        // token names its decl through the same door
+        let (mut s, _io) = rut_new::boot();
+        let uri = rut_new::at("src/child/mod.rut");
+        let src = "use m::{ mk };\nfn k() -> i32 { let c = mk(41); return c.bump(); }\n";
+        let site = byte_of(src, "c.bump()", 1) + 2;
+        assert_refs(&mut s, &uri, src, "c.bump()", 1, 2, &[site]);
+        // ... and with the declaration: the module's `fn bump` — beside
+        // the root's own `.bump()` call (`m::mk(41).bump()` in main)
+        let hits = s.refs_in(&uri, src, "c.bump()", 1, 2, true);
+        assert_eq!(hits.len(), 3, "{hits:?}");
+        assert!(hits.iter().any(|l| l["uri"] == rut_new::at("src/m/mod.rut")), "{hits:?}");
+        // a same-file method
+        let src = "struct R1 { n: i32 }\nimpl R1 {\n    fn go(self) -> i32 { return self.n; }\n}\nfn k() -> i32 { let r = R1 { n: 1 }; return r.go(); }\n";
+        assert_refs(&mut s, &uri, src, "r.go()", 1, 2, &[byte_of(src, "r.go()", 1) + 2]);
+    }
 }

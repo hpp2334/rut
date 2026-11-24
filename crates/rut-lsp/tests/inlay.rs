@@ -437,9 +437,14 @@ fn arity_mismatch_means_no_hints() {
 }
 
 #[test]
-fn ambiguous_callee_stays_silent() {
-    // the doc's `f` plus a same-named free fn in another index: no
-    // unique match, no hints (the call_ty law)
+fn the_doc_own_callee_wins_over_a_same_named_foreign_fn() {
+    // the doc's `f` plus a same-named free fn in another index: the
+    // callee resolves through the FILE SCOPE (the one home — the doc's
+    // own decl binds `f`; the foreign index is no binding of this
+    // file), so the hint types through the own decl. (The pre-phase
+    // pin read "no unique match, no hints" — the flat window's law;
+    // the file-scope law supersedes it: the compiler binds the own
+    // `f` and types `x` as `i32` here.)
     let mut s = S::boot();
     s.index_file(
         "file:///ws/other/lib.rut",
@@ -447,6 +452,16 @@ fn ambiguous_callee_stays_silent() {
     );
     let src = "fn f(a: i32) -> i32 {\n    return a;\n}\nfn main() -> i32 {\n    let x = f(1);\n    return x;\n}\n";
     let hs = s.inlay_all("file:///t/main.rut", src);
+    assert_eq!(
+        labels(&hs),
+        vec![": i32".to_string()],
+        "the own fn types the binding: {hs:?}"
+    );
+    // a callee the file binds TWICE (two use leaves of one name — the
+    // one-name refusal) stays silent: no pick between the bindings
+    let src =
+        "use a::{ g };\nuse b::{ g };\nfn main() -> i32 {\n    let x = g(1);\n    return x;\n}\n";
+    let hs = s.inlay_all("file:///t/main2.rut", src);
     assert!(hs.is_empty(), "{:?}", labels(&hs));
 }
 
@@ -498,4 +513,30 @@ fn range_filters_hints() {
     // a range before everything is empty, never wrong
     let empty = take(s.pool.run_until(s.lsp.inlay(uri.to_string(), 0, 0, 0, 0)));
     assert!(empty.as_array().unwrap().is_empty(), "{empty}");
+}
+
+both_uri_shapes! {
+    #[test]
+    fn a_receiver_behind_a_root_declared_edge_types_the_binding() {
+        // round 4: the inference's qualified hook reads the doc's own
+        // stamp — `m` declared by the ROOT (and the bare use-bound
+        // callee through the file scope) types the binding
+        let (mut s, _io) = rut_new::boot();
+        let uri = rut_new::at("src/child/mod.rut");
+        for src in [
+            "fn k() -> i32 { let c = m::mk(41); return c.bump(); }\n",
+            "use m::{ mk };\nfn k() -> i32 { let c = mk(41); return c.bump(); }\n",
+            "fn k() -> i32 { return m::mk(41).bump(); let d = m::mk(1); return d.bump(); }\n",
+        ] {
+            let hs = s.inlay_all(&uri, src);
+            // the TYPE hints (kind 1) — one per unannotated binding
+            // (a parameter-name hint may ride beside them)
+            let typed: Vec<Value> = hs.iter().filter(|h| h["kind"] == 1).cloned().collect();
+            let want: Vec<&str> = (0..src.matches("let ").count()).map(|_| ": Counter").collect();
+            assert_eq!(labels(&typed), want, "[{src:?}] {hs:?}");
+            for h in &typed {
+                assert!(tooltip(h).contains("Counter"), "{h}");
+            }
+        }
+    }
 }

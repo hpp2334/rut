@@ -9,8 +9,8 @@ use std::collections::HashSet;
 use rut_ast::{AnyHandle, UseNode, Vis};
 
 use super::{
-    used_ifaces, Chain, FnView, LetView, MemberView, ModView, MountedFile, RecvNode, TyView,
-    UseView,
+    used_ifaces, Chain, FnView, GlobUse, LetView, MemberView, ModView, MountedFile, RecvNode,
+    TyView, UseView,
 };
 use crate::world::mods::DocMods;
 use crate::world::types::TyForm;
@@ -101,6 +101,19 @@ pub(crate) struct FileScope<'a> {
     pub fns: Vec<FnView<'a>>,
 }
 
+impl<'a> FileScope<'a> {
+    /// the next layer's rows join the walk order
+    fn extend(&mut self, more: FileScope<'a>) {
+        self.types.extend(more.types);
+        self.lets.extend(more.lets);
+        self.fns.extend(more.fns);
+    }
+
+    fn is_empty(&self) -> bool {
+        self.types.is_empty() && self.lets.is_empty() && self.fns.is_empty()
+    }
+}
+
 impl<'a> Chain<'a> {
     /// completion's MEMBER tier — keyed on the walk's NODE: the
     /// member/receiver derive inside (a method call, a field access,
@@ -188,9 +201,15 @@ impl<'a> Chain<'a> {
         }
         // inherent impl-block methods — where methods live since type
         // bodies went fields-only; the owner string IS the target
-        // type's name. Gated rows (the compiler dials them like a
-        // class's own members)
+        // type's name, and the sweep stays inside the resolved type's
+        // own package (a same-named type elsewhere owns its own).
+        // Gated rows (the compiler dials them like a class's own
+        // members)
+        let ty_pkg = self.pkg_of(ty.file);
         for i in self.iter() {
+            if self.pkg_of(i) != ty_pkg {
+                continue;
+            }
             for f in i.fns() {
                 if f.owner().as_deref() != Some(ty_name.as_str())
                     || !self.member_dial_allows(doc, f.file, f.vis())
@@ -360,13 +379,28 @@ impl<'a> Chain<'a> {
         let Some(path) = walked else {
             return (String::new(), Vec::new());
         };
+        // the open document's entry speaks only through its STAMP (it
+        // IS the walked module when its twin says so) — never because
+        // a path segment names the package; an UNSTAMPED document
+        // joins an unnamed flat package only (the legacy shape, where
+        // no lane named anything)
+        let head = self.head();
+        let stamp = self.stamp();
+        let named = scoped.iter().any(|f| f.mount.module.is_some());
+        let member = |f: &MountedFile| {
+            !std::ptr::eq(f, head)
+                || match stamp.pkg.as_deref() {
+                    Some(p) => p == pkg && stamp.mod_path.as_deref().is_none_or(|mp| mp == path),
+                    None => !named,
+                }
+        };
         let scope: Vec<&MountedFile> = if carrying {
             scoped
                 .into_iter()
-                .filter(|f| crate::world::mods::mod_path_of(f) == path)
+                .filter(|f| member(f) && crate::world::mods::mod_path_of(f) == path)
                 .collect()
         } else {
-            scoped
+            scoped.into_iter().filter(|f| member(f)).collect()
         };
         let mut rows: Vec<ExportRow<'a>> = Vec::new();
         for f in &scope {
@@ -434,34 +468,28 @@ impl<'a> Chain<'a> {
     /// completion's BARE tier — the visible decls under the compiler's
     /// own bare-name law: the open document's decls (the chain head),
     /// the chain's AMBIENT builtin rows (`prelude builtin` — bound in
-    /// every unit, no `use` needed), and the names the document
-    /// already `use`s (matched `(name, pkg)` against the head's uses —
-    /// the same set shape the auto-import tier dedups against). Every
-    /// other foreign name rides ONLY the auto-import tier: a plain
-    /// offer the compile would reject is a trap. Free fns and types
-    /// only; methods are reached through a receiver, not named bare.
+    /// every unit, no `use` needed), and the rows the document's use
+    /// edges BIND (the file scope's own resolve, [`Chain::use_bound_scope`]
+    /// — an own-package edge, a dep's leaf, a glob all answer the same
+    /// way hover does; never a package-name match). Every other
+    /// foreign name rides ONLY the auto-import tier: a plain offer the
+    /// compile would reject is a trap. Free fns and types only;
+    /// methods are reached through a receiver, not named bare.
     pub(crate) fn bare(&self) -> Bare<'a> {
         let doc = self.head();
-        let imported = crate::world::pkg::import_map(self, doc);
+        // the names the document's use edges bind — through the ONE
+        // home ([`Chain::use_bound_scope`]): a foreign row is offered
+        // exactly when the file scope answers its name with it (an
+        // own-package edge, a dep's leaf, a glob — the resolve, never
+        // a package-name match)
+        let bound = self.use_bound_scope();
         let mut out = Bare {
             types: Vec::new(),
             fns: Vec::new(),
         };
         for i in self.iter() {
             let own = std::ptr::eq(i, doc);
-            // the names this document's `use`s bound FROM this file's
-            // package — the same (name, pkg) match the definition
-            // layer's use-graph walk reads (`matches_pkg`, module name
-            // first, the origin/stem derivation on an unnamed file)
-            let used_from: HashSet<&str> = imported
-                .iter()
-                .filter(|(_, pkg)| crate::world::pkg::matches_pkg(i, pkg))
-                .map(|(name, _)| *name)
-                .collect();
-            // the bare gate per row: own decls always; foreign rows
-            // only when the ambient linkage bound them or the
-            // document's `use` named them from this package
-            let offered = |name: &str, ambient: bool| own || ambient || used_from.contains(name);
+            let offered = |name: &str, ambient: bool| own || ambient || bound_has(&bound, i, name);
             for t in i.types() {
                 if offered(t.name(), t.ambient()) {
                     out.types.push(t);
@@ -481,9 +509,8 @@ impl<'a> Chain<'a> {
     /// THE file-scope resolver — what the QUERIED file (the chain
     /// head) binds by `name`, walked in the compiler's layer order:
     /// the head's own decls, then the names its use edges bind
-    /// ([`MountedFile::uses`] leaves at their walked mod path,
-    /// [`MountedFile::glob_uses`] leaves through the walked surface),
-    /// then the ambient prelude rows (`prelude builtin` — the
+    /// ([`MountedFile::uses`] leaves, [`MountedFile::glob_uses`]
+    /// leaves), then the ambient prelude rows (`prelude builtin` — the
     /// checker's wildcard-site split). A name the file never binds
     /// answers an EMPTY scope — never a foreign decl: sibling modules
     /// may share a name legally (the one-name law's Act 1), and the
@@ -491,56 +518,255 @@ impl<'a> Chain<'a> {
     /// — hover, definition, and references answer bare names through
     /// it (the flat doors re-spell it on top), the same walk the
     /// completion tiers enumerate (`bare`, `use_exports`).
+    ///
+    /// THE ONE-NAME LAW rides the front door: a name the file binds
+    /// TWICE — two explicit use leaves (twice in one list included),
+    /// two globs, or a decl of its own beside a use leaf — is a file
+    /// the compiler refuses at the second spelling, so the name
+    /// answers NOTHING here (never a pick between the bindings). The
+    /// shadowing the law admits resolves to the winner: an explicit
+    /// leaf over any glob, an own decl over any glob.
     pub(crate) fn file_scope(&self, name: &str) -> FileScope<'a> {
-        let mut out = own_scope_of(self.head(), name);
-        self.use_bound_layers(name, &mut out);
+        let mut out = FileScope::default();
+        let Some((leaves, globs)) = self.bindings(name) else {
+            return out;
+        };
+        out.extend(own_scope_of(self.head(), name));
+        for u in &leaves {
+            self.leaf_scope(u, name, &mut out);
+        }
+        for rows in globs {
+            out.extend(rows);
+        }
         self.ambient_layers(name, &mut out);
         out
     }
 
-    /// layer 2 — the names the head's use edges bind: explicit leaves
-    /// at their walked mod path, glob leaves through the walked
-    /// surface (a chained re-export's rows answer from the deeper pkg,
-    /// where the name actually resolves — the export machinery's own
-    /// law, [`Chain::surface_names`])
-    fn use_bound_layers(&self, name: &str, out: &mut FileScope<'a>) {
-        let doc = self.head();
-        for u in doc.uses() {
-            if u.name() != name {
-                continue;
-            }
-            let path = u.path();
-            self.use_bound(u.pkg(), &path[1..], name, out);
-        }
-        for g in doc.glob_uses() {
-            let exports = self.surface_names(g.pkg, &g.interior);
-            let Some((_, owner)) = exports.into_iter().find(|(n, _)| *n == name) else {
-                continue; // the glob never bound the name
-            };
-            // the owner speaks at the glob's own interior when it IS
-            // the glob's pkg (`use gadgets::layout::*` — the walked
-            // mod path scopes the sweep); a re-exporting head answers
-            // flat from the deeper pkg (`use a::*` over a pkg that
-            // pub-globs util — util's rows, util's files)
-            let interior = if owner == g.pkg {
-                g.interior.as_slice()
-            } else {
-                &[]
-            };
-            self.use_bound(owner, interior, name, out);
-        }
+    /// the use edges that bind `name` — the explicit leaves and the
+    /// globs' rows, each only when the law lets it bind: an own decl
+    /// shadows every glob, an explicit leaf wins over any glob. `None` =
+    /// the file binds the name TWICE (the one-name law's refusal — the
+    /// name answers nothing, own layer included).
+    fn bindings(&self, name: &str) -> Option<(Vec<UseView<'a>>, Vec<FileScope<'a>>)> {
+        let leaves: Vec<UseView<'a>> = self
+            .head()
+            .uses()
+            .into_iter()
+            .filter(|u| u.name() == name)
+            .collect();
+        let glob_scopes: Vec<FileScope<'a>> = self
+            .head()
+            .glob_uses()
+            .into_iter()
+            .map(|g| self.glob_scope(&g))
+            .collect();
+        self.bindings_in(name, leaves, &glob_scopes)
     }
 
-    /// one use edge's resolve — the (pkg, interior) scope's decls of
-    /// `name`. The interior walk rides the use tier's own machinery
-    /// (`walk_use_mods`); a walk the chain cannot satisfy falls back
-    /// to the flat pkg — an OWN-package edge over a private `mod`
-    /// child is the shape that needs it (the cross-package walk
-    /// refuses the non-pub edge, the intra-package use is legal). The
-    /// body-over-decl preference rides inside ([`Chain::prefer_bodies`]
-    /// — a pkg indexing both its `.d.rut` surface and its body
-    /// answers from the body); the queried file and its stamped twin
-    /// are excluded (layer 1 already spoke for the head's own uri).
+    /// [`Chain::bindings`] over scopes a caller already resolved (the
+    /// all-names enumeration resolves each glob ONCE)
+    fn bindings_in(
+        &self,
+        name: &str,
+        leaves: Vec<UseView<'a>>,
+        glob_scopes: &[FileScope<'a>],
+    ) -> Option<(Vec<UseView<'a>>, Vec<FileScope<'a>>)> {
+        let own = self.own_binds(name);
+        let globs: Vec<FileScope<'a>> = if own || !leaves.is_empty() {
+            Vec::new()
+        } else {
+            glob_scopes
+                .iter()
+                .filter_map(|rows| scope_named(rows, name))
+                .collect()
+        };
+        if leaves.len() + globs.len() + usize::from(own) > 1 {
+            return None;
+        }
+        Some((leaves, globs))
+    }
+
+    /// EVERY name the head's use edges bind — the file scope's layer 2
+    /// over all names at once (the same resolve [`Chain::file_scope`]
+    /// runs per name; each glob's surface resolves once). Completion's
+    /// enumeration gates ride it: a foreign row is offered exactly when
+    /// the file scope would answer its name with it.
+    pub(crate) fn use_bound_scope(&self) -> FileScope<'a> {
+        let doc = self.head();
+        let glob_scopes: Vec<FileScope<'a>> = doc
+            .glob_uses()
+            .into_iter()
+            .map(|g| self.glob_scope(&g))
+            .collect();
+        let mut names: Vec<&str> = doc
+            .uses()
+            .iter()
+            .map(|u| u.name())
+            .chain(glob_scopes.iter().flat_map(|rows| {
+                rows.types
+                    .iter()
+                    .map(|t| t.name())
+                    .chain(rows.fns.iter().map(|f| f.name()))
+                    .chain(rows.lets.iter().map(|l| l.name()))
+            }))
+            .collect();
+        names.sort_unstable();
+        names.dedup();
+        let mut out = FileScope::default();
+        for name in names {
+            let leaves: Vec<UseView<'a>> = doc
+                .uses()
+                .into_iter()
+                .filter(|u| u.name() == name)
+                .collect();
+            if let Some((leaves, globs)) = self.bindings_in(name, leaves, &glob_scopes) {
+                for u in &leaves {
+                    self.leaf_scope(u, name, &mut out);
+                }
+                for rows in globs {
+                    out.extend(rows);
+                }
+            }
+        }
+        out
+    }
+
+    /// does the file DECLARE `name` at module scope — a type, a module
+    /// let, a free fn, or a `mod NAME;` edge? (The one-name registry's
+    /// own-decl kinds; impl methods are type-scoped and never meet the
+    /// law.)
+    fn own_binds(&self, name: &str) -> bool {
+        let doc = self.head();
+        doc.ty(name).is_some()
+            || doc.lets().iter().any(|l| l.name() == name)
+            || doc
+                .fns()
+                .iter()
+                .any(|f| f.name() == name && f.owner().is_none())
+            || doc.mods().iter().any(|m| m.name() == name)
+    }
+
+    /// the one-name law's refusal for `name` in the queried file — it
+    /// binds the name twice (two use leaves, two globs, or a decl
+    /// beside a leaf): the compiler refuses the file at the second
+    /// spelling, so no lane answers the name
+    pub(crate) fn one_name_refused(&self, name: &str) -> bool {
+        self.bindings(name).is_none()
+    }
+
+    /// the head of a use path speaks for the doc's OWN package — the
+    /// intra-package import. Two sources, the qualified lane's own
+    /// family mirrored: the stamped own lane ([`resolve_position_head`]
+    /// — the doc's own `mod` edge, an ancestor's edge, or the own-pkg
+    /// name naming the root; answers the START mod path), and the
+    /// unstamped document's shape (its own `mod NAME;` edge off the
+    /// DeclMap — the child's path beside the document). `None` = a
+    /// foreign head: the caller rides the cross-package lane.
+    fn own_use_head(&self, head: &str) -> Option<String> {
+        let doc = self.head();
+        if let Some(p) = crate::world::mods::resolve_position_head(self.stamp(), doc, self, head) {
+            return Some(p);
+        }
+        doc.mods()
+            .iter()
+            .any(|m| m.name() == head)
+            .then(|| crate::world::mods::child_path(crate::world::mods::mod_path_of(doc), head))
+    }
+
+    /// the module an intra-package use path lands on: the start module
+    /// (the head's answer) walked through the path's interior segments
+    /// — any declared edge walks (`walk_position_mods`, the compiler's
+    /// own-use walk), the LEAF visibility-gates at the caller
+    fn own_module(&self, start: &str, interior: &[String]) -> Option<&'a MountedFile> {
+        let pkg = self.stamp().pkg.as_deref();
+        let path = crate::world::mods::walk_position_mods(self, pkg, start, interior)?;
+        self.module_at(self.stamp(), pkg, &path)
+    }
+
+    /// one EXPLICIT use leaf's resolve: an own-package head lands on
+    /// the walked module and binds its OWN declaration of the name —
+    /// a fn, a type, or a module let, visible from the importing file
+    /// ([`vis_allows`] — `import is no visibility bypass`; the
+    /// compiler's own-use binding reads the TARGET module's decl
+    /// tables: `fn_in`/`let_in`/`resolve_qualified_leaf_ty`). A `pub
+    /// use` row of that module is NOT followed (the compiler's binding
+    /// refuses a re-export import today — its use-LINE gate admits the
+    /// row, the binding answers "`G` is declared in module `m/grid`";
+    /// mirrored AS THE COMPILER IS), and a module name is no import
+    /// (no module rows here). A foreign head rides the cross-package
+    /// lane.
+    fn leaf_scope(&self, u: &UseView<'a>, name: &str, out: &mut FileScope<'a>) {
+        let path = u.path();
+        let (head, interior) = (&path[0], &path[1..]);
+        let Some(start) = self.own_use_head(head) else {
+            self.use_bound(u.pkg(), interior, name, out);
+            return;
+        };
+        let Some(cur) = self.own_module(&start, interior) else {
+            return;
+        };
+        let from = self.stamp().mod_path.as_deref().unwrap_or("");
+        let def_mod = self.mod_path_of(cur);
+        out.extend(decl_rows_visible(cur, name, |vis| {
+            crate::world::mods::vis_allows(from, def_mod, vis)
+        }));
+    }
+
+    /// one GLOB leaf's resolve — EVERY row it binds. The intra-package
+    /// lane (the compiler's own glob): the walked module's fn / type /
+    /// let decls visible from the importing file under the crossing
+    /// predicate (`pub`, `pub(pkg)`, `pub(super)` where it reaches, a
+    /// private for a reader inside the module's own subtree) and
+    /// nothing else — never its `pub use` rows (the same binding gap
+    /// the explicit leaf rides), never the names its own private
+    /// `use`s or globs bound, never a child module. The cross-package
+    /// lane: the walked surface's pub rows, each answered from the
+    /// package it declares in (a chained re-export's rows answer from
+    /// the deeper pkg, where the name actually resolves — the export
+    /// machinery's own law, [`Chain::surface_names`]) and the interior
+    /// when that owner IS the glob's own pkg.
+    fn glob_scope(&self, g: &GlobUse<'a>) -> FileScope<'a> {
+        let mut out = FileScope::default();
+        if let Some(start) = self.own_use_head(g.pkg) {
+            if let Some(cur) = self.own_module(&start, &g.interior) {
+                let from = self.stamp().mod_path.as_deref().unwrap_or("");
+                let def_mod = self.mod_path_of(cur);
+                let allows = |vis: Vis| crate::world::mods::vis_allows(from, def_mod, vis);
+                out.types
+                    .extend(cur.types().into_iter().filter(|t| allows(t.vis())));
+                out.fns.extend(
+                    cur.fns()
+                        .into_iter()
+                        .filter(|f| f.owner().is_none() && allows(f.vis())),
+                );
+                out.lets
+                    .extend(cur.lets().into_iter().filter(|l| allows(l.vis())));
+            }
+            return out;
+        }
+        for (name, owner) in self.surface_names(g.pkg, &g.interior) {
+            let interior = if owner == g.pkg {
+                g.interior.clone()
+            } else {
+                Vec::new()
+            };
+            self.use_bound(owner, &interior, name, &mut out);
+        }
+        out
+    }
+
+    /// one CROSS-package use edge's resolve — the (pkg, interior)
+    /// scope's `pub` decls of `name` (the compiler's leaf gate: "only
+    /// `pub` names cross packages" — a `pub(pkg)` row, a private, and
+    /// the module's own private imports never bind). The interior walk
+    /// rides the use tier's own machinery (`walk_use_mods`); the walk's
+    /// own carrying law (the use tier's): a mod-carrying package
+    /// scopes the flat spelling to its root, a flat package's whole
+    /// chain answers. The body-over-decl preference rides inside
+    /// ([`Chain::prefer_bodies`] — a pkg indexing both its `.d.rut`
+    /// surface and its body answers from the body); the queried file
+    /// is excluded (layer 1 already spoke for the head — by identity,
+    /// the stamped twin included).
     fn use_bound(&self, pkg: &str, interior: &[String], name: &str, out: &mut FileScope<'a>) {
         let head = self.head();
         let walked = if interior.is_empty() {
@@ -571,25 +797,22 @@ impl<'a> Chain<'a> {
         let mut lets: Vec<(&MountedFile, LetView<'a>)> = Vec::new();
         let mut fns: Vec<(&MountedFile, FnView<'a>)> = Vec::new();
         for f in in_scope {
-            // the head (and its stamped twin — same origin) answered at
-            // layer 1; the sweep adds the files AROUND it
-            if std::ptr::eq(f, head)
-                || (!head.mount.origin.is_empty() && f.mount.origin == head.mount.origin)
-            {
+            if f.same_file(head) {
                 continue;
             }
-            if let Some(t) = f.ty(name) {
+            // only `pub` names cross packages
+            if let Some(t) = f.ty(name).filter(|t| t.vis() == Vis::Pub) {
                 tys.push((f, t));
             }
             for l in f.lets() {
-                if l.name() == name {
+                if l.name() == name && l.vis() == Vis::Pub {
                     lets.push((f, l));
                 }
             }
             // the use leaves bind free fns — methods are reached
             // through a receiver, never named bare
             for fv in f.fns() {
-                if fv.name() == name && fv.owner().is_none() {
+                if fv.name() == name && fv.owner().is_none() && fv.vis() == Vis::Pub {
                     fns.push((f, fv));
                 }
             }
@@ -605,16 +828,17 @@ impl<'a> Chain<'a> {
     /// layer 3 — the chain's AMBIENT rows (`prelude builtin`: the
     /// names the checker binds under its wildcard site, in every
     /// file, no `use` needed). The head is excluded (its own decls
-    /// spoke at layer 1); the mounted carrier wins over the embedded
-    /// prelude — the mounted-over-embed preference, the fallback
-    /// shape the old flat `type_decl` carried. Module lets have no
-    /// ambient linkage — no lane.
+    /// spoke at layer 1 — by identity, the stamped twin included); the
+    /// mounted carrier wins over the embedded prelude — the
+    /// mounted-over-embed preference, the fallback shape the old flat
+    /// `type_decl` carried. Module lets have no ambient linkage — no
+    /// lane.
     fn ambient_layers(&self, name: &str, out: &mut FileScope<'a>) {
         let head = self.head();
         let mut tys: Vec<(&MountedFile, TyView<'a>)> = Vec::new();
         let mut fns: Vec<(&MountedFile, FnView<'a>)> = Vec::new();
         for f in self.iter() {
-            if std::ptr::eq(f, head) {
+            if f.same_file(head) {
                 continue;
             }
             for t in f.types() {
@@ -644,15 +868,21 @@ impl<'a> Chain<'a> {
     /// answer through [`Chain::file_scope`].
     pub(crate) fn type_via_imports(&self, name: &str) -> Option<TyView<'a>> {
         let doc = self.head();
+        // the heads resolve to PACKAGES: a foreign head is its pkg, an
+        // own-package head (a `mod` edge, the own-pkg name) is the
+        // doc's own package — the type behind the value lives where
+        // the value's edge points
         let mut pkgs: Vec<&str> = Vec::new();
-        for u in doc.uses() {
-            let p = u.pkg();
-            if !pkgs.contains(&p) {
-                pkgs.push(p);
-            }
-        }
-        for g in doc.glob_uses() {
-            let p = g.pkg;
+        for head in doc
+            .uses()
+            .into_iter()
+            .map(|u| u.pkg())
+            .chain(doc.glob_uses().into_iter().map(|g| g.pkg))
+        {
+            let p = match self.own_use_head(head) {
+                Some(_) => self.stamp().pkg.as_deref().unwrap_or(head),
+                None => head,
+            };
             if !pkgs.contains(&p) {
                 pkgs.push(p);
             }
@@ -663,9 +893,7 @@ impl<'a> Chain<'a> {
                 .iter()
                 .filter(|f| crate::world::pkg::matches_pkg(f, pkg))
             {
-                if std::ptr::eq(f, doc)
-                    || (!doc.mount.origin.is_empty() && f.mount.origin == doc.mount.origin)
-                {
+                if f.same_file(doc) {
                     continue;
                 }
                 if let Some(t) = f.ty(name) {
@@ -686,7 +914,7 @@ impl<'a> Chain<'a> {
         // spelling lanes stop at [`Chain::file_scope`].
         let mut flat: Vec<(&MountedFile, TyView<'a>)> = Vec::new();
         for f in self.iter() {
-            if std::ptr::eq(f, doc) {
+            if f.same_file(doc) {
                 continue;
             }
             if let Some(t) = f.ty(name) {
@@ -703,23 +931,28 @@ impl<'a> Chain<'a> {
     /// a module the queried file binds. A qualified path is the other
     /// explicit form of file-scope access (cross-module access is
     /// qualified paths or use bindings), so the file scope answers
-    /// BOTH forms. Three head sources, each an established walk —
+    /// BOTH forms. Four head sources, each an established walk —
     /// never a new rule:
     /// - the OWN lane ([`resolve_position_head`]): the doc's own
     ///   `mod` edge, an ancestor's edge, or the own-pkg name — any
     ///   declared edge walks (the intra-package rule);
     /// - the doc's own `mod NAME;` edge read off the DeclMap — the
-    ///   unstamped-doc shape ([`module_at`]'s unnamed-owner law);
+    ///   unstamped-doc shape ([`Chain::module_at`]'s unnamed-owner
+    ///   law);
     /// - a use-bound module leaf (`use calc::{ math }`) — the
     ///   cross-package `pub` walk ([`walk_use_mods`]; glob leaves
     ///   bind no modules — a walkable child is a namespace segment,
-    ///   never a bound name).
-    /// - a pkg-rooted DEP name (`calc::…`, the dep merely declared) —
-    ///   the manifest's own naming (the dep stamps: [`Mount::dep`]
-    ///   carries `module: Some(name)`), bound AMBIENTLY by the
-    ///   compiler — "the manifest's own naming, never a use's" — but
-    ///   ONLY when the dep carries a module tree ("a flat dep — no
-    ///   module path can root inside").
+    ///   never a bound name);
+    /// - a pkg-rooted DEP name (`calc::math::…`, the dep merely
+    ///   declared) — the manifest's own naming (the dep stamps:
+    ///   [`Mount::dep`] carries `module: Some(name)`), bound
+    ///   AMBIENTLY by the compiler — "the manifest's own naming, never
+    ///   a use's" — but ONLY when the dep carries a module tree ("a
+    ///   flat dep — no module path can root inside") AND the path
+    ///   roots INSIDE that tree: the dep root's own members are not
+    ///   nameable by position (`calc::ctop()` refuses — "unknown name
+    ///   `calc::ctop`", tree dep and flat dep alike; the use is their
+    ///   only door).
     ///
     /// The TYPE ladder walks the own family ONLY
     /// ([`resolve_position_head`] — `resolve_qualified_ty`'s law: a
@@ -742,12 +975,18 @@ impl<'a> Chain<'a> {
         segs: &[String],
         is_ty: bool,
     ) -> Option<FileScope<'a>> {
-        let doc = self.head();
         let (head, rest) = segs.split_first()?;
         let (tail, middles) = rest.split_last()?;
-        let (mut cur, mut cross) = self.module_head(doc_mods, head, is_ty)?;
-        (cur, cross) = self.module_walk(cur, cross, middles)?;
-        let mut scope = own_scope_of(cur, tail);
+        let (mut cur, src) = self.module_head(doc_mods, head, is_ty)?;
+        // the dep-root source roots inside the dep's module tree — a
+        // leaf directly behind the dep name is the dep root's own
+        // member, which no position names
+        if src == HeadSrc::DepRoot && middles.is_empty() {
+            return None;
+        }
+        (cur, _) = self.module_walk(doc_mods, cur, src, middles)?;
+        let cross = src != HeadSrc::Own;
+        let mut scope = decl_rows_visible(cur, tail, |_| true);
         // the leaf's fns are the module's own FREE fns — impl methods
         // are type-scoped, never module rows (`fn_in`'s shape)
         scope.fns.retain(|f| f.owner().is_none());
@@ -759,8 +998,8 @@ impl<'a> Chain<'a> {
         let from = doc_mods
             .mod_path
             .as_deref()
-            .unwrap_or_else(|| crate::world::mods::mod_path_of(doc));
-        let def_mod = crate::world::mods::mod_path_of(cur);
+            .unwrap_or_else(|| self.mod_path_of(self.head()));
+        let def_mod = self.mod_path_of(cur);
         let gate = |vis: Vis, ambient: bool| {
             ambient
                 || if cross {
@@ -794,27 +1033,27 @@ impl<'a> Chain<'a> {
         is_ty: bool,
     ) -> Option<&'a MountedFile> {
         let (head, rest) = segs.split_first()?;
-        let (cur, cross) = self.module_head(doc_mods, head, is_ty)?;
-        let (file, _) = self.module_walk(cur, cross, rest)?;
+        let (cur, src) = self.module_head(doc_mods, head, is_ty)?;
+        let (file, _) = self.module_walk(doc_mods, cur, src, rest)?;
         Some(file)
     }
 
     /// the head's module file — the own family for both ladders, the
-    /// cross-package heads for the value ladder only; `cross` marks
-    /// the use-bound and dep-root sources (their walk and everything
-    /// beyond stays `pub`-gated)
+    /// cross-package heads for the value ladder only; the source
+    /// marks the cross-package walks (everything beyond stays
+    /// `pub`-gated) and the dep root (its own members are no leaf)
     fn module_head(
         &self,
         doc_mods: &DocMods,
         head: &str,
         is_ty: bool,
-    ) -> Option<(&'a MountedFile, bool)> {
+    ) -> Option<(&'a MountedFile, HeadSrc)> {
         let doc = self.head();
         // 1. the own lane — the machinery's own walk (own/ancestor
         //    edges + the own-pkg head; the doc's stamp keys it)
         if let Some(p) = crate::world::mods::resolve_position_head(doc_mods, doc, self, head) {
-            if let Some(f) = self.module_at(doc_mods.pkg.as_deref(), &p) {
-                return Some((f, false));
+            if let Some(f) = self.module_at(doc_mods, doc_mods.pkg.as_deref(), &p) {
+                return Some((f, HeadSrc::Own));
             }
         }
         // 2. the doc's own mod edge off the DeclMap — the
@@ -822,8 +1061,8 @@ impl<'a> Chain<'a> {
         //    record walks, the unnamed-owner law finds the child)
         if doc.mods().iter().any(|m| m.name() == head) {
             let child = crate::world::mods::child_path(crate::world::mods::mod_path_of(doc), head);
-            if let Some(f) = self.module_at(doc.mount.module.as_deref(), &child) {
-                return Some((f, false));
+            if let Some(f) = self.module_at(doc_mods, self.pkg_of(doc), &child) {
+                return Some((f, HeadSrc::Own));
             }
         }
         // the TYPE ladder stops at the own family — a used package's
@@ -843,54 +1082,49 @@ impl<'a> Chain<'a> {
             let mut walk: Vec<String> = u.path().into_iter().skip(1).collect();
             walk.push(head.to_string());
             if let Some(p) = crate::world::mods::walk_use_mods(self, pkg, &walk) {
-                if let Some(f) = self.module_at(Some(pkg), &p) {
-                    return Some((f, true));
+                if let Some(f) = self.module_at(doc_mods, Some(pkg), &p) {
+                    return Some((f, HeadSrc::UseBound));
                 }
             }
         }
-        // 4. a pkg-rooted DEP name — the manifest's own naming (the
-        //    dep stamps: [`Mount::dep`] carries `module: Some(name)`),
-        //    bound AMBIENTLY by the compiler — "the manifest's own
-        //    naming, never a use's" — but ONLY when the dep carries a
-        //    module tree ("a flat dep — no module path can root
-        //    inside"). The mounted carrier wins over the embedded
-        //    twin (the mounted-over-embed law).
+        // 4. a pkg-rooted DEP name — the manifest's own naming: the
+        //    dep's ROOT module, stamped by the dep lanes (`Mount::dep`
+        //    carries `module: Some(name)`), found by that stamp alone
+        //    (a dep is manifest-named; no URI derivation lands it).
+        //    The mounted carrier wins over the embedded twin (the
+        //    mounted-over-embed law), and the dep must carry a module
+        //    tree ("a flat dep — no module path can root inside").
+        let named = |f: &'a MountedFile| {
+            f.mount.module.as_deref() == Some(head) && crate::world::mods::mod_path_of(f).is_empty()
+        };
         let tree_carrying = |f: &'a MountedFile| {
             !f.mods().is_empty()
                 || self.iter().any(|x| {
-                    crate::world::pkg::matches_pkg(x, head)
+                    x.mount.module.as_deref() == Some(head)
                         && !crate::world::mods::mod_path_of(x).is_empty()
                 })
         };
         let root = self
             .iter()
-            .find(|f| {
-                crate::world::pkg::matches_pkg(f, head)
-                    && crate::world::mods::mod_path_of(f).is_empty()
-                    && f.mount.src_path.is_none()
-            })
-            .or_else(|| {
-                self.iter().find(|f| {
-                    crate::world::pkg::matches_pkg(f, head)
-                        && crate::world::mods::mod_path_of(f).is_empty()
-                })
-            });
-        if let Some(root) = root.filter(|f| tree_carrying(f)) {
-            return Some((root, true));
-        }
-        None
+            .find(|f| named(f) && f.mount.src_path.is_none())
+            .or_else(|| self.iter().find(|f| named(f)));
+        root.map(|f| (f, HeadSrc::DepRoot))
+            .filter(|(f, _)| tree_carrying(f))
     }
 
     /// the interior walk — each segment a declared edge of the module
-    /// the walk stands at, resolved to its mounted file
+    /// the walk stands at, resolved to its mounted file (the
+    /// cross-package sources keep the use walk's gate: only `pub`
+    /// crosses)
     fn module_walk(
         &self,
+        doc_mods: &DocMods,
         mut cur: &'a MountedFile,
-        cross: bool,
+        src: HeadSrc,
         segs: &[String],
-    ) -> Option<(&'a MountedFile, bool)> {
+    ) -> Option<(&'a MountedFile, HeadSrc)> {
         for seg in segs {
-            if cross {
+            if src != HeadSrc::Own {
                 // the use walk's gate continues: only `pub` crosses
                 let pub_edge = cur
                     .mods()
@@ -901,37 +1135,107 @@ impl<'a> Chain<'a> {
                     return None;
                 }
             }
-            cur = self.module_hop(cur, seg)?;
+            cur = self.module_hop(doc_mods, cur, seg)?;
         }
-        Some((cur, cross))
+        Some((cur, src))
     }
 
     /// one hop — the current module's declared edge `seg` (any vis —
     /// the intra rule; the cross gate runs at the call site) and the
     /// mounted file at the child's mod path
-    fn module_hop(&self, cur: &'a MountedFile, seg: &str) -> Option<&'a MountedFile> {
+    fn module_hop(
+        &self,
+        doc_mods: &DocMods,
+        cur: &'a MountedFile,
+        seg: &str,
+    ) -> Option<&'a MountedFile> {
         if !cur.mods().iter().any(|m| m.name() == seg) {
             return None;
         }
-        let child = crate::world::mods::child_path(crate::world::mods::mod_path_of(cur), seg);
-        self.module_at(cur.mount.module.as_deref(), &child)
+        let child = crate::world::mods::child_path(self.mod_path_of(cur), seg);
+        self.module_at(doc_mods, self.pkg_of(cur), &child)
     }
 
-    /// the mounted file at `(pkg, path)` — the [`matches_mod`] law,
-    /// with the unnamed-owner fallback: a pkg-less owner answers any
-    /// chain file stamped at the path (the mounted_child law)
-    fn module_at(&self, pkg: Option<&str>, path: &str) -> Option<&'a MountedFile> {
-        self.iter()
-            .find(|f| crate::world::mods::matches_mod(f, pkg, path))
-            .or_else(|| {
-                (pkg.is_none())
-                    .then(|| {
-                        self.iter()
-                            .find(|f| crate::world::mods::mod_path_of(f) == path)
-                    })
-                    .flatten()
-            })
+    /// the mounted file at `(pkg, path)` — the [`matches_mod`] law
+    /// (the STAMP: a package's root is its stamped root, never the
+    /// open document by a path coincidence), with two doors ahead of
+    /// it: the open document IS the module when its stamp says so
+    /// (its own entry carries the freshest decls — the sync lane
+    /// keeps it ahead of the stamped twin), and the unnamed-owner
+    /// fallback (a pkg-less owner answers any chain file stamped at
+    /// the path — the unstamped document's lenience)
+    fn module_at(
+        &self,
+        doc_mods: &DocMods,
+        pkg: Option<&str>,
+        path: &str,
+    ) -> Option<&'a MountedFile> {
+        if doc_mods.pkg.as_deref() == pkg && doc_mods.mod_path.as_deref() == Some(path) {
+            return Some(self.head());
+        }
+        crate::world::mods::find_mod(self, pkg, path).or_else(|| {
+            (pkg.is_none())
+                .then(|| {
+                    self.iter()
+                        .find(|f| crate::world::mods::mod_path_of(f) == path)
+                })
+                .flatten()
+        })
     }
+}
+
+/// where a qualified path's head resolved from — the walk's gates key
+/// on it: the own family (any declared edge, the visibility dial),
+/// the cross-package heads (the `pub` walk), the dep root (whose own
+/// members no position names)
+#[derive(Clone, Copy, PartialEq, Eq)]
+pub(crate) enum HeadSrc {
+    Own,
+    UseBound,
+    DepRoot,
+}
+
+/// the scope's rows of ONE name (`None` when it binds nothing of it)
+fn scope_named<'a>(scope: &FileScope<'a>, name: &str) -> Option<FileScope<'a>> {
+    let out = FileScope {
+        types: scope
+            .types
+            .iter()
+            .copied()
+            .filter(|t| t.name() == name)
+            .collect(),
+        lets: scope
+            .lets
+            .iter()
+            .copied()
+            .filter(|l| l.name() == name)
+            .collect(),
+        fns: scope
+            .fns
+            .iter()
+            .copied()
+            .filter(|f| f.name() == name)
+            .collect(),
+    };
+    (!out.is_empty()).then_some(out)
+}
+
+/// does the use-bound scope bind a row of `name` declared in `f`?
+/// (The bare and type tiers' imported gate — one answer with
+/// [`Chain::file_scope`].)
+pub(crate) fn bound_has(bound: &FileScope<'_>, f: &MountedFile, name: &str) -> bool {
+    bound
+        .types
+        .iter()
+        .any(|t| std::ptr::eq(t.file, f) && t.name() == name)
+        || bound
+            .fns
+            .iter()
+            .any(|fv| std::ptr::eq(fv.file, f) && fv.name() == name)
+        || bound
+            .lets
+            .iter()
+            .any(|l| std::ptr::eq(l.file, f) && l.name() == name)
 }
 
 /// the ambient layer's mounted-over-embed pick: the MOUNTED carriers
@@ -971,5 +1275,32 @@ fn own_scope_of<'a>(f: &'a MountedFile, name: &str) -> FileScope<'a> {
         .extend(f.lets().into_iter().filter(|l| l.name() == name));
     out.fns
         .extend(f.fns().into_iter().filter(|fv| fv.name() == name));
+    out
+}
+
+/// one file's DECLARATION rows of `name` — its own type / module let
+/// / FREE fn (impl methods are type-scoped, never module rows), each
+/// passing `gate`: the leaf shape the compiler's use binding and its
+/// qualified leaf both read (`fn_in`/`let_in`/the data tables of the
+/// TARGET module)
+fn decl_rows_visible<'a>(
+    f: &'a MountedFile,
+    name: &str,
+    gate: impl Fn(Vis) -> bool,
+) -> FileScope<'a> {
+    let mut out = FileScope::default();
+    if let Some(t) = f.ty(name).filter(|t| gate(t.vis())) {
+        out.types.push(t);
+    }
+    out.lets.extend(
+        f.lets()
+            .into_iter()
+            .filter(|l| l.name() == name && gate(l.vis())),
+    );
+    out.fns.extend(
+        f.fns()
+            .into_iter()
+            .filter(|fv| fv.name() == name && fv.owner().is_none() && gate(fv.vis())),
+    );
     out
 }
