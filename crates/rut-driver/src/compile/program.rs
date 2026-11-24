@@ -79,38 +79,6 @@ fn unbound_use_msg(
     }
 }
 
-/// The dep head's own-package answer for a glob leaf — the same walk
-/// `Session::own_use_head` runs at the graph, read off the mod inputs
-/// the compile already carries: a `mod` edge visible-walked from `from`
-/// (the current module first, then the ancestors, nearest wins), or the
-/// unit's own spec naming the root module. A flat package claims
-/// nothing — its own name was never a legal use head there.
-fn own_glob_target(
-    mods: &rut_lir::check::ModInputs,
-    spec: &str,
-    head: &str,
-    from: &str,
-) -> Option<String> {
-    let mut cur = from.to_string();
-    loop {
-        if let Some((path, _)) = mods.scopes.get(&cur).and_then(|s| s.children.get(head)) {
-            return Some(path.clone());
-        }
-        let parent = match cur.rsplit_once('/') {
-            Some((p, _)) => p.to_string(),
-            None => String::new(),
-        };
-        if parent == cur {
-            break;
-        }
-        cur = parent;
-    }
-    if !mods.scopes.is_empty() && head == spec {
-        return Some(String::new());
-    }
-    None
-}
-
 /// The walked path's pub surface names a glob leaf binds — the DEP
 /// lane's enumeration. The dep's binary surface answers (a packed
 /// `.rutbundle` enumerates the same way its per-leaf lookups do: a bare
@@ -645,8 +613,12 @@ fn compile_program_inner(
             .join("::");
         // the head's namespace: a dep surface (the bound vec's rows —
         // `used_pkgs`/D5 gated this head exactly as for a spelled
-        // leaf), else the own-package walk. Neither answers and
-        // nothing enumerates — the graph diagnosed the head already.
+        // leaf), else the own-package walk — the shared law
+        // `rut_lir::check::mod_head` (the same walk
+        // `Session::own_use_head` runs: a `mod` edge visible-walked
+        // from `from`, the unit's own spec naming the root module, a
+        // flat tree refusing). Neither answers and nothing enumerates —
+        // the graph diagnosed the head already.
         let dep = uses.iter().find(|(_, _, _, h)| h == &head);
         // the own lane walks the interior segments exactly like the
         // graph's own lane: the head resolves the target module, each
@@ -654,7 +626,7 @@ fn compile_program_inner(
         // the star enumerates the WALKED module's surface, never the
         // head's root
         let own_target = if dep.is_none() {
-            own_glob_target(&ctx.mods, module_name, &head, &file).and_then(|at| {
+            rut_lir::check::mod_head(&ctx.mods, module_name, &file, &head).and_then(|at| {
                 let mut at = at;
                 for seg in &u.path[1..] {
                     let seg_text = ast.name(seg.ident);
