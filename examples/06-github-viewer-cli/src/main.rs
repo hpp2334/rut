@@ -1,5 +1,5 @@
 //! 06-github-viewer-cli — the Rust half of `rgh`: mount, bind, launch,
-//! pump, exit. The BRAIN is `mod.rut` (an async free fn over the
+//! drive, exit. The BRAIN is `mod.rut` (an async free fn over the
 //! redesigned rut/http lane); this file owns only I/O:
 //!
 //! - argv crosses in as ONE `\n`-joined `str` (the crossing
@@ -12,11 +12,14 @@
 //!   grows — the streaming download's two halves), and the `exit` row
 //!   (the process exits with the brain's i32);
 //! - `boot` launches the brain (`launch_future` — the futures
-//!   standard launcher); this file then pumps the driving loop to
-//!   idle (the run lane): `run_ready` + a short wall-clock
-//!   sleep per spin until `pending_tasks()` hits zero. The `exit` row
-//!   fires INSIDE the pump and never returns. A trap surfaces here as
-//!   exit 1 with the trap name.
+//!   standard launcher); this file then rides the engine's driving
+//!   loop (the run lane): `run_until_idle(Wait::Block)` — the engine
+//!   drains ready frames, jumps the virtual clock, and parks on the
+//!   wake cell while real reqwest workers settle the completers; no
+//!   pump is written here (the engine owns the loop). The `exit` row
+//!   fires INSIDE the drive and never returns. A trap surfaces as
+//!   exit 1 with the trap name; a brain that goes idle without
+//!   `exit` is a brain bug (exit 1, loud).
 //!
 //! The offline suite (tests/session.rs) builds its own VM over the
 //! fixture lane (`http::pkg_with`) and a recording `exit` body —
@@ -196,7 +199,7 @@ fn main() {
     });
     rut_vm::register!(hosts, "rgh_host::exit", (i32,) -> (),
     |_vm: &mut Vm, code: i32| -> Result<(), Trap> {
-        // the brain's one-way door: the pump dies here with the
+        // the brain's one-way door: the drive dies here with the
         // code it carried
         std::process::exit(code);
     });
@@ -215,26 +218,24 @@ fn main() {
             std::process::exit(1);
         }
     };
-    // launch the brain, then pump the driving loop to idle: real
+    // launch the brain, then ride the engine's driving loop: real
     // reqwest workers settle the completers from their threads (the
-    // wall-clock spin), `exit` fires mid-spin and never returns
+    // parked wake is the protocol's whole point), `exit` fires
+    // mid-drive and never returns
     if let Err(t) = vm.call::<_, ()>("boot", (args,)) {
         eprintln!("rgh: boot fn: {} — {}", t.name(), t.msg);
         std::process::exit(1);
     }
-    loop {
-        match vm.run_ready() {
-            Ok(_) => {}
-            Err(t) => {
-                eprintln!("rgh: trap: {} — {}", t.name(), t.msg);
-                std::process::exit(1);
-            }
-        }
-        if vm.pending_tasks() == 0 {
+    match vm.run_until_idle(rut_vm::interp::Wait::Block) {
+        Ok(rut_vm::interp::Idle::Drained) => {
             // the brain retired WITHOUT exiting — a brain bug: loud
             eprintln!("rgh: the brain retired without exit (a brain bug)");
             std::process::exit(1);
         }
-        std::thread::sleep(std::time::Duration::from_millis(2));
+        Ok(rut_vm::interp::Idle::WouldBlock) => unreachable!("Block never answers WouldBlock"),
+        Err(t) => {
+            eprintln!("rgh: trap: {} — {}", t.name(), t.msg);
+            std::process::exit(1);
+        }
     }
 }

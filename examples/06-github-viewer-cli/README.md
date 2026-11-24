@@ -12,8 +12,8 @@ cargo run -p rgh -- --repo=jquery/jquery --ref=3.7.1 download test/data/text.txt
 `mod.rut` is the program: argv carving, the URL building, the tree
 JSON decode, the human-size formatting, every error message and exit
 code. The Rust half (`src/main.rs`) is an embedder that mounts
-packages, binds host bodies, launches the brain, pumps the driving
-loop to idle, and exits with the brain's i32 — `0` ok, `1` runtime
+packages, binds host bodies, launches the brain, rides the engine's
+driving loop to idle, and exits with the brain's i32 — `0` ok, `1` runtime
 error, `2` usage.
 
 ## The brain is async
@@ -29,13 +29,14 @@ entry fn boot(args: str) -> nil {
 }
 ```
 
-The host crosses argv in, `boot` launches, and the embedder pumps the
-driving loop (`run_ready` + a wall-clock spin until
-`pending_tasks()` hits 0 — the
-[loading](../../docs/src/reference/loading.md) lane; real reqwest
-workers settle the completers from their threads). The code crosses
+The host crosses argv in, `boot` launches, and the embedder rides the
+engine's driving loop (`run_until_idle(Wait::Block)` — the engine
+parks on the wake cell while real reqwest workers settle the
+completers from their threads; see [the embedder's driving
+contract](../../docs/src/reference/embedding.md#the-embedders-driving-contract)).
+The code crosses
 out through the sync `exit` row — the process's one-way door, fired
-mid-pump; the brain keeps the `-> i32` discipline beside it.
+mid-drive; the brain keeps the `-> i32` discipline beside it.
 
 The fetch sites await — and ONLY the fetch sites:
 
@@ -69,7 +70,7 @@ rate-limit note; any other non-2xx → `rgh: CDN <n>`.
 | the brain | `mod.rut` | argv carve (hand-rolled — there is no `str.split`; the `scan`/`slice` tokenizer primitives), flag/subcommand parse, URL building, `decodeJsonBytes`-shaped root decode over the tree JSON (`Entry` + `Root` spell json's `JsonDeserialize` members on their own inherent impls — structural satisfaction — over `rut/json`'s reader), depth-first flatten, `human_size`, every message and exit code; the awaits live at the fetch sites |
 | the std HTTP lane | `rut/http_host` + `rut/http` (tree pkgs), bodies in `rut-std` behind its default-off `http` feature | the async-only face: `HttpClient()`, the verbs as build sugars (`get`/`post`/`put`/`patch`/`del`), the builder chain, `build()`, and the async points — `send(cx)` (headers), `body(cx)` (the drain), `byte_stream()` + `next(cx)` (chunk per await); `status()` (0 = transport), `ok()`, `transport_error()`, `read_error()` |
 | the example's host rows | `rgh_host/` + `src/main.rs` | CLI I/O only: `out` (stdout line), `eprint` (stderr line), `write_file` (truncate-or-create), `append_file` (append-or-create — one streamed chunk per call), `exit` (the one-way door) |
-| the embedder | `src/main.rs` | mount std + the async pair + `pouch`/`nmapset`/`json` + the http pair + `rgh_host`, compile `mod.rut` (Impl mode), verify, install `http::pkg()` (reqwest) + `async_host::pkg()` + the `rgh_host` rows, `verify_against`, `vm.call("boot", (args,))`, pump to idle, exit with the carried code |
+| the embedder | `src/main.rs` | mount std + the async pair + `pouch`/`nmapset`/`json` + the http pair + `rgh_host`, compile `mod.rut` (Impl mode), verify, install `http::pkg()` (reqwest) + `async_host::pkg()` + the `rgh_host` rows, `verify_against`, `vm.call("boot", (args,))`, drive `run_until_idle(Wait::Block)` to idle, exit with the carried code |
 
 The disk-write split is the streaming shape: `download` TRUNCATES the
 dest through `write_file` once (a stale file never leaks its tail
@@ -165,7 +166,7 @@ and the fuel budget (the real tree lists in ~1.9M fuel against the
 embedder's 250M).
 
 The live smoke is opt-in and hits the real CDN through the embedder's
-reqwest lane (the recording `exit`, the wall-clock pump):
+reqwest lane (the recording `exit`, the engine's driving loop):
 
 ```
 RGH_LIVE=1 cargo test -p rgh live_smoke

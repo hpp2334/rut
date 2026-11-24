@@ -1037,7 +1037,7 @@ fn live_smoke_over_the_real_cdn() {
     }
     // the embedder's own boot, but the observations ride the sinks and
     // `exit` records: reqwest lane (http::pkg()), the real DNS,
-    // the real CDN, the wall-clock pump
+    // the real CDN, the engine's driving loop
     let sinks = Sinks::default();
     let mut compiled = compile_brain(
         SRC,
@@ -1101,17 +1101,12 @@ fn live_smoke_over_the_real_cdn() {
         ("--repo=jquery/jquery\n--ref=3.7.1\nlist".to_string(),),
     )
     .unwrap();
-    // the wall-clock pump: real workers settle the completers
-    let mut ok = false;
-    for _ in 0..20_000 {
-        vm.run_ready().unwrap();
-        if sinks.code.borrow().is_some() {
-            ok = true;
-            break;
-        }
-        std::thread::sleep(std::time::Duration::from_millis(2));
-    }
-    assert!(ok, "the brain exited: {:?}", sinks.err_lines());
+    // the engine's driving loop: real workers settle the completers,
+    // the parked wake is the protocol's whole point
+    let idle = vm
+        .run_until_idle(rut_vm::interp::Wait::Block)
+        .expect("run_until_idle");
+    assert_eq!(idle, rut_vm::interp::Idle::Drained);
     assert_eq!(sinks.code(), 0, "stderr: {:?}", sinks.err_lines());
     assert!(!sinks.out_lines().is_empty(), "the real tree lists files");
 }

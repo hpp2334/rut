@@ -5,8 +5,8 @@ the jsDelivr CDN — no GitHub API, no tokens. Its **brain is a rut
 async free fn**: argv carving, the URL building, the tree JSON
 decode, the human-size formatter, every message and exit code run in
 the VM. The Rust half is a pure embedder: mount packages, bind host
-bodies, launch the brain, pump the driving loop to idle, exit with
-the brain's i32 (`0` ok, `1` runtime error, `2` usage). This is the
+bodies, launch the brain, ride the engine's driving loop to idle,
+exit with the brain's i32 (`0` ok, `1` runtime error, `2` usage). This is the
 worked example for the std `http` lane's redesigned face —
 `HttpClient`, builder-style construction, and async-only send with
 true streaming.
@@ -38,7 +38,7 @@ downloads verified byte-verbatim, wire deaths, and status mappings.
 
 ## Code tour
 
-### The brain is async; the host launches and pumps
+### The brain is async; the host launches and the engine drives
 
 `src/mod.rut` — the entry point is one `boot` fn: the host crosses argv
 in as a single `\n`-joined string (no arg lists in the crossing set),
@@ -51,25 +51,29 @@ entry fn boot(args: str) -> nil {
 }
 ```
 
-The embedder then pumps the driving loop to idle — real reqwest
-workers settle the completers from their threads, and the process's
-one-way `exit` row fires mid-pump:
+The embedder then rides the engine's driving loop — the host names
+only its parking policy, `Wait::Block`: the engine drains ready
+frames, jumps the virtual clock, and parks on the wake cell while
+real reqwest workers settle the completers from their threads, and
+the process's one-way `exit` row fires mid-drive
+([the embedder's driving contract](../reference/embedding.md#the-embedders-driving-contract)):
 
 ```rust
-loop {
-    match vm.run_ready() {
-        Ok(_) => {}
-        Err(t) => {
-            eprintln!("rgh: trap: {} — {}", t.name(), t.msg);
-            std::process::exit(1);
-        }
-    }
-    if vm.pending_tasks() == 0 {
+if let Err(t) = vm.call::<_, ()>("boot", (args,)) {
+    eprintln!("rgh: boot fn: {} — {}", t.name(), t.msg);
+    std::process::exit(1);
+}
+match vm.run_until_idle(rut_vm::interp::Wait::Block) {
+    Ok(rut_vm::interp::Idle::Drained) => {
         // the brain retired WITHOUT exiting — a brain bug: loud
         eprintln!("rgh: the brain retired without exit (a brain bug)");
         std::process::exit(1);
     }
-    std::thread::sleep(std::time::Duration::from_millis(2));
+    Ok(rut_vm::interp::Idle::WouldBlock) => unreachable!("Block never answers WouldBlock"),
+    Err(t) => {
+        eprintln!("rgh: trap: {} — {}", t.name(), t.msg);
+        std::process::exit(1);
+    }
 }
 ```
 
@@ -212,8 +216,8 @@ presence.
 ## Takeaways
 
 - **An async rut program in production shape**: the brain awaits at
-  the fetch sites only; the embedder launches, pumps to idle, and
-  exits with the brain's code.
+  the fetch sites only; the embedder launches, rides the engine's
+  driving loop to idle, and exits with the brain's code.
 - **Headers-first send + one-shot body/stream** is the whole mental
   model of the std http lane — drain JSON in one await, stream files
   chunk by chunk.

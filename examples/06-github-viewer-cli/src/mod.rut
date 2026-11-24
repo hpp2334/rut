@@ -11,9 +11,9 @@
 //   rgh --repo=owner/name --ref=<tag|branch|sha> download <repo-path> [<dest>]
 //
 // THE ASYNC SHAPE: the brain is an async free fn (`rgh_main(args)
-// -> i32`); the host's `boot` entry launches it (`launch_future`) and
-// pumps the driving loop to idle, then exits with the code the
-// `exit` row carried out. The fetch sites await — `send` resolves at
+// -> i32`); the host's `boot` entry launches it (`launch_future`), the
+// engine's driving loop runs it to idle, and the `exit` row carries
+// the code out. The fetch sites await — `send` resolves at
 // HEADERS; `list` drains the body in one await; `download` walks the
 // byte stream chunk by chunk and appends each to the dest through the
 // sync `append_file` row (disk writes are sync embedder rows; blocking
@@ -516,8 +516,8 @@ async fn rgh_main(args: str) -> i32 {
     return code;
 }
 
-// the host-callable entry: launch the brain, return — the embedder
-// pumps the driving loop to idle and exits with the carried code
+// the host-callable entry: launch the brain, return — the engine's
+// driving loop runs it to idle and `exit` carries the code out
 entry fn boot(args: str) -> nil {
     launch_future(rgh_main(args));
 }
