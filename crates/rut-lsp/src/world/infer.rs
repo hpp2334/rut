@@ -9,6 +9,10 @@
 //! pass); an un-annotated binding's type consults its recorded init.
 //! A miss is `None` — never wrong text.
 //!
+//! Every answer is a [`Ty`](super::ty::Ty) — the verbatim spelling
+//! beside the shape read off the tree (L4); substitution and the
+//! structural match walk the shape, never the text.
+//!
 //! The Future family types here too, text-level rules mirroring the
 //! engine's own laws (real typing stays rut-lir's lane): a call to an
 //! `async` fn answers `Future<R>` (`R` = written ret, `nil` when
@@ -17,9 +21,9 @@
 //! law), and `await e` unwraps a head that is EXACTLY `Future` (the
 //! `compile_await` law — no `?` peel, an optional future is not
 //! awaitable). Call sites price the ret through a first-order
-//! text-level substitution (spelled generics + declared-vs-inferred
-//! argument matching); residual type variables are silence, never
-//! `: T` text.
+//! substitution (spelled generics + declared-vs-inferred argument
+//! matching over the shape); residual type variables are silence,
+//! never `: T` text.
 
 use crate::semantic::IntSuffix;
 use rut_ast::{
@@ -28,7 +32,7 @@ use rut_ast::{
 };
 
 use super::collection::{prefer_mounted, FnView};
-use super::types::{head_of_ty, ty_src, TyForm};
+use super::ty::{bind_var, Shape, Ty, TyForm};
 use crate::world::File;
 
 /// the type an expression suggests, as display text. `home` is the
@@ -41,7 +45,7 @@ use crate::world::File;
 /// type the member chain resolves)
 pub(crate) enum QualHit<'a> {
     Fn(crate::world::collection::FnView<'a>),
-    Ty(String),
+    Ty(Ty),
 }
 
 pub(crate) fn expr_ty<'a>(
@@ -49,18 +53,18 @@ pub(crate) fn expr_ty<'a>(
     idxs: &[&'a File],
     e: ExprRef,
     qual: &impl Fn(&[String], bool) -> Option<QualHit<'a>>,
-) -> Option<String> {
+) -> Option<Ty> {
     let ast = home.doc.ast();
     match e {
         // the literal defaults are the engine's own law
         ExprRef::Lit(h) => match &h.get(ast).lit {
-            Lit::Str(_) | Lit::RawStr(_) => Some("str".to_string()),
-            Lit::Bool(_) => Some("bool".to_string()),
-            Lit::Int(_, sfx) => Some(sfx.map(int_suffix).unwrap_or("i32").to_string()),
-            Lit::Float(_, sfx) => Some(sfx.map(float_suffix).unwrap_or("f32").to_string()),
+            Lit::Str(_) | Lit::RawStr(_) => Some(Ty::named("str")),
+            Lit::Bool(_) => Some(Ty::named("bool")),
+            Lit::Int(_, sfx) => Some(Ty::named(sfx.map(int_suffix).unwrap_or("i32"))),
+            Lit::Float(_, sfx) => Some(Ty::named(sfx.map(float_suffix).unwrap_or("f32"))),
             Lit::Nil => None,
         },
-        ExprRef::FStr(_) => Some("str".to_string()),
+        ExprRef::FStr(_) => Some(Ty::named("str")),
         // `self` — the receiver: the enclosing type (the walk's own
         // law), HOME-scoped — the only file whose spans index the
         // token's offsets; the `Self` type spelling has no value type
@@ -70,7 +74,7 @@ pub(crate) fn expr_ty<'a>(
                 return None;
             }
             super::collection::enclosing_type(std::iter::once(home), d.span.lo)
-                .map(|t| t.name().to_string())
+                .map(|t| Ty::named(t.name()))
         }
         ExprRef::Path(h) => {
             let segs = &h.get(ast).segs;
@@ -90,7 +94,7 @@ pub(crate) fn expr_ty<'a>(
                         .get(ast)
                         .segs
                         .first()
-                        .map(|s| ast.name(s.name.ident).to_string());
+                        .map(|s| Ty::named(ast.name(s.name.ident)));
                 }
                 return None;
             }
@@ -99,7 +103,7 @@ pub(crate) fn expr_ty<'a>(
                 home,
                 idxs,
                 ast,
-                &head_of_ty(&ty),
+                &ty.head(),
                 ast.name(name),
                 &d.generics,
                 &d.args,
@@ -109,49 +113,59 @@ pub(crate) fn expr_ty<'a>(
         ExprRef::Field(h) => {
             let d = h.get(ast);
             let ty = expr_ty(home, idxs, d.recv, qual)?;
-            let text = field_ty(idxs, &head_of_ty(&ty), ast.name(d.name.ident))?;
+            let out = field_ty(idxs, &ty.head(), ast.name(d.name.ident))?;
             // a QUALIFIED field type (`c: m::Counter`): the type
             // ladder's qualified lane names the declaring view — the
             // bare name the member chain then resolves
-            if text.contains("::") {
-                let mut segs: Vec<String> =
-                    text.split("::").map(|s| s.trim().to_string()).collect();
-                if let Some(last) = segs.last_mut() {
-                    if let Some(i) = last.find('<') {
-                        *last = last[..i].to_string();
+            if let Shape::Named { segs, .. } = &out.shape {
+                if segs.len() >= 2 {
+                    if let Some(QualHit::Ty(name)) = qual(segs, true) {
+                        return Some(name);
                     }
                 }
-                if let Some(QualHit::Ty(name)) = qual(&segs, true) {
-                    return Some(name);
-                }
             }
-            Some(text)
+            Some(out)
         }
         ExprRef::Index(h) => {
             let d = h.get(ast);
-            expr_ty(home, idxs, d.recv, qual).and_then(|t| elem_ty(&t))
+            expr_ty(home, idxs, d.recv, qual).and_then(|t| t.first_arg().cloned())
         }
-        ExprRef::Struct(h) => Some(ty_src(ast, h.get(ast).ty)),
+        ExprRef::Struct(h) => Some(Ty::of(ast, h.get(ast).ty)),
         ExprRef::Tuple(h) => {
             let elems = &h.get(ast).elems;
-            let parts: Option<Vec<String>> = elems
+            let parts: Option<Vec<Ty>> = elems
                 .iter()
                 .map(|&e| expr_ty(home, idxs, e, qual))
                 .collect();
-            parts.map(|p| format!("({})", p.join(", ")))
+            parts.map(|p| Ty {
+                text: format!(
+                    "({})",
+                    p.iter()
+                        .map(|t| t.text.as_str())
+                        .collect::<Vec<_>>()
+                        .join(", ")
+                ),
+                shape: Shape::Tuple(p),
+            })
         }
         ExprRef::ArrayLit(h) => h
             .get(ast)
             .elems
             .first()
             .and_then(|&e| expr_ty(home, idxs, e, qual))
-            .map(|t| format!("[{t}]")),
+            .map(|t| Ty {
+                text: format!("[{}]", t.text),
+                shape: Shape::Array(Box::new(t)),
+            }),
         ExprRef::ArrayRepeat(h) => {
             let d = h.get(ast);
-            expr_ty(home, idxs, d.value, qual).map(|t| format!("[{t}]"))
+            expr_ty(home, idxs, d.value, qual).map(|t| Ty {
+                text: format!("[{}]", t.text),
+                shape: Shape::Array(Box::new(t)),
+            })
         }
-        ExprRef::Cast(h) => Some(ty_src(ast, h.get(ast).ty)),
-        ExprRef::Is(_) => Some("bool".to_string()),
+        ExprRef::Cast(h) => Some(Ty::of(ast, h.get(ast).ty)),
+        ExprRef::Is(_) => Some(Ty::named("bool")),
         ExprRef::Binary(h) => {
             let d = h.get(ast);
             match d.op {
@@ -162,7 +176,7 @@ pub(crate) fn expr_ty<'a>(
                 | BinOp::Le
                 | BinOp::Ge
                 | BinOp::And
-                | BinOp::Or => Some("bool".to_string()),
+                | BinOp::Or => Some(Ty::named("bool")),
                 // same-type arithmetic; the left operand decides
                 _ => expr_ty(home, idxs, d.lhs, qual).or_else(|| expr_ty(home, idxs, d.rhs, qual)),
             }
@@ -174,10 +188,14 @@ pub(crate) fn expr_ty<'a>(
         // a miss; a non-Future is a miss too (never wrong text)
         ExprRef::Await(h) => {
             let t = expr_ty(home, idxs, h.get(ast).expr, qual)?;
-            if head_strict(&t) != "Future" {
+            // an `Opt` spells `?..` — never exactly `Future`
+            if t.opt_inner().is_some() {
                 return None;
             }
-            first_generic_arg(&t)
+            if t.head() != "Future" {
+                return None;
+            }
+            t.first_arg().cloned()
         }
         // `async { .. }` mints `Future<T>` — the engine's
         // `compile_async_block` law. T is the body's answer: the first
@@ -188,28 +206,25 @@ pub(crate) fn expr_ty<'a>(
         // `Future<nil>` exactly like the engine
         ExprRef::AsyncBlock(h) => {
             let t = first_return(ast, h.get(ast).body).and_then(|e| expr_ty(home, idxs, e, qual));
-            Some(format!(
-                "Future<{}>",
-                t.unwrap_or_else(|| "nil".to_string())
-            ))
+            Some(future_ty(t.unwrap_or_else(|| Ty::named("nil"))))
         }
         _ => None,
     }
 }
 
 /// a binding row's type, declared-or-inferred: the WRITTEN annotation
-/// verbatim (`Doc::text` join), else the recorded init through the
-/// resolver over `idxs` (the window the caller rides — the old pass
-/// inferred against the whole chain). `None` when nothing derives —
-/// never wrong text.
+/// (the verbatim span join beside the tree's shape), else the recorded
+/// init through the resolver over `idxs` (the window the caller rides
+/// — the old pass inferred against the whole chain). `None` when
+/// nothing derives — never wrong text.
 pub(crate) fn binding_ty<'a>(
     home: &File,
     idxs: &[&'a File],
     b: &Binding,
     qual: &impl Fn(&[String], bool) -> Option<QualHit<'a>>,
-) -> Option<String> {
+) -> Option<Ty> {
     if let Some(sp) = b.ty_span {
-        return Some(home.doc.text(sp).to_string());
+        return Some(Ty::of_annotation(home, sp));
     }
     b.init.and_then(|init| expr_ty(home, idxs, init, qual))
 }
@@ -226,7 +241,7 @@ fn path_ty<'a>(
     pos: u32,
     segs: &[PathSeg],
     qual: &impl Fn(&[String], bool) -> Option<QualHit<'a>>,
-) -> Option<String> {
+) -> Option<Ty> {
     let ast = home.doc.ast();
     let head = segs.first()?.name.ident;
     let text = ast.name(head);
@@ -238,12 +253,12 @@ fn path_ty<'a>(
             .and_then(|b| binding_ty(home, idxs, b, qual))
             .or_else(|| {
                 // a capitalized head is the type itself (`Color::Red`)
-                is_cap(text).then(|| text.to_string())
+                is_cap(text).then(|| Ty::named(text))
             });
         if let Some(start) = head_ty {
             let mut cur = start;
             for seg in &segs[1..] {
-                cur = field_ty(idxs, &head_of_ty(&cur), ast.name(seg.name.ident))?;
+                cur = field_ty(idxs, &cur.head(), ast.name(seg.name.ident))?;
             }
             return Some(cur);
         }
@@ -251,7 +266,7 @@ fn path_ty<'a>(
     }
     let own = rut_ast::resolve_binding(home.doc.bindings(), pos, head)
         .and_then(|b| binding_ty(home, idxs, b, qual));
-    own.or_else(|| module_let_ty(idxs.iter().copied(), text))
+    own.or_else(|| module_let_ty(idxs.iter().copied(), text).map(|t| t.headed()))
 }
 
 /// `f(..)` — a free fn's declared ret: a bare callee resolves through
@@ -268,7 +283,7 @@ fn call_ty<'a>(
     callee: ExprRef,
     args: &[ExprRef],
     qual: &impl Fn(&[String], bool) -> Option<QualHit<'a>>,
-) -> Option<String> {
+) -> Option<Ty> {
     if let ExprRef::Path(h) = callee {
         let segs = &h.get(ast).segs;
         if segs.len() == 1 {
@@ -304,9 +319,9 @@ fn call_ty<'a>(
                         TyForm::Class | TyForm::Struct | TyForm::HostStruct
                     ) {
                         return Some(if segs[0].generics.is_empty() {
-                            name.to_string()
+                            Ty::named(name)
                         } else {
-                            generic_name(home, ast, name, &segs[0].generics)
+                            written_arg_ty(home, ast, name, &segs[0].generics)
                         });
                     }
                 }
@@ -322,8 +337,8 @@ fn call_ty<'a>(
             return Some(
                 segs.iter()
                     .find(|s| !s.generics.is_empty())
-                    .map(|s| generic_name(home, ast, name, &s.generics))
-                    .unwrap_or_else(|| name.to_string()),
+                    .map(|s| written_arg_ty(home, ast, name, &s.generics))
+                    .unwrap_or_else(|| Ty::named(name)),
             );
         }
         // `m::mk(..)` — a module-qualified callee: the namespace lane
@@ -351,17 +366,25 @@ fn call_ty<'a>(
     None
 }
 
-/// the constructor-call type text for `name<args>` — each argument is
-/// the OWNING doc's verbatim slice (`Doc::text` over the arg's span,
-/// trimmed), joined with `, `; nested args (`Vec<str>`) ride their own
-/// spans by construction. No type stringifier — a span×src join
-fn generic_name(home: &File, ast: &Ast, name: &str, args: &[TyRef]) -> String {
-    let rendered = args
+/// the constructor-call type for `name<args>` — the head name beside
+/// each argument as the OWNING doc's verbatim slice (`Doc::text` over
+/// the arg's span, trimmed) joined `, `; the shape is the tree's, so
+/// the substitution can still see through it. Nested args (`Vec<str>`)
+/// ride their own spans by construction
+fn written_arg_ty(home: &File, ast: &Ast, name: &str, args: &[TyRef]) -> Ty {
+    let rendered: Vec<String> = args
         .iter()
         .map(|&a| home.doc.text(a.span(ast)).trim().to_string())
-        .collect::<Vec<_>>()
-        .join(", ");
-    format!("{name}<{rendered}>")
+        .collect();
+    let shape_args: Vec<Ty> = args.iter().map(|&a| Ty::of(ast, a)).collect();
+    let text = format!("{name}<{}>", rendered.join(", "));
+    Ty {
+        text,
+        shape: Shape::Named {
+            segs: vec![name.to_string()],
+            args: shape_args,
+        },
+    }
 }
 
 /// a member call's ret on `ty_name` — the impl-fn lane over the
@@ -381,18 +404,18 @@ fn member_ret<'a>(
     written: &[TyRef],
     args: &[ExprRef],
     qual: &impl Fn(&[String], bool) -> Option<QualHit<'a>>,
-) -> Option<String> {
+) -> Option<Ty> {
     super::collection::impl_method_fn_in(idxs.iter().copied(), ty_name, member)
         .and_then(|f| call_ret(home, idxs, ast, &f, written, args, qual))
 }
 
 /// a callee fn view's ret at a call site — the written ret priced for
-/// display. First-order text-level substitution over the call site:
+/// display. First-order substitution over the call site:
 ///
 /// (a) the spelled call-site generics zip the decl's parameters
 ///     (`make<i32>()` names `T := i32`);
 /// (b) each declared param whose type mentions a variable
-///     structurally matches the arg's inferred text — heads equal,
+///     structurally matches the arg's inferred type — heads equal,
 ///     generic arity equal, non-var text equal (`Future<T>` vs
 ///     `Future<str>` → `T := str`; `[Future<T>]` vs `[Future<str>]` →
 ///     `T := str`; `?X` peels like `[X]`).
@@ -410,14 +433,15 @@ fn call_ret<'a>(
     written: &[TyRef],
     args: &[ExprRef],
     qual: &impl Fn(&[String], bool) -> Option<QualHit<'a>>,
-) -> Option<String> {
+) -> Option<Ty> {
     let vars = f.generics();
-    let mut map: Vec<(String, String)> = Vec::new();
+    let mut map: Vec<(String, Ty)> = Vec::new();
     for (v, w) in vars.iter().zip(written.iter()) {
         // the call site's own spelling — the HOME doc's verbatim slice
         let text = home.doc.text(w.span(ast)).trim().to_string();
         if !text.is_empty() {
-            bind_var(&mut map, v.clone(), text);
+            let shape = Ty::of(ast, *w).shape;
+            bind_var(&mut map, v.clone(), Ty { text, shape });
         }
     }
     // argument-driven matching: the receiver slot rides out (the args
@@ -428,123 +452,46 @@ fn call_ret<'a>(
         let Some(declared) = p else {
             continue;
         };
-        if !mentions_var(declared, &vars) {
+        if !declared.mentions_any(&vars) {
             continue;
         }
         let Some(inferred) = expr_ty(home, idxs, *a, qual) else {
             continue;
         };
-        unify(declared, &inferred, &vars, &mut map);
+        declared.unify(&inferred, &vars, &mut map);
     }
     let Some(ret) = f.ret() else {
         // unwritten = `nil` (the engine's law) — only an async callee
         // answers it
-        return f.is_async().then(|| "Future<nil>".to_string());
+        return f.is_async().then(|| future_ty(Ty::named("nil")));
     };
-    let priced = apply_subst(&ret, &map);
-    if mentions_var(&priced, &vars) {
+    let priced = ret.subst(&map);
+    if priced.mentions_any(&vars) {
         return None;
     }
     Some(if f.is_async() {
-        format!("Future<{priced}>")
+        future_ty(priced)
     } else {
         priced
     })
 }
 
-// ---- the text-level substitution ----
-
-/// first binding wins — a variable already bound keeps its first text
-fn bind_var(map: &mut Vec<(String, String)>, var: String, text: String) {
-    if !map.iter().any(|(v, _)| *v == var) {
-        map.push((var, text));
+/// the async wrap — a call to an `async` fn (or an async block)
+/// answers `Future<R>`, the head's spelling (the engine's sugar law)
+fn future_ty(inner: Ty) -> Ty {
+    let text = format!("Future<{}>", inner.text);
+    Ty {
+        text,
+        shape: Shape::Named {
+            segs: vec!["Future".to_string()],
+            args: vec![inner],
+        },
     }
 }
 
-/// the maximal identifier runs of a type text — the boundary scan the
-/// substitution's application and its residual check share
-fn idents(text: &str) -> Vec<&str> {
-    let mut out = Vec::new();
-    let mut run: Option<usize> = None;
-    for (i, c) in text.char_indices() {
-        if c.is_alphanumeric() || c == '_' {
-            if run.is_none() {
-                run = Some(i);
-            }
-        } else if let Some(s) = run.take() {
-            out.push(&text[s..i]);
-        }
-    }
-    if let Some(s) = run {
-        out.push(&text[s..]);
-    }
-    out
-}
+// ---- the substitution's bookkeeping ----
 
-/// does any of `vars` occur as a whole identifier in `text`?
-fn mentions_var(text: &str, vars: &[String]) -> bool {
-    idents(text).iter().any(|w| vars.iter().any(|v| v == w))
-}
-
-/// ident-boundary substitution: each whole-identifier occurrence of a
-/// bound variable swaps to its text (`Vec<T>` with `T := i32` →
-/// `Vec<i32>`); a variable inside a longer ident never fires
-fn apply_subst(text: &str, map: &[(String, String)]) -> String {
-    if map.is_empty() {
-        return text.to_string();
-    }
-    let mut out = String::with_capacity(text.len());
-    let mut run: Option<usize> = None;
-    for (i, c) in text.char_indices().chain([(text.len(), '\0')]) {
-        if c.is_alphanumeric() || c == '_' {
-            if run.is_none() {
-                run = Some(i);
-            }
-            continue;
-        }
-        if let Some(s) = run.take() {
-            let word = &text[s..i];
-            out.push_str(
-                map.iter()
-                    .find(|(v, _)| v == word)
-                    .map(|(_, t)| t.as_str())
-                    .unwrap_or(word),
-            );
-        }
-        if i < text.len() {
-            out.push(c);
-        }
-    }
-    out
-}
-
-/// one first-order structural match: heads equal, generic arity
-/// equal, non-var text equal. A bare variable binds whatever the arg
-/// inferred; later occurrences of a bound variable don't re-check —
-/// the honesty rides the residual rule
-fn unify(declared: &str, inferred: &str, vars: &[String], map: &mut Vec<(String, String)>) {
-    let d = declared.trim_start_matches('?').trim();
-    let i = inferred.trim_start_matches('?').trim();
-    if vars.iter().any(|v| v == d) {
-        bind_var(map, d.to_string(), i.to_string());
-        return;
-    }
-    if d.starts_with('[') && d.ends_with(']') && i.starts_with('[') && i.ends_with(']') {
-        unify(&d[1..d.len() - 1], &i[1..i.len() - 1], vars, map);
-        return;
-    }
-    let (dh, ih) = (head_strict(d), head_strict(i));
-    if dh.is_empty() || dh != ih {
-        return;
-    }
-    if let (Some(ds), Some(is)) = (generic_args(d), generic_args(i)) {
-        if ds.len() == is.len() {
-            for (a, b) in ds.iter().zip(is.iter()) {
-                unify(a, b, vars, map);
-            }
-        }
-    }
-}
+// `bind_var` lives beside the shape walks it feeds (`world::ty`).
 
 /// an async body's first valued `return`, source order — the engine's
 /// weave records EVERY return's found type and unifies them into the
@@ -593,7 +540,7 @@ fn expr_return(ast: &Ast, e: ExprRef) -> Option<ExprRef> {
 }
 
 /// a field's written type — the first file that declares it
-fn field_ty(idxs: &[&File], ty_name: &str, field: &str) -> Option<String> {
+fn field_ty(idxs: &[&File], ty_name: &str, field: &str) -> Option<Ty> {
     idxs.iter().copied().find_map(|i| {
         i.ty(ty_name)?
             .fields()
@@ -603,78 +550,24 @@ fn field_ty(idxs: &[&File], ty_name: &str, field: &str) -> Option<String> {
     })
 }
 
-/// a module let's type head — the decl layer's contribution to
-/// receiver inference (`let TOTAL = ..;` at module scope, read below)
-pub(crate) fn module_let_ty<'a, I>(idxs: I, name: &str) -> Option<String>
+/// a module let's type — the decl layer's contribution to receiver
+/// inference (`let TOTAL = ..;` at module scope, read below). The FULL
+/// declared-or-inferred type; the lanes that key a receiver head it
+/// with [`Ty::headed`] (today's head-only answer)
+pub(crate) fn module_let_ty<'a, I>(idxs: I, name: &str) -> Option<Ty>
 where
     I: IntoIterator<Item = &'a File>,
 {
-    let hits: Vec<Option<String>> = idxs
+    let hits: Vec<Option<Ty>> = idxs
         .into_iter()
         .flat_map(|f| f.lets())
         .filter(|l| l.name() == name)
         .map(|l| l.ty())
         .collect();
     match hits.as_slice() {
-        [one] => one.as_deref().map(head_of_ty),
+        [one] => one.clone(),
         _ => None,
     }
-}
-
-/// the element type of a sequence type text — the survey's for-of rule:
-/// `[T]` → `T`, `Vec<T>` → `T` (first generic argument). `None` when the
-/// text isn't a sequence spelling (a bare head iterates nothing we can
-/// name — a miss, never wrong members)
-pub(crate) fn elem_ty(text: &str) -> Option<String> {
-    let t = text.trim_start_matches('?');
-    if t.starts_with('[') && t.ends_with(']') {
-        return Some(t[1..t.len() - 1].trim().to_string());
-    }
-    first_generic_arg(t)
-}
-
-/// the type text's head WITHOUT the `?` peel — the strict head the
-/// await unwrap keys on (`head_of_ty` strips by design for member
-/// lookup; the engine rejects awaiting an optional future)
-fn head_strict(text: &str) -> &str {
-    match text.find('<') {
-        Some(i) if text.ends_with('>') => &text[..i],
-        _ => text,
-    }
-}
-
-/// a type text's `<..>` arguments, split at depth-0 commas —
-/// `Future<Vec<str>, i32>` → [`Vec<str>`, `i32`]; `None` when the
-/// text spells no generic region
-fn generic_args(text: &str) -> Option<Vec<String>> {
-    let open = text.find('<')?;
-    if !text.ends_with('>') {
-        return None;
-    }
-    let inner = &text[open + 1..text.len() - 1];
-    let mut out = Vec::new();
-    let mut depth = 0i32;
-    let mut start = 0usize;
-    for (i, c) in inner.char_indices() {
-        match c {
-            '<' => depth += 1,
-            '>' => depth -= 1,
-            ',' if depth == 0 => {
-                out.push(inner[start..i].trim().to_string());
-                start = i + 1;
-            }
-            _ => {}
-        }
-    }
-    out.push(inner[start..].trim().to_string());
-    Some(out)
-}
-
-/// the first generic argument of a `<..>` spelling — the depth-aware
-/// cut (`Future<Vec<str>>` → `Vec<str>`); `None` when the text spells
-/// no generic region
-fn first_generic_arg(text: &str) -> Option<String> {
-    generic_args(text)?.into_iter().next()
 }
 
 pub(crate) fn is_cap(s: &str) -> bool {

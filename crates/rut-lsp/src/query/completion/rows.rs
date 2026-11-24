@@ -9,7 +9,7 @@ use ls_types::{
 
 use super::CompletionKind;
 use crate::world::collection::{FnView, LetView, MemberView, TyView};
-use crate::world::types::TyForm;
+use crate::world::ty::{Ty, TyForm};
 
 /// One completion item — plain data; the server maps it to LSP types.
 #[derive(Debug, Clone)]
@@ -73,7 +73,7 @@ pub(super) struct BindRow<'a> {
     pub doc: &'a crate::world::File,
     /// the resolver's declared-or-inferred answer (the tier's one
     /// resolver read per row)
-    pub ty: Option<String>,
+    pub ty: Option<Ty>,
 }
 
 /// One tier row — the view the tier door found it from. The variants

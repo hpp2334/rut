@@ -4,7 +4,7 @@ use rut_ast::{AnyHandle, Ast, ModuleLetNode, Vis};
 
 use super::doc_lines;
 use crate::world::infer;
-use crate::world::types::ty_src;
+use crate::world::ty::Ty;
 use crate::world::File;
 
 /// a module-scope `let` view
@@ -44,7 +44,7 @@ impl<'a> LetView<'a> {
     /// the declared annotation as written, else the initializer-derived
     /// type (the same display-side heuristic the binding pass uses,
     /// priced against THIS file's own decls)
-    pub(crate) fn ty(&self) -> Option<String> {
+    pub(crate) fn ty(&self) -> Option<Ty> {
         let ast = self.ast();
         let d = self
             .h
@@ -52,7 +52,7 @@ impl<'a> LetView<'a> {
             .expect("a let view")
             .get(ast);
         match d.ty {
-            Some(t) => Some(ty_src(ast, t)),
+            Some(t) => Some(Ty::of(ast, t)),
             None => infer::expr_ty(self.file, &[self.file], d.init, &|_, _| None),
         }
     }

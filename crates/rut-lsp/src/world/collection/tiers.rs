@@ -7,7 +7,7 @@
 
 use std::collections::HashSet;
 
-use crate::world::types::TyForm;
+use crate::world::ty::TyForm;
 use rut_ast::{AnyHandle, UseNode, Vis};
 
 use super::{used_ifaces, FnView, GlobUse, LetView, MemberView, ModView, TyView, UseView};
@@ -148,13 +148,14 @@ pub(crate) fn members_for<'a>(
     pos: u32,
     recv: Recv,
 ) -> Option<Vec<MemberRow<'a>>> {
-    let ty_name = super::recv_ty_name(w, file, pos, recv).or_else(|| match recv {
-        Recv::Expr(e) => super::expr_ty(w, file, e).map(|t| crate::world::types::head_of_ty(&t)),
+    let ty = super::recv_ty(w, file, pos, recv).or_else(|| match recv {
+        Recv::Expr(e) => super::expr_ty(w, file, e).map(|t| t.headed()),
         _ => None,
     });
-    let Some(ty_name) = ty_name else {
+    let Some(ty) = ty else {
         return Some(Vec::new());
     };
+    let ty_name = super::qualified_ty_name(w, file, &ty).unwrap_or_else(|| ty.head());
     // an interface receiver: the declared signatures are the whole
     // member list — satisfaction is structural, so no impl lookup
     // rides along. The use-both gate: a foreign interface's

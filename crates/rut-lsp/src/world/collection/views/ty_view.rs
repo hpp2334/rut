@@ -9,7 +9,7 @@ use rut_ast::{
 };
 
 use super::{decl_src, doc_lines, head_src, MemberView};
-use crate::world::types::TyForm;
+use crate::world::ty::TyForm;
 use crate::world::File;
 
 /// a type decl view — every fact derives from the node on read: the

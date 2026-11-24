@@ -15,7 +15,7 @@ use crate::resolve::Def;
 use crate::semantic::Span;
 use crate::world::bindings::{BindKind, Binding};
 use crate::world::infer::QualHit;
-use crate::world::types::TyForm;
+use crate::world::ty::{Shape, Ty, TyForm};
 use crate::world::{File, FileId, World};
 
 /// THE MEMBER DOOR — where a member of the receiver actually
@@ -78,16 +78,19 @@ fn member_derived<'a>(
         return MemberHit::UnknownReceiver;
     };
     let member_text = ast.name(member);
-    // the receiver's type head: the bindings' resolve, else the
+    // the receiver's type: the bindings' resolve, else the
     // expression door (a chained receiver — `m::mk(41).bump()` —
     // types through its call's written ret, the same door the
-    // completion tier rides)
-    let Some(ty_name) = recv_ty_name(w, file, pos, recv).or_else(|| match recv {
-        Recv::Expr(e) => expr_ty(w, file, e).map(|t| crate::world::types::head_of_ty(&t)),
+    // completion tier rides). The lookup keys on the QUALIFIED
+    // lane's answer first, else the type's head
+    let ty = recv_ty(w, file, pos, recv).or_else(|| match recv {
+        Recv::Expr(e) => expr_ty(w, file, e).map(|t| t.headed()),
         _ => None,
-    }) else {
+    });
+    let Some(ty) = ty else {
         return MemberHit::UnknownReceiver;
     };
+    let ty_name = qualified_ty_name(w, file, &ty).unwrap_or_else(|| ty.head());
     // an interface receiver: the declared signatures ARE the members —
     // satisfaction is structural (a type qualifies by having the
     // members), so no impl lookup rides this path. The use-both gate:
@@ -201,12 +204,13 @@ pub(crate) fn member_dial_allows(w: &World, site: FileId, decl_file: &File, vis:
     )
 }
 
-/// the receiver's type name — the node-derived spelling: the
-/// receiver value (`self` → the enclosing type), a path segment
-/// (capitalized and primitive names spell themselves, locals ride
-/// the bindings — read internally, never a caller-run pass — then
-/// module lets)
-pub(crate) fn recv_ty_name(w: &World, file: FileId, pos: u32, recv: Recv) -> Option<String> {
+/// the receiver's type — the node-derived answer: the receiver value
+/// (`self` → the enclosing type), a path segment (capitalized and
+/// primitive names spell themselves, locals ride the bindings — read
+/// internally, never a caller-run pass — then module lets). The
+/// member lookup keys on the QUALIFIED lane's answer first, else
+/// [`Ty::head`] — as today
+pub(crate) fn recv_ty(w: &World, file: FileId, pos: u32, recv: Recv) -> Option<Ty> {
     let ast = w.file(file).doc.ast();
     match recv {
         Recv::Expr(e) => match e {
@@ -216,25 +220,43 @@ pub(crate) fn recv_ty_name(w: &World, file: FileId, pos: u32, recv: Recv) -> Opt
                 // offsets (a foreign world file's byte spans are
                 // its own text's coordinates and would steal the
                 // answer whenever they overlap)
-                enclosing_type(std::iter::once(w.file(file)), pos).map(|t| t.name().to_string())
+                enclosing_type(std::iter::once(w.file(file)), pos).map(|t| Ty::named(t.name()))
             }
             ExprRef::Path(ph) => {
                 let segs = &ph.get(ast).segs;
                 if segs.len() != 1 {
                     return None;
                 }
-                named_recv(w, file, pos, segs[0].name.ident)
+                named_recv_ty(w, file, pos, segs[0].name.ident)
             }
             ExprRef::Lit(h) => match h.get(ast).lit {
                 // every string-literal form is a `str` receiver
-                Lit::Str(_) | Lit::RawStr(_) => Some("str".to_string()),
+                Lit::Str(_) | Lit::RawStr(_) => Some(Ty::named("str")),
                 _ => None,
             },
-            ExprRef::FStr(_) => Some("str".to_string()),
+            ExprRef::FStr(_) => Some(Ty::named("str")),
             _ => None,
         },
-        Recv::Seg(id) => named_recv(w, file, pos, id),
+        Recv::Seg(id) => named_recv_ty(w, file, pos, id),
     }
+}
+
+/// a plain name receiver's TYPE — capitalized and primitive spellings
+/// name themselves; anything else is the bindings' resolve (the
+/// declared-or-inferred type — the FULL type, so the qualified lane
+/// can walk it), then the module lets (the HEAD only — a computed
+/// head keys a name, never the qualified walk)
+fn named_recv_ty(w: &World, file: FileId, pos: u32, id: IdentId) -> Option<Ty> {
+    let doc = w.file(file);
+    let text = doc.doc.ast().name(id);
+    if crate::world::infer::is_cap(text) || crate::semantic::is_primitive_ty(text) {
+        return Some(Ty::named(text));
+    }
+    let b = rut_ast::resolve_binding(doc.doc.bindings(), pos, id)?;
+    binding_ty(w, file, b).or_else(|| {
+        let files: Vec<&File> = w.chain(file).map(|id| w.file(id)).collect();
+        crate::world::infer::module_let_ty(files, text).map(|t| t.headed())
+    })
 }
 
 /// a plain name receiver — capitalized and primitive spellings
@@ -252,12 +274,10 @@ pub(crate) fn named_recv(w: &World, file: FileId, pos: u32, id: IdentId) -> Opti
     }
     let b = rut_ast::resolve_binding(doc.doc.bindings(), pos, id)?;
     binding_ty(w, file, b)
-        .map(|t| {
-            qualified_ty_name(w, file, &t).unwrap_or_else(|| crate::world::types::head_of_ty(&t))
-        })
+        .map(|t| qualified_ty_name(w, file, &t).unwrap_or_else(|| t.head()))
         .or_else(|| {
             let files: Vec<&File> = w.chain(file).map(|id| w.file(id)).collect();
-            crate::world::infer::module_let_ty(files, text)
+            crate::world::infer::module_let_ty(files, text).map(|t| t.head())
         })
 }
 
@@ -266,20 +286,15 @@ pub(crate) fn named_recv(w: &World, file: FileId, pos: u32, id: IdentId) -> Opti
 /// own family — `resolve_qualified_ty`'s law) to its declaring
 /// view; the view's bare name is the type head the member lane
 /// then resolves. `None` when the spelling is unqualified or the
-/// lane misses — `head_of_ty` keeps the old shape then.
-pub(crate) fn qualified_ty_name(w: &World, file: FileId, text: &str) -> Option<String> {
-    if !text.contains("::") {
+/// lane misses — [`Ty::head`] keeps the old shape then.
+pub(crate) fn qualified_ty_name(w: &World, file: FileId, t: &Ty) -> Option<String> {
+    let Shape::Named { segs, .. } = &t.shape else {
+        return None;
+    };
+    if segs.len() < 2 {
         return None;
     }
-    let mut segs: Vec<String> = text.split("::").map(|s| s.trim().to_string()).collect();
-    // the tail's generic args ride the substitution, not the walk
-    // — the lane matches the DECLARED name
-    if let Some(last) = segs.last_mut() {
-        if let Some(i) = last.find('<') {
-            *last = last[..i].to_string();
-        }
-    }
-    super::qualified_scope(w, file, &segs, true)?
+    super::qualified_scope(w, file, segs, true)?
         .types
         .first()
         .map(|t| t.name().to_string())
@@ -289,10 +304,10 @@ pub(crate) fn qualified_ty_name(w: &World, file: FileId, text: &str) -> Option<S
 /// inference window (the hover/tooltip text for a local). A loop
 /// variable's iterated ELEMENT is the answer (`[Point]` iterates
 /// `Point`), the survey's for-of rule
-pub(crate) fn binding_ty(w: &World, file: FileId, b: &Binding) -> Option<String> {
+pub(crate) fn binding_ty(w: &World, file: FileId, b: &Binding) -> Option<Ty> {
     let head = w.file(file);
     if let Some(sp) = b.ty_span {
-        return Some(head.doc.text(sp).to_string());
+        return Some(Ty::of_annotation(head, sp));
     }
     // a destructured row takes its TUPLE element positionally
     if let (Some(i), Some(ExprRef::Tuple(th))) = (b.destructure_index, b.init) {
@@ -303,8 +318,8 @@ pub(crate) fn binding_ty(w: &World, file: FileId, b: &Binding) -> Option<String>
     }
     let ty = b.init.and_then(|init| expr_ty(w, file, init))?;
     if matches!(b.kind, BindKind::IterVar) {
-        if let Some(elem) = crate::world::infer::elem_ty(&ty) {
-            return Some(elem);
+        if let Some(elem) = ty.first_arg() {
+            return Some(elem.clone());
         }
     }
     Some(ty)
@@ -325,7 +340,7 @@ pub(crate) fn binding_ty(w: &World, file: FileId, b: &Binding) -> Option<String>
 /// [`functions`](super::functions): what the doc binds, never the flat
 /// unique-match a same-named fn elsewhere would break); the
 /// written ret prices the call either way
-pub(crate) fn expr_ty<'a>(w: &'a World, file: FileId, e: ExprRef) -> Option<String> {
+pub(crate) fn expr_ty<'a>(w: &'a World, file: FileId, e: ExprRef) -> Option<Ty> {
     let files: Vec<&'a File> = w.chain(file).map(|id| w.file(id)).collect();
     let qual = |segs: &[String], is_ty: bool| -> Option<QualHit<'a>> {
         if !is_ty && segs.len() == 1 {
@@ -336,7 +351,7 @@ pub(crate) fn expr_ty<'a>(w: &'a World, file: FileId, e: ExprRef) -> Option<Stri
         }
         let scope = super::qualified_scope(w, file, segs, is_ty)?;
         Some(if is_ty {
-            QualHit::Ty(scope.types.first()?.name().to_string())
+            QualHit::Ty(Ty::named(scope.types.first()?.name()))
         } else {
             QualHit::Fn(scope.fns.into_iter().next()?)
         })

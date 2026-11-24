@@ -17,7 +17,7 @@ use crate::world::collection::{
     Via,
 };
 use crate::world::infer::is_cap;
-use crate::world::types::TyForm;
+use crate::world::ty::{Ty, TyForm};
 use crate::world::{File, FileId, World};
 
 use super::lookup::HoverOut;
@@ -231,7 +231,7 @@ impl Candidate<'_> {
 /// annotations render as written — the row's span join — inference is
 /// labeled). `name` is the interner spelling (the rows carry ids);
 /// `ty` is the resolver's declared-or-inferred answer.
-pub(crate) fn binding_markdown(b: &Binding, name: &str, ty: Option<String>) -> String {
+pub(crate) fn binding_markdown(b: &Binding, name: &str, ty: Option<Ty>) -> String {
     // the binding as it binds — the head keyword rides along (`const`
     // vs `let`) for a let-form binding and a const loop var; a param
     // renders bare (params are mutable by default)

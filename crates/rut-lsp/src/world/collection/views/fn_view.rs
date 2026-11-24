@@ -4,7 +4,7 @@
 use rut_ast::{AnyHandle, Ast, FnNode, ImplNode, MethodDeclNode, ParamRef, SurfaceFnNode, Vis};
 
 use super::{doc_lines, param_names, sig_src};
-use crate::world::types::{ty_head, ty_src};
+use crate::world::ty::{Shape, Ty};
 use crate::world::File;
 
 /// a fn view — a free fn, a surface fn, or an impl-block method (the
@@ -69,19 +69,19 @@ impl<'a> FnView<'a> {
     /// written ret is the crossing's contract; `src()` already
     /// rendered it verbatim in hovers, and the Future family types
     /// through it).
-    pub(crate) fn ret(&self) -> Option<String> {
+    pub(crate) fn ret(&self) -> Option<Ty> {
         let ast = self.ast();
         if let Some(d) = self.h.downcast::<MethodDeclNode>() {
             let d = d.get(ast);
             if matches!(&d.ret, Some(r) if r.is_self()) {
-                return self.owner();
+                return self.owner().map(|o| Ty::named(&o));
             }
-            return d.ret.map(|r| ty_src(ast, r));
+            return d.ret.map(|r| Ty::of(ast, r));
         }
         macro_rules! wr {
             ($t:ty) => {
                 if let Some(d) = self.h.downcast::<$t>() {
-                    return d.get(ast).ret.map(|r| ty_src(ast, r));
+                    return d.get(ast).ret.map(|r| Ty::of(ast, r));
                 }
             };
         }
@@ -152,7 +152,7 @@ impl<'a> FnView<'a> {
     /// — it types as the receiver, never a substitutable text; an
     /// undeclared param renders `None` too). The call-site lanes zip
     /// these against the args' inferred texts
-    pub(crate) fn param_tys(&self) -> Vec<Option<String>> {
+    pub(crate) fn param_tys(&self) -> Vec<Option<Ty>> {
         let ast = self.ast();
         macro_rules! pt {
             ($t:ty) => {
@@ -162,7 +162,7 @@ impl<'a> FnView<'a> {
                         .params
                         .iter()
                         .map(|p| match p {
-                            ParamRef::Param(ph) => ph.get(ast).ty.map(|t| ty_src(ast, t)),
+                            ParamRef::Param(ph) => ph.get(ast).ty.map(|t| Ty::of(ast, t)),
                             _ => None, // `self` / `mut self` / a damaged slot
                         })
                         .collect();
@@ -245,7 +245,8 @@ impl<'a> FnView<'a> {
         self.h.downcast::<MethodDeclNode>()?;
         let parent = ast.parent(self.h)?;
         let imp = parent.downcast::<ImplNode>()?;
-        Some(ty_head(ast, imp.get(ast).target))
+        let t = Ty::of(ast, imp.get(ast).target);
+        Some(target_name(&t))
     }
 
     pub(crate) fn span(&self) -> rut_lexer::span::Span {
@@ -254,5 +255,17 @@ impl<'a> FnView<'a> {
 
     pub(crate) fn line(&self) -> u32 {
         1 + self.file.doc.line_of(self.span().lo)
+    }
+}
+
+/// the impl target's NAME — the first path segment, the `?` peel
+/// (today's `ty_head` rule): a lookup key the owner comparisons ride,
+/// not a display type. `Self` targets name nothing (the empty key,
+/// as before)
+fn target_name(t: &Ty) -> String {
+    match &t.shape {
+        Shape::Named { segs, .. } => segs.first().cloned().unwrap_or_default(),
+        Shape::Opt(inner) => target_name(inner),
+        _ => String::new(),
     }
 }

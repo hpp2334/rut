@@ -25,8 +25,8 @@ mod views;
 
 pub(crate) use member::{
     binding_ty, constructor_of, enclosing_type, expr_ty, iface_decl, impl_method_fn,
-    impl_method_fn_in, member, member_dial_allows, member_gated, named_recv, recv_ty_name,
-    unique_free_fn, unique_free_fn_in, used_ifaces, MemberHit, MemberTarget,
+    impl_method_fn_in, member, member_dial_allows, member_gated, named_recv, qualified_ty_name,
+    recv_ty, unique_free_fn, unique_free_fn_in, used_ifaces, MemberHit, MemberTarget,
 };
 pub(crate) use tiers::{
     ambiguous_scope, bare, bound_has, file_scope, functions, one_name_refused, qualified_module,

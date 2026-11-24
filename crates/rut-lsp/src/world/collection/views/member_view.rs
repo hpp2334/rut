@@ -4,7 +4,7 @@
 use rut_ast::{AnyHandle, Ast, EnumMemberNode, FieldDeclNode, MethodDeclNode, Vis};
 
 use super::{decl_src, doc_lines, sig_src, TyView};
-use crate::world::types::ty_src;
+use crate::world::ty::Ty;
 use crate::world::File;
 
 /// a member view — a field, a method, or an enum member of
@@ -68,21 +68,21 @@ impl<'a> MemberView<'a> {
     /// `-> Self` method or a `Self`-typed field answers the declaring
     /// type (the view owns it) — receiver inference steps through the
     /// builder-chain rungs.
-    pub(crate) fn ty(&self) -> Option<String> {
+    pub(crate) fn ty(&self) -> Option<Ty> {
         let ast = self.ast();
         if let Some(d) = self.h.downcast::<FieldDeclNode>() {
             let d = d.get(ast);
             if d.ty.is_self() {
-                return Some(self.ty.name().to_string());
+                return Some(Ty::named(self.ty.name()));
             }
-            return Some(ty_src(ast, d.ty));
+            return Some(Ty::of(ast, d.ty));
         }
         if let Some(d) = self.h.downcast::<MethodDeclNode>() {
             let d = d.get(ast);
             if matches!(&d.ret, Some(r) if r.is_self()) {
-                return Some(self.ty.name().to_string());
+                return Some(Ty::named(self.ty.name()));
             }
-            return d.ret.map(|r| ty_src(ast, r));
+            return d.ret.map(|r| Ty::of(ast, r));
         }
         None
     }

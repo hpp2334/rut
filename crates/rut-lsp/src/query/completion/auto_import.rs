@@ -10,7 +10,7 @@ use rut_ast::{Ast, ItemRef};
 use super::rows::CompletionOut;
 use super::CompletionKind;
 use crate::semantic::LineIndex;
-use crate::world::types::TyForm;
+use crate::world::ty::TyForm;
 use crate::world::{File, FileId, World};
 
 // ---- the auto-import tier ----

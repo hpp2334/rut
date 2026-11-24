@@ -6,7 +6,7 @@ use super::rows::{push_item, CompletionOut};
 use super::CompletionKind;
 use crate::resolve::mods;
 use crate::world::collection::{self, FileScope};
-use crate::world::types::TyForm;
+use crate::world::ty::TyForm;
 use crate::world::{FileId, World};
 
 // ---- the qualified-position tier (intra-package) ----

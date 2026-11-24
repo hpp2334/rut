@@ -39,7 +39,6 @@ use ls_types::{
 
 use rut_ast::{ElseBranch, ExprRef, ItemRef, StmtRef};
 
-use crate::world::types::head_of_ty;
 use crate::world::{FileId, World};
 
 /// one hint before position/label conversion — byte-based so the range
@@ -115,7 +114,7 @@ fn type_hints(w: &World, file: FileId, out: &mut Vec<InlayRow>) {
             continue;
         }
         let Some(ty) =
-            crate::world::collection::binding_ty(w, file, b).filter(|t| !t.trim().is_empty())
+            crate::world::collection::binding_ty(w, file, b).filter(|t| !t.text.trim().is_empty())
         else {
             continue;
         };
@@ -139,7 +138,7 @@ fn type_hints(w: &World, file: FileId, out: &mut Vec<InlayRow>) {
         {
             continue;
         }
-        let Some(text) = l.ty().filter(|t| !t.trim().is_empty()) else {
+        let Some(text) = l.ty().filter(|t| !t.text.trim().is_empty()) else {
             continue;
         };
         let Some(name) = l.name_span() else { continue };
@@ -327,7 +326,7 @@ impl CallCx<'_> {
                 let id = ph.get(ast).segs[0].name.ident;
                 crate::world::collection::named_recv(self.w, self.file, pos, id)
             }
-            _ => crate::world::collection::expr_ty(self.w, self.file, recv).map(|t| head_of_ty(&t)),
+            _ => crate::world::collection::expr_ty(self.w, self.file, recv).map(|t| t.head()),
         };
         let Some(ty_name) = head else { return };
         let Some(params) = self.method_params(&ty_name, ast.name(name)) else {

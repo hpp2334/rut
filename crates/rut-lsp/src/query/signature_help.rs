@@ -45,6 +45,7 @@ use ls_types::{
 use rut_ast::{CallNode, ExprRef, MethodNode};
 
 use crate::resolve::View;
+use crate::world::ty::Ty;
 use crate::world::{FileId, World};
 
 /// the resolved fn view behind a callee door's [`crate::resolve::Def`]
@@ -284,9 +285,7 @@ fn signature_help_at_decl(
             let owner = ast.parent(a).and_then(|p| {
                 if let Some(t) = p.downcast::<rut_ast::ImplNode>() {
                     let td = t.get(ast);
-                    return Some(crate::world::types::head_of_ty(
-                        &crate::world::types::ty_src(ast, td.target),
-                    ));
+                    return Some(Ty::of(ast, td.target).head());
                 }
                 p.downcast::<rut_ast::InterfaceNode>()
                     .map(|t| ast.name(t.get(ast).name.ident).to_string())

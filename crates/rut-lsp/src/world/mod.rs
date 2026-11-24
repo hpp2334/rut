@@ -17,7 +17,8 @@
 //! answer, never wrong text.
 //!
 //! Layout: [`World`]/[`File`]/[`Stamp`] here, the per-file doors in
-//! `decls`, `types` (the shared vocabulary — TyForm, type text) →
+//! `decls`, `ty` (the shared vocabulary — TyForm and the `Ty` value
+//! type) →
 //! `collection` (the resolver family in `member`, completion's tier
 //! doors in `tiers`, the per-node views in `views/`) → `bindings` +
 //! `infer` (what's under the cursor) + `pkg` (package identity and the
@@ -30,7 +31,7 @@ pub(crate) mod collection;
 pub(crate) mod decls;
 pub(crate) mod infer;
 pub(crate) mod pkg;
-pub(crate) mod types;
+pub(crate) mod ty;
 
 pub use bindings::{BindKind, Binding};
 pub(crate) use decls::{decls_of, DeclMap};

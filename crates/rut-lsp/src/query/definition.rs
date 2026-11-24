@@ -31,7 +31,6 @@
 use crate::resolve::cursor::{Cursor, UseAt};
 use crate::world::collection::{one_name_refused, MemberHit, MemberTarget};
 use crate::world::infer::QualHit;
-use crate::world::types::head_of_ty;
 use crate::world::{File, FileId, World};
 
 use rut_ast::UseNode;
@@ -132,7 +131,7 @@ pub fn get_type_definition(w: &World, file: FileId, pos: u32) -> Vec<DefLocation
                     | MemberTarget::IfaceMember(m) => m.ty(),
                     MemberTarget::ImplFn(f) => f.ret(),
                 };
-                return locate_ty_head(w, file, ty_text.as_deref().map(head_of_ty));
+                return locate_ty_head(w, file, ty_text.map(|t| t.head()));
             }
             MemberHit::None => return Vec::new(),
             MemberHit::UnknownReceiver => {} // fall through
@@ -172,7 +171,7 @@ pub fn get_type_definition(w: &World, file: FileId, pos: u32) -> Vec<DefLocation
         let qual = |segs: &[String], is_ty: bool| -> Option<QualHit> {
             let scope = crate::world::collection::qualified_scope(w, file, segs, is_ty)?;
             Some(if is_ty {
-                QualHit::Ty(scope.types.first()?.name().to_string())
+                QualHit::Ty(crate::world::ty::Ty::named(scope.types.first()?.name()))
             } else {
                 QualHit::Fn(scope.fns.into_iter().next()?)
             })
@@ -180,15 +179,13 @@ pub fn get_type_definition(w: &World, file: FileId, pos: u32) -> Vec<DefLocation
         return locate_ty_head(
             w,
             file,
-            crate::world::infer::binding_ty(doc, &files, b, &qual)
-                .as_deref()
-                .map(head_of_ty),
+            crate::world::infer::binding_ty(doc, &files, b, &qual).map(|t| t.head()),
         );
     }
     locate_ty_head(
         w,
         file,
-        crate::world::infer::module_let_ty(files_of(w, file), &name),
+        crate::world::infer::module_let_ty(files_of(w, file), &name).map(|t| t.head()),
     )
 }
 
