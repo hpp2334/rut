@@ -930,6 +930,79 @@ fn the_mod_tree_spellings_mount_and_hint_on_both() {
 }
 
 #[test]
+fn a_dep_child_with_parse_errors_mounts_childless() {
+    let ws = scratch("broken-child");
+    let home = ws.join("store");
+    let proj = ws.join("proj");
+    project(
+        &proj,
+        "walkapp",
+        Some(&lock_text(vec![("kit", KIT_URL, KIT_PIN)])),
+        &format!("{{\"kit\": {{\"url\": \"{KIT_URL}\"}}}}"),
+        "fn main() -> nil {\n}\n",
+    );
+    let dir = store_dep(&home, "kit", KIT_PIN, KIT_URL);
+    put(
+        &dir,
+        &format!("{}/rut.jsonc", rut_driver::UNPACK_DIR),
+        &manifest("kit", ""),
+    );
+    let unpack = format!("{}/{}", rut_driver::UNPACK_DIR, "src");
+    put(
+        &dir,
+        &format!("{unpack}/mod.rut"),
+        "pub mod broken;\npub fn kit_tag() -> i32 {\n    return 1;\n}\n",
+    );
+    // the child: a syntax error BESIDE a further `mod deep;` edge —
+    // recovery keeps the edge, and the driver's law says a broken file
+    // mounts CHILDLESS: the child itself mounts, nothing under it
+    put(
+        &dir,
+        &format!("{unpack}/broken/mod.rut"),
+        "pub fn broken_tag() -> i32 {\n    return 2;\n}\npub mod deep;\nfn broken( {{\n",
+    );
+    put(
+        &dir,
+        &format!("{unpack}/broken/deep/mod.rut"),
+        "pub fn deep_tag() -> i32 {\n    return 3;\n}\n",
+    );
+
+    let (lsp, mut pool, io) = boot(&home);
+    let out = resolve(&lsp, &mut pool, &[proj.to_str().unwrap()]);
+    assert_eq!(out["missing"].as_array().unwrap().len(), 0, "{out}");
+    // childless is the mount's answer, never a hint — the walk stays
+    // silent on a broken dep child
+    assert_eq!(io.notes.borrow().len(), 0, "{:?}", io.notes.borrow());
+
+    // the set of origins the walk indexed: the pkg root and the broken
+    // child are in, NOTHING under the child is — the grandchild's
+    // origin never mounts
+    let kit = walk_path(
+        &home,
+        &format!(
+            "deps/{}/{}",
+            rut_driver::store_dir("kit", KIT_PIN),
+            rut_driver::UNPACK_DIR
+        ),
+    );
+    let doc = "use kit::{ kit_tag };\nuse kit::broken::{ broken_tag };\nuse kit::broken::deep::{ deep_tag };\nfn main() -> nil {\n}\n";
+    assert_eq!(
+        def_uris(&lsp, &mut pool, doc, "kit_tag"),
+        vec![file_uri(format!("{kit}/src/mod.rut"))],
+        "the pkg root mounts"
+    );
+    assert_eq!(
+        def_uris(&lsp, &mut pool, doc, "broken_tag"),
+        vec![file_uri(format!("{kit}/src/broken/mod.rut"))],
+        "the broken child itself IS indexed"
+    );
+    assert!(
+        def_uris(&lsp, &mut pool, doc, "deep_tag").is_empty(),
+        "a broken child mounts childless — the grandchild's origin is not indexed"
+    );
+}
+
+#[test]
 fn the_depth_budget_truncates_the_walk() {
     let ws = scratch("depth");
     let root = ws.join("proj");

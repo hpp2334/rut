@@ -35,10 +35,12 @@
 
 mod auto_import;
 mod edge;
+mod mod_name;
 mod paths;
 mod rows;
 mod tiers;
 
+pub(crate) use mod_name::file_dir;
 pub use rows::{lsp_item, CompletionOut};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]

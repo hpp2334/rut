@@ -101,7 +101,8 @@ pub(super) fn bare_tier_out(w: &World, file: FileId) -> Vec<CompletionOut> {
 
 /// The mod-name tier — the `mod NAME;` name slot's answer: the module
 /// files beside the open document, listed by the disk probe in
-/// `crate::walk` (the one home of the loader's child spellings).
+/// `super::mod_name` (the loader's child spellings — the mount law's
+/// home is rut-driver's `mount_edges`).
 /// No filesystem to ask (no env, or a non-`file://` uri) is an empty
 /// list — a miss is an empty list, never the bare dump. The gate: a
 /// name the open document ALREADY declares never re-offers (a
@@ -118,7 +119,7 @@ pub(super) fn mod_name_tier_out(
         return Vec::new();
     };
     let mut out: Vec<CompletionOut> = Vec::new();
-    for c in crate::walk::list_child_mods(io, dir, facts.decl) {
+    for c in super::mod_name::list_child_mods(io, dir, facts.decl) {
         // the declared gate — another `mod` decl of the open doc
         // owning the name kills the candidate
         if w.file(file)

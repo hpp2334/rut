@@ -31,7 +31,8 @@ pub use loader::{bundle_entry_pkg, sha256_hex};
 /// one lock per walk root, beside the root `rut.jsonc`.
 pub use lock::{parse_lock, render_lock, LockError, LockFile, LockRow};
 pub use mods::{
-    collect_module_set, mount_mod_children, ChildLookup, ModSource, ModuleSet, ModuleUnit,
+    collect_module_set, mod_edges_of, mount_edges, mount_mod_children, Child, ChildLookup, Edge,
+    ModSource, ModuleSet, ModuleUnit, Refusal,
 };
 pub use pack::{
     lower_rows_envelope, pack, pack_inline_pkg, rows_agree, Archive, PackError, PackOpts,

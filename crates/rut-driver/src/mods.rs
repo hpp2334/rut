@@ -4,13 +4,20 @@
 //! for a host surface tree), never a directory listing. This module is
 //! the PURE half of that law:
 //!
-//! - [`mount_mod_children`] — the mounting core. Parses a file, walks
-//!   its `ModDecl` items, and resolves each against a caller-supplied
-//!   child lookup (the FS lane in rut-native, the archive rows lane in
-//!   the loader), recursively, cycle-guarded by the canonical identity
-//!   of each mounted file (the dep walk's law mirrored: the visiting
-//!   chain is the cycle guard, first mount wins on a repeated name).
-//!   The flavor rides the caller: a lib body tree speaks Impl and
+//! - [`mount_edges`] — the mounting core: depth-first in declaration
+//!   order from a file's own `mod` declarations, every edge resolved
+//!   through a caller-supplied child lookup, cycle-guarded by the
+//!   canonical identity of each mounted file (the dep walk's law
+//!   mirrored: the visiting chain is the cycle guard, first mount
+//!   wins on a repeated path). `visit` sees each outcome and answers
+//!   whether to keep walking — the editor's dep walk rides the same
+//!   core with its budget lanes.
+//! - [`mount_mod_children`] — the compile's strict door over the
+//!   core: parses the root and collects the [`ModSource`] rows, and
+//!   turns the first refusal into the loud error naming the declaring
+//!   file and the spellings it probed (the FS lane in rut-native and
+//!   the archive rows lane in the loader mount through it). The
+//!   flavor rides the caller: a lib body tree speaks Impl and
 //!   mounts `NAME/mod.rut`; a Decl surface tree (a `type = "host"`
 //!   pkg's `.d.rut` set) speaks Decl and mounts `NAME/mod.d.rut`.
 //!   Each child has TWO spellings: the directory form
@@ -107,13 +114,161 @@ pub enum ChildLookup {
     Missing,
 }
 
+// ---------------------------------------------------------------------
+// the mount core (pure) — and the compile's strict door over it
+// ---------------------------------------------------------------------
+
+/// one declared `mod NAME;` edge the mount core resolved through the caller's lookup
+pub enum Edge<'a> {
+    Found {
+        path: &'a str,
+        vis: Vis,
+        text: String,
+        canon: String,
+        file: String,
+        depth: usize,
+    },
+    Refused {
+        path: &'a str,
+        name: &'a str,
+        why: Refusal,
+        depth: usize,
+    },
+}
+
+pub enum Refusal {
+    Ambiguous,
+    NoModRut,
+    Missing,
+}
+
+/// what the visitor did with a found child
+pub enum Child {
+    Declares(Vec<(String, Vis)>),
+    Childless,
+}
+
+/// The mount core: depth-first in declaration order from the root file's own
+/// `mod` declarations, every edge resolved through `read`, cycle-guarded by
+/// canonical identity, first mount wins on a repeated path. `visit` sees each
+/// outcome and answers whether to keep walking. The only `Err` is a cycle or a
+/// failing `read`.
+pub fn mount_edges(
+    root_edges: Vec<(String, Vis)>,
+    read: &mut dyn FnMut(&str, &str) -> Result<ChildLookup, String>,
+    visit: &mut dyn FnMut(Edge<'_>) -> (Child, bool),
+) -> Result<(), String> {
+    let mut chain: Vec<String> = Vec::new();
+    let mut done: Vec<String> = Vec::new();
+    // edge depth: the root's own edges walk at 0, a child edge its
+    // parent's + 1 — the budget lanes read it off the edge
+    walk_edges("", 0, root_edges, read, visit, &mut chain, &mut done)
+}
+
+/// one descent level of the core: resolve `edges` — the `parent`
+/// file's own declarations, `depth` levels below it — and recurse into
+/// what `visit` declares. The visiting `chain` is the cycle guard
+/// (pushed before a found child's descent, popped after); `done`
+/// carries the paths already mounted (first mount wins on a repeated
+/// declaration).
+fn walk_edges(
+    parent: &str,
+    depth: usize,
+    edges: Vec<(String, Vis)>,
+    read: &mut dyn FnMut(&str, &str) -> Result<ChildLookup, String>,
+    visit: &mut dyn FnMut(Edge<'_>) -> (Child, bool),
+    chain: &mut Vec<String>,
+    done: &mut Vec<String>,
+) -> Result<(), String> {
+    // the lookup's answer, narrowed to what the core does with it: the
+    // found triple rides the edge, a refusal carries its why
+    enum Resolved {
+        Found {
+            text: String,
+            canon: String,
+            file: String,
+        },
+        Refused(Refusal),
+    }
+    for (name, vis) in edges {
+        let path = if parent.is_empty() {
+            name.clone()
+        } else {
+            format!("{parent}/{name}")
+        };
+        if done.iter().any(|p| p == &path) {
+            continue; // first mount wins (a repeated declaration)
+        }
+        let resolved = match read(parent, &name)? {
+            ChildLookup::Found { text, canon, file } => Resolved::Found { text, canon, file },
+            ChildLookup::Ambiguous => Resolved::Refused(Refusal::Ambiguous),
+            ChildLookup::NoModRut => Resolved::Refused(Refusal::NoModRut),
+            ChildLookup::Missing => Resolved::Refused(Refusal::Missing),
+        };
+        match resolved {
+            Resolved::Found { text, canon, file } => {
+                if chain.contains(&canon) {
+                    return Err(format!(
+                        "cyclic mod: `{name}` ({path}/{file}) is already being mounted"
+                    ));
+                }
+                chain.push(canon.clone());
+                let (child, keep) = visit(Edge::Found {
+                    path: &path,
+                    vis,
+                    text,
+                    canon,
+                    file,
+                    depth,
+                });
+                if !keep {
+                    return Ok(()); // the visitor stopped the walk
+                }
+                if let Child::Declares(declared) = child {
+                    walk_edges(&path, depth + 1, declared, read, visit, chain, done)?;
+                }
+                chain.pop();
+                done.push(path);
+            }
+            Resolved::Refused(why) => {
+                let (_, keep) = visit(Edge::Refused {
+                    path: &path,
+                    name: &name,
+                    why,
+                    depth,
+                });
+                if !keep {
+                    return Ok(()); // the visitor stopped the walk
+                }
+            }
+        }
+    }
+    Ok(())
+}
+
+/// the `mod` declarations of a parsed file, in source order
+pub fn mod_edges_of(ast: &Ast) -> Vec<(String, Vis)> {
+    let mut out = Vec::new();
+    for it in ast.root().items(ast) {
+        let ItemRef::ModDecl(h) = it else {
+            continue;
+        };
+        let d = h.get(ast);
+        out.push((ast.name(d.name.ident).to_string(), d.vis()));
+    }
+    out
+}
+
 /// Mount a file's mod tree: parse `root_text`, resolve every
-/// `ModDecl` against `read(parent_mod_path, name)`, recursively.
-/// Cycle-guarded by canonical file identity: a file already in the
-/// current mount chain is the loud `cyclic mod` error (the dep walk's
-/// `cyclic use` mirrored); a repeated NAME mounts once (first mount
-/// wins). The root's own identity (`root_canon`) opens the chain — a
-/// child aliasing back onto the root file is a cycle too.
+/// `ModDecl` against `read(parent_mod_path, name)`, recursively —
+/// the compile's STRICT DOOR over the pure core [`mount_edges`]: the
+/// first refusal is the loud `Err`, naming the declaring file and the
+/// spellings it probed. Cycle-guarded by canonical file identity: a
+/// file already in the current mount chain is the loud `cyclic mod`
+/// error (the dep walk's `cyclic use` mirrored); a repeated NAME
+/// mounts once (first mount wins). The root's own identity
+/// (`root_canon`) opens the chain — a child aliasing back onto the
+/// root file is a cycle too.
 ///
 /// The flavor is explicit: `mode` is the parse mode the tree speaks
 /// ([`Mode::Impl`] for a lib body tree, [`Mode::Decl`] for a host
@@ -138,19 +293,93 @@ pub fn mount_mod_children(
     if !p.ast().is_clean() {
         return Ok(BTreeMap::new()); // the compile reports the syntax, loudly
     }
+    let root_edges = mod_edges_of(p.ast());
     let mut out = BTreeMap::new();
-    let mut visiting = vec![root_canon.to_string()];
-    mount_rec(
-        "",
-        child_file,
-        p.ast(),
-        mode,
-        child_file,
-        read,
-        &mut out,
-        &mut visiting,
-    )?;
-    Ok(out)
+    // the declaring file's physical spelling, by mod path — the
+    // refusal messages name it (`file_display`): the root speaks the
+    // directory form, each cleanly parsed child its own found spelling
+    let mut files: BTreeMap<String, String> =
+        BTreeMap::from([(String::new(), child_file.to_string())]);
+    let mut refusal: Option<String> = None;
+    let mut visit = |e: Edge<'_>| -> (Child, bool) {
+        match e {
+            Edge::Found {
+                path,
+                vis,
+                text,
+                canon,
+                file,
+                depth: _,
+            } => {
+                // the root's own identity opens the chain — a child
+                // aliasing back onto the root file is a cycle too (the
+                // core's chain sees only the children's canons)
+                if canon == root_canon {
+                    let name = path.rsplit('/').next().unwrap_or(path);
+                    refusal = Some(format!(
+                        "cyclic mod: `{name}` ({path}/{file}) is already being mounted"
+                    ));
+                    return (Child::Childless, false);
+                }
+                // the child parses to its OWN module root — its
+                // declarations are the next edges; a broken parse
+                // mounts childless (the compile reports the syntax,
+                // loudly)
+                let cp = parse_with_recover(text.clone(), mode);
+                let child = if cp.ast().is_clean() {
+                    files.insert(path.to_string(), file.clone());
+                    Child::Declares(mod_edges_of(cp.ast()))
+                } else {
+                    Child::Childless
+                };
+                out.insert(
+                    path.to_string(),
+                    ModSource {
+                        path: path.to_string(),
+                        vis,
+                        text,
+                        file,
+                    },
+                );
+                (child, true)
+            }
+            Edge::Refused {
+                path,
+                name,
+                why,
+                depth: _,
+            } => {
+                // `path` is the refused edge's own (would-be) mount
+                // path — the declaring file is the parent's
+                let parent = path.rsplit_once('/').map(|(p, _)| p).unwrap_or("");
+                let parent_file = files
+                    .get(parent)
+                    .cloned()
+                    .unwrap_or_else(|| child_file.to_string());
+                refusal = Some(match why {
+                    Refusal::Ambiguous => format!(
+                        "`mod {name};` in {} — both `{name}/{child_file}` and `{name}.rut` exist; \
+                         the mount is ambiguous — keep one",
+                        file_display(parent, &parent_file),
+                    ),
+                    Refusal::NoModRut => format!(
+                        "`mod {name};` in {} — `{name}/` has no `{child_file}`",
+                        file_display(parent, &parent_file),
+                    ),
+                    Refusal::Missing => format!(
+                        "`mod {name};` in {} — no `{name}/{child_file}` beside it",
+                        file_display(parent, &parent_file),
+                    ),
+                });
+                (Child::Childless, false) // the first refusal stops the mount
+            }
+        }
+    };
+    mount_edges(root_edges, read, &mut visit)?;
+    match refusal {
+        Some(msg) => Err(msg),
+        None => Ok(out),
+    }
 }
 
 /// The declaring file's display path, mod-path relative: the root is
@@ -163,92 +392,6 @@ fn file_display(parent: &str, file: &str) -> String {
     } else {
         format!("{parent}/{file}")
     }
-}
-
-#[allow(clippy::too_many_arguments)] // the walk threads exactly this state
-fn mount_rec(
-    parent: &str,
-    parent_file: &str,
-    ast: &Ast,
-    mode: Mode,
-    child_file: &str,
-    read: &mut dyn FnMut(&str, &str) -> Result<ChildLookup, String>,
-    out: &mut BTreeMap<String, ModSource>,
-    visiting: &mut Vec<String>,
-) -> Result<(), String> {
-    for it in ast.root().items(ast) {
-        let ItemRef::ModDecl(h) = it else {
-            continue;
-        };
-        let d = h.get(ast);
-        let (vis, name) = (d.vis(), d.name.ident);
-        let name = ast.name(name).to_string();
-        let child_path = if parent.is_empty() {
-            name.clone()
-        } else {
-            format!("{parent}/{name}")
-        };
-        if out.contains_key(&child_path) {
-            continue; // first mount wins (a repeated declaration)
-        }
-        match read(parent, &name)? {
-            ChildLookup::Found { text, canon, file } => {
-                if visiting.contains(&canon) {
-                    return Err(format!(
-                        "cyclic mod: `{name}` ({child_path}/{file}) is already being mounted"
-                    ));
-                }
-                visiting.push(canon);
-                // the child parses to its OWN module root — recurse
-                // into its declarations, never splice it here
-                // the child's text rides the mounted row below — clone
-                // to move into THIS parse (the row keeps the original)
-                let cp = parse_with_recover(text.clone(), mode);
-                if cp.ast().is_clean() {
-                    mount_rec(
-                        &child_path,
-                        &file,
-                        cp.ast(),
-                        mode,
-                        child_file,
-                        read,
-                        out,
-                        visiting,
-                    )?;
-                }
-                visiting.pop();
-                out.insert(
-                    child_path.clone(),
-                    ModSource {
-                        path: child_path,
-                        vis,
-                        text,
-                        file: file.clone(),
-                    },
-                );
-            }
-            ChildLookup::Ambiguous => {
-                return Err(format!(
-                    "`mod {name};` in {} — both `{name}/{child_file}` and `{name}.rut` exist; \
-                     the mount is ambiguous — keep one",
-                    file_display(parent, parent_file),
-                ));
-            }
-            ChildLookup::NoModRut => {
-                return Err(format!(
-                    "`mod {name};` in {} — `{name}/` has no `{child_file}`",
-                    file_display(parent, parent_file),
-                ));
-            }
-            ChildLookup::Missing => {
-                return Err(format!(
-                    "`mod {name};` in {} — no `{name}/{child_file}` beside it",
-                    file_display(parent, parent_file),
-                ));
-            }
-        }
-    }
-    Ok(())
 }
 
 // ---------------------------------------------------------------------

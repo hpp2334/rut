@@ -3,10 +3,12 @@
 //! reading only through the injected host environment
 //! ([`crate::env::Io`]): pure reads, one fast handler turn, no walk
 //! task, no awaits (the actor seam's law — the walk is a sync body
-//! over `&mut Session` exactly like every other handler). This
-//! module is also the home of the mod-name completion slot's disk
-//! probe ([`list_child_mods`] — the module files beside the current
-//! file), the env capability's second pure read.
+//! over `&mut Session` exactly like every other handler). The mod
+//! tree mounts through rut-driver's ONE mount core (`mount_edges`) —
+//! the compile's own law, no second walker. The mod-name completion
+//! slot's disk probe (the module files beside the current file, the
+//! env capability's second pure read) lives in
+//! `crate::query::completion::mod_name`.
 //!
 //! What the port keeps, law for law:
 //!
@@ -49,10 +51,15 @@
 //! (`std::path` never enters; a path row may spell `..`, and the env
 //! it reads through resolves it).
 
-use std::collections::HashSet;
+use std::cell::RefCell;
+use std::collections::{BTreeMap, HashSet};
+
+use rut_ast::Vis;
+use rut_driver::mods::{mount_edges, Child, ChildLookup, Edge, Refusal};
 
 use crate::deps::{DepRow, DepSource};
 use crate::env::Io;
+use crate::semantic::{mode_of, Document};
 use crate::state::Session;
 
 /// the manifest recursion cap — the extension's `MAX_DEP_DEPTH`
@@ -264,15 +271,26 @@ fn mount_row(ctx: &mut WalkCtx, state: &mut Session, dir: &str, row: &DepRow, de
     }
 }
 
-/// one package's mod tree: the root module stamps at mod path `""`
-/// (the entries loop's flat stamp for the same file REPLACES with it —
-/// same origin), then each `mod NAME;` edge mounts beside the root
-/// file, recursively, depth- and file-budget-capped. `entries` carries
-/// the manifest's own rows: a lib's first IMPL entry is its root
-/// (`src/mod.rut`), else a HOST pkg's DECL entry is (the `.d.rut`
-/// surface — its tree mounts with the Decl flavor, `NAME/mod.d.rut`
-/// children, the loader's own law), else the lib convention is probed
-/// (a surface-only dev state).
+/// one package's mod tree through rut-driver's ONE mount core
+/// ([`mount_edges`]): the root module stamps at mod path `""` (the
+/// entries loop's flat stamp for the same file REPLACES with it —
+/// same origin), then every `mod NAME;` edge resolves through `read`
+/// — the lib flavor probes `NAME/mod.rut` beside the declaring file
+/// first, then the single-file spelling `NAME.rut`; BOTH present is
+/// the loader's loud ambiguity (hinted once, neither mounts); the
+/// Decl flavor (a host pkg's surface tree) probes the loader's own
+/// spelling only — `NAME/mod.d.rut`, directory form, no single-file
+/// twin. `visit` charges the file budget, indexes the read file at
+/// the canon origin, and answers with the file's own `mod` edges —
+/// a file that fails to parse mounts CHILDLESS (the driver's law),
+/// and a file-form child's children mount beside it, not under
+/// `NAME/`. Depth- and file-budget-capped: a spent cap stops the
+/// package's walk (the set stays incomplete, never a failure).
+/// `entries` carries the manifest's own rows: a lib's first IMPL
+/// entry is its root (`src/mod.rut`), else a HOST pkg's DECL entry is
+/// (the `.d.rut` surface — its tree mounts with the Decl flavor, the
+/// loader's own flavor law), else the lib convention is probed (a
+/// surface-only dev state).
 fn mount_mod_tree(
     ctx: &mut WalkCtx,
     state: &mut Session,
@@ -315,207 +333,151 @@ fn mount_mod_tree(
     }
     let text = String::from_utf8_lossy(&bytes).into_owned();
     // the root re-stamp REPLACES the entries loop's row (same origin) —
-    // the fresh read moves into the parse
-    let decls = state.index_mod_at(&root_path, module, "", text);
+    // the fresh read moves into the parse; the reply's `mod` edges
+    // open the mount
+    let root_edges = mod_edges(state.index_mod_at(&root_path, module, "", text));
     // the children mount BESIDE THE ROOT FILE — inside the package's
-    // `src/` shell
+    // `src/` shell. The map both closures share: mod path → the
+    // directory its edges declare in (the found file's own directory
+    // for a directory-form child, the declaring directory for a
+    // single-file one — the `child_dir` rule).
     let root_dir = dirname(&root_path);
-    for decl in decls {
-        if ctx.files == 0 {
-            return; // the budget died — the set stays incomplete
-        }
-        mount_child_mod(
-            ctx,
-            state,
-            &root_dir,
-            module,
-            &decl.name,
-            "",
-            depth,
-            decl_flavor,
-        );
-    }
-}
-
-/// one `mod NAME;` edge: the lib flavor probes `NAME/mod.rut` beside
-/// the declaring file first, then the single-file spelling `NAME.rut`;
-/// BOTH present is the loader's loud ambiguity (hinted once, mirrored).
-/// The Decl flavor (a host pkg's surface tree) probes the loader's own
-/// spelling only — `NAME/mod.d.rut`, directory form, no single-file
-/// twin. The found child stamps under the module at its mount path —
-/// `NAME` under the root, `parent/NAME` nested — and its own decls
-/// recurse from its physical directory (a file-form child's children
-/// mount beside it, not under `NAME/`).
-#[allow(clippy::too_many_arguments)] // the walk threads exactly this state
-fn mount_child_mod(
-    ctx: &mut WalkCtx,
-    state: &mut Session,
-    declaring_dir: &str,
-    module: &str,
-    name: &str,
-    parent_path: &str,
-    depth: usize,
-    decl_flavor: bool,
-) {
-    let dir_form = if decl_flavor {
-        // the host surface tree's child spelling (the loader's
-        // DECL_CHILD_FILE law — dir form only)
-        format!(
-            "{declaring_dir}/{name}/{}",
-            rut_driver::decl::DECL_CHILD_FILE
-        )
-    } else {
-        format!("{declaring_dir}/{name}/mod.rut")
-    };
-    let file_form = format!("{declaring_dir}/{name}.rut");
-    let dir_bytes = ctx.io.read(&dir_form);
-    // the Decl flavor never probes the single-file twin — a stray
-    // `NAME.rut` beside a host tree is nobody's module
-    let file_bytes = if decl_flavor {
-        None
-    } else {
-        ctx.io.read(&file_form)
-    };
-    let (child_path, bytes) = match (dir_bytes, file_bytes) {
-        (Some(_), Some(_)) => {
-            state.hint_once(
-                ctx.io,
-                &format!("mods:{file_form}"),
-                &format!("rut: {module} — both {name}/mod.rut and {name}.rut exist; keep one"),
-            );
-            return;
-        }
-        (Some(b), None) => (dir_form.clone(), b),
-        (None, Some(b)) => (file_form, b),
-        (None, None) => return, // nothing under either spelling — mounts nothing
-    };
-    if depth + 1 > MAX_DEP_DEPTH || ctx.files == 0 {
-        return; // the caps truncate — the child never mounts
-    }
-    ctx.files -= 1;
-    let text = String::from_utf8_lossy(&bytes).into_owned();
-    let mod_path = if parent_path.is_empty() {
-        name.to_string()
-    } else {
-        format!("{parent_path}/{name}")
-    };
-    let decls = state.index_mod_at(&child_path, module, &mod_path, text);
-    // a file-form child's children mount BESIDE it, not under `NAME/`
-    let child_dir = if child_path == dir_form {
-        format!("{declaring_dir}/{name}")
-    } else {
-        declaring_dir.to_string()
-    };
-    for decl in decls {
-        if ctx.files == 0 {
-            return; // the budget died — the set stays incomplete
-        }
-        mount_child_mod(
-            ctx,
-            state,
-            &child_dir,
-            module,
-            &decl.name,
-            &mod_path,
-            depth + 1,
-            decl_flavor,
-        );
-    }
-}
-
-/// one module candidate the mod-name slot offers — the name and the
-/// file spelling the loader would mount (`harness/mod.rut`,
-/// `util.rut`)
-pub(crate) struct ModCandidate {
-    pub name: String,
-    pub file: String,
-}
-
-/// the doc uri's directory, `file://` uris only — the scheme KEPT
-/// (`file:///ws/app/src/mod.rut` → `file:///ws/app/src`): the probe
-/// hands the env a `file://`-shaped path (the doc uri's directory,
-/// verbatim) and the HOST resolves it (`fileURLToPath` in the
-/// extension; a host that cannot resolve answers `null` → an empty
-/// list). Any other scheme (`untitled:`, the playground's) is no disk
-/// to ask — `None`. Join with `/` only; `std::path` never enters.
-pub(crate) fn file_dir(uri: &str) -> Option<String> {
-    let rest = uri.strip_prefix("file://")?;
-    let i = rest.rfind('/')?;
-    Some(format!("file://{}", &rest[..i]))
-}
-
-/// the mod-name slot's disk probe — the module files beside the
-/// current file, exactly the user's rule: the ONE directory probed is
-/// the open document's own directory, and a candidate is what the
-/// LOADER mounts there ([`mount_child_mod`]'s spellings, the one
-/// home of that law): a folder containing the document flavor's
-/// module file (`mod.d.rut` for a `.d.rut` doc, else `mod.rut`), or —
-/// Impl flavor only — the single-file `NAME.rut` twin. Nothing else:
-/// not the indexed chain (it can be stale, it cannot see an
-/// undeclared sibling — the disk is the truth the loader reads), not
-/// a nested folder, not an empty folder, not the document's own kind
-/// (`mod.rut`, any `*.d.rut`), and a name under BOTH spellings is the
-/// loader's loud ambiguity — never offered. Non-identifier or
-/// reserved-word names drop. Sorted by name; no dir → nothing.
-pub(crate) fn list_child_mods(io: &dyn Io, dir: &str, decl: bool) -> Vec<ModCandidate> {
-    let Some(entries) = io.read_dir(dir) else {
-        return Vec::new();
-    };
-    // the flavor's child file — the loader's own spelling
-    let child_file = if decl {
+    let child_file = if decl_flavor {
         rut_driver::decl::DECL_CHILD_FILE
     } else {
         "mod.rut"
     };
-    let mut out: Vec<ModCandidate> = Vec::new();
-    for e in entries {
-        if e.ends_with(".rut") {
-            // the file form: the doc's own kind never rides, and the
-            // Decl flavor never probes the single-file twin
-            if decl || e == "mod.rut" || e.ends_with(".d.rut") {
-                continue;
-            }
-            let name = e.strip_suffix(".rut").unwrap_or(&e).to_string();
-            if is_mod_name(&name) {
-                out.push(ModCandidate { name, file: e });
-            }
+    let dirs = RefCell::new(BTreeMap::from([(String::new(), root_dir)]));
+    let io = ctx.io; // the env — a shared handle, copied out of the ctx
+    let mut read = |parent: &str, name: &str| -> Result<ChildLookup, String> {
+        let dir = dirs
+            .borrow()
+            .get(parent)
+            .expect("the declaring directory is mapped")
+            .clone();
+        let dir_form = format!("{dir}/{name}/{child_file}");
+        let file_form = format!("{dir}/{name}.rut");
+        let dir_bytes = io.read(&dir_form);
+        // the Decl flavor never probes the single-file twin — a stray
+        // `NAME.rut` beside a host tree is nobody's module
+        let file_bytes = if decl_flavor {
+            None
         } else {
-            // the dir form: the entry must CONTAIN the flavor's child
-            // file — an empty folder, or a folder with some other
-            // spelling, is not a candidate
-            let has_child = io
-                .read_dir(&format!("{dir}/{e}"))
-                .is_some_and(|kids| kids.iter().any(|k| k == child_file));
-            if !has_child || !is_mod_name(&e) {
-                continue;
+            io.read(&file_form)
+        };
+        Ok(match (dir_bytes, file_bytes) {
+            (Some(_), Some(_)) => ChildLookup::Ambiguous,
+            (Some(b), None) => ChildLookup::Found {
+                text: String::from_utf8_lossy(&b).into_owned(),
+                canon: dir_form,
+                file: child_file.to_string(),
+            },
+            (None, Some(b)) => ChildLookup::Found {
+                text: String::from_utf8_lossy(&b).into_owned(),
+                canon: file_form.clone(),
+                file: format!("{name}.rut"),
+            },
+            (None, None) => ChildLookup::Missing,
+        })
+    };
+    let mut visit = |e: Edge<'_>| -> (Child, bool) {
+        match e {
+            Edge::Found {
+                path,
+                vis: _,
+                text,
+                canon,
+                file: _,
+                depth: edge_depth,
+            } => {
+                // the caps truncate: a spent depth or a dead budget
+                // stops this package's walk — the child never mounts
+                if edge_depth + depth >= MAX_DEP_DEPTH || ctx.files == 0 {
+                    return (Child::Childless, false);
+                }
+                ctx.files -= 1;
+                // the driver's law: a child that fails to parse mounts
+                // CHILDLESS — its `mod` edges never walk (the mode is
+                // the file-name convention: the same parse the mount
+                // below runs)
+                let mod_path = path.to_string();
+                let clean = Document::parse(mode_of(&canon), text.clone())
+                    .ast()
+                    .is_clean();
+                let decls = state.index_mod_at(&canon, module, &mod_path, text);
+                if !clean {
+                    return (Child::Childless, true);
+                }
+                // a file-form child's children mount BESIDE it, not
+                // under `NAME/`
+                let (parent, name) = match path.rsplit_once('/') {
+                    Some((p, n)) => (p, n),
+                    None => ("", path),
+                };
+                let parent_dir = dirs
+                    .borrow()
+                    .get(parent)
+                    .expect("the declaring directory is mapped")
+                    .clone();
+                let child_dir = if canon == format!("{parent_dir}/{name}/{child_file}") {
+                    format!("{parent_dir}/{name}")
+                } else {
+                    parent_dir
+                };
+                dirs.borrow_mut().insert(mod_path, child_dir);
+                (Child::Declares(mod_edges(decls)), true)
             }
-            let file = format!("{e}/{child_file}");
-            out.push(ModCandidate { name: e, file });
+            Edge::Refused {
+                path,
+                name,
+                why,
+                depth: _,
+            } => {
+                // BOTH spellings present — the loader's loud ambiguity,
+                // hinted once, neither mounts; any other refusal mounts
+                // nothing and the walk continues silently
+                if let Refusal::Ambiguous = why {
+                    let (parent, _) = match path.rsplit_once('/') {
+                        Some((p, n)) => (p, n),
+                        None => ("", path),
+                    };
+                    let parent_dir = dirs
+                        .borrow()
+                        .get(parent)
+                        .expect("the declaring directory is mapped")
+                        .clone();
+                    let file_form = format!("{parent_dir}/{name}.rut");
+                    state.hint_once(
+                        io,
+                        &format!("mods:{file_form}"),
+                        &format!(
+                            "rut: {module} — both {name}/mod.rut and {name}.rut exist; keep one"
+                        ),
+                    );
+                }
+                (Child::Childless, true)
+            }
         }
+    };
+    // the core's Err — a cyclic mount (the chain repeats a canonical
+    // identity) or a failing read — ends this package's walk with ONE
+    // hint naming the reason
+    if let Err(e) = mount_edges(root_edges, &mut read, &mut visit) {
+        state.hint_once(
+            io,
+            &format!("mods:{root_path}"),
+            &format!("rut: {module} — {e}"),
+        );
     }
-    // a name that arrived under BOTH spellings is dropped — the
-    // loader refuses the ambiguity, so an offered name is always one
-    // it mounts
-    let mut seen: HashSet<&str> = HashSet::new();
-    let mut dupes: HashSet<String> = HashSet::new();
-    for c in &out {
-        if !seen.insert(c.name.as_str()) {
-            dupes.insert(c.name.clone());
-        }
-    }
-    out.retain(|c| !dupes.contains(&c.name));
-    out.sort_by(|a, b| a.name.cmp(&b.name));
-    out
 }
 
-/// a legal mod name: non-empty, `[A-Za-z_][A-Za-z0-9_]*`, and not a
-/// reserved word (the grammar's own table)
-fn is_mod_name(name: &str) -> bool {
-    let mut chars = name.chars();
-    if !matches!(chars.next(), Some(c) if c == '_' || c.is_ascii_alphabetic()) {
-        return false;
-    }
-    chars.all(|c| c == '_' || c.is_ascii_alphanumeric()) && !rut_ast::parser::is_reserved_kw(name)
+/// the index door's reply — the pushed file's own `mod` declarations,
+/// as the mount core's edge rows (the name, the declared vis)
+fn mod_edges(decls: Vec<crate::wire::ModDecl>) -> Vec<(String, Vis)> {
+    decls
+        .into_iter()
+        .map(|d| (d.name, if d.vis == "pub" { Vis::Pub } else { Vis::Self_ }))
+        .collect()
 }
 
 /// one url row — the store's mount door. The address is DERIVED

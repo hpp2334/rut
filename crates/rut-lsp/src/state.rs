@@ -211,7 +211,7 @@ impl Session {
         };
         let file = self.world.file(f);
         let byte = file.doc.byte(line, ch);
-        let dir = crate::walk::file_dir(uri);
+        let dir = crate::query::completion::file_dir(uri);
         let facts = crate::query::completion::DocFile {
             dir: dir.as_deref(),
             // the flavor is the file's own stamp — the lane's word
