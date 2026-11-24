@@ -26,13 +26,6 @@
 //! the tooltip IS the binding's hover markdown. Divergence would be a
 //! bug. Inlay text is the sanctioned source-less rendering (inferred);
 //! tooltips render the written decl verbatim via the views.
-
-//! The consistency law: a type hint's text is the SAME string hover
-//! shows for the binding — one source (the declared annotation's span
-//! join, else the resolver's answer), literal defaults included — and
-//! the tooltip IS the binding's hover markdown. Divergence would be a
-//! bug. Inlay text is the sanctioned source-less rendering (inferred);
-//! tooltips render the written decl verbatim via the views.
 //!
 //! The LIFECYCLE: [`compute`] runs the whole-document pass once per
 //! document version — the SESSION caches the rows beside the version

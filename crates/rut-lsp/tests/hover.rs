@@ -2739,3 +2739,26 @@ fn a_generic_newtype_callee_mints_with_its_binder() {
     );
 }
 }
+
+#[test]
+fn qualified_tail_caret_past_the_name_still_answers_the_member() {
+    // END-OF-NAME CARET (Act 4 review): the caret one byte past a
+    // qualified tail's last character — `Color::Red|` — rides the
+    // tail: hover renders the enum (the member's own block), and the
+    // references count the declaring ident beside the use site. The
+    // base probe answered null/[] there (definition's cell of this
+    // shape is pinned by
+    // `definition_at_a_tail_s_end_byte_still_rides_the_tail`).
+    let mut s = S::boot();
+    let uri = "file:///t/main.rut";
+    let src = "enum Color { Red, Green }\nentry fn main() -> nil {\n    let c = Color::Red;\n}\n";
+    s.analyze(uri, src);
+    // the caret past the tail `Red` (the `;` that follows)
+    let (l, c) = S::pos_at_byte(src, byte_of(src, "Color::Red", 1) + 10);
+    let md = markdown(s.hover_pos(uri, l, c));
+    assert!(md.contains("enum Color { Red, Green }"), "{md}");
+    let refs = s.refs_pos(uri, (l, c), true);
+    assert_eq!(refs.len(), 2, "{refs:?}");
+    assert_eq!(pos_pair(&refs[0]["range"]["start"]), (0, 13), "{refs:?}");
+    assert_eq!(pos_pair(&refs[1]["range"]["start"]), (2, 19), "{refs:?}");
+}

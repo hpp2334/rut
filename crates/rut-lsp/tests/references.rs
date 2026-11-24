@@ -659,6 +659,14 @@ both_uri_shapes! {
         assert_eq!(hits.len(), 1, "{hits:?}");
         assert_eq!(hits[0]["uri"], uri, "{hits:?}");
         assert_eq!(span_of(src, &hits[0]).0 as u32, byte_of(src, "gadgets", 1), "{hits:?}");
+        // the mechanism is caret-independent within the name: the MID
+        // and END carets (`gadge|ts`, `gadgets|`) answer the same set
+        let hits = s.refs_in(uri, src, "use gadgets", 1, 8, true);
+        assert_eq!(hits.len(), 1, "mid: {hits:?}");
+        assert_eq!(span_of(src, &hits[0]).0 as u32, byte_of(src, "gadgets", 1), "{hits:?}");
+        let hits = s.refs_in(uri, src, "use gadgets", 1, 11, true);
+        assert_eq!(hits.len(), 1, "end: {hits:?}");
+        assert_eq!(span_of(src, &hits[0]).0 as u32, byte_of(src, "gadgets", 1), "{hits:?}");
         // include_decl adds nothing here: a module names no declaring
         // ident in the scan (its answer IS the file top)
         let hits = s.refs_in(uri, src, "use gadgets", 1, 4, false);

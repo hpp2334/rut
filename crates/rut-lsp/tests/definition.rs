@@ -1439,3 +1439,103 @@ fn definition_at_a_tail_s_end_byte_still_rides_the_tail() {
     // the enum member's own decl site (line 0, `Red` after `{ `)
     assert_eq!(pos_pair(&hits[0]["range"]["start"]), (0, 13), "{hits:?}");
 }
+
+#[test]
+fn fn_use_caret_past_the_name_still_answers_the_fn() {
+    // END-OF-NAME CARET (Act 4 review): the caret one byte past a
+    // callee's last character — `helper(|)` — rides the callee: hover
+    // renders it, definition jumps to it, references count it. The
+    // base probe answered null/[]/[] there (the byte's node was the
+    // enclosing stmt).
+    let mut s = S::boot();
+    let uri = "file:///t/main.rut";
+    let src = "fn helper() -> i32 {\n    return 1;\n}\nentry fn main() -> nil {\n    let x = helper();\n}\n";
+    s.analyze(uri, src);
+    // the caret past the use-site `helper` (the `(` that follows)
+    let (l, c) = S::pos_at_byte(src, byte_of(src, "helper", 2) + 6);
+    let md = markdown(s.hover_pos(uri, l, c));
+    assert!(
+        md.contains("fn helper() -> i32") && md.contains("main.rut:1"),
+        "{md}"
+    );
+    let hits = s.def_pos(uri, l, c);
+    assert_eq!(hits.len(), 1, "{hits:?}");
+    assert_eq!(pos_pair(&hits[0]["range"]["start"]), (0, 3), "{hits:?}");
+    let refs = s.refs_pos(uri, (l, c), true);
+    assert_eq!(refs.len(), 2, "{refs:?}");
+    assert_eq!(pos_pair(&refs[0]["range"]["start"]), (0, 3), "{refs:?}");
+    assert_eq!(pos_pair(&refs[1]["range"]["start"]), (4, 12), "{refs:?}");
+}
+
+#[test]
+fn local_use_caret_past_the_name_still_answers_the_binding() {
+    // END-OF-NAME CARET (Act 4 review): the caret one byte past a
+    // local's last character — `return n|;` — rides the binding:
+    // hover renders the parameter, definition jumps to its decl,
+    // references count it. The base probe answered null/[]/[] there.
+    let mut s = S::boot();
+    let uri = "file:///t/main.rut";
+    let src = "fn go(n: i32) -> i32 {\n    return n;\n}\n";
+    s.analyze(uri, src);
+    // the caret past the returned `n` (the `;` that follows)
+    let (l, c) = S::pos_at_byte(src, byte_of(src, "return n", 1) + 8);
+    let md = markdown(s.hover_pos(uri, l, c));
+    assert!(md.contains("n: i32") && md.contains("parameter"), "{md}");
+    let hits = s.def_pos(uri, l, c);
+    assert_eq!(hits.len(), 1, "{hits:?}");
+    assert_eq!(pos_pair(&hits[0]["range"]["start"]), (0, 6), "{hits:?}");
+    let refs = s.refs_pos(uri, (l, c), true);
+    assert_eq!(refs.len(), 2, "{refs:?}");
+    assert_eq!(pos_pair(&refs[0]["range"]["start"]), (0, 6), "{refs:?}");
+    assert_eq!(pos_pair(&refs[1]["range"]["start"]), (1, 11), "{refs:?}");
+}
+
+#[test]
+fn receiver_caret_at_the_dot_answers_the_receiver() {
+    // END-OF-NAME CARET (Act 4 review): the dot that ends a receiver
+    // sits at the receiver's own end byte — `p.|bump()` — and the
+    // caret reads the RECEIVER (the single-segment Name arm carries
+    // no position check of its own): hover renders the binding,
+    // definition jumps to its decl, references count it,
+    // typeDefinition names the receiver's type. The base probe
+    // answered null/[]/[]/[] there.
+    let mut s = S::boot();
+    let uri = "file:///t/main.rut";
+    let src = "class Box2 {\n    n: i32;\n}\nimpl Box2 {\n    fn bump(self) -> i32 { return self.n; }\n}\nfn go() -> i32 {\n    let p = Box2 { n: 1 };\n    return p.bump();\n}\n";
+    s.analyze(uri, src);
+    // the caret at `p`'s end byte — the DOT itself
+    let (l, c) = S::pos_at_byte(src, byte_of(src, "p.bump", 1) + 1);
+    let md = markdown(s.hover_pos(uri, l, c));
+    assert!(md.contains("let p: Box2"), "{md}");
+    let hits = s.def_pos(uri, l, c);
+    assert_eq!(hits.len(), 1, "{hits:?}");
+    assert_eq!(pos_pair(&hits[0]["range"]["start"]), (7, 8), "{hits:?}");
+    let refs = s.refs_pos(uri, (l, c), true);
+    assert_eq!(refs.len(), 2, "{refs:?}");
+    assert_eq!(pos_pair(&refs[0]["range"]["start"]), (7, 8), "{refs:?}");
+    assert_eq!(pos_pair(&refs[1]["range"]["start"]), (8, 11), "{refs:?}");
+    let tys = s.typedef_in(uri, src, "p.bump", 1, 1);
+    assert_eq!(tys.len(), 1, "{tys:?}");
+    assert_eq!(pos_pair(&tys[0]["range"]["start"]), (0, 6), "{tys:?}");
+}
+
+both_uri_shapes! {
+#[test]
+fn struct_lit_tail_caret_past_the_name_typedefs_the_type() {
+    // END-OF-NAME CARET (Act 4 review): the caret one byte past a
+    // struct-literal's qualified tail — `gadgets::Widget| { .. }` —
+    // rides the tail: typeDefinition names the type. The base probe
+    // answered [] there.
+    let mut s = S::boot();
+    s.index_mod_at(WIDGET_URI, "gadgets", "", WIDGET_SRC);
+    let uri = "file:///t/main.rut";
+    let src = "use gadgets::{ Widget };\nentry fn main() -> nil {\n    let w = gadgets::Widget { id: 1 };\n}\n";
+    s.analyze(uri, src);
+    // the caret past the literal's tail (the ` {` that follows)
+    let (l, c) = S::pos_at_byte(src, byte_of(src, "gadgets::Widget", 1) + 15);
+    let tys = s.typedef_pos(uri, l, c);
+    assert_eq!(tys.len(), 1, "{tys:?}");
+    assert_eq!(tys[0]["uri"], WIDGET_URI, "{tys:?}");
+    assert_eq!(pos_pair(&tys[0]["range"]["start"]), (0, 10), "{tys:?}");
+}
+}

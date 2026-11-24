@@ -549,6 +549,17 @@ impl S {
         .clone()
     }
 
+    /// typeDefinition at a raw position over the stored doc
+    pub fn typedef_pos(&mut self, uri: &str, line: u32, ch: u32) -> Vec<Value> {
+        take(
+            self.pool
+                .run_until(self.lsp.type_definition(spelled(uri), line, ch)),
+        )
+        .as_array()
+        .expect("the typeDefinition answer is an array")
+        .clone()
+    }
+
     /// typeDefinition at `off` past the needle's start
     pub fn typedef_in(
         &mut self,

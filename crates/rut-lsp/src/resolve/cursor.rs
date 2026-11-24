@@ -98,12 +98,16 @@ pub(crate) enum Cursor {
 }
 
 /// the classification of the node the caret rides — `w` is the
-/// session's world, `file` the queried file. The probe: the byte under
-/// the caret first; when THAT byte's node names nothing (the byte sits
-/// in the statement's own span — a partially-typed name's end rides
-/// the stmt it ends), the node the byte BEFORE belongs to, the caret
-/// unchanged — a cursor sitting on a token's end reads that token, the
-/// same boundary convention one node deeper.
+/// session's world, `file` the queried file. The boundary convention:
+/// the caret on the byte where a name's NEXT character would sit
+/// still reads that name — whatever sits there (`(`, `;`, whitespace,
+/// or the DOT that ends a receiver: `p.|bump()` answers the receiver,
+/// the single-segment Name arm carrying no position check of its
+/// own). The probe: the byte under the caret first; when THAT byte's
+/// node names nothing (the byte sits in the statement's own span — a
+/// name's end byte rides the stmt the name ends), the node the byte
+/// BEFORE belongs to, the caret unchanged — the same convention, one
+/// node deeper.
 pub(crate) fn cursor(w: &World, file: FileId, pos: u32) -> Cursor {
     let d = w.file(file);
     let ast = d.doc.ast();
