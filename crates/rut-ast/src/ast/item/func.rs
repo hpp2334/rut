@@ -31,6 +31,11 @@ pub struct FnNode {
     pub params: Vec<ParamRef>,
     pub ret: Option<TyRef>,
     pub body: Handle<BlockNode>,
+    /// did the body's block eat its own `}`? `false` when the parse
+    /// closed the body at EOF — the fn is still open (the edit lane's
+    /// survivor rule asks exactly this); `true` for the synthesized
+    /// bodiless block of a Decl-mode signature
+    pub closed: bool,
     pub doc: DocData,
 }
 

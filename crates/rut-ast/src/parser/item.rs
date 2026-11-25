@@ -1746,6 +1746,9 @@ impl FnFrame {
         let at = self.semi_hi;
         let body = BlockNode {
             span: Span::new(at, at),
+            // the `;` closed the signature — the synthesized body is
+            // not an open construct
+            closed: true,
             stmts: Vec::new(),
             tail: None,
         }
@@ -1764,6 +1767,7 @@ impl FnFrame {
                 ret: self.ret.take(),
                 bounds: std::mem::take(&mut self.bounds),
                 body,
+                closed: true,
                 doc: DocData::default(),
             }
         );
@@ -1812,6 +1816,7 @@ impl FnFrame {
                         ret: self.ret.take(),
                         bounds: std::mem::take(&mut self.bounds),
                         body,
+                        closed: body.get(&p.ast).closed,
                         doc: DocData::default(),
                     }
                 );

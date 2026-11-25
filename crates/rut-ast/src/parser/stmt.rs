@@ -83,6 +83,8 @@ impl BlockFrame {
     pub(crate) fn empty(&self, p: &mut Parser) -> Handle<BlockNode> {
         BlockNode {
             span: self.closed_span(p),
+            // the budget swapped the block out — it never ate a `}`
+            closed: false,
             stmts: Vec::new(),
             tail: None,
         }
@@ -112,9 +114,13 @@ impl BlockFrame {
     }
 
     fn next_stmt(&mut self, p: &mut Parser) -> Step {
-        if p.eat_punct(Tok::RBrace) || p.at_eof() {
+        let closed = p.eat_punct(Tok::RBrace);
+        if closed || p.at_eof() {
             let node = BlockNode {
                 span: self.closed_span(p),
+                // the `}` closed the block; EOF did not — the edit
+                // lane's survivor rule asks exactly this
+                closed,
                 stmts: std::mem::take(&mut self.stmts),
                 tail: self.tail.take(),
             }

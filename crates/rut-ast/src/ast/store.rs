@@ -250,7 +250,7 @@ arenas! {
     classes: crate::ast::item::ClassNode => Class, "Class",
     interfaces: crate::ast::item::InterfaceNode => Interface, "Interface",
     impls: crate::ast::item::ImplNode => Impl, "Impl",
-    fns: crate::ast::item::FnNode => Fn, "Fn",
+    fns: crate::ast::item::FnNode => Fn, "Fn" (|n: &Self| !n.closed),
     surface_fns: crate::ast::item::SurfaceFnNode => SurfaceFn, "SurfaceFn",
     surface_structs: crate::ast::item::SurfaceStructNode => SurfaceStruct, "SurfaceStruct",
     builtin_tys: crate::ast::item::BuiltinTyNode => BuiltinTy, "BuiltinTy",
@@ -273,7 +273,7 @@ arenas! {
     continues: crate::ast::stmt::ContinueNode => Continue, "Continue",
     when_stmts: crate::ast::stmt::WhenStmtNode => WhenStmt, "WhenStmt",
     // expressions
-    blocks: crate::ast::expr::BlockNode => Block, "Block",
+    blocks: crate::ast::expr::BlockNode => Block, "Block" (|n: &Self| !n.closed),
     lits: crate::ast::expr::LitNode => Lit, "Lit",
     paths: crate::ast::expr::PathNode => Path, "Path",
     selfs: crate::ast::expr::SelfNode => SelfExpr, "Self",

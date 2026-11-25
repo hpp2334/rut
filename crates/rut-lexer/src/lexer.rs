@@ -726,16 +726,18 @@ impl<'a> Lexer<'a> {
                     }
                 }
                 b'/' if self.peek2() == b'*' => {
-                    while self.pos + 1 < self.src.len()
-                        && !(self.peek() == b'*' && self.peek2() == b'/')
-                    {
+                    self.pos += 2;
+                    while !self.at_end() {
+                        if self.peek() == b'*' && self.peek2() == b'/' {
+                            self.pos += 2;
+                            break;
+                        }
                         let b = self.peek();
                         self.pos += 1;
                         if b == b'\n' {
                             self.note_line();
                         }
                     }
-                    self.pos = (self.pos + 2).min(self.src.len());
                 }
                 b'0'..=b'9' => self.lex_number(hlo),
                 b'"' => {

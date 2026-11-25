@@ -139,10 +139,12 @@ impl Doc {
     /// 9. the tree index invalidated — the next read rebuilds it (the
     ///    same deterministic walk a cold parse runs).
     ///
-    /// v1 notes: the root-item granularity makes the span shift a
-    /// no-op (survivors are the unchanged prefix; the tail is
-    /// reparsed wholesale) and a full tree-index rebuild stands in for
-    /// a patch — both are the later knobs the plan defers.
+    /// v1 notes: survivors are CLEAN, CLOSED items — an item still
+    /// open at EOF, or holding a parse row the boundary would cut, is
+    /// not one, and the window reopens at it (the root-item
+    /// granularity makes the span shift a no-op, and a full tree-index
+    /// rebuild stands in for a patch — both are the later knobs the
+    /// plan defers).
     pub fn edit(&mut self, e: Edit) {
         // 1. text + line geometry
         self.src.edit(&e);
@@ -183,7 +185,10 @@ impl Doc {
         // re-rides the surviving subtrees verbatim (byte-identical
         // text ⇒ byte-identical rows); the boundary is the first
         // dropped item's start (a dropped item's rows can start before
-        // the first dirty token, never before its own item)
+        // the first dirty token, never before its own item). The
+        // boundary settled BELOW every survivor-held row (`dirty_unit`'s
+        // rows rule), so this filter keeps every survivor's rows and
+        // drops only the dropped region's
         let survivors: Vec<Diag> = self.ast.errors()[self.parse_from..]
             .iter()
             .filter(|d| d.span.lo < bnd)
@@ -323,12 +328,18 @@ impl Doc {
     ///
     /// - `drop_from` — the first parsed item to drop, in the module's
     ///   PARSED region (the lex-fence prefix excluded): the first item
-    ///   reaching past the splice's window start. Tokens before the
+    ///   that is NOT a survivor. A survivor is a clean, closed item:
+    ///   it ends below the splice's window start (tokens before the
     ///   window are byte-identical text, so an item built purely from
-    ///   them survives slot-stable; every item owning a relexed token
-    ///   is reparsed (to EOF — item boundaries are not trusted past
-    ///   damage). The window start sits at/before the edit's start, so
-    ///   old-text item spans compare against it directly.
+    ///   them survives slot-stable), `Ast::is_incomplete` says no (a
+    ///   construct still open at EOF is re-derived whole), and it
+    ///   holds no parse row at or after the boundary (one that does
+    ///   pulls the boundary back to the earliest such holder, so the
+    ///   survivors' row filter keeps all their rows and drops none).
+    ///   Every non-survivor is reparsed (to EOF — item boundaries are
+    ///   not trusted past damage). The window start sits at/before the
+    ///   edit's start, so old-text item spans compare against it
+    ///   directly.
     /// - `window_from` — the spliced stream's index the reparse window
     ///   starts at: the dropped item's OWN first token (the first dirty
     ///   token can sit mid-item — the window must open at the item
@@ -358,7 +369,14 @@ impl Doc {
                 (lo as i64 - delta).max(e.start as i64) as u32
             }
         };
-        let mut drop_from = parsed.partition_point(|it| it.span(&self.ast).hi <= change.window_lo);
+        // law 2: an item is a survivor only if it is CLEAN, CLOSED
+        // item-shaped — closed means `Ast::is_incomplete` says no: a
+        // construct still open at EOF (a fn whose body never got its
+        // `}`) is not a survivor, so the boundary stops there and the
+        // tail reparse re-derives it whole
+        let mut drop_from = parsed.partition_point(|it| {
+            it.span(&self.ast).hi <= change.window_lo && !self.ast.is_incomplete(it.any())
+        });
         // The boundary must settle between two CLEAN items — recovery is
         // NOT item-local: a failed frame's sync skim and its expects read
         // tokens past the item's own span, and a clean item's recovery
@@ -370,7 +388,12 @@ impl Doc {
         //
         // (tail) a survivor tail ending with a fence backtracks one item
         // — the fence's extent keys on the token its sync stopped at,
-        // and past the boundary that token changed.
+        // and past the boundary that token changed;
+        //
+        // (rows) a survivor holding a parse row at or after the
+        // boundary backtracks to the earliest such holder — a row the
+        // boundary passes is dropped by the survivors' filter and never
+        // re-derived (the window opens past the item that produced it).
         //
         // Backtracking is always sound: an earlier window only re-derives
         // more, and the parse state at a clean item boundary of the
@@ -383,14 +406,36 @@ impl Doc {
                 && drop_from < parsed.len()
                 && matches!(parsed[drop_from], ItemRef::Error(_));
             let tail = drop_from > 0 && matches!(parsed[drop_from - 1], ItemRef::Error(_));
-            if !pair && !tail {
+            if pair || tail {
+                drop_from -= 1;
+                continue;
+            }
+            // (rows) the earliest surviving item holding a parse row at
+            // or after the boundary — a row attributes to the last
+            // survivor starting at or before it; rows before the first
+            // survivor hold to no survivor
+            if drop_from == 0 || drop_from >= parsed.len() {
                 break;
             }
-            drop_from -= 1;
+            let bnd = parsed[drop_from].span(&self.ast).lo;
+            let holder = self.ast.errors()[self.parse_from..]
+                .iter()
+                .filter(|d| d.span.lo >= bnd)
+                .filter_map(|d| {
+                    parsed[..drop_from]
+                        .partition_point(|it| it.span(&self.ast).lo <= d.span.lo)
+                        .checked_sub(1)
+                })
+                .min();
+            match holder {
+                Some(i) => drop_from = i,
+                None => break,
+            }
         }
         if drop_from == parsed.len() {
             // past the last item: the fresh items append; every parse
-            // row survives
+            // row survives — and every survivor answered closed (the
+            // partition's clause), so no open construct rides along
             return (drop_from, change.start, u32::MAX);
         }
         let d_lo = parsed[drop_from].span(&self.ast).lo;
@@ -706,5 +751,60 @@ fn main() -> nil {
             cold.ast().errors(),
             "bodies stay forbidden"
         );
+    }
+
+    // ── law 2's pins: a survivor is a clean, closed item ──
+
+    #[test]
+    fn a_surviving_fn_body_ends_at_its_own_brace() {
+        // a space at byte 34 of the two-fn file: the survivor's body
+        // must end at its own `}`, exactly the cold parse's span
+        let mut d = doc(TWO_FNS);
+        let old = d.text(d.span()).to_string();
+        let mut new = old.clone();
+        new.insert(34, ' ');
+        assert_edit_cold(&mut d, &old, &new);
+        // and the corpus edit of ground truth 4 replayed: [861,867)
+        // (`try fn`) becomes `{`, so `entry fn` becomes `en{` — the
+        // surviving `count` body's span must be the cold parse's, not
+        // the old `entry`'s end
+        let path = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+            .join("../../benches/workloads/binary-trees/src/mod.rut");
+        let src = std::fs::read_to_string(&path).expect("the binary-trees corpus file");
+        let mut d = Doc::parse(Mode::Impl, src.clone());
+        let new = format!("{}{{{}", &src[..861], &src[867..]);
+        assert_edit_cold(&mut d, &src, &new);
+    }
+
+    #[test]
+    fn an_append_at_eof_after_a_fn_is_cold_equal() {
+        // ground truth 9: the fn is still open at EOF — not a survivor;
+        // the append must reparse it, not bolt a row onto the tail
+        let mut d = doc("fn a() -> i32 {\n    let x = 1;\n");
+        let old = d.text(d.span()).to_string();
+        assert_edit_cold(&mut d, &old, "fn a() -> i32 {\n    let x = 1;\n}\n");
+    }
+
+    #[test]
+    fn typing_a_closing_brace_at_eof_closes_the_open_fn() {
+        // ground truth 9, typed one keystroke at a time: `}` first
+        // (a true append at EOF — the M4 shape), then the newline —
+        // every step ≡ cold
+        let mut d = doc("fn a() -> i32 {\n    let x = 1;\n");
+        let old = d.text(d.span()).to_string();
+        assert_edit_cold(&mut d, &old, &format!("{old}}}"));
+        let old = d.text(d.span()).to_string();
+        assert_edit_cold(&mut d, &old, &format!("{old}\n"));
+    }
+
+    #[test]
+    fn a_damaged_items_rows_survive_an_edit_in_the_next_item() {
+        // ground truth 8: the damaged use's recovery row lands ON the
+        // next item's first token — the boundary must move back so the
+        // reparse re-derives it, exactly as a cold parse holds it
+        let mut d = doc("use ink::{ Logger }\nfn b() {}\n");
+        assert!(!d.ast().is_clean());
+        let old = d.text(d.span()).to_string();
+        assert_edit_cold(&mut d, &old, "use ink::{ Logger }\nfn bb() {}\n");
     }
 }

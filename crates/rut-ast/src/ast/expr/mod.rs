@@ -171,6 +171,11 @@ impl ExprRef {
 #[derive(Clone, Debug)]
 pub struct BlockNode {
     pub span: Span,
+    /// did the frame eat the block's own `}`? `false` when the parse
+    /// closed the block at EOF (the construct is still open) or never
+    /// received its `{` — the completeness query's absence rule for
+    /// the brace, the same rung as a call without its `)`
+    pub closed: bool,
     pub stmts: Vec<crate::ast::stmt::StmtRef>,
     pub tail: Option<ExprRef>,
 }

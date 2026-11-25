@@ -2,13 +2,15 @@
 //! pipeline's lane (rut-ast's `Doc` is the consumer; nothing above
 //! rut-ast touches the token storage). One edit in, one WINDOWED
 //! relex out: the window starts at a line boundary that is not inside
-//! a literal (the old stream knows literal extents — an edit cutting
-//! into a literal backs the window to the literal's own start), relexes
-//! the fresh text, and splices where the fresh tail CONVERGES with the
-//! old suffix (same kinds, spans equal after the length delta). The
-//! result is exactly the cold lex of the edited text — the
-//! `splice ≡ cold lex` law, property-tested over the corpus
-//! (`tests/splice_props.rs`).
+//! a construct — a multi-line or unterminated literal, or a comment
+//! that spans the line start (the old stream knows the literal
+//! extents; a byte scan over the token gaps finds the comments) — an
+//! edit inside or at such a construct backs the window to its own
+//! start, relexes the fresh text, and splices where the fresh tail
+//! CONVERGES with the old suffix (same kinds, spans equal after the
+//! length delta). The result is exactly the cold lex of the edited
+//! text — the `splice ≡ cold lex` law, property-tested over the
+//! corpus (`tests/splice_props.rs`).
 
 use crate::lexer::{lex_normalized, lex_window};
 use crate::source::{Edit, Source};
@@ -18,11 +20,12 @@ use crate::token::{FPart, Tok, Token};
 /// into the POST-splice stream — the tokens whose content came from
 /// the relexed window (everything outside the range is the untouched
 /// prefix or the delta-shifted suffix). `window_lo` is the byte the
-/// relex window opened at — a line start, or a literal's own start
-/// when the line start sat inside it (0 for a full relex). Together
-/// they draw the reuse-unit line for the `Doc` pipeline: tokens before
-/// the window are byte-identical text (items built purely from them
-/// survive), everything at/after was relexed.
+/// relex window opened at — a line start, or a construct's own start
+/// when the line start sat inside it (a multi-line literal or a
+/// comment; 0 for a full relex). Together they draw the reuse-unit
+/// line for the `Doc` pipeline: tokens before the window are
+/// byte-identical text (items built purely from them survive),
+/// everything at/after was relexed.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct TokenChange {
     /// first dirty token index (into the spliced stream)
@@ -63,10 +66,13 @@ pub fn splice_tokens(toks: &mut Vec<Token>, src: &Source, e: &Edit) -> TokenChan
 
     // ── the window start ──
     // the last token starting at or before the edit (the edit may cut
-    // INTO it), then that line's start — unless the line start sits
-    // inside a token (a multi-line literal spanning it), in which case
-    // the token's own start is the window: a token start is always a
-    // lex point, a position strictly inside a token never is.
+    // INTO it), then that line's start — pulled back to the earliest
+    // construct holding that position. A token holds it when it spans
+    // the position (a multi-line literal) or ENDS at it while open —
+    // an unterminated literal runs to EOF, so an edit at or after the
+    // last token's end is an edit inside that token. A token start and
+    // a comment opener are where a cold lex enters the construct; a
+    // position strictly inside one never is.
     let anchor = toks.partition_point(|t| t.span.lo <= e.start);
     let anchor_lo = if anchor > 0 {
         toks[anchor - 1].span.lo as usize
@@ -76,9 +82,29 @@ pub fn splice_tokens(toks: &mut Vec<Token>, src: &Source, e: &Edit) -> TokenChan
     let mut ws = src.line_start_of(anchor_lo as u32) as usize;
     if let Some(t) = toks
         .iter()
-        .find(|t| t.span.lo < ws as u32 && (ws as u32) < t.span.hi)
+        .find(|t| t.span.lo < ws as u32 && (ws as u32) <= t.span.hi)
     {
         ws = t.span.lo as usize;
+    }
+    // comments are not tokens: the gaps between tokens hold nothing
+    // but whitespace and comments (every other byte lexed into the
+    // tokens around them), so a byte scan sees every opener — the
+    // earliest one holding the line start pulls the window onto itself
+    let mut gap_lo = 0usize;
+    for t in toks.iter() {
+        if gap_lo > ws {
+            break;
+        }
+        if let Some(lo) = comment_holding(text, gap_lo, (t.span.lo as usize).min(text.len()), ws) {
+            ws = lo;
+            break;
+        }
+        gap_lo = (t.span.hi as usize).min(text.len());
+    }
+    if gap_lo <= ws {
+        if let Some(lo) = comment_holding(text, gap_lo, text.len(), ws) {
+            ws = lo;
+        }
     }
 
     // ── the pieces ──
@@ -162,6 +188,52 @@ fn shift_token(t: &mut Token, by: i64) {
             }
         }
     }
+}
+
+/// The comment holding `ws` inside one gap of the old stream — its
+/// opener's offset. A gap holds nothing but whitespace and comments
+/// (every other byte lexed into the tokens around it), so a byte scan
+/// sees every opener. `//` runs to its newline — a `/*` inside it is
+/// comment text, not an opener, and a line comment never spans a line
+/// start. `/*` runs to its `*/`, or to the end of the text when open:
+/// an open comment holds every position past its opener, the
+/// edit-at-EOF inside it included.
+fn comment_holding(text: &str, lo: usize, hi: usize, ws: usize) -> Option<usize> {
+    let b = text.as_bytes();
+    let mut i = lo;
+    while i < hi {
+        match b[i] {
+            b'/' if i + 1 < hi && b[i + 1] == b'/' => {
+                while i < hi && b[i] != b'\n' {
+                    i += 1;
+                }
+            }
+            b'/' if i + 1 < hi && b[i + 1] == b'*' => {
+                let opener = i;
+                let mut j = i + 2;
+                let mut closed = false;
+                while j + 1 < hi {
+                    if b[j] == b'*' && b[j + 1] == b'/' {
+                        j += 2;
+                        closed = true;
+                        break;
+                    }
+                    j += 1;
+                }
+                let holds = if closed {
+                    opener < ws && ws < j
+                } else {
+                    opener < ws && ws <= hi
+                };
+                if holds {
+                    return Some(opener);
+                }
+                i = if closed { j } else { hi };
+            }
+            _ => i += 1,
+        }
+    }
+    None
 }
 
 #[cfg(test)]
@@ -306,5 +378,63 @@ mod tests {
         apply_edit(text, new, &mut toks);
         let (_, cold) = src_toks(new);
         assert_eq!(toks, cold);
+    }
+
+    // ── law 3's pins: the re-lex window opens where a cold lex opens ──
+
+    #[test]
+    fn a_window_never_opens_inside_a_block_comment() {
+        // ground truth 11, both literals. (1) an append at EOF after
+        // an unterminated block comment: the old line start at the edit
+        // sits INSIDE the comment — the window must pull back to the
+        // comment's opener, or the `}` lexes as code
+        let text = "let a = 1;\n/* never closed\n";
+        let new = "let a = 1;\n/* never closed\n}\n";
+        let (_, mut toks) = src_toks(text);
+        let change = apply_edit(text, new, &mut toks);
+        let (_, cold) = src_toks(new);
+        assert_eq!(toks, cold, "spliced ≡ cold across the open comment");
+        assert!(
+            change.window_lo <= 11,
+            "the window opened inside the comment: {change:?}"
+        );
+        // (2) a rename whose line start sits inside a CLOSED multi-line
+        // comment — same law, the comment's bytes are no code
+        let text = "let a = 1;\n/* multi\n   line */ fn foo() {}\nlet x = 1;\n";
+        let new = "let a = 1;\n/* multi\n   line */ fn foobar() {}\nlet x = 1;\n";
+        let (_, mut toks) = src_toks(text);
+        let change = apply_edit(text, new, &mut toks);
+        let (_, cold) = src_toks(new);
+        assert_eq!(toks, cold, "spliced ≡ cold across the closed comment");
+        assert!(
+            change.window_lo <= 11,
+            "the window opened inside the comment: {change:?}"
+        );
+    }
+
+    #[test]
+    fn an_edit_at_eof_relexes_an_open_construct() {
+        // ground truth 11: an edit at/after the last token's end is an
+        // edit INSIDE the construct when the construct is still open —
+        // the unterminated comment and each literal opener relex from
+        // their own start
+        let cases = [
+            ("let a = 1;\n/* never closed\n", 11u32),
+            ("let a = 1;\nr#\"unterminated\n", 11),
+            ("let a = 1;\nr##\"unterminated\n", 11),
+            ("let a = 1;\nf#\"unterminated\n", 11),
+        ];
+        for (text, open_lo) in cases {
+            let mut new = text.to_string();
+            new.push_str("}\n");
+            let (_, mut toks) = src_toks(text);
+            let change = apply_edit(text, &new, &mut toks);
+            let (_, cold) = src_toks(&new);
+            assert_eq!(toks, cold, "spliced ≡ cold over {text:?}");
+            assert!(
+                change.window_lo <= open_lo,
+                "the window opened inside the open construct: {change:?} over {text:?}"
+            );
+        }
     }
 }
