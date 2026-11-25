@@ -31,7 +31,7 @@ const LOCK_TEMPLATE: &str = include_str!("../template/rut.lock");
 const MOD_RUT: &str = include_str!("../template/src/mod.rut");
 
 /// The `--version` string — the CLI's semver beside the std pin baked
-/// into the lock template: `rut 0.2.0 (std-v18)`. The pin is DERIVED
+/// into the lock template: `rut 0.2.0 (std-v19)`. The pin is DERIVED
 /// from the already-baked template at runtime — no second pin table
 /// anywhere (the lock is the carrier). The answer is `&'static str`
 /// because clap's `version` door wants a `Str`: the string is a pure

@@ -317,8 +317,8 @@ the two packages the program uses, and the program is
 
   "deps": {
     // the pins live in literals/rut.lock — `rut install` writes it
-    "pouch": { "url": "https://cdn.jsdelivr.net/gh/hpp2334/rut@std-v18/dist/std/pouch.zip" },
-    "ink":   { "url": "https://cdn.jsdelivr.net/gh/hpp2334/rut@std-v18/dist/std/ink.zip" }
+    "pouch": { "url": "https://cdn.jsdelivr.net/gh/hpp2334/rut@std-v19/dist/std/pouch.zip" },
+    "ink":   { "url": "https://cdn.jsdelivr.net/gh/hpp2334/rut@std-v19/dist/std/ink.zip" }
   }
 }
 ```

@@ -10,7 +10,7 @@
   // source groups.
   //
   // THE CDN ROW: `pouch` ships as a COMMITTED source zip
-  // (dist/std-v18/pouch.zip, jsDelivr-served at the tag, pinned in
+  // (dist/std-v19/pouch.zip, jsDelivr-served at the tag, pinned in
   // rut.lock — the pin is law at the mount door on every load). pouch is a
   // GENERIC owner, and the source zip IS the delivery — the plugin's
   // consumer-spelled `Vec<..>` shapes compile from the zip's ridden
@@ -26,6 +26,6 @@
     "server": {
       "path": "../server"
     },
-    "pouch": { "url": "https://cdn.jsdelivr.net/gh/hpp2334/rut@std-v18/dist/std/pouch.zip" }
+    "pouch": { "url": "https://cdn.jsdelivr.net/gh/hpp2334/rut@std-v19/dist/std/pouch.zip" }
   }
 }

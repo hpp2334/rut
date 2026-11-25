@@ -94,11 +94,12 @@ def esc(s):
 # the push-contract rename: the trait's name IS `Iterable` now;
 # the main-convention retirement: the code-span shape IS `entry fn`
 # now — `pub fn main` was the retired spelling of the same decl).
-# The per-publish tag/sha chains (std-v3→…→v12, the wire-number bumps,
-# the purged envelopes' shas) are pruned: the po/pot hold only current
-# std-v18 spellings, so those rules were unreachable — each new publish
-# that changes book prose pins its own rules here AGAIN, for that
-# sweep's one-shot carry, then they prune with the FRESH table.
+# The per-publish tag/sha chains (std-v3→…→v18, the wire-number
+# bumps, the purged envelopes' shas) are pruned: the po/pot hold only
+# current std-v19 spellings, so those rules were unreachable — each
+# new publish that changes book prose pins its own rules here AGAIN,
+# for that sweep's one-shot carry, then they prune with the FRESH
+# table.
 MECH = [
     (re.compile(r'\bdataclasses\b'), 'structs'),
     (re.compile(r'\bdataclass\b'), 'struct'),

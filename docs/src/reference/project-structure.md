@@ -48,8 +48,8 @@ the resolution laws, and where everything lives in the toolchain tree.
 
   "deps": {
     "greet": { "path": "../greet" },
-    "pouch": { "url": "https://cdn.jsdelivr.net/gh/hpp2334/rut@std-v18/dist/std/pouch.zip" },
-    "ink":   { "url": "https://cdn.jsdelivr.net/gh/hpp2334/rut@std-v18/dist/std/ink.zip" }
+    "pouch": { "url": "https://cdn.jsdelivr.net/gh/hpp2334/rut@std-v19/dist/std/pouch.zip" },
+    "ink":   { "url": "https://cdn.jsdelivr.net/gh/hpp2334/rut@std-v19/dist/std/ink.zip" }
   }
 }
 ```

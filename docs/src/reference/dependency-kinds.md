@@ -125,7 +125,7 @@ project's `rut.lock`** from this CDN — that is the recommended import
 for everything the toolchain ships. A `path` row is for **your own
 local packages**: a sibling directory in the same project (the modules
 tutorial's `greet` app mounting `../pkg` is the shape). The tag
-advances with format changes (`std-v18` today) and is never re-pointed
+advances with format changes (`std-v19` today) and is never re-pointed
 — a lock pin names the current cut's envelope, and an old tag's bytes
 are refused by this toolchain (re-pack, never load back).
 
@@ -333,7 +333,7 @@ through the bundle's scope ledger ([Module bundles](bundles.md)).
 // an app that wants json's whole surface
 {
   "deps": {
-    "json": { "url": "https://cdn.jsdelivr.net/gh/hpp2334/rut@std-v18/dist/std/json.zip" }
+    "json": { "url": "https://cdn.jsdelivr.net/gh/hpp2334/rut@std-v19/dist/std/json.zip" }
   }
 }
 ```

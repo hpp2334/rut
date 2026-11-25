@@ -36,8 +36,8 @@ cat > hello/rut.jsonc <<'EOF'
   "name": "hello",
   "deps": {
     // ink — the toolchain's logger package, served by jsDelivr at the
-    // std-v18 tag; the pin lives in rut.lock, one install below
-    "ink": { "url": "https://cdn.jsdelivr.net/gh/hpp2334/rut@std-v18/dist/std/ink.zip" }
+    // std-v19 tag; the pin lives in rut.lock, one install below
+    "ink": { "url": "https://cdn.jsdelivr.net/gh/hpp2334/rut@std-v19/dist/std/ink.zip" }
   }
 }
 EOF
@@ -54,7 +54,7 @@ rut run hello
 ```
 
 ```text
-install: ink — downloading https://cdn.jsdelivr.net/gh/hpp2334/rut@std-v18/dist/std/ink.zip
+install: ink — downloading https://cdn.jsdelivr.net/gh/hpp2334/rut@std-v19/dist/std/ink.zip
 install: ink — downloaded (2883 bytes)
 install: 1 url deps resolved — 1 downloaded, 0 cache hits (2883 bytes total)
 rut.lock written: 1 rows (1 added, 0 changed, 0 dropped)

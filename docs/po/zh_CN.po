@@ -1,7 +1,6 @@
 msgid ""
 msgstr "Project-Id-Version: The rut Book\nPOT-Creation-Date: 1970-01-01 00:00:00+00:00\nPO-Revision-Date: \nLast-Translator: \nLanguage-Team: \nLanguage: en\nMIME-Version: 1.0\nContent-Type: text/plain; charset=UTF-8\nContent-Transfer-Encoding: 8bit\nPlural-Forms: nplurals=1; plural=0;\n"
 
-
 #: src/SUMMARY.md:1
 msgid "Summary"
 msgstr "目录"
@@ -28,7 +27,7 @@ msgstr "你的第一个 rut 程序"
 
 
 #: src/SUMMARY.md:11 src/quick-start/playground.md:1
-#: src/reference/project-structure.md:290
+#: src/reference/project-structure.md:294
 msgid "The playground"
 msgstr "Playground"
 
@@ -857,8 +856,8 @@ msgid ""
 "  \"name\": \"hello\",\n"
 "  \"deps\": {\n"
 "    // ink — the toolchain's logger package, served by jsDelivr at the\n"
-"    // std-v18 tag; the pin lives in rut.lock, one install below\n"
-"    \"ink\": { \"url\": \"https://cdn.jsdelivr.net/gh/hpp2334/rut@std-v18/dist/std/ink.zip\" }\n"
+"    // std-v19 tag; the pin lives in rut.lock, one install below\n"
+"    \"ink\": { \"url\": \"https://cdn.jsdelivr.net/gh/hpp2334/rut@std-v19/dist/std/ink.zip\" }\n"
 "  }\n"
 "}\n"
 "EOF\n"
@@ -878,7 +877,7 @@ msgstr ""
 #: src/quick-start/installation.md:229 src/quick-start/first-program.md:56
 msgid ""
 "```text\n"
-"install: ink — downloading https://cdn.jsdelivr.net/gh/hpp2334/rut@std-v18/dist/std/ink.zip\n"
+"install: ink — downloading https://cdn.jsdelivr.net/gh/hpp2334/rut@std-v19/dist/std/ink.zip\n"
 "install: ink — downloaded (2883 bytes)\n"
 "install: 1 url deps resolved — 1 downloaded, 0 cache hits (2883 bytes total)\n"
 "rut.lock written: 1 rows (1 added, 0 changed, 0 dropped)\n"
@@ -1882,8 +1881,8 @@ msgid ""
 "\n"
 "  \"deps\": {\n"
 "    // the pins live in literals/rut.lock — `rut install` writes it\n"
-"    \"pouch\": { \"url\": \"https://cdn.jsdelivr.net/gh/hpp2334/rut@std-v18/dist/std/pouch.zip\" },\n"
-"    \"ink\":   { \"url\": \"https://cdn.jsdelivr.net/gh/hpp2334/rut@std-v18/dist/std/ink.zip\" }\n"
+"    \"pouch\": { \"url\": \"https://cdn.jsdelivr.net/gh/hpp2334/rut@std-v19/dist/std/pouch.zip\" },\n"
+"    \"ink\":   { \"url\": \"https://cdn.jsdelivr.net/gh/hpp2334/rut@std-v19/dist/std/ink.zip\" }\n"
 "  }\n"
 "}\n"
 "```"
@@ -4288,7 +4287,7 @@ msgid ""
 "  \"deps\": {\n"
 "    // the toolchain's pouch package, from jsDelivr — the pin lives in\n"
 "    // the app's rut.lock (one lock per walk root)\n"
-"    \"pouch\": { \"url\": \"https://cdn.jsdelivr.net/gh/hpp2334/rut@std-v18/dist/std/pouch.zip\" }\n"
+"    \"pouch\": { \"url\": \"https://cdn.jsdelivr.net/gh/hpp2334/rut@std-v19/dist/std/pouch.zip\" }\n"
 "  }\n"
 "}\n"
 "```"
@@ -4350,7 +4349,7 @@ msgid ""
 "    \"greet\": { \"path\": \"../pkg\" },\n"
 "    // the toolchain's ink package, from jsDelivr — the pin lives in\n"
 "    // this app's rut.lock\n"
-"    \"ink\": { \"url\": \"https://cdn.jsdelivr.net/gh/hpp2334/rut@std-v18/dist/std/ink.zip\" }\n"
+"    \"ink\": { \"url\": \"https://cdn.jsdelivr.net/gh/hpp2334/rut@std-v19/dist/std/ink.zip\" }\n"
 "  }\n"
 "}\n"
 "```"
@@ -6735,8 +6734,10 @@ msgstr ""
 
 
 #: src/core-concepts/async-model.md:119
-msgid "// idle or trap — the only exits\n"
-msgstr "// 空闲或陷阱——仅有的出口\n"
+msgid ""
+"// idle or trap — the only exits\n"
+msgstr ""
+"// 空闲或陷阱——仅有的出口\n"
 
 
 #: src/core-concepts/async-model.md:122
@@ -6771,8 +6772,7 @@ msgstr "原生代码加入同一个模型。声明文件写下这样一行："
 #: src/core-concepts/async-model.md:143
 msgid ""
 "and the embedder binds it with **one closure** that starts the work — the sugar mints the future's state cell (wired to the machine's wake cell) and hands it to the closure as its FIRST parameter:"
-msgstr ""
-"而嵌入方用**一个闭包**绑定它：闭包只负责启动工作——糖宏铸造 future 的状态单元（接线到机器的唤醒单元），并把它作为闭包的第一个参数交进来："
+msgstr "而嵌入方用**一个闭包**绑定它：闭包只负责启动工作——糖宏铸造 future 的状态单元（接线到机器的唤醒单元），并把它作为闭包的第一个参数交进来："
 
 
 #: src/core-concepts/async-model.md:148
@@ -7172,8 +7172,10 @@ msgstr ""
 
 
 #: src/core-concepts/host-boundary.md:38
-msgid "// idle or trap\n"
-msgstr "// 空闲或陷阱\n"
+msgid ""
+"// idle or trap\n"
+msgstr ""
+"// 空闲或陷阱\n"
 
 
 #: src/core-concepts/host-boundary.md:41
@@ -9489,10 +9491,10 @@ msgid ""
 "  \"deps\": {\n"
 "    // the sibling package — the consumer's own local package\n"
 "    \"ui\":      { \"path\": \"../ui\" },\n"
-"    // the toolchain's packages, from jsDelivr at the std-v18 tag —\n"
+"    // the toolchain's packages, from jsDelivr at the std-v19 tag —\n"
 "    // the pins live in this walk root's rut.lock\n"
-"    \"pouch\":   { \"url\": \"https://cdn.jsdelivr.net/gh/hpp2334/rut@std-v18/dist/std/pouch.zip\" },\n"
-"    \"nmapset\": { \"url\": \"https://cdn.jsdelivr.net/gh/hpp2334/rut@std-v18/dist/std/nmapset.zip\" }\n"
+"    \"pouch\":   { \"url\": \"https://cdn.jsdelivr.net/gh/hpp2334/rut@std-v19/dist/std/pouch.zip\" },\n"
+"    \"nmapset\": { \"url\": \"https://cdn.jsdelivr.net/gh/hpp2334/rut@std-v19/dist/std/nmapset.zip\" }\n"
 "  }\n"
 "}\n"
 "```"
@@ -9594,6 +9596,11 @@ msgid ""
 "The embedder then rides the engine's driving loop — the host names only its parking policy, `Wait::Block`: the engine drains ready frames, jumps the virtual clock, and parks on the wake cell while real reqwest workers settle the completers from their threads, and the process's one-way `exit` row fires mid-drive ([the embedder's driving contract](../reference/embedding.md#the-embedders-driving-contract)):"
 msgstr ""
 "嵌入方接着骑上引擎的驱动循环——宿主只指明自己的停放策略 `Wait::Block`：引擎排空就绪的帧、推进虚拟时钟，并在真实的 reqwest worker 从各自的线程落定 completer 时停放在唤醒单元上；进程的单向 `exit` 行在驱动中途触发（[嵌入方的驱动契约](../reference/embedding.md#the-embedders-driving-contract)）："
+
+
+#: src/examples/06-github-viewer-cli.md:62 src/reference/async.md:183
+msgid "\"boot\""
+msgstr "\"boot\""
 
 
 #: src/examples/06-github-viewer-cli.md:63
@@ -11115,8 +11122,10 @@ msgstr "（包内绑定会补充那个文件是从哪个模块导入它的），
 
 
 #: src/reference/modules-and-visibility.md:178
-msgid "**One name, one leaf, per file.** The name law is NAME-level, not package-level, and it covers every module-scope binding — not just use leaves. A file's scope binds each name at most once, by a declaration of any kind (class, struct, enum, interface, alias, fn, module `let`, `mod` edge) or by a use leaf; the SECOND spelling of a name in the same file errors, citing the first:"
-msgstr "**一个文件内，一个名字只有一次拼写。**单一名字法则按名字（NAME）划定，而非按包划定，且覆盖模块作用域的每一种绑定——不只是 use 叶子。一个文件的作用域对每个名字至多绑定一次，绑定者可以是任何一种声明（class、struct、enum、interface、alias、fn、模块 `let`、`mod` 边），也可以是一条 use 叶子；同一个文件里第二次拼写同一名字就会报错，并引用第一次的拼写："
+msgid ""
+"**One name, one leaf, per file.** The name law is NAME-level, not package-level, and it covers every module-scope binding — not just use leaves. A file's scope binds each name at most once, by a declaration of any kind (class, struct, enum, interface, alias, fn, module `let`, `mod` edge) or by a use leaf; the SECOND spelling of a name in the same file errors, citing the first:"
+msgstr ""
+"**一个文件内，一个名字只有一次拼写。**单一名字法则按名字（NAME）划定，而非按包划定，且覆盖模块作用域的每一种绑定——不只是 use 叶子。一个文件的作用域对每个名字至多绑定一次，绑定者可以是任何一种声明（class、struct、enum、interface、alias、fn、模块 `let`、`mod` 边），也可以是一条 use 叶子；同一个文件里第二次拼写同一名字就会报错，并引用第一次的拼写："
 
 
 #: src/reference/modules-and-visibility.md:185
@@ -11139,48 +11148,61 @@ msgstr ""
 
 
 #: src/reference/modules-and-visibility.md:196
-msgid "`use pkga::{ x }; use pkga::{ y }` is fine — the name is the rule, never the package, the kind, or the list."
+msgid ""
+"`use pkga::{ x }; use pkga::{ y }` is fine — the name is the rule, never the package, the kind, or the list."
 msgstr "`use pkga::{ x }; use pkga::{ y }` 没有问题——法则看的是名字，从来不是包、不是种类，也不是列表。"
 
 
 #: src/reference/modules-and-visibility.md:199
-msgid "**The layer model.** A name resolves through three lexical layers, inner wins:"
+msgid ""
+"**The layer model.** A name resolves through three lexical layers, inner wins:"
 msgstr "**分层模型。**名字沿三个词法层解析，内层优先："
 
 
 #: src/reference/modules-and-visibility.md:202
-msgid "**local** — the fn body (its params and locals); shadowing is legal inside a body and is nobody else's business;"
+msgid ""
+"**local** — the fn body (its params and locals); shadowing is legal inside a body and is nobody else's business;"
 msgstr "**局部**——fn 体（它的参数与局部变量）；遮蔽在体内合法，与他人无关；"
 
 
 #: src/reference/modules-and-visibility.md:204
-msgid "**file scope** — the file's own module-scope declarations plus the bindings its `use` lines wrote. This is the layer the one-name law governs: uniqueness exactly where names meet;"
+msgid ""
+"**file scope** — the file's own module-scope declarations plus the bindings its `use` lines wrote. This is the layer the one-name law governs: uniqueness exactly where names meet;"
 msgstr "**文件作用域**——文件自己的模块作用域声明，加上它的 `use` 行写下的绑定。这正是单一名字法则掌管的层：唯一性恰恰落在名字相遇的地方；"
 
 
 #: src/reference/modules-and-visibility.md:207
-msgid "**ambient** — the engine's own names (the builtins below). The fallback layer: shadowable, never colliding — `fn panic` in your file is legal, and a call spells yours."
+msgid ""
+"**ambient** — the engine's own names (the builtins below). The fallback layer: shadowable, never colliding — `fn panic` in your file is legal, and a call spells yours."
 msgstr "**环境性的**——引擎自己的名字（下文的内建）。它是回退层：可遮蔽、绝不冲突——你文件里的 `fn panic` 合法，调用拼写的也是你的那个。"
 
 
 #: src/reference/modules-and-visibility.md:211
-msgid "**Siblings never meet — across kinds.** The law is per FILE (module ↔ file is 1:1): a fn in one sibling beside a class in the other, two module `let`s of one name, or a `mod NAME;` edge beside a sibling's decl — all legal, each file resolving its own. Two of the SAME kind still refuse across siblings — two fns, or two types, of one name (the two exceptions spelled out below). Cross-module access stays explicit: qualified paths (`a::Foo`) or use bindings in the importing file. The miss hints point at the `use` fix:"
-msgstr "**兄弟模块永不相遇——跨种类。**法则按文件划定（模块与文件一一对应）：一个兄弟模块里的 fn 与另一个里的 class、两个同名的模块 `let`，或一条 `mod NAME;` 边挨着兄弟模块的声明——都合法，各自文件解析各自的。同一种类的两个仍然跨兄弟模块拒绝——两个同名 fn，或两个同名类型（两条例外在下文写出）。跨模块访问保持显式：限定路径（`a::Foo`）或导入文件里的 use 绑定。未命中提示指向 `use` 修法："
+msgid ""
+"**Siblings never meet — across kinds.** The law is per FILE (module ↔ file is 1:1): a fn in one sibling beside a class in the other, two module `let`s of one name, or a `mod NAME;` edge beside a sibling's decl — all legal, each file resolving its own. Two of the SAME kind still refuse across siblings — two fns, or two types, of one name (the two exceptions spelled out below). Cross-module access stays explicit: qualified paths (`a::Foo`) or use bindings in the importing file. The miss hints point at the `use` fix:"
+msgstr ""
+"**兄弟模块永不相遇——跨种类。**法则按文件划定（模块与文件一一对应）：一个兄弟模块里的 fn 与另一个里的 class、两个同名的模块 `let`，或一条 `mod NAME;` 边挨着兄弟模块的声明——都合法，各自文件解析各自的。同一种类的两个仍然跨兄弟模块拒绝——两个同名 fn，或两个同名类型（两条例外在下文写出）。跨模块访问保持显式：限定路径（`a::Foo`）或导入文件里的 use 绑定。未命中提示指向 `use` 修法："
 
 
 #: src/reference/modules-and-visibility.md:224
-msgid "**Not in the law.** Everything with its own narrower scope keeps its own checks, unchanged: enum members, fields, methods, impl-block methods (type-scoped), and params/locals (fn-scoped)."
-msgstr "**不在法则之内的。**拥有自己更窄作用域的东西保留自己的检查，不变：enum 成员、字段、方法、impl 块方法（类型作用域），以及参数与局部变量（fn 作用域）。"
+msgid ""
+"**Not in the law.** Everything with its own narrower scope keeps its own checks, unchanged: enum members, fields, methods, impl-block methods (type-scoped), and params/locals (fn-scoped)."
+msgstr ""
+"**不在法则之内的。**拥有自己更窄作用域的东西保留自己的检查，不变：enum 成员、字段、方法、impl 块方法（类型作用域），以及参数与局部变量（fn 作用域）。"
 
 
 #: src/reference/modules-and-visibility.md:228
-msgid "**Two same-kind refusals across modules.** A package's fn table and its type table are each keyed by name, so two sibling modules cannot both declare a fn — or a type — of one name today; the refusal cites the first spelling's module. Two `fn`s of one name in different modules: ````duplicate fn `f` — already declared in module `a```. Two types of one name in different modules: ````duplicate type name `T` — already declared in module \\`a\\```. A fn and a type of one name across sibling modules is legal — the collision the old precedence rule used to arbitrate cannot even spell."
-msgstr "**跨模块的两条同类拒绝。**一个包的 fn 表与它的类型表都按名字键控，因此今天两个兄弟模块不能都声明一个同名 fn——或同名类型；拒绝会引用第一处拼写的模块。不同模块里的两个同名 `fn`：``duplicate fn `f` — already declared in module `a```。不同模块里的两个同名类型：``duplicate type name `T` — already declared in module `a```。跨兄弟模块的一个 fn 与一个类型同名则合法——旧优先级规则仲裁的那种碰撞连拼写都拼不出来。"
+msgid ""
+"**Two same-kind refusals across modules.** A package's fn table and its type table are each keyed by name, so two sibling modules cannot both declare a fn — or a type — of one name today; the refusal cites the first spelling's module. Two `fn`s of one name in different modules: ````duplicate fn `f` — already declared in module `a```. Two types of one name in different modules: ````duplicate type name `T` — already declared in module \\`a\\```. A fn and a type of one name across sibling modules is legal — the collision the old precedence rule used to arbitrate cannot even spell."
+msgstr ""
+"**跨模块的两条同类拒绝。**一个包的 fn 表与它的类型表都按名字键控，因此今天两个兄弟模块不能都声明一个同名 fn——或同名类型；拒绝会引用第一处拼写的模块。不同模块里的两个同名 `fn`：``duplicate fn `f` — already declared in module `a```。不同模块里的两个同名类型：``duplicate type name `T` — already declared in module `a```。跨兄弟模块的一个 fn 与一个类型同名则合法——旧优先级规则仲裁的那种碰撞连拼写都拼不出来。"
 
 
 #: src/reference/modules-and-visibility.md:238
-msgid "**`entry fn` by name.** The host calls entry fns BY NAME, so a program may spell many differently-named entries (a dispatcher's surface; the run lane picks with `--entry`, and without the flag several entries refuse to guess). What may not repeat is a NAME: two sibling modules both spelling `entry fn main` refuse at the second — the ambiguity the entry gate owns."
-msgstr "**按名字的 `entry fn`。**宿主按名字调用 entry fn，因此一个程序可以拼写多个不同名的 entry（一个分派器的表面；运行车道用 `--entry` 挑选，不带该标志时多个 entry 会拒绝瞎猜）。不能重复的是名字：两个兄弟模块都拼写 `entry fn main` 时，第二处被拒绝——这份歧义由 entry 门掌管。"
+msgid ""
+"**`entry fn` by name.** The host calls entry fns BY NAME, so a program may spell many differently-named entries (a dispatcher's surface; the run lane picks with `--entry`, and without the flag several entries refuse to guess). What may not repeat is a NAME: two sibling modules both spelling `entry fn main` refuse at the second — the ambiguity the entry gate owns."
+msgstr ""
+"**按名字的 `entry fn`。**宿主按名字调用 entry fn，因此一个程序可以拼写多个不同名的 entry（一个分派器的表面；运行车道用 `--entry` 挑选，不带该标志时多个 entry 会拒绝瞎猜）。不能重复的是名字：两个兄弟模块都拼写 `entry fn main` 时，第二处被拒绝——这份歧义由 entry 门掌管。"
 
 
 #: src/reference/modules-and-visibility.md:245
@@ -13868,8 +13890,10 @@ msgstr ""
 
 
 #: src/reference/classes.md:159
-msgid "**Resolution order for `Name(args)`** is the layer model derived: the local layer answers first (a fn body's own fns), then the file scope, then the ambient prelude. A class's call form sits in the file scope too — so a free fn named `Point` and a class `Point` can no longer both spell: the one-name law refuses the second spelling (``duplicate name `Point` — the class already declares it in this file``). What remains is the ladder within one name: the newtype mint first, then the designated constructor, then the error."
-msgstr "**`Name(args)` 的解析顺序**是分层模型的推论：局部层先应答（fn 体自己的 fn），然后是文件作用域，然后是环境性的 prelude。类的调用形式同样落在文件作用域里——因此名为 `Point` 的自由函数与类 `Point` 再也不能同时拼写：单一名字法则拒绝第二处拼写（``duplicate name `Point` — the class already declares it in this file``）。剩下的是同一个名字之内的阶梯：先新类型铸造，再被指定的构造器，最后才是错误。"
+msgid ""
+"**Resolution order for `Name(args)`** is the layer model derived: the local layer answers first (a fn body's own fns), then the file scope, then the ambient prelude. A class's call form sits in the file scope too — so a free fn named `Point` and a class `Point` can no longer both spell: the one-name law refuses the second spelling (``duplicate name `Point` — the class already declares it in this file``). What remains is the ladder within one name: the newtype mint first, then the designated constructor, then the error."
+msgstr ""
+"**`Name(args)` 的解析顺序**是分层模型的推论：局部层先应答（fn 体自己的 fn），然后是文件作用域，然后是环境性的 prelude。类的调用形式同样落在文件作用域里——因此名为 `Point` 的自由函数与类 `Point` 再也不能同时拼写：单一名字法则拒绝第二处拼写（``duplicate name `Point` — the class already declares it in this file``）。剩下的是同一个名字之内的阶梯：先新类型铸造，再被指定的构造器，最后才是错误。"
 
 
 #: src/reference/classes.md:168
@@ -15904,8 +15928,10 @@ msgstr "**非泛型**：头部不接受成员。`type Vec2<T> = Vec<T>;` 无法�
 
 
 #: src/reference/type-aliases.md:45
-msgid "**One name = one type**: an alias may not share its name with any other module-scope binding of the same file — alias, enum, struct, class, interface, fn, module `let`, `mod` edge, or use leaf (the one-name law). The check is symmetric: the second spelling errors, whichever order they spell, citing the first's kind."
-msgstr "**一个名字 = 一个类型**：别名不得与同一文件的任何其他模块作用域绑定共享名字——alias、enum、struct、class、interface、fn、模块 `let`、`mod` 边，或 use 叶子（单一名字法则）。检查是对称的：无论按什么顺序拼写，第二处拼写都会报错，并引用第一处的种类。"
+msgid ""
+"**One name = one type**: an alias may not share its name with any other module-scope binding of the same file — alias, enum, struct, class, interface, fn, module `let`, `mod` edge, or use leaf (the one-name law). The check is symmetric: the second spelling errors, whichever order they spell, citing the first's kind."
+msgstr ""
+"**一个名字 = 一个类型**：别名不得与同一文件的任何其他模块作用域绑定共享名字——alias、enum、struct、class、interface、fn、模块 `let`、`mod` 边，或 use 叶子（单一名字法则）。检查是对称的：无论按什么顺序拼写，第二处拼写都会报错，并引用第一处的种类。"
 
 
 #: src/reference/type-aliases.md:50
@@ -17845,19 +17871,18 @@ msgstr ""
 "循环归引擎所有。构建、调用入口、驱动到空闲、处理陷阱——一扇门完成整个驱动（[嵌入方的驱动契约](embedding.md#the-embedders-driving-contract)）："
 
 
-#: src/examples/06-github-viewer-cli.md:62 src/reference/async.md:183
-msgid "\"boot\""
-msgstr "\"boot\""
-
-
 #: src/reference/async.md:185 src/reference/embedding.md:449
-msgid "// every frame retired\n"
-msgstr "// 每一帧都已退役\n"
+msgid ""
+"// every frame retired\n"
+msgstr ""
+"// 每一帧都已退役\n"
 
 
 #: src/reference/async.md:186
-msgid "// Block never answers WouldBlock\n"
-msgstr "// Block 绝不应答 WouldBlock\n"
+msgid ""
+"// Block never answers WouldBlock\n"
+msgstr ""
+"// Block 绝不应答 WouldBlock\n"
 
 
 #: src/reference/async.md:187 src/reference/embedding.md:451
@@ -18547,8 +18572,10 @@ msgstr ""
 
 
 #: src/reference/host-futures.md:76
-msgid "// return; the future parks on the handed cell\n"
-msgstr "// 返回；future 停放在递进来的单元上\n"
+msgid ""
+"// return; the future parks on the handed cell\n"
+msgstr ""
+"// 返回；future 停放在递进来的单元上\n"
 
 
 #: src/reference/host-futures.md:77
@@ -19945,8 +19972,10 @@ msgstr "构建、调用入口、驱动到空闲、处理陷阱——循环归引
 
 
 #: src/reference/embedding.md:450
-msgid "// NonBlock only\n"
-msgstr "// 仅 NonBlock\n"
+msgid ""
+"// NonBlock only\n"
+msgstr ""
+"// 仅 NonBlock\n"
 
 
 #: src/reference/embedding.md:455
@@ -20372,37 +20401,43 @@ msgstr "最小后端——每个请求一条线程，reqwest 链路自己的形�
 #: src/reference/embedding.md:623
 msgid ""
 "// HEADERS — send resolves here\n"
-msgstr "// 响应头——send 在此解析\n"
+msgstr ""
+"// 响应头——send 在此解析\n"
 
 
 #: src/reference/embedding.md:625
 msgid ""
 "// the wire-abort: drop the wire\n"
-msgstr "// 线路中止：丢掉这条线\n"
+msgstr ""
+"// 线路中止：丢掉这条线\n"
 
 
 #: src/reference/embedding.md:626
 msgid ""
 "// bounded — may park this thread\n"
-msgstr "// 有界——可能停放这条线程\n"
+msgstr ""
+"// 有界——可能停放这条线程\n"
 
 
 #: src/reference/embedding.md:628
 msgid ""
 "// clean EOF\n"
-msgstr "// 干净的 EOF\n"
+msgstr ""
+"// 干净的 EOF\n"
 
 
 #: src/reference/embedding.md:631
 msgid ""
 "// status 0\n"
-msgstr "// 状态码 0\n"
+msgstr ""
+"// 状态码 0\n"
 
 
 #: src/reference/embedding.md:636
 msgid ""
 "// the seven rows bind over it like any host pkg:\n"
-msgstr "// 七条行像任何宿主 pkg 一样绑定在它之上：\n"
+msgstr ""
+"// 七条行像任何宿主 pkg 一样绑定在它之上：\n"
 
 
 #: src/reference/embedding.md:644
@@ -22567,7 +22602,7 @@ msgstr ""
 "下表的 **rut 包**是普通源码包——每个模块都链接，发布为捆绑包时是编译形态（没有 inline 车道；见 [the compilerpipeline](compiler.md)）。**宿主包**是声明表面，其函数体由嵌入方绑定。"
 
 
-#: src/reference/stdlib.md:122 src/reference/project-structure.md:273
+#: src/reference/stdlib.md:122 src/reference/project-structure.md:277
 msgid "package"
 msgstr "包"
 
@@ -22610,7 +22645,7 @@ msgid "the `Logger` class"
 msgstr "`Logger` 类"
 
 
-#: src/reference/stdlib.md:126 src/reference/project-structure.md:281
+#: src/reference/stdlib.md:126 src/reference/project-structure.md:285
 msgid "`pouch`"
 msgstr "`pouch`"
 
@@ -22625,7 +22660,7 @@ msgid "the growable sequence `Vec<T>`"
 msgstr "可增长序列 `Vec<T>`"
 
 
-#: src/reference/stdlib.md:127 src/reference/project-structure.md:282
+#: src/reference/stdlib.md:127 src/reference/project-structure.md:286
 msgid "`flow`"
 msgstr "`flow`"
 
@@ -22656,7 +22691,7 @@ msgid "the native key table; `HashMap`/`HashSet`"
 msgstr "原生键表；`HashMap`/`HashSet`"
 
 
-#: src/reference/stdlib.md:129 src/reference/project-structure.md:283
+#: src/reference/stdlib.md:129 src/reference/project-structure.md:287
 msgid "`json`"
 msgstr "`json`"
 
@@ -22682,7 +22717,7 @@ msgid "the builder rows; the `StringBuilder` class"
 msgstr "构建器各行；`StringBuilder` 类"
 
 
-#: src/reference/stdlib.md:131 src/reference/project-structure.md:276
+#: src/reference/stdlib.md:131 src/reference/project-structure.md:280
 msgid "`calc`"
 msgstr "`calc`"
 
@@ -22698,7 +22733,7 @@ msgid ""
 msgstr "泛型浮点表面——`math` 模块（`sqrt<T requires f32 \\| f64>`，宽度由实参得出）"
 
 
-#: src/reference/stdlib.md:132 src/reference/project-structure.md:277
+#: src/reference/stdlib.md:132 src/reference/project-structure.md:281
 msgid "`calc_host`"
 msgstr "`calc_host`"
 
@@ -26964,8 +26999,10 @@ msgstr ""
 
 
 #: src/reference/loading.md:76
-msgid "// one pass: drain ready + poll parked hosts\n"
-msgstr "// 一趟：排空就绪 + 轮询停放的宿主\n"
+msgid ""
+"// one pass: drain ready + poll parked hosts\n"
+msgstr ""
+"// 一趟：排空就绪 + 轮询停放的宿主\n"
 
 
 #: src/reference/loading.md:77
@@ -28067,8 +28104,8 @@ msgid ""
 "\n"
 "  \"deps\": {\n"
 "    \"greet\": { \"path\": \"../greet\" },\n"
-"    \"pouch\": { \"url\": \"https://cdn.jsdelivr.net/gh/hpp2334/rut@std-v18/dist/std/pouch.zip\" },\n"
-"    \"ink\":   { \"url\": \"https://cdn.jsdelivr.net/gh/hpp2334/rut@std-v18/dist/std/ink.zip\" }\n"
+"    \"pouch\": { \"url\": \"https://cdn.jsdelivr.net/gh/hpp2334/rut@std-v19/dist/std/pouch.zip\" },\n"
+"    \"ink\":   { \"url\": \"https://cdn.jsdelivr.net/gh/hpp2334/rut@std-v19/dist/std/ink.zip\" }\n"
 "  }\n"
 "}\n"
 "```"
@@ -28302,123 +28339,123 @@ msgid "The toolchain tree"
 msgstr "工具链树"
 
 
-#: src/reference/project-structure.md:248
+#: src/reference/project-structure.md:250
 msgid ""
 "Dependency line: `rut-lexer ← rut-ast (tree + grammar) ← rut-driver → rut-lir → rut-core ← rut-vm` (with `rut-vm-threaded` behind it; the driver sits on the vm's `HostPkgContext`/`HostRegistry` for the install law), `rut-native` beside the driver (it depends on the driver, never the reverse — the driver is provably pure: no fs, no net, no `std::path`), hosts (`rut-std`, `rut-wasm`) on top, and `rut-cli`/`demo` above those. `rut-lsp` sits on the frontend crates — tokens, diagnostics, and symbols need no VM — plus the driver's pure core for manifest and bundle parsing (the dep tables behind the editor's dep walk). It is the language core, and its layers point downward only — the actor's event loop, then the session's one method per request, then the load lanes and the queries (`analysis`, `completion`, `definition`, `check`, and the rest), then the resolver and the world — all the way to the classifier: the SEALED `doc` module (a private `mod` hides even its own `pub` items), which sits on the frontend crates for the same reason — so a feature cannot land on one and miss the other, and embedders take the core without an editor at all. `rut-lsp-wasm` is the thin wasm-bindgen face over that core: every exported method delegates onto the `Lsp` handle, so the extension and the playground bundle the face with no second implementation to keep in step."
 msgstr ""
 "依赖线：`rut-lexer ← rut-ast (tree + grammar) ← rut-driver → rut-lir → rut-core ← rut-vm`（`rut-vm-threaded` 在其后；驱动层坐在 vm 的 `HostPkgContext`/`HostRegistry` 上以落安装法则），`rut-native` 在驱动层旁（它依赖驱动层，绝不反向 —— 驱动层可证纯净：无 fs、无网络、无 `std::path`），宿主（`rut-std`、`rut-wasm`）在其上，`rut-cli`/`demo` 再其上。`rut-lsp` 坐在前端 crate 上 —— token、诊断与符号不需要 VM —— 再加上驱动层的纯净核心做清单与捆绑包解析（编辑器 deps 遍历背后的依赖表）。它是语言核心，其分层只向下 —— 先是 actor 的事件循环，再是 session 的每请求一方法，然后是 load 车道与各查询（`analysis`、`completion`、`definition`、`check` 等），再是解析器与世界 —— 一路直抵分类器：即封闭的 `doc` 模块（私有的 `mod` 声明把它封住 —— 连它自己的 `pub` 条目也对外不可见），出于同样的原因坐在前端 crate 上 —— 一项特性不可能落到其一而错过其二，嵌入方根本不需要编辑器也能取用这个核心。`rut-lsp-wasm` 是架在这个核心之上的薄薄 wasm-bindgen 面：每个导出方法都委托到 `Lsp` 句柄上，因此扩展与 Playground 打包的是这个面，没有需要同步的第二个实现。"
 
 
-#: src/reference/project-structure.md:268
+#: src/reference/project-structure.md:272
 msgid "The in-tree packages"
 msgstr "树内包"
 
 
-#: src/reference/project-structure.md:270
+#: src/reference/project-structure.md:274
 msgid ""
 "`rut/` carries the standard and swappable packages the CLI offers on demand:"
 msgstr "`rut/` 收纳 CLI 按需 offer 的标准与可换包："
 
 
-#: src/reference/project-structure.md:273
+#: src/reference/project-structure.md:277
 msgid "shape"
 msgstr "形状"
 
 
-#: src/reference/project-structure.md:275
+#: src/reference/project-structure.md:279
 msgid "`core`"
 msgstr "`core`"
 
 
-#: src/reference/project-structure.md:275
+#: src/reference/project-structure.md:279
 msgid ""
 "the only standard package — the builtin surface, auto-offered by every run's `.compile()`"
 msgstr "唯一的标准包 —— 内建表面，由每次运行的 `.compile()` 自动 offer"
 
 
-#: src/reference/project-structure.md:276
+#: src/reference/project-structure.md:280
 msgid ""
 "the math surface as a normal lib (its `math` module) — generic fns over `calc_host`; a `deps`\\-carrying dir mounts through `load_dir`/`dir_pkgs`, never `tree_pkg` ([stdlib](stdlib.md))"
 msgstr ""
 "数学表面，普通库（其 `math` 模块）——`calc_host` 之上的泛型函数；带 `deps` 的目录经 `load_dir`/`dir_pkgs` 挂载，绝不走 `tree_pkg`（[标准库](stdlib.md)）"
 
 
-#: src/reference/project-structure.md:277
+#: src/reference/project-structure.md:281
 msgid ""
 "host pkg: the math rows + the `PI` constants (bare at its root) — offer `rut_native::tree_pkg(\"calc_host\")`, bind `rut_std::math::pkg()` ([stdlib](stdlib.md))"
 msgstr ""
 "宿主包：数学行 + `PI` 常量（裸绑定在包根）—— offer `rut_native::tree_pkg(\"calc_host\")`，绑定 `rut_std::math::pkg()`（[标准库](stdlib.md)）"
 
 
-#: src/reference/project-structure.md:278
+#: src/reference/project-structure.md:282
 msgid "`ink_host`, `nmap_host`, `async_host`, `bench_cross`"
 msgstr "`ink_host`, `http_host`, `nmap_host`, `async_host`, `bench_cross`"
 
 
-#: src/reference/project-structure.md:278
+#: src/reference/project-structure.md:282
 msgid "host pkgs — flat `.d.rut` surfaces; bodies live in `rut-std`"
 msgstr "宿主包——扁平的 `.d.rut` 表面；函数体住在 `rut-std`"
 
 
-#: src/reference/project-structure.md:279
+#: src/reference/project-structure.md:283
 msgid "`http_host`"
 msgstr ""
 
 
-#: src/reference/project-structure.md:279
+#: src/reference/project-structure.md:283
 msgid ""
 "host pkg, the surface-tree pilot — the default `src/mod.d.rut` root over the std HTTP rows, `net/` + `stream/` mods ([project structure](#host-surface-trees)); bodies in `rut-std`"
 msgstr ""
 "宿主包，表面树试点 —— std HTTP 行之上的默认 `src/mod.d.rut` 根，`net/` + `stream/` 两个 mod（[项目结构](#host-surface-trees)）；函数体在 `rut-std`"
 
 
-#: src/reference/project-structure.md:280
+#: src/reference/project-structure.md:284
 msgid "`ink`, `http`, `strbuild`, `futures`"
 msgstr "`ink`, `http`, `strbuild`, `futures`"
 
 
-#: src/reference/project-structure.md:280
+#: src/reference/project-structure.md:284
 msgid ""
 "rut classes over host rows (published compiled — methods cross on the surface's inherent rows)"
 msgstr "架在宿主行上的 rut 类（以编译发布——方法经表面的固有行跨越）"
 
 
-#: src/reference/project-structure.md:281
+#: src/reference/project-structure.md:285
 msgid "the growable sequence `Vec<T>` (plain linked package)"
 msgstr "可增长序列 `Vec<T>`（普通链接包）"
 
 
-#: src/reference/project-structure.md:282
+#: src/reference/project-structure.md:286
 msgid ""
 "the push pipeline (`Flow<E>`; its `VecFlow`/`SetFlow` wrappers over `pouch`/`nmapset`)"
 msgstr "推式流水线（`Flow<E>`；其 `VecFlow`/`SetFlow` 包装器架在 `pouch`/`nmapset` 上）"
 
 
-#: src/reference/project-structure.md:283
+#: src/reference/project-structure.md:287
 msgid ""
 "the serde pkg — owns the wrapper families over `pouch`/`nmapset`, plain `deps` ([Dependency kinds](dependency-kinds.md))"
 msgstr ""
 "serde 包——拥有 `pouch`/`nmapset` 之上的包装器家族，普通 `deps`（[Dependencykinds](dependency-kinds.md)）"
 
 
-#: src/reference/project-structure.md:284
+#: src/reference/project-structure.md:288
 msgid "`nmapset`"
 msgstr "`nmapset`"
 
 
-#: src/reference/project-structure.md:284
+#: src/reference/project-structure.md:288
 msgid "native-key maps/sets over `nmap_host`"
 msgstr "架在 `nmap_host` 之上的原生键 map/set"
 
 
-#: src/reference/project-structure.md:286
+#: src/reference/project-structure.md:290
 msgid ""
 "Nothing in the engine knows the swappable packages' names — deps are resolved by name from manifests; a host may replace the non-`core` set wholesale ([Embedding and native modules](embedding.md))."
 msgstr ""
 "引擎不知道任何可替换包的名字——deps 按名字从清单解析；宿主可以把非 `core` 集合整体换掉（[Embedding and nativemodules](embedding.md)）。"
 
 
-#: src/reference/project-structure.md:292
+#: src/reference/project-structure.md:296
 msgid ""
 "`demo/` is a React + rspack + TypeScript page over the wasm build. The wasm ABI is two calls — `compile(src)` returning diagnostics, an AST dump, an IR dump, and an optional binary; `run(binary, budget)` returning output lines, an optional trap, and used fuel/heap. Fuel is off by default (fuel 0 is the ABI's uncapped encoding) and opts in through the page's fuel box; the heap defaults to 4 MiB, and auto-runs keep an internal 1M fuel watchdog so unbounded loops park and resume instead of hanging the page. The served artifact is deployed at <https://playground.rut.hpp2334.com>."
 msgstr ""
@@ -28577,9 +28614,9 @@ msgstr "jsDelivr 上的 std 树"
 
 #: src/reference/dependency-kinds.md:122
 msgid ""
-"**Which kind, when.** The toolchain's standard packages (`core`, `ink`, `pouch`, `json`, …) are consumed as **url rows pinned by the project's `rut.lock`** from this CDN — that is the recommended import for everything the toolchain ships. A `path` row is for **your own local packages**: a sibling directory in the same project (the modules tutorial's `greet` app mounting `../pkg` is the shape). The tag advances with format changes (`std-v18` today) and is never re-pointed — a lock pin names the current cut's envelope, and an old tag's bytes are refused by this toolchain (re-pack, never load back)."
+"**Which kind, when.** The toolchain's standard packages (`core`, `ink`, `pouch`, `json`, …) are consumed as **url rows pinned by the project's `rut.lock`** from this CDN — that is the recommended import for everything the toolchain ships. A `path` row is for **your own local packages**: a sibling directory in the same project (the modules tutorial's `greet` app mounting `../pkg` is the shape). The tag advances with format changes (`std-v19` today) and is never re-pointed — a lock pin names the current cut's envelope, and an old tag's bytes are refused by this toolchain (re-pack, never load back)."
 msgstr ""
-"**哪种，何时。**工具链的标准包（`core`、`ink`、`pouch`、`json`……）从这个 CDN 以**由项目 `rut.lock` 固定的 url 行**消费——这是工具链所发布一切物的推荐导入方式。`path` 行留给**你自己的本地包**：同一项目里的兄弟目录（模块教程里 `greet` 应用挂载 `../pkg` 就是这个形态）。标签随格式变化前进（如今是 `std-v18`）且永不重指向——锁固定值点名当前刀的信封，旧标签的字节会被本工具链拒绝（重新打包，绝不加载回来）。"
+"**哪种，何时。**工具链的标准包（`core`、`ink`、`pouch`、`json`……）从这个 CDN 以**由项目 `rut.lock` 固定的 url 行**消费——这是工具链所发布一切物的推荐导入方式。`path` 行留给**你自己的本地包**：同一项目里的兄弟目录（模块教程里 `greet` 应用挂载 `../pkg` 就是这个形态）。标签随格式变化前进（如今是 `std-v19`）且永不重指向——锁固定值点名当前刀的信封，旧标签的字节会被本工具链拒绝（重新打包，绝不加载回来）。"
 
 
 #: src/reference/dependency-kinds.md:132
@@ -28851,7 +28888,7 @@ msgid ""
 "// an app that wants json's whole surface\n"
 "{\n"
 "  \"deps\": {\n"
-"    \"json\": { \"url\": \"https://cdn.jsdelivr.net/gh/hpp2334/rut@std-v18/dist/std/json.zip\" }\n"
+"    \"json\": { \"url\": \"https://cdn.jsdelivr.net/gh/hpp2334/rut@std-v19/dist/std/json.zip\" }\n"
 "  }\n"
 "}\n"
 "```"
@@ -29116,9 +29153,9 @@ msgstr "写出的文件"
 
 #: src/reference/cli.md:118
 msgid ""
-"`rut.jsonc` — the derived name plus the whole swappable std set (nine packages) as unpinned url deps at the `@std-v18` tag (source zips); `rut.lock` — the set's pins, rendered through the lock grammar ([`install`](#install) is its re-writer); `src/mod.rut` — the ink hello"
+"`rut.jsonc` — the derived name plus the whole swappable std set (nine packages) as unpinned url deps at the `@std-v19` tag (source zips); `rut.lock` — the set's pins, rendered through the lock grammar ([`install`](#install) is its re-writer); `src/mod.rut` — the ink hello"
 msgstr ""
-"`rut.jsonc`——派生包名加整个可换 std 集合（九个包），作为 `@std-v18` 标签下未固定的 url 依赖（源码压缩包）；`rut.lock`——集合的固定值，经锁语法渲染（[`install`](#install) 是它的改写者）；`src/mod.rut`——ink hello"
+"`rut.jsonc`——派生包名加整个可换 std 集合（九个包），作为 `@std-v19` 标签下未固定的 url 依赖（源码压缩包）；`rut.lock`——集合的固定值，经锁语法渲染（[`install`](#install) 是它的改写者）；`src/mod.rut`——ink hello"
 
 
 #: src/reference/cli.md:119
@@ -29147,7 +29184,7 @@ msgid ""
 "  // module the loader mounts.\n"
 "  //\n"
 "  // THE STD SET: all nine swappable std libs, each a COMMITTED\n"
-"  // source zip (dist/std, jsDelivr-served at the std-v18 tag) —\n"
+"  // source zip (dist/std, jsDelivr-served at the std-v19 tag) —\n"
 "  // source compiles with YOUR toolchain, so a zip never goes stale\n"
 "  // the way compiled IR does.\n"
 "  // The pins live in `rut.lock` beside this file (machine-generated:\n"
@@ -29158,15 +29195,15 @@ msgid ""
 "  // hello (ink only) runs clean with the full set declared.\n"
 "  \"name\": \"hello\",\n"
 "  \"deps\": {\n"
-"    \"ink\": { \"url\": \"https://cdn.jsdelivr.net/gh/hpp2334/rut@std-v18/dist/std/ink.zip\" },\n"
-"    \"pouch\": { \"url\": \"https://cdn.jsdelivr.net/gh/hpp2334/rut@std-v18/dist/std/pouch.zip\" },\n"
-"    \"flow\": { \"url\": \"https://cdn.jsdelivr.net/gh/hpp2334/rut@std-v18/dist/std/flow.zip\" },\n"
-"    \"nmapset\": { \"url\": \"https://cdn.jsdelivr.net/gh/hpp2334/rut@std-v18/dist/std/nmapset.zip\" },\n"
-"    \"json\": { \"url\": \"https://cdn.jsdelivr.net/gh/hpp2334/rut@std-v18/dist/std/json.zip\" },\n"
-"    \"strbuild\": { \"url\": \"https://cdn.jsdelivr.net/gh/hpp2334/rut@std-v18/dist/std/strbuild.zip\" },\n"
-"    \"calc\": { \"url\": \"https://cdn.jsdelivr.net/gh/hpp2334/rut@std-v18/dist/std/calc.zip\" },\n"
-"    \"futures\": { \"url\": \"https://cdn.jsdelivr.net/gh/hpp2334/rut@std-v18/dist/std/futures.zip\" },\n"
-"    \"http\": { \"url\": \"https://cdn.jsdelivr.net/gh/hpp2334/rut@std-v18/dist/std/http.zip\" }\n"
+"    \"ink\": { \"url\": \"https://cdn.jsdelivr.net/gh/hpp2334/rut@std-v19/dist/std/ink.zip\" },\n"
+"    \"pouch\": { \"url\": \"https://cdn.jsdelivr.net/gh/hpp2334/rut@std-v19/dist/std/pouch.zip\" },\n"
+"    \"flow\": { \"url\": \"https://cdn.jsdelivr.net/gh/hpp2334/rut@std-v19/dist/std/flow.zip\" },\n"
+"    \"nmapset\": { \"url\": \"https://cdn.jsdelivr.net/gh/hpp2334/rut@std-v19/dist/std/nmapset.zip\" },\n"
+"    \"json\": { \"url\": \"https://cdn.jsdelivr.net/gh/hpp2334/rut@std-v19/dist/std/json.zip\" },\n"
+"    \"strbuild\": { \"url\": \"https://cdn.jsdelivr.net/gh/hpp2334/rut@std-v19/dist/std/strbuild.zip\" },\n"
+"    \"calc\": { \"url\": \"https://cdn.jsdelivr.net/gh/hpp2334/rut@std-v19/dist/std/calc.zip\" },\n"
+"    \"futures\": { \"url\": \"https://cdn.jsdelivr.net/gh/hpp2334/rut@std-v19/dist/std/futures.zip\" },\n"
+"    \"http\": { \"url\": \"https://cdn.jsdelivr.net/gh/hpp2334/rut@std-v19/dist/std/http.zip\" }\n"
 "  }\n"
 "}\n"
 "\n"
@@ -29177,15 +29214,15 @@ msgid ""
 "  \"format\": \"rutlock\",\n"
 "  \"format_version\": 1,\n"
 "  \"deps\": [\n"
-"    { \"pkg\": \"calc\",     \"url\": \"https://cdn.jsdelivr.net/gh/hpp2334/rut@std-v18/dist/std/calc.zip\",     \"sha256\": \"794f823b8af9d1c1bcf4e1c30c51f1c405954b6ffc1be9cbf9b64739faa3fa24\" },\n"
-"    { \"pkg\": \"flow\",     \"url\": \"https://cdn.jsdelivr.net/gh/hpp2334/rut@std-v18/dist/std/flow.zip\",     \"sha256\": \"5987d7691269ea5fbf4a4cdf79733b9339a55ee57daa2d7f9b761acc3999c980\" },\n"
-"    { \"pkg\": \"futures\",  \"url\": \"https://cdn.jsdelivr.net/gh/hpp2334/rut@std-v18/dist/std/futures.zip\",  \"sha256\": \"c80977aa16abe61a7b7616703d688a1ae9100836f96806b70cd64e63aef7668e\" },\n"
-"    { \"pkg\": \"http\",     \"url\": \"https://cdn.jsdelivr.net/gh/hpp2334/rut@std-v18/dist/std/http.zip\",     \"sha256\": \"e4b4f9d1e4fa3b105d01d949cc57f64b894ed59c1fbfe3d297b9484064fe7317\" },\n"
-"    { \"pkg\": \"ink\",      \"url\": \"https://cdn.jsdelivr.net/gh/hpp2334/rut@std-v18/dist/std/ink.zip\",      \"sha256\": \"359a93a2e32f2ef09ae710b81b57ba0a691b588971dcf7110301b39a9ffba11e\" },\n"
-"    { \"pkg\": \"json\",     \"url\": \"https://cdn.jsdelivr.net/gh/hpp2334/rut@std-v18/dist/std/json.zip\",     \"sha256\": \"50ac914f50c4903a4c4806381c24ddc7c54370edb7189512906fe01aa3135e15\" },\n"
-"    { \"pkg\": \"nmapset\",  \"url\": \"https://cdn.jsdelivr.net/gh/hpp2334/rut@std-v18/dist/std/nmapset.zip\",  \"sha256\": \"959ae7cc249b4b5ccb953487a917edf96b282c29c5a53943c2d060c361421eb5\" },\n"
-"    { \"pkg\": \"pouch\",    \"url\": \"https://cdn.jsdelivr.net/gh/hpp2334/rut@std-v18/dist/std/pouch.zip\",    \"sha256\": \"ce5f554cdf6f6dbfe758281e598e18b46158db7be26277b662c9ed3c1a5c71a7\" },\n"
-"    { \"pkg\": \"strbuild\", \"url\": \"https://cdn.jsdelivr.net/gh/hpp2334/rut@std-v18/dist/std/strbuild.zip\", \"sha256\": \"b1000f1752fd24970c9bb0e519a45fbf7184d98a54318c0a19edccae4a4c273c\" }\n"
+"    { \"pkg\": \"calc\",     \"url\": \"https://cdn.jsdelivr.net/gh/hpp2334/rut@std-v19/dist/std/calc.zip\",     \"sha256\": \"794f823b8af9d1c1bcf4e1c30c51f1c405954b6ffc1be9cbf9b64739faa3fa24\" },\n"
+"    { \"pkg\": \"flow\",     \"url\": \"https://cdn.jsdelivr.net/gh/hpp2334/rut@std-v19/dist/std/flow.zip\",     \"sha256\": \"5987d7691269ea5fbf4a4cdf79733b9339a55ee57daa2d7f9b761acc3999c980\" },\n"
+"    { \"pkg\": \"futures\",  \"url\": \"https://cdn.jsdelivr.net/gh/hpp2334/rut@std-v19/dist/std/futures.zip\",  \"sha256\": \"c80977aa16abe61a7b7616703d688a1ae9100836f96806b70cd64e63aef7668e\" },\n"
+"    { \"pkg\": \"http\",     \"url\": \"https://cdn.jsdelivr.net/gh/hpp2334/rut@std-v19/dist/std/http.zip\",     \"sha256\": \"dab590862e8d7bc0fd2e236f501136c17c32730215eaf2f67d7dd01e19a61a82\" },\n"
+"    { \"pkg\": \"ink\",      \"url\": \"https://cdn.jsdelivr.net/gh/hpp2334/rut@std-v19/dist/std/ink.zip\",      \"sha256\": \"359a93a2e32f2ef09ae710b81b57ba0a691b588971dcf7110301b39a9ffba11e\" },\n"
+"    { \"pkg\": \"json\",     \"url\": \"https://cdn.jsdelivr.net/gh/hpp2334/rut@std-v19/dist/std/json.zip\",     \"sha256\": \"50ac914f50c4903a4c4806381c24ddc7c54370edb7189512906fe01aa3135e15\" },\n"
+"    { \"pkg\": \"nmapset\",  \"url\": \"https://cdn.jsdelivr.net/gh/hpp2334/rut@std-v19/dist/std/nmapset.zip\",  \"sha256\": \"959ae7cc249b4b5ccb953487a917edf96b282c29c5a53943c2d060c361421eb5\" },\n"
+"    { \"pkg\": \"pouch\",    \"url\": \"https://cdn.jsdelivr.net/gh/hpp2334/rut@std-v19/dist/std/pouch.zip\",    \"sha256\": \"ce5f554cdf6f6dbfe758281e598e18b46158db7be26277b662c9ed3c1a5c71a7\" },\n"
+"    { \"pkg\": \"strbuild\", \"url\": \"https://cdn.jsdelivr.net/gh/hpp2334/rut@std-v19/dist/std/strbuild.zip\", \"sha256\": \"b1000f1752fd24970c9bb0e519a45fbf7184d98a54318c0a19edccae4a4c273c\" }\n"
 "  ]\n"
 "}\n"
 "\n"
@@ -29247,7 +29284,7 @@ msgstr "两条流：进度走 **stderr**，汇总走 **stdout**——"
 #: src/reference/cli.md:214
 msgid ""
 "```text\n"
-"install: ink — downloading https://cdn.jsdelivr.net/gh/hpp2334/rut@std-v18/dist/std/ink.zip\n"
+"install: ink — downloading https://cdn.jsdelivr.net/gh/hpp2334/rut@std-v19/dist/std/ink.zip\n"
 "install: ink — downloaded (2883 bytes)\n"
 "install: 1 url deps resolved — 1 downloaded, 0 cache hits (2883 bytes total)\n"
 "rut.lock written: 1 rows (1 added, 0 changed, 0 dropped)\n"
