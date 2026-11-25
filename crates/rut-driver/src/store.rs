@@ -92,7 +92,8 @@ pub fn store_dir(name: &str, pin: &str) -> String {
 /// artifact's bytes: the bare [`store_dir`] address for a SOURCE zip
 /// (its bytes are toolchain-independent), the same address carrying
 /// the module-binary wire VERSION for a COMPILED `.rutbundle` —
-/// `futures@<pin16>.v13`. The law: a compiled dependency is served
+/// `futures@<pin16>.v{rut_core::binary::VERSION}`. The law: a
+/// compiled dependency is served
 /// only to the toolchain that wrote it — its bytes are the writing
 /// compiler's output, and a reader that cannot load them must never
 /// be served them, so the key names the writer the way the lock names
