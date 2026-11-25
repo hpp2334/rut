@@ -45,6 +45,15 @@
 //! flush the comments the scanner places on the arm's line; the comment
 //! positions were trailing by scan).
 //!
+//! **The hole zone** (`hole_depth`): an f-string hole is a SINGLE-LINE
+//! ZONE — the language's own law (`lex_hole` errors on a newline in a
+//! hole at every hash level). The zone is hard: no layout newline may
+//! fire inside (`nl`/`nl_band`/`blank` assert it), no try-flat site
+//! can flip to broken while it is up (`over_on_flat`), and the
+//! block-carrying atoms print the source's own flat spellings
+//! (`{ p -> b, p -> b }`, `async { .. }`). A hole wider than the line
+//! stays on one line; the enclosing statement breaks instead.
+//!
 //! **Spans (v2)**: node spans are EXACT — a node ends at its own last
 //! token (`prev_end`), no next-token tail — so `span.hi` IS the
 //! element's content end (`content_end`).
@@ -226,6 +235,12 @@ pub(super) struct P<'a> {
     pending: Option<usize>,
     /// the inline-flat depth (arm bodies): drains suppress, breaks skip
     in_flat: usize,
+    /// the hard-flat depth (an f-string hole): a hole is a SINGLE-LINE
+    /// ZONE — no layout newline may fire inside (`nl`/`nl_band`/
+    /// `blank` assert it), no try-flat site can flip to broken while
+    /// it is up (`over_on_flat`), and the break machinery honors it
+    /// through [`P::flat`]
+    hole_depth: usize,
     /// newlines emitted INSIDE multi-line literal content (`r#"..."#`,
     /// `f#"..."#`) — the flat-attempt probe discounts them: a multi-line
     /// literal is an atom that fits, not a child break
@@ -252,6 +267,7 @@ impl<'a> P<'a> {
             level: 0,
             pending: Some(0),
             in_flat: 0,
+            hole_depth: 0,
             lit_nl: 0,
         }
     }
@@ -322,6 +338,11 @@ impl<'a> P<'a> {
 
     /// finish the open line; the NEXT line re-indents at `self.level`
     fn nl(&mut self) {
+        assert_eq!(
+            self.hole_depth, 0,
+            "a layout newline inside an f-string hole — a hole is a \
+             single-line zone"
+        );
         self.trim_tail();
         if !self.out.ends_with('\n') {
             self.out.push('\n');
@@ -332,6 +353,11 @@ impl<'a> P<'a> {
     /// one blank line between the finished content and the coming one
     /// (runs of source blanks collapse to one)
     fn blank(&mut self) {
+        assert_eq!(
+            self.hole_depth, 0,
+            "a layout newline inside an f-string hole — a hole is a \
+             single-line zone"
+        );
         self.trim_tail();
         if !self.out.is_empty() && !self.out.ends_with('\n') {
             self.out.push('\n');
@@ -366,13 +392,26 @@ impl<'a> P<'a> {
     /// flat attempt failed: a newline appeared inside it (a comment or
     /// a child break), or the resulting line exceeds the width. Newlines
     /// inside multi-line literal content do NOT count — the literal is
-    /// an atom that fits wherever its first line does.
+    /// an atom that fits wherever its first line does. Inside a hole
+    /// the attempt can never fail: the hard-flat zone has no broken
+    /// fallback, so the probe stays false while it is up and the hole
+    /// prints on one line however wide it is.
     fn over_on_flat(&self, m: Mark) -> bool {
+        if self.hole_depth > 0 {
+            return false;
+        }
         let nls = self.out[m.len..].matches('\n').count();
         if nls > self.lit_nl - m.lit_nl {
             return true;
         }
         self.col() > self.style.max_width
+    }
+
+    /// the flat test: a soft inline-flat context (arm/lambda bodies,
+    /// the rhs try-flats) OR the hole's hard-flat zone — the drains
+    /// suppress and the two-mode break decisions skip
+    fn flat(&self) -> bool {
+        self.in_flat > 0 || self.hole_depth > 0
     }
 }
 
@@ -448,7 +487,7 @@ impl<'a> P<'a> {
     /// the trailing-drain without the newline (for broken-list members
     /// whose comma prints first). Returns whether a run was consumed.
     fn drain_trailing_bare(&mut self, content_hi: u32) -> bool {
-        if self.in_flat > 0 {
+        if self.flat() {
             // an inline-flat context cannot host a line comment (the
             // comment would swallow the tokens after it) — leave it for
             // the enclosing statement's end drain
@@ -547,7 +586,7 @@ impl<'a> P<'a> {
             // separators/closers never print after a `//`.
             commented |= self.drain_trailing_bare(self.content_end(*sp));
         }
-        if self.in_flat > 0 {
+        if self.flat() {
             return; // inline-flat context: no two-mode decision, no break
         }
         if std::env::var_os("FMT_DEBUG").is_some() {
@@ -602,6 +641,11 @@ impl<'a> P<'a> {
     /// SUCCEEDING fresh lines (until the level restores) live at that
     /// deeper band
     fn nl_band(&mut self) {
+        assert_eq!(
+            self.hole_depth, 0,
+            "a layout newline inside an f-string hole — a hole is a \
+             single-line zone"
+        );
         self.trim_tail();
         self.out.push('\n');
         self.level += 1;
@@ -1265,7 +1309,7 @@ impl<'a> P<'a> {
             }
             self.text(n);
         }
-        if self.in_flat > 0 {
+        if self.flat() {
             return;
         }
         if self.over_on_flat(m) {
@@ -1294,7 +1338,7 @@ impl<'a> P<'a> {
     /// drain owns the comment queue there.
     fn stmt(&mut self, s: StmtRef) {
         let span = s.span(self.a);
-        if self.in_flat > 0 {
+        if self.flat() {
             self.stmt_tokens(s);
             return;
         }
@@ -1435,7 +1479,7 @@ impl<'a> P<'a> {
         let b = h.get(self.a);
         let stmts: Vec<StmtRef> = b.stmts.to_vec();
         let tail = b.tail;
-        if self.in_flat > 0 {
+        if self.flat() {
             // the inline-flat shape (arm/lambda bodies inside flat contexts)
             self.text("{");
             for s in &stmts {
@@ -1473,7 +1517,32 @@ impl<'a> P<'a> {
     /// the arm list — ALWAYS one per line (the shape): pattern
     /// alternatives, `->`, the body (flat attempt with rollback to a
     /// broken block), trailing comma, then the line's own comments.
+    /// Inside a hole the shape is the source's own flat spelling
+    /// `{ p -> b, p -> b }` — the arm list's newlines would tear the
+    /// hole (law 2).
     fn arms(&mut self, arms: &[Handle<WhenArmNode>], node: Span) {
+        if self.hole_depth > 0 {
+            self.text("{");
+            self.sp();
+            for (i, a) in arms.iter().enumerate() {
+                if i > 0 {
+                    self.text(", ");
+                }
+                let arm = a.get(self.a);
+                for (j, p) in arm.pats.iter().enumerate() {
+                    if j > 0 {
+                        self.text(", ");
+                    }
+                    self.pat(*p);
+                }
+                self.sp();
+                self.text("->");
+                self.sp();
+                self.arm_body(arm.body);
+            }
+            self.text(" }");
+            return;
+        }
         self.text("{");
         self.level += 1;
         self.nl();
@@ -1775,7 +1844,7 @@ impl<'a> P<'a> {
                 let blk = b.get(self.a);
                 let stmts: Vec<StmtRef> = blk.stmts.to_vec();
                 let tail = blk.tail;
-                if self.in_flat > 0 {
+                if self.flat() {
                     self.text("{");
                     for s in &stmts {
                         self.sp();
@@ -1811,13 +1880,30 @@ impl<'a> P<'a> {
             }
             ExprRef::AsyncBlock(h) => {
                 let d = h.get(self.a);
-                // `async { .. }` — the async primitive; the block always
-                // breaks (a mint is a statement-sized thing). The tail
-                // prints like a statement (the comment drains ride it),
-                // minus the `;` — the whole mint prints, every time.
+                // `async { .. }` — the async primitive. Inside a hole
+                // the mint prints the source's own flat spelling (a
+                // hole is a single-line zone); outside one the block
+                // always breaks (a mint is a statement-sized thing).
+                // The tail prints like a statement (the comment drains
+                // ride it), minus the `;` — the whole mint prints,
+                // every time.
                 let blk = d.body.get(self.a);
                 let stmts: Vec<StmtRef> = blk.stmts.to_vec();
                 let tail = blk.tail;
+                if self.hole_depth > 0 {
+                    self.text("async ");
+                    self.text("{");
+                    for s in &stmts {
+                        self.sp();
+                        self.stmt_tokens(*s);
+                    }
+                    if let Some(t) = tail {
+                        self.sp();
+                        self.expr_tokens(t);
+                    }
+                    self.text(" }");
+                    return;
+                }
                 self.text("async ");
                 self.text("{");
                 self.passed = self.passed.max(d.body.span(self.a).lo);
@@ -2023,7 +2109,9 @@ impl<'a> P<'a> {
                         );
                         self.text_lit(&self.src[cursor..k - 1]);
                         self.text("{");
+                        self.hole_depth += 1;
                         self.expr(*e);
+                        self.hole_depth -= 1;
                         // the hole's `}`: the first one at/after the
                         // expr's end
                         let mut m = he.hi as usize;

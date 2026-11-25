@@ -268,6 +268,42 @@ fn fstr_chunk_bytes_stay_verbatim_holes_reprint() {
 }
 
 #[test]
+fn a_hole_prints_on_one_line_at_every_level() {
+    // law 2: a hole is a single-line zone — the block-carrying atoms
+    // print the source's own flat spelling inside the hole, at every
+    // hash level (the book: "Holes stay single-line at every level")
+    assert_eq!(
+        fmt("fn f(n: i32) -> i32 { let s = f\"{when (n) { 1 -> 2, else -> 3 }}\"; s }"),
+        "fn f(n: i32) -> i32 {\n    let s = f\"{when (n) { 1 -> 2, else -> 3 }}\";\n    s\n}\n"
+    );
+    assert_eq!(
+        fmt("fn f(n: i32) -> i32 { let s = f#\"{when (n) { 1 -> 2, else -> 3 }}\"#; s }"),
+        "fn f(n: i32) -> i32 {\n    let s = f#\"{when (n) { 1 -> 2, else -> 3 }}\"#;\n    s\n}\n"
+    );
+    assert_eq!(
+        fmt("fn f(n: i32) -> i32 { let s = f##\"{when (n) { 1 -> 2, else -> 3 }}\"##; s }"),
+        "fn f(n: i32) -> i32 {\n    let s = f##\"{when (n) { 1 -> 2, else -> 3 }}\"##;\n    s\n}\n"
+    );
+    // the flat spellings are the source's own: block-valued arms and
+    // the async mint
+    assert_eq!(
+        fmt("fn f(n: i32) -> i32 { let s = f\"{when (n) { 1 -> { a + 1 }, else -> { b + 2 } }}\"; s }"),
+        "fn f(n: i32) -> i32 {\n    let s = f\"{when (n) { 1 -> { a + 1 }, else -> { b + 2 } }}\";\n    s\n}\n"
+    );
+    assert_eq!(
+        fmt("fn f() -> i32 { let s = f\"{async { a = 1; a }}\"; s }"),
+        "fn f() -> i32 {\n    let s = f\"{async { a = 1; a }}\";\n    s\n}\n"
+    );
+    // a hole wider than the line stays on one line — the LET breaks,
+    // the hole does not (103 cols flat, so the rhs breaks; the hole
+    // itself never does)
+    assert_eq!(
+        fmt("fn f(a: i32, b: i32) -> i32 { let s = f\"{a + b + a + b + a + b + a + b + a + b + a + b + a + b + a + b + a + b + a + b + a + b}\"; s }"),
+        "fn f(a: i32, b: i32) -> i32 {\n    let s =\n        f\"{a + b + a + b + a + b + a + b + a + b + a + b + a + b + a + b + a + b + a + b + a + b}\";\n    s\n}\n"
+    );
+}
+
+#[test]
 fn multiline_literals_are_idempotent() {
     let src = "fn f() {\n    let s = r#\"a\nb\"#;\n    let t = f#\"line {x}\nmore\"#;\n}";
     let once = fmt(src);

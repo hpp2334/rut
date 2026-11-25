@@ -410,3 +410,23 @@ entry fn main() {
 "#,
     );
 }
+
+#[test]
+fn when_in_an_fstring_hole_survives_formatting() {
+    // ground truth 2: `f"{when (n) { .. }}"` printed the hole on four
+    // lines and the formatted text failed with `unterminated
+    // format-string hole`. The when's VALUE rides the log line — the
+    // program's observable.
+    probe(
+        "when-hole",
+        r#"
+use ink::{ Logger };
+entry fn main() {
+    let log = Logger::new("wh");
+    let n = 2;
+    let msg = f"n={when (n) { 1 -> 10, else -> 20 }}";
+    log.info(msg);
+}
+"#,
+    );
+}
