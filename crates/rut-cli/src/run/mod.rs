@@ -82,9 +82,10 @@ pub(crate) fn run(args: &RunArgs) {
                 // refuses exactly like the direct `.rutbundle` lane
                 door::refuse_host_archive(&archive, &label);
                 // the law — stale bytes re-pack, they never load back: an entry
-                // whose walk this toolchain refuses (a wire the VERSION gate
-                // rejects, a group it cannot decode) is a miss, never a failed
-                // run; the miss path below rewrites it
+                // whose walk this toolchain refuses (a scope ledger its
+                // numbering cannot fit, a group's ledger row disagreeing with
+                // its binary) is a miss, never a failed run; the miss path
+                // below rewrites it
                 match archive.walk() {
                     Ok(walked) => {
                         run_walked(walked, entry, fuel);

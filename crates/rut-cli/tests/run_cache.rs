@@ -177,7 +177,10 @@ fn a_stale_version_entry_repacks_instead_of_failing() {
     let entry = cache_entries(&home).remove(0);
 
     // age the entry to the PREVIOUS wire: the archive's `mod.rutc`
-    // begins MAGIC (4 bytes) then the version as a little-endian u32
+    // begins MAGIC (4 bytes) then the version as a little-endian u32.
+    // The PARSE refuses this entry — the VERSION gate inside
+    // `Bundle::parse`, routed by the hit lane's parse arm (the
+    // walk-refused pin below is the other gate's pin)
     let bytes = std::fs::read(&entry).unwrap();
     let mut entries = rut_driver::bundle::parse_bundle(&bytes).unwrap();
     for (name, body) in entries.iter_mut() {
@@ -198,6 +201,62 @@ fn a_stale_version_entry_repacks_instead_of_failing() {
         std::fs::read(&entry).unwrap(),
         aged,
         "the stale entry repacked"
+    );
+    let _ = std::fs::remove_dir_all(&root);
+}
+
+#[test]
+fn a_walk_refused_entry_repacks_instead_of_failing() {
+    let root = hello_world("walkrefused");
+    let dir = root.join("hello");
+    let home = root.join("home");
+
+    let (code, err) = rut_run(&home, &["run", dir.to_str().unwrap()]);
+    assert_eq!(code, 0, "first run: {err}");
+    let entry = cache_entries(&home).remove(0);
+
+    // doctored so the WALK refuses it (the stale-version pin's gate is
+    // the parse): every ledger row's scope number moves to 5000 — the
+    // row's shape still parses (`5000` is a u16, the identity is
+    // untouched), the numbering fit does not (every row must fit above
+    // the program's own; the space ends at 4095)
+    let bytes = std::fs::read(&entry).unwrap();
+    let mut entries = rut_driver::bundle::parse_bundle(&bytes).unwrap();
+    for (name, body) in entries.iter_mut() {
+        if name == "rut.scopes" {
+            let mut out = String::new();
+            for line in std::str::from_utf8(body).unwrap().lines() {
+                match line.split_once(" = ") {
+                    Some((num, rest))
+                        if !num.is_empty() && num.chars().all(|c| c.is_ascii_digit()) =>
+                    {
+                        out.push_str(&format!("5000 = {rest}\n"));
+                    }
+                    _ => {
+                        out.push_str(line);
+                        out.push('\n');
+                    }
+                }
+            }
+            *body = out.into_bytes();
+        }
+    }
+    let doctored = rut_driver::bundle::write_bundle(&entries).unwrap();
+    std::fs::write(&entry, &doctored).unwrap();
+
+    // the walk refusal is a miss, never a failed run: the hit notes the
+    // re-pack on stderr, falls through to the miss path, and the fresh
+    // archive rewrites the entry
+    let (code, err) = rut_run(&home, &["run", dir.to_str().unwrap()]);
+    assert_eq!(code, 0, "the walk-refused entry never fails a run: {err}");
+    assert!(
+        err.contains("; re-packing"),
+        "the hit notes the re-pack: {err}"
+    );
+    assert_ne!(
+        std::fs::read(&entry).unwrap(),
+        doctored,
+        "the walk-refused entry repacked"
     );
     let _ = std::fs::remove_dir_all(&root);
 }
