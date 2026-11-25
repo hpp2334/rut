@@ -10,19 +10,12 @@ use rut_core::types::{Repr, TyKind, TY_U8};
 pub fn verify(prog: &Program) -> Result<(), String> {
     let ntypes = prog.types.types.len() as u32;
     for (fi, f) in prog.funcs.iter().enumerate() {
-        // bodyless host functions have no code to verify; a BODYLESS
-        // mirror stub (empty code, no params — every compiled body ends
-        // in its implicit Ret) that lost the ledger claim was
-        // redirected at link, and one nothing claimed is refused at
-        // its call site (the Call/CallM arm below — never executed)
-        if f.host_id.is_some() || (f.code.is_empty() && f.params.is_empty()) {
-            continue;
-        }
-        let nregs = f.regs.len();
         let ctx = |m: String| format!("function {} (#{fi}): {m}", prog.func_name(f));
         // the signature's type ids must be in the table — the op loop checks
         // only its own operands, and `Interp::new`'s ref-register scan indexes
         // the table with every one of these
+        // the signature check runs for EVERY function — a host thunk's and a
+        // stub's ids included — before the no-code skip
         for (i, &t) in f.regs.iter().enumerate() {
             if t >= ntypes {
                 return Err(ctx(format!(
@@ -43,6 +36,15 @@ pub fn verify(prog: &Program) -> Result<(), String> {
                 f.ret
             )));
         }
+        // bodyless host functions have no code to verify; a BODYLESS
+        // mirror stub (empty code, no params — every compiled body ends
+        // in its implicit Ret) that lost the ledger claim was
+        // redirected at link, and one nothing claimed is refused at
+        // its call site (the Call/CallM arm below — never executed)
+        if f.host_id.is_some() || (f.code.is_empty() && f.params.is_empty()) {
+            continue;
+        }
+        let nregs = f.regs.len();
         for (pc, op) in f.code.iter().enumerate() {
             let bad = |m: String| ctx(format!("op @{pc}: {m}"));
             // every register operand must be in range
@@ -827,6 +829,34 @@ mod tests {
         let mut prog = prog_with_call("map_new", Some("map_new"));
         prog.funcs[0].ret = n;
         let err = verify(&prog).expect_err("a return naming a row outside the table must refuse");
+        assert!(
+            err.contains("return type id 21 out of range (21 rows)"),
+            "{err}"
+        );
+    }
+
+    #[test]
+    fn a_host_thunk_signature_type_id_outside_the_table_refuses() {
+        let n = rut_core::types::TypeTable::boot().types.len() as u32;
+        let mut prog = prog_with_call("map_new", Some("map_new"));
+        // the caller's arity matches, so the ONLY thing this pin exercises
+        // is the thunk's own signature — an id outside the table
+        prog.funcs[1].params = vec![n];
+        prog.funcs[0].argv = vec![0];
+        prog.funcs[0].code[0] = Op::Call {
+            func: 1,
+            argv_off: 0,
+            argc: 1,
+            dst: 0,
+        };
+        let err = verify(&prog).expect_err("a host thunk's param outside the table must refuse");
+        assert!(
+            err.contains("param #0 type id 21 out of range (21 rows)"),
+            "{err}"
+        );
+        let mut prog = prog_with_call("map_new", Some("map_new"));
+        prog.funcs[1].ret = n;
+        let err = verify(&prog).expect_err("a host thunk's return outside the table must refuse");
         assert!(
             err.contains("return type id 21 out of range (21 rows)"),
             "{err}"
