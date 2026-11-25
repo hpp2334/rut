@@ -167,6 +167,42 @@ fn no_cache_forces_the_miss_but_refreshes_the_entry() {
 }
 
 #[test]
+fn a_stale_version_entry_repacks_instead_of_failing() {
+    let root = hello_world("stalever");
+    let dir = root.join("hello");
+    let home = root.join("home");
+
+    let (code, err) = rut_run(&home, &["run", dir.to_str().unwrap()]);
+    assert_eq!(code, 0, "first run: {err}");
+    let entry = cache_entries(&home).remove(0);
+
+    // age the entry to the PREVIOUS wire: the archive's `mod.rutc`
+    // begins MAGIC (4 bytes) then the version as a little-endian u32
+    let bytes = std::fs::read(&entry).unwrap();
+    let mut entries = rut_driver::bundle::parse_bundle(&bytes).unwrap();
+    for (name, body) in entries.iter_mut() {
+        if name == "mod.rutc" {
+            // MAGIC (4 bytes) then the version u32
+            let old = rut_core::binary::VERSION - 1;
+            body[4..8].copy_from_slice(&old.to_le_bytes());
+        }
+    }
+    std::fs::write(&entry, rut_driver::bundle::write_bundle(&entries).unwrap()).unwrap();
+    let aged = std::fs::read(&entry).unwrap();
+
+    // the stale entry is a miss, never a failed run: the hit falls
+    // through to the miss path and the fresh archive rewrites the entry
+    let (code, err) = rut_run(&home, &["run", dir.to_str().unwrap()]);
+    assert_eq!(code, 0, "the stale entry never fails a run: {err}");
+    assert_ne!(
+        std::fs::read(&entry).unwrap(),
+        aged,
+        "the stale entry repacked"
+    );
+    let _ = std::fs::remove_dir_all(&root);
+}
+
+#[test]
 fn a_dir_with_a_path_dep_caches_one_closed_entry() {
     let root = scratch("dep");
     let hello = root.join("hello");

@@ -81,8 +81,17 @@ pub(crate) fn run(args: &RunArgs) {
                 // cache, but the hit lane holds the decoded handle — it
                 // refuses exactly like the direct `.rutbundle` lane
                 door::refuse_host_archive(&archive, &label);
-                run_archive_bytes(archive, entry, fuel, &label);
-                return;
+                // the law — stale bytes re-pack, they never load back: an entry
+                // whose walk this toolchain refuses (a wire the VERSION gate
+                // rejects, a group it cannot decode) is a miss, never a failed
+                // run; the miss path below rewrites it
+                match archive.walk() {
+                    Ok(walked) => {
+                        run_walked(walked, entry, fuel);
+                        return;
+                    }
+                    Err(e) => eprintln!("run: {label}: {e}; re-packing"),
+                }
             }
             Err(_) => {
                 // a corrupt or half-written entry: fall through to the
@@ -175,7 +184,9 @@ fn run_archive(
     run_archive_bytes(archive, entry, fuel, label);
 }
 
-/// Compile the decoded archive through the host chain and drive it.
+/// The archive lane's load gate: walk the decoded archive — the direct
+/// and miss lanes refuse here (a run dies on an archive its walk
+/// cannot mount) — then drive the walked world.
 fn run_archive_bytes(
     archive: rut_driver::Bundle,
     entry: Option<String>,
@@ -191,6 +202,11 @@ fn run_archive_bytes(
             std::process::exit(2);
         }
     };
+    run_walked(walked, entry, fuel);
+}
+
+/// Compile the walked world through the host chain and drive it.
+fn run_walked(walked: rut_driver::Walk, entry: Option<String>, fuel: Option<u64>) {
     let compiled = {
         let mut chain = walked
             .pkgs
