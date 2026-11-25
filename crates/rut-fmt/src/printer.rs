@@ -21,10 +21,12 @@
 //! length, comment cursor, passed cursor), so rollbacks also
 //! un-consume comments; nested break points compose.
 //!
-//! **Parens**: the AST has no paren nodes; the printer re-parens a
-//! child only where flat precedence would invert the parse's grouping
-//! (the child-level table mirrors the parser's reduce levels). The
-//! VM-verified suite (`tests/semantic_equiv.rs`) referees the table.
+//! **Parens**: the AST has no paren nodes; the printer keeps a child's
+//! group exactly where the child's bare spelling would not re-parse to
+//! the same node in the role it sits in (law 1 — the role table in
+//! [`Role`]). The matrix gate (`tests/paren_matrix.rs`) referees the
+//! table cell by cell; the VM-verified suite
+//! (`tests/semantic_equiv.rs`) referees the programs.
 //!
 //! **Literals print verbatim**: every `LitNode` carries its exact
 //! token span, so atoms slice their spelling out of the normalized
@@ -66,6 +68,39 @@ const L_MUL: u8 = 11;
 const L_CAST: u8 = 12;
 const L_UNARY: u8 = 13;
 const L_POSTFIX: u8 = 14; // call/index/field — children never anchor
+
+/// the side of a binary operator a child sits on
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum Side {
+    Lhs,
+    Rhs,
+}
+
+/// the role a child expression sits in — the position decides whether
+/// its bare spelling would re-parse to the same node
+#[derive(Clone, Copy)]
+enum Role {
+    /// the callee of a call — an operand of the postfix loop
+    Callee,
+    /// the receiver of a `.field` / `[index]` / `.method()` postfix —
+    /// a chain re-associates left, so a chain receiver drops its group
+    Receiver,
+    /// the target of an assignment — the parser takes whatever operand
+    /// stood left of `=`, so the group never carries meaning
+    AssignTarget,
+    /// an operand of a binary operator
+    Bin { op: BinOp, side: Side },
+    /// the operand of a prefix `-` / `!`
+    Unary,
+    /// the operand of `as`
+    CastOperand,
+    /// the operand of `is`
+    IsOperand,
+    /// the operand of `await`
+    AwaitOperand,
+    /// the value of an assignment
+    AssignValue,
+}
 
 fn binop_str(op: BinOp) -> &'static str {
     match op {
@@ -1575,31 +1610,153 @@ impl<'a> P<'a> {
         self.passed = self.passed.max(self.content_end(h.span(self.a)));
     }
 
-    /// the child-paren law: a child parenthesizes only where flat
-    /// precedence would invert the parse's grouping (the fmt survey
-    /// §2's table; the VM pins referee)
-    fn needs_parens(&self, h: ExprRef, parent: u8, rhs: bool) -> bool {
-        match h {
-            ExprRef::Binary(bh) => {
-                let d = bh.get(self.a);
-                let l = binop_level(d.op);
-                l < parent || (l == parent && rhs)
+    /// the child-paren law: a paren is kept IFF the child's bare
+    /// spelling would not re-parse to the same node in this role. One
+    /// exhaustive match, role by role, no wildcard arm — a new
+    /// `ExprRef` variant fails to compile here and joins the matrix
+    /// gate (`tests/paren_matrix.rs`), the lane's referee.
+    fn needs_parens(&self, h: ExprRef, role: Role) -> bool {
+        // a lambda's body is a full expression and an assignment takes
+        // whatever operand stood left of `=` — either bare spelling
+        // re-nests the node in every role, so both keep their group
+        if matches!(h, ExprRef::Lambda(_) | ExprRef::Assign(_)) {
+            return true;
+        }
+        match role {
+            Role::Callee => match h {
+                // a call's callee is an operand: a chain names its
+                // value through the postfix loop (`(self.drive)(emit)`,
+                // `(xs[i])(a)`), a composite literal leaves the atom
+                // frame (`(P { a: 1 })(a)`), and a prefixed, awaited or
+                // operator expression re-binds (`(-a)(1)`,
+                // `(b as u64)(x)`)
+                ExprRef::Field(_)
+                | ExprRef::Index(_)
+                | ExprRef::Struct(_)
+                | ExprRef::Tuple(_)
+                | ExprRef::ArrayLit(_)
+                | ExprRef::ArrayRepeat(_)
+                | ExprRef::Unary(_)
+                | ExprRef::Await(_)
+                | ExprRef::Binary(_)
+                | ExprRef::Is(_)
+                | ExprRef::Cast(_) => true,
+                // a call or method chain, a literal, a path, `self`, an
+                // f-string, a `when`/`if`/`async` atom — the bare
+                // spelling re-parses to the same call
+                ExprRef::Call(_)
+                | ExprRef::Method(_)
+                | ExprRef::Lit(_)
+                | ExprRef::Path(_)
+                | ExprRef::Self_(_)
+                | ExprRef::FStr(_)
+                | ExprRef::WhenExpr(_)
+                | ExprRef::If(_)
+                | ExprRef::AsyncBlock(_) => false,
+                // unreachable (the early return above), spelled so the
+                // match stays exhaustive with no wildcard arm
+                ExprRef::Lambda(_) | ExprRef::Assign(_) => true,
+                ExprRef::Block(_) | ExprRef::Error(_) => false,
+            },
+            Role::Receiver | Role::AssignTarget => match h {
+                // a composite literal leaves the atom frame
+                // (`(P { a: 1 }).a = b;`), a prefixed or awaited
+                // expression re-nests (`(-a).x`, `(await f()).x`), and
+                // an operator expression re-nests
+                // (`(h ^ b as u32).wrapping_mul(..)`)
+                ExprRef::Struct(_)
+                | ExprRef::Tuple(_)
+                | ExprRef::ArrayLit(_)
+                | ExprRef::ArrayRepeat(_)
+                | ExprRef::Unary(_)
+                | ExprRef::Await(_)
+                | ExprRef::Binary(_)
+                | ExprRef::Is(_)
+                | ExprRef::Cast(_) => true,
+                // a chain re-associates left: `q.b.c` and `(q.b).c` are
+                // the same tree, and so are `k[i].m()` and
+                // `(k[i]).m()` — the group drops; so does a literal, a
+                // path, a call, an f-string, a `when`/`if`/`async` atom
+                ExprRef::Field(_)
+                | ExprRef::Index(_)
+                | ExprRef::Call(_)
+                | ExprRef::Method(_)
+                | ExprRef::Lit(_)
+                | ExprRef::Path(_)
+                | ExprRef::Self_(_)
+                | ExprRef::FStr(_)
+                | ExprRef::WhenExpr(_)
+                | ExprRef::If(_)
+                | ExprRef::AsyncBlock(_) => false,
+                // unreachable (the early return above), spelled so the
+                // match stays exhaustive with no wildcard arm
+                ExprRef::Lambda(_) | ExprRef::Assign(_) => true,
+                ExprRef::Block(_) | ExprRef::Error(_) => false,
+            },
+            Role::Bin { op, side } => {
+                let parent = binop_level(op);
+                let child = self.reduce_level(h);
+                child < parent
+                    || (child == parent && side == Side::Rhs)
+                    // level 6 is not associative: a level-6 left operand
+                    // keeps its group (`(a < b) < c`, `(a is i32) < b`,
+                    // `(a < b) is i32`)
+                    || (child == L_CMP && parent == L_CMP)
+                    // in type position `<` opens generic arguments, so a
+                    // cast's bare spelling on the left of `<` feeds the
+                    // type parse (`(a as i64) < b`)
+                    || (child == L_CAST && side == Side::Lhs && op == BinOp::Lt)
             }
-            ExprRef::Is(_) => L_CMP < parent || (L_CMP == parent && rhs),
-            ExprRef::Cast(_) => L_CAST < parent || (L_CAST == parent && rhs),
-            ExprRef::Assign(_) => true,
-            // a FIELD/INDEX chain as a CALLEE names the value through the
-            // chain — the call grammar takes an operand, so the chain
-            // needs its parens back (`(self.drive)(emit)`, `(xs[i])(a)`)
-            ExprRef::Field(_) | ExprRef::Index(_) if parent == L_POSTFIX => true,
-            _ => false,
+            Role::Unary | Role::AwaitOperand => self.reduce_level(h) < L_UNARY,
+            Role::CastOperand => self.reduce_level(h) < L_CAST,
+            Role::IsOperand => {
+                // level 6 is not associative: a level-6 operand keeps
+                // its group (`(a < b) is i32`, `(a is i32) is i32`)
+                self.reduce_level(h) <= L_CMP
+            }
+            // the value side takes the whole expression: no reduce
+            // level anchors through it, so the bare spelling re-parses
+            // whole (a lambda or assignment value kept its group above)
+            Role::AssignValue => false,
+        }
+    }
+
+    /// the reduce level an operator child anchors — a non-operator
+    /// child never anchors a reduce, so its bare spelling re-parses
+    /// whole under every reduce-level operator
+    fn reduce_level(&self, h: ExprRef) -> u8 {
+        match h {
+            ExprRef::Binary(bh) => binop_level(bh.get(self.a).op),
+            ExprRef::Is(_) => L_CMP,
+            ExprRef::Cast(_) => L_CAST,
+            ExprRef::Block(_)
+            | ExprRef::Lit(_)
+            | ExprRef::Path(_)
+            | ExprRef::Self_(_)
+            | ExprRef::Call(_)
+            | ExprRef::Method(_)
+            | ExprRef::Field(_)
+            | ExprRef::Index(_)
+            | ExprRef::Unary(_)
+            | ExprRef::Lambda(_)
+            | ExprRef::Assign(_)
+            | ExprRef::FStr(_)
+            | ExprRef::Struct(_)
+            | ExprRef::Tuple(_)
+            | ExprRef::ArrayLit(_)
+            | ExprRef::ArrayRepeat(_)
+            | ExprRef::WhenExpr(_)
+            | ExprRef::If(_)
+            | ExprRef::Await(_)
+            | ExprRef::AsyncBlock(_)
+            | ExprRef::Error(_) => L_POSTFIX,
         }
     }
 
     /// a child in a constrained position (operand, callee, receiver,
     /// index): parens where the law asks
-    fn operand(&mut self, h: ExprRef, parent: u8, rhs: bool) {
-        let needs = self.needs_parens(h, parent, rhs);
+    fn operand(&mut self, h: ExprRef, role: Role) {
+        let needs = self.needs_parens(h, role);
         if needs {
             self.text("(");
         }
@@ -1689,7 +1846,7 @@ impl<'a> P<'a> {
             }
             ExprRef::Call(h) => {
                 let d = h.get(self.a);
-                self.operand(d.callee, L_POSTFIX, false);
+                self.operand(d.callee, Role::Callee);
                 self.text("(");
                 let spans: Vec<Span> = d.args.iter().map(|&e| e.span(self.a)).collect();
                 self.break_list(&d.args, &spans, true, |p, e| p.expr(*e));
@@ -1698,7 +1855,7 @@ impl<'a> P<'a> {
             }
             ExprRef::Method(h) => {
                 let d = h.get(self.a);
-                self.operand(d.recv, L_POSTFIX, false);
+                self.operand(d.recv, Role::Receiver);
                 self.text(".");
                 if let Some(m) = d.member {
                     self.text(self.a.name(m.ident));
@@ -1721,13 +1878,13 @@ impl<'a> P<'a> {
             }
             ExprRef::Field(h) => {
                 let d = h.get(self.a);
-                self.operand(d.recv, L_POSTFIX, false);
+                self.operand(d.recv, Role::Receiver);
                 self.text(".");
                 self.text(self.a.name(d.name.ident));
             }
             ExprRef::Index(h) => {
                 let d = h.get(self.a);
-                self.operand(d.recv, L_POSTFIX, false);
+                self.operand(d.recv, Role::Receiver);
                 self.text("[");
                 self.expr(d.idx);
                 self.drain_close(h.span(self.a).hi);
@@ -1736,47 +1893,70 @@ impl<'a> P<'a> {
             ExprRef::Unary(h) => {
                 let d = h.get(self.a);
                 self.text(unop_str(d.op));
-                self.operand(d.expr, L_UNARY, false);
+                self.operand(d.expr, Role::Unary);
             }
             ExprRef::Binary(h) => {
                 let d = h.get(self.a);
                 let op = d.op;
-                let lvl = binop_level(op);
                 // flat try with the children's own breaks suppressed
                 let m = self.stamp();
                 self.in_flat += 1;
-                self.operand(d.lhs, lvl, false);
+                self.operand(
+                    d.lhs,
+                    Role::Bin {
+                        op,
+                        side: Side::Lhs,
+                    },
+                );
                 self.sp();
                 self.text(binop_str(op));
                 self.sp();
-                self.operand(d.rhs, lvl, true);
+                self.operand(
+                    d.rhs,
+                    Role::Bin {
+                        op,
+                        side: Side::Rhs,
+                    },
+                );
                 self.in_flat -= 1;
                 if self.over_on_flat(m) {
                     self.rollback(m);
-                    self.operand(d.lhs, lvl, false);
+                    self.operand(
+                        d.lhs,
+                        Role::Bin {
+                            op,
+                            side: Side::Lhs,
+                        },
+                    );
                     self.sp();
                     self.text(binop_str(op));
                     self.nl_band();
-                    self.operand(d.rhs, lvl, true);
+                    self.operand(
+                        d.rhs,
+                        Role::Bin {
+                            op,
+                            side: Side::Rhs,
+                        },
+                    );
                     self.level -= 1;
                 }
             }
             ExprRef::Assign(h) => {
                 let d = h.get(self.a);
-                self.operand(d.target, L_POSTFIX, false);
+                self.operand(d.target, Role::AssignTarget);
                 let m = self.stamp();
                 self.in_flat += 1;
                 self.sp();
                 self.text(assign_str(d.op));
                 self.sp();
-                self.operand(d.value, 0, false);
+                self.operand(d.value, Role::AssignValue);
                 self.in_flat -= 1;
                 if self.over_on_flat(m) {
                     self.rollback(m);
                     self.sp();
                     self.text(assign_str(d.op));
                     self.nl_band();
-                    self.operand(d.value, 0, false);
+                    self.operand(d.value, Role::AssignValue);
                     self.level -= 1;
                 }
             }
@@ -1938,11 +2118,11 @@ impl<'a> P<'a> {
             ExprRef::Await(h) => {
                 let d = h.get(self.a);
                 self.text("await ");
-                self.operand(d.expr, L_UNARY, false);
+                self.operand(d.expr, Role::AwaitOperand);
             }
             ExprRef::Is(h) => {
                 let d = h.get(self.a);
-                self.operand(d.expr, L_CMP, false);
+                self.operand(d.expr, Role::IsOperand);
                 self.sp();
                 self.text("is");
                 self.sp();
@@ -1950,7 +2130,7 @@ impl<'a> P<'a> {
             }
             ExprRef::Cast(h) => {
                 let d = h.get(self.a);
-                self.operand(d.expr, L_CAST, false);
+                self.operand(d.expr, Role::CastOperand);
                 self.sp();
                 self.text("as");
                 self.sp();

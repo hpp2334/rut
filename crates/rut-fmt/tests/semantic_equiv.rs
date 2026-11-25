@@ -353,6 +353,28 @@ entry fn main() {
 }
 
 #[test]
+fn struct_literal_in_postfix_position_survives_formatting() {
+    // ground truth 1: a composite literal leaves the atom frame, so
+    // `(P { a: 1 }).a` needs its group — fmt used to drop it and the
+    // formatted text stopped compiling (`expected ';', found '.'`).
+    // The field value is the program's observable.
+    probe(
+        "struct-postfix",
+        r#"
+use ink::{ Logger };
+class P {
+    a: i32;
+}
+entry fn main() {
+    let log = Logger::new("sp");
+    let x = (P { a: 1 }).a;
+    log.info(f"{x}");
+}
+"#,
+    );
+}
+
+#[test]
 fn loop_header_const_survives_formatting() {
     // the loop-header `const` (the for-of opt-out) and a `const`
     // binding ride fmt without changing behavior — the const law makes
@@ -361,9 +383,9 @@ fn loop_header_const_survives_formatting() {
     // would catch (the const header's write-through must still run).
     // The byte-level round-trip + idempotence pins live in pin.rs
     // (`loop_header_const_survives_parse_fmt_parse`); the field-write
-    // target reprints parenthesized (`(t.done) = ..`), the printer's
-    // standing assignment-target law, and must re-parse to the same
-    // program.
+    // target prints bare (`t.done = ..` — the same `Assign` as the
+    // paren spelling, so the group drops) and must re-parse to the
+    // same program.
     probe(
         "loop-const",
         r#"

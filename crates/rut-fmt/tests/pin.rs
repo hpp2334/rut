@@ -311,6 +311,155 @@ fn unary_needs_parens_over_a_binary_operand() {
     assert!(out.contains("-(1 * 2)"), "{out}");
 }
 
+#[test]
+fn paren_group_on_a_struct_literal_survives_every_postfix_role() {
+    // a composite literal leaves the atom frame — the paren group is
+    // the only way back into the postfix loop — so every postfix role
+    // keeps it: the callee, the field, method and index receivers
+    assert_eq!(
+        fmt("fn f() -> i32 { let x = (P { a: 1 }).a; x }"),
+        "fn f() -> i32 {\n    let x = (P { a: 1 }).a;\n    x\n}\n"
+    );
+    assert_eq!(
+        fmt("fn f() -> i32 { let x = (P { a: 1 }).m(); x }"),
+        "fn f() -> i32 {\n    let x = (P { a: 1 }).m();\n    x\n}\n"
+    );
+    assert_eq!(
+        fmt("fn f(i: i32) -> i32 { let x = (P { a: 1 })[i]; x }"),
+        "fn f(i: i32) -> i32 {\n    let x = (P { a: 1 })[i];\n    x\n}\n"
+    );
+    assert_eq!(
+        fmt("fn f(a: i32) -> i32 { let x = (P { a: 1 })(a); x }"),
+        "fn f(a: i32) -> i32 {\n    let x = (P { a: 1 })(a);\n    x\n}\n"
+    );
+}
+
+#[test]
+fn paren_group_on_array_repeat_and_tuple_survives() {
+    // arrays, repeats and tuples leave the atom frame like a struct
+    // literal — their groups ride every postfix role
+    assert_eq!(
+        fmt("fn f(a: i32, b: i32, i: i32) -> i32 { let x = ([a, b])[i]; x }"),
+        "fn f(a: i32, b: i32, i: i32) -> i32 {\n    let x = ([a, b])[i];\n    x\n}\n"
+    );
+    assert_eq!(
+        fmt("fn f(a: i32, i: i32) -> i32 { let x = ([a; 2])[i]; x }"),
+        "fn f(a: i32, i: i32) -> i32 {\n    let x = ([a; 2])[i];\n    x\n}\n"
+    );
+    assert_eq!(
+        fmt("fn f(a: i32, b: i32) -> i32 { let x = ([a, b]).len(); x }"),
+        "fn f(a: i32, b: i32) -> i32 {\n    let x = ([a, b]).len();\n    x\n}\n"
+    );
+    assert_eq!(
+        fmt("fn f(a: i32, b: i32, i: i32) -> i32 { let x = ((a, b))[i]; x }"),
+        "fn f(a: i32, b: i32, i: i32) -> i32 {\n    let x = ((a, b))[i];\n    x\n}\n"
+    );
+}
+
+#[test]
+fn paren_group_on_a_lambda_survives() {
+    // a lambda's body is a full expression, so the bare spelling
+    // swallows the postfix chain or the operator — the group is the
+    // lambda's boundary in every constrained position
+    assert_eq!(
+        fmt("fn f() -> i32 { let x = (x => x)(1); x }"),
+        "fn f() -> i32 {\n    let x = (x => x)(1);\n    x\n}\n"
+    );
+    assert_eq!(
+        fmt("fn f() -> i32 { let x = (x => x).a; x }"),
+        "fn f() -> i32 {\n    let x = (x => x).a;\n    x\n}\n"
+    );
+    assert_eq!(
+        fmt("fn f() -> i32 { let x = (x => x) + 1; x }"),
+        "fn f() -> i32 {\n    let x = (x => x) + 1;\n    x\n}\n"
+    );
+    assert_eq!(
+        fmt("fn f() -> i64 { let x = ((a: i32) => a) as i64; x }"),
+        "fn f() -> i64 {\n    let x = ((a: i32) => a) as i64;\n    x\n}\n"
+    );
+    assert_eq!(
+        fmt("fn f(a: bool, b: bool) -> bool { let x = a < (b => b); x }"),
+        "fn f(a: bool, b: bool) -> bool {\n    let x = a < (b => b);\n    x\n}\n"
+    );
+}
+
+#[test]
+fn paren_group_on_unary_and_await_survives() {
+    // a prefix wraps the whole postfix chain from its atom, so the
+    // bare spelling re-nests: `-a.x` is Unary(Field) where `(-a).x`
+    // is Field(Unary) — the group is the boundary
+    assert_eq!(
+        fmt("fn f() -> i32 { let x = (-a).x; x }"),
+        "fn f() -> i32 {\n    let x = (-a).x;\n    x\n}\n"
+    );
+    assert_eq!(
+        fmt("fn f() -> bool { let x = (!a).x; x }"),
+        "fn f() -> bool {\n    let x = (!a).x;\n    x\n}\n"
+    );
+    assert_eq!(
+        fmt("fn f() -> i32 { let x = (await g()).x; x }"),
+        "fn f() -> i32 {\n    let x = (await g()).x;\n    x\n}\n"
+    );
+}
+
+#[test]
+fn level_six_operator_keeps_its_left_group() {
+    // level 6 is not associative: the bare spelling either re-nests or
+    // is rejected (`a < b < c`), so a level-6 left operand under a
+    // level-6 operator keeps its group — the four pairs
+    assert_eq!(
+        fmt("fn f() -> bool { let x = (a < b) < c; x }"),
+        "fn f() -> bool {\n    let x = (a < b) < c;\n    x\n}\n"
+    );
+    assert_eq!(
+        fmt("fn f() -> bool { let x = (a is i32) < c; x }"),
+        "fn f() -> bool {\n    let x = (a is i32) < c;\n    x\n}\n"
+    );
+    assert_eq!(
+        fmt("fn f() -> bool { let x = (a < b) is i32; x }"),
+        "fn f() -> bool {\n    let x = (a < b) is i32;\n    x\n}\n"
+    );
+    assert_eq!(
+        fmt("fn f() -> bool { let x = (a is i32) is i32; x }"),
+        "fn f() -> bool {\n    let x = (a is i32) is i32;\n    x\n}\n"
+    );
+}
+
+#[test]
+fn cast_keeps_its_group_before_a_less_than() {
+    // in type position `<` opens generic arguments, so the bare
+    // `a as i64 < b` feeds `< b` to the cast's type parse and dies —
+    // the group is load-bearing for the parse itself
+    assert_eq!(
+        fmt("fn f() -> bool { let x = (a as i64) < b; x }"),
+        "fn f() -> bool {\n    let x = (a as i64) < b;\n    x\n}\n"
+    );
+}
+
+#[test]
+fn a_receiver_paren_is_kept_only_when_it_carries_meaning() {
+    // a receiver chain re-associates left: `(q.b).c` and `q.b.c` are
+    // the same tree, and so are `(k[i]).m()` and `k[i].m()` — those
+    // groups drop. An operator receiver re-nests bare
+    // (`h ^ b as u32 .m()` is not the same chain), so those stay.
+    assert_eq!(
+        fmt("fn f() -> i32 { let y = (q.b).c; y }"),
+        "fn f() -> i32 {\n    let y = q.b.c;\n    y\n}\n"
+    );
+    assert_eq!(
+        fmt("fn f(x: i64) -> i64 { let y = (k[i]).wrapping_add(x); y }"),
+        "fn f(x: i64) -> i64 {\n    let y = k[i].wrapping_add(x);\n    y\n}\n"
+    );
+    assert_eq!(
+        fmt("fn f(x: u64) -> u64 { let y = (b as u64).wrapping_add(x); y }"),
+        "fn f(x: u64) -> u64 {\n    let y = (b as u64).wrapping_add(x);\n    y\n}\n"
+    );
+    assert_eq!(
+        fmt("fn f() -> i32 { let y = (n - 11).wrapping_mul(5); y }"),
+        "fn f() -> i32 {\n    let y = (n - 11).wrapping_mul(5);\n    y\n}\n"
+    );
+}
+
 // ---- [style] ----
 
 #[test]
@@ -523,13 +672,15 @@ fn statement_if_trailing_semicolon_normalizes_away() {
 fn loop_header_const_survives_parse_fmt_parse() {
     // the const head prints verbatim: `for (const t of xs)` (the
     // per-iteration opt-out) and `const x = ..;` (the binding head) —
-    // the field-write target prints parenthesized (the printer's
-    // standing assignment-target law), and a write through a const
-    // binding prints untouched (shallow by law)
+    // a field-write target prints bare (`t.x = 1;`: the parser takes
+    // whatever operand stood left of `=`, so the bare and the
+    // parenthesized spellings are the same `Assign`, and the group
+    // drops), and a write through a const binding prints untouched
+    // (shallow by law)
     let of_once = fmt("fn f(xs: Vec<i32>) -> nil { for (const t of xs) { t.x = 1; } }");
     assert_eq!(
         of_once,
-        "fn f(xs: Vec<i32>) -> nil {\n    for (const t of xs) {\n        (t.x) = 1;\n    }\n}\n"
+        "fn f(xs: Vec<i32>) -> nil {\n    for (const t of xs) {\n        t.x = 1;\n    }\n}\n"
     );
     assert_eq!(fmt(&of_once), of_once, "idempotent");
 

@@ -52,12 +52,16 @@ fn hex_val(c: str) -> i32 {
     let upper = "0123456789ABCDEF";
     let i = 0;
     for (let t of lower) {
-        if (f"{t}" == c) { return i; }
+        if (f"{t}" == c) {
+            return i;
+        }
         i = i + 1;
     }
     i = 0;
     for (let t of upper) {
-        if (f"{t}" == c) { return i; }
+        if (f"{t}" == c) {
+            return i;
+        }
         i = i + 1;
     }
     return -1;
@@ -110,14 +114,20 @@ entry fn b64_enc(data: bytes, url: bool) -> str {
         let b2: u32 = 0;
         let have1 = false;
         let have2 = false;
-        if (i + 1 < n) { b1 = data[i + 1] as u32; have1 = true; }
-        if (i + 2 < n) { b2 = data[i + 2] as u32; have2 = true; }
-        let w: u32 = (b0 << 16) | (b1 << 8) | b2;
-        out = f"{out}{t[((w >> 18) & 63) as i32]}{t[((w >> 12) & 63) as i32]}";
+        if (i + 1 < n) {
+            b1 = data[i + 1] as u32;
+            have1 = true;
+        }
+        if (i + 2 < n) {
+            b2 = data[i + 2] as u32;
+            have2 = true;
+        }
+        let w: u32 = b0 << 16 | b1 << 8 | b2;
+        out = f"{out}{t[(w >> 18 & 63) as i32]}{t[(w >> 12 & 63) as i32]}";
         if (have2) {
-            out = f"{out}{t[((w >> 6) & 63) as i32]}{t[(w & 63) as i32]}";
+            out = f"{out}{t[(w >> 6 & 63) as i32]}{t[(w & 63) as i32]}";
         } else if (have1) {
-            out = f"{out}{t[((w >> 6) & 63) as i32]}=";
+            out = f"{out}{t[(w >> 6 & 63) as i32]}=";
         } else {
             out = f"{out}==";
         }
@@ -139,7 +149,9 @@ entry fn b64_dec(s: str, url: bool) -> (bytes, str) {
             }
             let v: u32 = 256;
             for (let i = 0; i < t.len(); i += 1) {
-                if (t[i] == cs) { v = i as u32; }
+                if (t[i] == cs) {
+                    v = i as u32;
+                }
             }
             if (v == 256) {
                 return (bytes::zeroed(0), f"base64: invalid character `{cs}`");
@@ -154,13 +166,23 @@ entry fn b64_dec(s: str, url: bool) -> (bytes, str) {
     let n = vals.len();
     for (let i = 0; i < n; i += 4) {
         let rem = n - i;
-        if (rem > 4) { rem = 4; }
-        let w = (vals[i] << 18) | (vals[i + 1] << 12);
-        if (rem >= 3) { w = w | (vals[i + 2] << 6); }
-        if (rem == 4) { w = w | vals[i + 3]; }
+        if (rem > 4) {
+            rem = 4;
+        }
+        let w = vals[i] << 18 | vals[i + 1] << 12;
+        if (rem >= 3) {
+            w = w | vals[i + 2] << 6;
+        }
+        if (rem == 4) {
+            w = w | vals[i + 3];
+        }
         out.push((w >> 16) as u8);
-        if (rem >= 3) { out.push(((w >> 8) & 255) as u8); }
-        if (rem == 4) { out.push((w & 255) as u8); }
+        if (rem >= 3) {
+            out.push((w >> 8 & 255) as u8);
+        }
+        if (rem == 4) {
+            out.push((w & 255) as u8);
+        }
     }
     return (freeze_bytes(out), "");
 }
@@ -174,8 +196,8 @@ entry fn crc32(data: bytes) -> u32 {
     for (let b of data) {
         crc = crc ^ b as u32;
         for (let k = 0; k < 8; k += 1) {
-            if ((crc & 1) == 1) {
-                crc = (crc >> 1) ^ 0xEDB88320u32;
+            if (crc & 1 == 1) {
+                crc = crc >> 1 ^ 0xEDB88320u32;
             } else {
                 crc = crc >> 1;
             }
@@ -205,7 +227,7 @@ entry fn fnv1a64(data: bytes) -> u64 {
 entry fn djb2(data: bytes) -> u64 {
     let h: u64 = 5381;
     for (let b of data) {
-        h = (h.wrapping_mul(33)).wrapping_add(b as u64);
+        h = h.wrapping_mul(33).wrapping_add(b as u64);
     }
     return h;
 }
@@ -224,78 +246,186 @@ entry fn sdbm(data: bytes) -> u64 {
 /// rotate left, 32-bit: `x.wrapping_shl(n)` truncates, `>>` on u32 is logical.
 fn rotl32(x: u32, n: u32) -> u32 {
     let bits = 32 as u32;
-    return x.wrapping_shl(n) | (x >> (bits - n));
+    return x.wrapping_shl(n) | x >> bits - n;
 }
 
 fn rotr32(x: u32, n: u32) -> u32 {
     let bits = 32 as u32;
-    return (x >> n) | x.wrapping_shl(bits - n);
+    return x >> n | x.wrapping_shl(bits - n);
 }
 
 /// rotate right, 64-bit — THE `u64 >>` dogfood: SHA-512 words regularly
 /// carry bit 63, so an arithmetic `>>` would corrupt every one of them.
 fn rotr64(x: u64, n: u64) -> u64 {
     let bits = 64 as u64;
-    return (x >> n) | x.wrapping_shl(bits - n);
+    return x >> n | x.wrapping_shl(bits - n);
 }
 
 fn copy_bytes(msg: bytes) -> Vec<u8> {
     let m: Vec<u8> = Vec::new();
-    for (let b of msg) { m.push(b); }
+    for (let b of msg) {
+        m.push(b);
+    }
     return m;
 }
 
 fn md5_k() -> Vec<u32> {
-    let k: Vec<u32> = Vec<u32>::from([
-        3614090360u32, 3905402710u32, 606105819, 3250441966u32,
-        4118548399u32, 1200080426, 2821735955u32, 4249261313u32,
-        1770035416, 2336552879u32, 4294925233u32, 2304563134u32,
-        1804603682, 4254626195u32, 2792965006u32, 1236535329,
-        4129170786u32, 3225465664u32, 643717713, 3921069994u32,
-        3593408605u32, 38016083, 3634488961u32, 3889429448u32,
-        568446438, 3275163606u32, 4107603335u32, 1163531501,
-        2850285829u32, 4243563512u32, 1735328473, 2368359562u32,
-        4294588738u32, 2272392833u32, 1839030562, 4259657740u32,
-        2763975236u32, 1272893353, 4139469664u32, 3200236656u32,
-        681279174, 3936430074u32, 3572445317u32, 76029189,
-        3654602809u32, 3873151461u32, 530742520, 3299628645u32,
-        4096336452u32, 1126891415, 2878612391u32, 4237533241u32,
-        1700485571, 2399980690u32, 4293915773u32, 2240044497u32,
-        1873313359, 4264355552u32, 2734768916u32, 1309151649,
-        4149444226u32, 3174756917u32, 718787259, 3951481745u32,
-    ]);
+    let k: Vec<u32> =
+        Vec<u32>::from(
+            [
+                3614090360u32,
+                3905402710u32,
+                606105819,
+                3250441966u32,
+                4118548399u32,
+                1200080426,
+                2821735955u32,
+                4249261313u32,
+                1770035416,
+                2336552879u32,
+                4294925233u32,
+                2304563134u32,
+                1804603682,
+                4254626195u32,
+                2792965006u32,
+                1236535329,
+                4129170786u32,
+                3225465664u32,
+                643717713,
+                3921069994u32,
+                3593408605u32,
+                38016083,
+                3634488961u32,
+                3889429448u32,
+                568446438,
+                3275163606u32,
+                4107603335u32,
+                1163531501,
+                2850285829u32,
+                4243563512u32,
+                1735328473,
+                2368359562u32,
+                4294588738u32,
+                2272392833u32,
+                1839030562,
+                4259657740u32,
+                2763975236u32,
+                1272893353,
+                4139469664u32,
+                3200236656u32,
+                681279174,
+                3936430074u32,
+                3572445317u32,
+                76029189,
+                3654602809u32,
+                3873151461u32,
+                530742520,
+                3299628645u32,
+                4096336452u32,
+                1126891415,
+                2878612391u32,
+                4237533241u32,
+                1700485571,
+                2399980690u32,
+                4293915773u32,
+                2240044497u32,
+                1873313359,
+                4264355552u32,
+                2734768916u32,
+                1309151649,
+                4149444226u32,
+                3174756917u32,
+                718787259,
+                3951481745u32,
+            ],
+        );
     return k;
 }
 
 fn md5_s() -> Vec<u32> {
-    let s: Vec<u32> = Vec<u32>::from([
-        7, 12, 17, 22,
-        7, 12, 17, 22,
-        7, 12, 17, 22,
-        7, 12, 17, 22,
-        5, 9, 14, 20,
-        5, 9, 14, 20,
-        5, 9, 14, 20,
-        5, 9, 14, 20,
-        4, 11, 16, 23,
-        4, 11, 16, 23,
-        4, 11, 16, 23,
-        4, 11, 16, 23,
-        6, 10, 15, 21,
-        6, 10, 15, 21,
-        6, 10, 15, 21,
-        6, 10, 15, 21,
-    ]);
+    let s: Vec<u32> =
+        Vec<u32>::from(
+            [
+                7,
+                12,
+                17,
+                22,
+                7,
+                12,
+                17,
+                22,
+                7,
+                12,
+                17,
+                22,
+                7,
+                12,
+                17,
+                22,
+                5,
+                9,
+                14,
+                20,
+                5,
+                9,
+                14,
+                20,
+                5,
+                9,
+                14,
+                20,
+                5,
+                9,
+                14,
+                20,
+                4,
+                11,
+                16,
+                23,
+                4,
+                11,
+                16,
+                23,
+                4,
+                11,
+                16,
+                23,
+                4,
+                11,
+                16,
+                23,
+                6,
+                10,
+                15,
+                21,
+                6,
+                10,
+                15,
+                21,
+                6,
+                10,
+                15,
+                21,
+                6,
+                10,
+                15,
+                21,
+            ],
+        );
     return s;
 }
 
 fn md5_impl(msg: bytes) -> bytes {
     let m = copy_bytes(msg);
     m.push(0x80);
-    while (m.len() % 64 != 56) { m.push(0); }
+    while (m.len() % 64 != 56) {
+        m.push(0);
+    }
     let bits = msg.len() as u64 * 8;
     for (let i = 0; i < 8; i += 1) {
-        m.push(((bits >> (i as u64 * 8)) & 0xFF) as u8);   // little-endian length
+        m.push(
+            (bits >> i as u64 * 8 & 0xFF) as u8, // little-endian length
+        );
     }
     let a0: u32 = 0x67452301;
     let b0: u32 = 0xefcdab89u32;
@@ -308,7 +438,9 @@ fn md5_impl(msg: bytes) -> bytes {
         let x: Vec<u32> = Vec::new();
         for (let j = 0; j < 16; j += 1) {
             let o = blk * 64 + j * 4;
-            x.push(m[o] as u32 | (m[o + 1] as u32 << 8) | (m[o + 2] as u32 << 16) | (m[o + 3] as u32 << 24));
+            x.push(
+                m[o] as u32 | m[o + 1] as u32 << 8 | m[o + 2] as u32 << 16 | m[o + 3] as u32 << 24,
+            );
         }
         let a = a0;
         let b = b0;
@@ -318,22 +450,22 @@ fn md5_impl(msg: bytes) -> bytes {
             let f: u32 = 0;
             let g = 0;
             if (i < 16) {
-                f = (b & c) | (d & (b ^ 4294967295u32));
+                f = b & c | d & (b ^ 4294967295u32);
                 g = i;
             } else if (i < 32) {
-                f = (d & b) | (c & (d ^ 4294967295u32));
+                f = d & b | c & (d ^ 4294967295u32);
                 g = (5 * i + 1) % 16;
             } else if (i < 48) {
                 f = b ^ c ^ d;
                 g = (3 * i + 5) % 16;
             } else {
                 f = c ^ (b | (d ^ 4294967295u32));
-                g = (7 * i) % 16;
+                g = 7 * i % 16;
             }
             let tmp = d;
             d = c;
             c = b;
-            let sum = (a.wrapping_add(f)).wrapping_add((k[i]).wrapping_add(x[g]));
+            let sum = a.wrapping_add(f).wrapping_add(k[i].wrapping_add(x[g]));
             b = b.wrapping_add(rotl32(sum, s[i]));
             a = tmp;
         }
@@ -344,13 +476,21 @@ fn md5_impl(msg: bytes) -> bytes {
     }
     let out: Vec<u8> = Vec::new();
     let w = a0;
-    for (let i = 0; i < 4; i += 1) { out.push(((w >> (i as u32 * 8)) & 0xFF) as u8); }
+    for (let i = 0; i < 4; i += 1) {
+        out.push((w >> i as u32 * 8 & 0xFF) as u8);
+    }
     w = b0;
-    for (let i = 0; i < 4; i += 1) { out.push(((w >> (i as u32 * 8)) & 0xFF) as u8); }
+    for (let i = 0; i < 4; i += 1) {
+        out.push((w >> i as u32 * 8 & 0xFF) as u8);
+    }
     w = c0;
-    for (let i = 0; i < 4; i += 1) { out.push(((w >> (i as u32 * 8)) & 0xFF) as u8); }
+    for (let i = 0; i < 4; i += 1) {
+        out.push((w >> i as u32 * 8 & 0xFF) as u8);
+    }
     w = d0;
-    for (let i = 0; i < 4; i += 1) { out.push(((w >> (i as u32 * 8)) & 0xFF) as u8); }
+    for (let i = 0; i < 4; i += 1) {
+        out.push((w >> i as u32 * 8 & 0xFF) as u8);
+    }
     return freeze_bytes(out);
 }
 
@@ -358,15 +498,17 @@ fn md5_impl(msg: bytes) -> bytes {
 /// length in bits as a big-endian 64-bit word.
 fn sha_tail(m: ?Vec<u8>, msg_len: i32) {
     m.push(0x80);
-    while (m.len() % 64 != 56) { m.push(0); }
+    while (m.len() % 64 != 56) {
+        m.push(0);
+    }
     let bits = msg_len as u64 * 8;
-    m.push(((bits >> 56) & 0xFF) as u8);
-    m.push(((bits >> 48) & 0xFF) as u8);
-    m.push(((bits >> 40) & 0xFF) as u8);
-    m.push(((bits >> 32) & 0xFF) as u8);
-    m.push(((bits >> 24) & 0xFF) as u8);
-    m.push(((bits >> 16) & 0xFF) as u8);
-    m.push(((bits >> 8) & 0xFF) as u8);
+    m.push((bits >> 56 & 0xFF) as u8);
+    m.push((bits >> 48 & 0xFF) as u8);
+    m.push((bits >> 40 & 0xFF) as u8);
+    m.push((bits >> 32 & 0xFF) as u8);
+    m.push((bits >> 24 & 0xFF) as u8);
+    m.push((bits >> 16 & 0xFF) as u8);
+    m.push((bits >> 8 & 0xFF) as u8);
     m.push((bits & 0xFF) as u8);
 }
 
@@ -385,7 +527,9 @@ fn sha1_impl(msg: bytes) -> bytes {
         let w: Vec<u32> = Vec::new();
         for (let j = 0; j < 16; j += 1) {
             let o = blk * 64 + j * 4;
-            w.push(m[o] as u32 << 24 | m[o + 1] as u32 << 16 | m[o + 2] as u32 << 8 | m[o + 3] as u32);
+            w.push(
+                m[o] as u32 << 24 | m[o + 1] as u32 << 16 | m[o + 2] as u32 << 8 | m[o + 3] as u32,
+            );
         }
         for (let i = 16; i < 80; i += 1) {
             w.push(rotl32(w[i - 3] ^ w[i - 8] ^ w[i - 14] ^ w[i - 16], 1));
@@ -399,19 +543,20 @@ fn sha1_impl(msg: bytes) -> bytes {
             let f: u32 = 0;
             let kk: u32 = 0;
             if (i < 20) {
-                f = (b & c) | (d & (b ^ 4294967295u32));
+                f = b & c | d & (b ^ 4294967295u32);
                 kk = 0x5A827999;
             } else if (i < 40) {
                 f = b ^ c ^ d;
                 kk = 0x6ED9EBA1;
             } else if (i < 60) {
-                f = (b & c) | (b & d) | (c & d);
+                f = b & c | b & d | c & d;
                 kk = 0x8F1BBCDCu32;
             } else {
                 f = b ^ c ^ d;
                 kk = 0xCA62C1D6u32;
             }
-            let tmp = ((rotl32(a, 5)).wrapping_add(f.wrapping_add(e))).wrapping_add(kk.wrapping_add(w[i]));
+            let tmp =
+                rotl32(a, 5).wrapping_add(f.wrapping_add(e)).wrapping_add(kk.wrapping_add(w[i]));
             e = d;
             d = c;
             c = rotl32(b, 30);
@@ -426,35 +571,90 @@ fn sha1_impl(msg: bytes) -> bytes {
     }
     let out: Vec<u8> = Vec::new();
     let ws: Vec<u32> = Vec::new();
-    ws.push(h0); ws.push(h1); ws.push(h2); ws.push(h3); ws.push(h4);
+    ws.push(h0);
+    ws.push(h1);
+    ws.push(h2);
+    ws.push(h3);
+    ws.push(h4);
     for (let j = 0; j < 5; j += 1) {
-        out.push(((ws[j] >> 24) & 0xFF) as u8);
-        out.push(((ws[j] >> 16) & 0xFF) as u8);
-        out.push(((ws[j] >> 8) & 0xFF) as u8);
+        out.push((ws[j] >> 24 & 0xFF) as u8);
+        out.push((ws[j] >> 16 & 0xFF) as u8);
+        out.push((ws[j] >> 8 & 0xFF) as u8);
         out.push((ws[j] & 0xFF) as u8);
     }
     return freeze_bytes(out);
 }
 
 fn sha256_k() -> Vec<u32> {
-    let k: Vec<u32> = Vec<u32>::from([
-        1116352408, 1899447441, 3049323471u32, 3921009573u32,
-        961987163, 1508970993, 2453635748u32, 2870763221u32,
-        3624381080u32, 310598401, 607225278, 1426881987,
-        1925078388, 2162078206u32, 2614888103u32, 3248222580u32,
-        3835390401u32, 4022224774u32, 264347078, 604807628,
-        770255983, 1249150122, 1555081692, 1996064986,
-        2554220882u32, 2821834349u32, 2952996808u32, 3210313671u32,
-        3336571891u32, 3584528711u32, 113926993, 338241895,
-        666307205, 773529912, 1294757372, 1396182291,
-        1695183700, 1986661051, 2177026350u32, 2456956037u32,
-        2730485921u32, 2820302411u32, 3259730800u32, 3345764771u32,
-        3516065817u32, 3600352804u32, 4094571909u32, 275423344,
-        430227734, 506948616, 659060556, 883997877,
-        958139571, 1322822218, 1537002063, 1747873779,
-        1955562222, 2024104815, 2227730452u32, 2361852424u32,
-        2428436474u32, 2756734187u32, 3204031479u32, 3329325298u32,
-    ]);
+    let k: Vec<u32> =
+        Vec<u32>::from(
+            [
+                1116352408,
+                1899447441,
+                3049323471u32,
+                3921009573u32,
+                961987163,
+                1508970993,
+                2453635748u32,
+                2870763221u32,
+                3624381080u32,
+                310598401,
+                607225278,
+                1426881987,
+                1925078388,
+                2162078206u32,
+                2614888103u32,
+                3248222580u32,
+                3835390401u32,
+                4022224774u32,
+                264347078,
+                604807628,
+                770255983,
+                1249150122,
+                1555081692,
+                1996064986,
+                2554220882u32,
+                2821834349u32,
+                2952996808u32,
+                3210313671u32,
+                3336571891u32,
+                3584528711u32,
+                113926993,
+                338241895,
+                666307205,
+                773529912,
+                1294757372,
+                1396182291,
+                1695183700,
+                1986661051,
+                2177026350u32,
+                2456956037u32,
+                2730485921u32,
+                2820302411u32,
+                3259730800u32,
+                3345764771u32,
+                3516065817u32,
+                3600352804u32,
+                4094571909u32,
+                275423344,
+                430227734,
+                506948616,
+                659060556,
+                883997877,
+                958139571,
+                1322822218,
+                1537002063,
+                1747873779,
+                1955562222,
+                2024104815,
+                2227730452u32,
+                2361852424u32,
+                2428436474u32,
+                2756734187u32,
+                3204031479u32,
+                3329325298u32,
+            ],
+        );
     return k;
 }
 
@@ -466,18 +666,22 @@ fn sha256_impl(msg: bytes) -> bytes {
     let h = sha256_h();
     let k = sha256_k();
     let st: Vec<u32> = Vec::new();
-    for (let i = 0; i < 8; i += 1) { st.push(h[i]); }
+    for (let i = 0; i < 8; i += 1) {
+        st.push(h[i]);
+    }
     let blocks = m.len() / 64;
     for (let blk = 0; blk < blocks; blk += 1) {
         let w: Vec<u32> = Vec::new();
         for (let j = 0; j < 16; j += 1) {
             let o = blk * 64 + j * 4;
-            w.push(m[o] as u32 << 24 | m[o + 1] as u32 << 16 | m[o + 2] as u32 << 8 | m[o + 3] as u32);
+            w.push(
+                m[o] as u32 << 24 | m[o + 1] as u32 << 16 | m[o + 2] as u32 << 8 | m[o + 3] as u32,
+            );
         }
         for (let i = 16; i < 64; i += 1) {
-            let s0 = rotr32(w[i - 15], 7) ^ rotr32(w[i - 15], 18) ^ (w[i - 15] >> 3);
-            let s1 = rotr32(w[i - 2], 17) ^ rotr32(w[i - 2], 19) ^ (w[i - 2] >> 10);
-            w.push((((w[i - 16]).wrapping_add(s0)).wrapping_add(w[i - 7])).wrapping_add(s1));
+            let s0 = rotr32(w[i - 15], 7) ^ rotr32(w[i - 15], 18) ^ w[i - 15] >> 3;
+            let s1 = rotr32(w[i - 2], 17) ^ rotr32(w[i - 2], 19) ^ w[i - 2] >> 10;
+            w.push(w[i - 16].wrapping_add(s0).wrapping_add(w[i - 7]).wrapping_add(s1));
         }
         let a = st[0];
         let b = st[1];
@@ -489,10 +693,10 @@ fn sha256_impl(msg: bytes) -> bytes {
         let hh = st[7];
         for (let i = 0; i < 64; i += 1) {
             let big1 = rotr32(e, 6) ^ rotr32(e, 11) ^ rotr32(e, 25);
-            let ch = (e & f) ^ ((e ^ 4294967295u32) & g);
-            let t1 = (hh.wrapping_add(big1)).wrapping_add(ch.wrapping_add((k[i]).wrapping_add(w[i])));
+            let ch = e & f ^ (e ^ 4294967295u32) & g;
+            let t1 = hh.wrapping_add(big1).wrapping_add(ch.wrapping_add(k[i].wrapping_add(w[i])));
             let big0 = rotr32(a, 2) ^ rotr32(a, 13) ^ rotr32(a, 22);
-            let maj = (a & b) ^ (a & c) ^ (b & c);
+            let maj = a & b ^ a & c ^ b & c;
             let t2 = big0.wrapping_add(maj);
             hh = g;
             g = f;
@@ -503,48 +707,111 @@ fn sha256_impl(msg: bytes) -> bytes {
             b = a;
             a = t1.wrapping_add(t2);
         }
-        st[0] = (st[0]).wrapping_add(a);
-        st[1] = (st[1]).wrapping_add(b);
-        st[2] = (st[2]).wrapping_add(c);
-        st[3] = (st[3]).wrapping_add(d);
-        st[4] = (st[4]).wrapping_add(e);
-        st[5] = (st[5]).wrapping_add(f);
-        st[6] = (st[6]).wrapping_add(g);
-        st[7] = (st[7]).wrapping_add(hh);
+        st[0] = st[0].wrapping_add(a);
+        st[1] = st[1].wrapping_add(b);
+        st[2] = st[2].wrapping_add(c);
+        st[3] = st[3].wrapping_add(d);
+        st[4] = st[4].wrapping_add(e);
+        st[5] = st[5].wrapping_add(f);
+        st[6] = st[6].wrapping_add(g);
+        st[7] = st[7].wrapping_add(hh);
     }
     let out: Vec<u8> = Vec::new();
     for (let j = 0; j < 8; j += 1) {
-        out.push(((st[j] >> 24) & 0xFF) as u8);
-        out.push(((st[j] >> 16) & 0xFF) as u8);
-        out.push(((st[j] >> 8) & 0xFF) as u8);
+        out.push((st[j] >> 24 & 0xFF) as u8);
+        out.push((st[j] >> 16 & 0xFF) as u8);
+        out.push((st[j] >> 8 & 0xFF) as u8);
         out.push((st[j] & 0xFF) as u8);
     }
     return freeze_bytes(out);
 }
 
 fn sha512_k() -> Vec<u64> {
-    let k: Vec<u64> = Vec<u64>::from([
-        4794697086780616226u64, 8158064640168781261u64, 13096744586834688815u64, 16840607885511220156u64,
-        4131703408338449720u64, 6480981068601479193u64, 10538285296894168987u64, 12329834152419229976u64,
-        15566598209576043074u64, 1334009975649890238u64, 2608012711638119052u64, 6128411473006802146u64,
-        8268148722764581231u64, 9286055187155687089u64, 11230858885718282805u64, 13951009754708518548u64,
-        16472876342353939154u64, 17275323862435702243u64, 1135362057144423861u64, 2597628984639134821u64,
-        3308224258029322869u64, 5365058923640841347u64, 6679025012923562964u64, 8573033837759648693u64,
-        10970295158949994411u64, 12119686244451234320u64, 12683024718118986047u64, 13788192230050041572u64,
-        14330467153632333762u64, 15395433587784984357u64, 489312712824947311u64, 1452737877330783856u64,
-        2861767655752347644u64, 3322285676063803686u64, 5560940570517711597u64, 5996557281743188959u64,
-        7280758554555802590u64, 8532644243296465576u64, 9350256976987008742u64, 10552545826968843579u64,
-        11727347734174303076u64, 12113106623233404929u64, 14000437183269869457u64, 14369950271660146224u64,
-        15101387698204529176u64, 15463397548674623760u64, 17586052441742319658u64, 1182934255886127544u64,
-        1847814050463011016u64, 2177327727835720531u64, 2830643537854262169u64, 3796741975233480872u64,
-        4115178125766777443u64, 5681478168544905931u64, 6601373596472566643u64, 7507060721942968483u64,
-        8399075790359081724u64, 8693463985226723168u64, 9568029438360202098u64, 10144078919501101548u64,
-        10430055236837252648u64, 11840083180663258601u64, 13761210420658862357u64, 14299343276471374635u64,
-        14566680578165727644u64, 15097957966210449927u64, 16922976911328602910u64, 17689382322260857208u64,
-        500013540394364858u64, 748580250866718886u64, 1242879168328830382u64, 1977374033974150939u64,
-        2944078676154940804u64, 3659926193048069267u64, 4368137639120453308u64, 4836135668995329356u64,
-        5532061633213252278u64, 6448918945643986474u64, 6902733635092675308u64, 7801388544844847127u64,
-    ]);
+    let k: Vec<u64> =
+        Vec<u64>::from(
+            [
+                4794697086780616226u64,
+                8158064640168781261u64,
+                13096744586834688815u64,
+                16840607885511220156u64,
+                4131703408338449720u64,
+                6480981068601479193u64,
+                10538285296894168987u64,
+                12329834152419229976u64,
+                15566598209576043074u64,
+                1334009975649890238u64,
+                2608012711638119052u64,
+                6128411473006802146u64,
+                8268148722764581231u64,
+                9286055187155687089u64,
+                11230858885718282805u64,
+                13951009754708518548u64,
+                16472876342353939154u64,
+                17275323862435702243u64,
+                1135362057144423861u64,
+                2597628984639134821u64,
+                3308224258029322869u64,
+                5365058923640841347u64,
+                6679025012923562964u64,
+                8573033837759648693u64,
+                10970295158949994411u64,
+                12119686244451234320u64,
+                12683024718118986047u64,
+                13788192230050041572u64,
+                14330467153632333762u64,
+                15395433587784984357u64,
+                489312712824947311u64,
+                1452737877330783856u64,
+                2861767655752347644u64,
+                3322285676063803686u64,
+                5560940570517711597u64,
+                5996557281743188959u64,
+                7280758554555802590u64,
+                8532644243296465576u64,
+                9350256976987008742u64,
+                10552545826968843579u64,
+                11727347734174303076u64,
+                12113106623233404929u64,
+                14000437183269869457u64,
+                14369950271660146224u64,
+                15101387698204529176u64,
+                15463397548674623760u64,
+                17586052441742319658u64,
+                1182934255886127544u64,
+                1847814050463011016u64,
+                2177327727835720531u64,
+                2830643537854262169u64,
+                3796741975233480872u64,
+                4115178125766777443u64,
+                5681478168544905931u64,
+                6601373596472566643u64,
+                7507060721942968483u64,
+                8399075790359081724u64,
+                8693463985226723168u64,
+                9568029438360202098u64,
+                10144078919501101548u64,
+                10430055236837252648u64,
+                11840083180663258601u64,
+                13761210420658862357u64,
+                14299343276471374635u64,
+                14566680578165727644u64,
+                15097957966210449927u64,
+                16922976911328602910u64,
+                17689382322260857208u64,
+                500013540394364858u64,
+                748580250866718886u64,
+                1242879168328830382u64,
+                1977374033974150939u64,
+                2944078676154940804u64,
+                3659926193048069267u64,
+                4368137639120453308u64,
+                4836135668995329356u64,
+                5532061633213252278u64,
+                6448918945643986474u64,
+                6902733635092675308u64,
+                7801388544844847127u64,
+            ],
+        );
     return k;
 }
 
@@ -553,21 +820,27 @@ fn sha512_k() -> Vec<u64> {
 fn sha512_impl(msg: bytes) -> bytes {
     let m = copy_bytes(msg);
     m.push(0x80);
-    while (m.len() % 128 != 112) { m.push(0); }
+    while (m.len() % 128 != 112) {
+        m.push(0);
+    }
     let bits = msg.len() as u64 * 8;
-    for (let i = 0; i < 8; i += 1) { m.push(0); }
-    m.push(((bits >> 56) & 0xFF) as u8);
-    m.push(((bits >> 48) & 0xFF) as u8);
-    m.push(((bits >> 40) & 0xFF) as u8);
-    m.push(((bits >> 32) & 0xFF) as u8);
-    m.push(((bits >> 24) & 0xFF) as u8);
-    m.push(((bits >> 16) & 0xFF) as u8);
-    m.push(((bits >> 8) & 0xFF) as u8);
+    for (let i = 0; i < 8; i += 1) {
+        m.push(0);
+    }
+    m.push((bits >> 56 & 0xFF) as u8);
+    m.push((bits >> 48 & 0xFF) as u8);
+    m.push((bits >> 40 & 0xFF) as u8);
+    m.push((bits >> 32 & 0xFF) as u8);
+    m.push((bits >> 24 & 0xFF) as u8);
+    m.push((bits >> 16 & 0xFF) as u8);
+    m.push((bits >> 8 & 0xFF) as u8);
     m.push((bits & 0xFF) as u8);
     let h = sha512_h();
     let k = sha512_k();
     let st: Vec<u64> = Vec::new();
-    for (let i = 0; i < 8; i += 1) { st.push(h[i]); }
+    for (let i = 0; i < 8; i += 1) {
+        st.push(h[i]);
+    }
     let blocks = m.len() / 128;
     for (let blk = 0; blk < blocks; blk += 1) {
         let w: Vec<u64> = Vec::new();
@@ -575,14 +848,14 @@ fn sha512_impl(msg: bytes) -> bytes {
             let o = blk * 128 + j * 8;
             let word: u64 = 0;
             for (let t = 0; t < 8; t += 1) {
-                word = (word << 8) | m[o + t] as u64;
+                word = word << 8 | m[o + t] as u64;
             }
             w.push(word);
         }
         for (let i = 16; i < 80; i += 1) {
-            let s0 = rotr64(w[i - 15], 1) ^ rotr64(w[i - 15], 8) ^ (w[i - 15] >> 7);
-            let s1 = rotr64(w[i - 2], 19) ^ rotr64(w[i - 2], 61) ^ (w[i - 2] >> 6);
-            w.push((((w[i - 16]).wrapping_add(s0)).wrapping_add(w[i - 7])).wrapping_add(s1));
+            let s0 = rotr64(w[i - 15], 1) ^ rotr64(w[i - 15], 8) ^ w[i - 15] >> 7;
+            let s1 = rotr64(w[i - 2], 19) ^ rotr64(w[i - 2], 61) ^ w[i - 2] >> 6;
+            w.push(w[i - 16].wrapping_add(s0).wrapping_add(w[i - 7]).wrapping_add(s1));
         }
         let a = st[0];
         let b = st[1];
@@ -594,10 +867,10 @@ fn sha512_impl(msg: bytes) -> bytes {
         let hh = st[7];
         for (let i = 0; i < 80; i += 1) {
             let big1 = rotr64(e, 14) ^ rotr64(e, 18) ^ rotr64(e, 41);
-            let ch = (e & f) ^ ((e ^ 18446744073709551615u64) & g);
-            let t1 = (hh.wrapping_add(big1)).wrapping_add(ch.wrapping_add((k[i]).wrapping_add(w[i])));
+            let ch = e & f ^ (e ^ 18446744073709551615u64) & g;
+            let t1 = hh.wrapping_add(big1).wrapping_add(ch.wrapping_add(k[i].wrapping_add(w[i])));
             let big0 = rotr64(a, 28) ^ rotr64(a, 34) ^ rotr64(a, 39);
-            let maj = (a & b) ^ (a & c) ^ (b & c);
+            let maj = a & b ^ a & c ^ b & c;
             let t2 = big0.wrapping_add(maj);
             hh = g;
             g = f;
@@ -608,43 +881,52 @@ fn sha512_impl(msg: bytes) -> bytes {
             b = a;
             a = t1.wrapping_add(t2);
         }
-        st[0] = (st[0]).wrapping_add(a);
-        st[1] = (st[1]).wrapping_add(b);
-        st[2] = (st[2]).wrapping_add(c);
-        st[3] = (st[3]).wrapping_add(d);
-        st[4] = (st[4]).wrapping_add(e);
-        st[5] = (st[5]).wrapping_add(f);
-        st[6] = (st[6]).wrapping_add(g);
-        st[7] = (st[7]).wrapping_add(hh);
+        st[0] = st[0].wrapping_add(a);
+        st[1] = st[1].wrapping_add(b);
+        st[2] = st[2].wrapping_add(c);
+        st[3] = st[3].wrapping_add(d);
+        st[4] = st[4].wrapping_add(e);
+        st[5] = st[5].wrapping_add(f);
+        st[6] = st[6].wrapping_add(g);
+        st[7] = st[7].wrapping_add(hh);
     }
     let out: Vec<u8> = Vec::new();
     for (let j = 0; j < 8; j += 1) {
-        out.push(((st[j] >> 56) & 0xFF) as u8);
-        out.push(((st[j] >> 48) & 0xFF) as u8);
-        out.push(((st[j] >> 40) & 0xFF) as u8);
-        out.push(((st[j] >> 32) & 0xFF) as u8);
-        out.push(((st[j] >> 24) & 0xFF) as u8);
-        out.push(((st[j] >> 16) & 0xFF) as u8);
-        out.push(((st[j] >> 8) & 0xFF) as u8);
+        out.push((st[j] >> 56 & 0xFF) as u8);
+        out.push((st[j] >> 48 & 0xFF) as u8);
+        out.push((st[j] >> 40 & 0xFF) as u8);
+        out.push((st[j] >> 32 & 0xFF) as u8);
+        out.push((st[j] >> 24 & 0xFF) as u8);
+        out.push((st[j] >> 16 & 0xFF) as u8);
+        out.push((st[j] >> 8 & 0xFF) as u8);
         out.push((st[j] & 0xFF) as u8);
     }
     return freeze_bytes(out);
 }
 
-entry fn md5(data: bytes) -> bytes { return md5_impl(data); }
-entry fn sha1(data: bytes) -> bytes { return sha1_impl(data); }
-entry fn sha256(data: bytes) -> bytes { return sha256_impl(data); }
-entry fn sha512(data: bytes) -> bytes { return sha512_impl(data); }
+entry fn md5(data: bytes) -> bytes {
+    return md5_impl(data);
+}
+entry fn sha1(data: bytes) -> bytes {
+    return sha1_impl(data);
+}
+entry fn sha256(data: bytes) -> bytes {
+    return sha256_impl(data);
+}
+entry fn sha512(data: bytes) -> bytes {
+    return sha512_impl(data);
+}
 
 /// One name, one call — the 01-sort dispatcher pattern on strings.
 entry fn digest(algo: str, data: bytes) -> (bytes, str) {
-    return when (algo) {
-        "md5"    -> (md5_impl(data), ""),
-        "sha1"   -> (sha1_impl(data), ""),
-        "sha256" -> (sha256_impl(data), ""),
-        "sha512" -> (sha512_impl(data), ""),
-        else     -> (bytes::zeroed(0), f"unknown algorithm: {algo}"),
-    };
+    return
+        when (algo) {
+            "md5" -> (md5_impl(data), ""),
+            "sha1" -> (sha1_impl(data), ""),
+            "sha256" -> (sha256_impl(data), ""),
+            "sha512" -> (sha512_impl(data), ""),
+            else -> (bytes::zeroed(0), f"unknown algorithm: {algo}"),
+        };
 }
 
 // ---------------------------------------------------------------- JSON ---
@@ -665,15 +947,17 @@ entry fn digest(algo: str, data: bytes) -> (bytes, str) {
 enum JTag { Null, False, True, Num, Str, Arr, Obj }
 
 struct Json {
-    tag:  JTag;
-    num: str;          // verbatim lexeme — exact round-trips, no
-    str: str;          // float formatting anywhere in this file
-    arr:  Vec<opaque>;
+    tag: JTag;
+    num: str; // verbatim lexeme — exact round-trips, no
+    str: str; // float formatting anywhere in this file
+    arr: Vec<opaque>;
     keys: Vec<str>;
     vals: Vec<opaque>;
 }
 
-fn noopaque() -> opaque { return opaque(0); }
+fn noopaque() -> opaque {
+    return opaque(0);
+}
 
 fn noopaques() -> Vec<opaque> {
     let v: Vec<opaque> = Vec::new();
@@ -684,28 +968,104 @@ fn nostrings() -> Vec<str> {
     return v;
 }
 
-fn jnull() -> Json { return Json { tag: JTag::Null, num: "", str: "", arr: noopaques(), keys: nostrings(), vals: noopaques() }; }
-fn jbool(b: bool) -> Json {
-    if (b) { return Json { tag: JTag::True, num: "", str: "", arr: noopaques(), keys: nostrings(), vals: noopaques() }; }
-    return Json { tag: JTag::False, num: "", str: "", arr: noopaques(), keys: nostrings(), vals: noopaques() };
+fn jnull() -> Json {
+    return
+        Json {
+            tag: JTag::Null,
+            num: "",
+            str: "",
+            arr: noopaques(),
+            keys: nostrings(),
+            vals: noopaques(),
+        };
 }
-fn jnum(n: str) -> Json { return Json { tag: JTag::Num, num: n, str: "", arr: noopaques(), keys: nostrings(), vals: noopaques() }; }
-fn jstr(s: str) -> Json { return Json { tag: JTag::Str, num: "", str: s, arr: noopaques(), keys: nostrings(), vals: noopaques() }; }
-fn jarr() -> Json { return Json { tag: JTag::Arr, num: "", str: "", arr: noopaques(), keys: nostrings(), vals: noopaques() }; }
-fn jobj() -> Json { return Json { tag: JTag::Obj, num: "", str: "", arr: noopaques(), keys: nostrings(), vals: noopaques() }; }
+fn jbool(b: bool) -> Json {
+    if (b) {
+        return
+            Json {
+                tag: JTag::True,
+                num: "",
+                str: "",
+                arr: noopaques(),
+                keys: nostrings(),
+                vals: noopaques(),
+            };
+    }
+    return
+        Json {
+            tag: JTag::False,
+            num: "",
+            str: "",
+            arr: noopaques(),
+            keys: nostrings(),
+            vals: noopaques(),
+        };
+}
+fn jnum(n: str) -> Json {
+    return
+        Json {
+            tag: JTag::Num,
+            num: n,
+            str: "",
+            arr: noopaques(),
+            keys: nostrings(),
+            vals: noopaques(),
+        };
+}
+fn jstr(s: str) -> Json {
+    return
+        Json {
+            tag: JTag::Str,
+            num: "",
+            str: s,
+            arr: noopaques(),
+            keys: nostrings(),
+            vals: noopaques(),
+        };
+}
+fn jarr() -> Json {
+    return
+        Json {
+            tag: JTag::Arr,
+            num: "",
+            str: "",
+            arr: noopaques(),
+            keys: nostrings(),
+            vals: noopaques(),
+        };
+}
+fn jobj() -> Json {
+    return
+        Json {
+            tag: JTag::Obj,
+            num: "",
+            str: "",
+            arr: noopaques(),
+            keys: nostrings(),
+            vals: noopaques(),
+        };
+}
 
 /// The parser cursor. A `str` is a sequence of codepoints, so the
 /// source is split once into single-char strings and walked by index.
-struct Cur { cs: Vec<str>; pos: i32; depth: i32; }
+struct Cur {
+    cs: Vec<str>;
+    pos: i32;
+    depth: i32;
+}
 
 fn split_chars(s: str) -> Vec<str> {
     let cs: Vec<str> = Vec::new();
-    for (let c of s) { cs.push(f"{c}"); }
+    for (let c of s) {
+        cs.push(f"{c}");
+    }
     return cs;
 }
 
 fn jpeek(cur: ?Cur) -> str {
-    if (cur.pos < cur.cs.len()) { return cur.cs[cur.pos]; }
+    if (cur.pos < cur.cs.len()) {
+        return cur.cs[cur.pos];
+    }
     return "";
 }
 
@@ -714,13 +1074,17 @@ fn jskip(cur: ?Cur) {
     while (again) {
         let c = jpeek(cur);
         again = c == " " || c == "\t" || c == "\n" || c == "\r";
-        if (again) { cur.pos = cur.pos + 1; }
+        if (again) {
+            cur.pos = cur.pos + 1;
+        }
     }
 }
 
 fn is_digit(c: str) -> bool {
-    return c == "0" || c == "1" || c == "2" || c == "3" || c == "4"
-        || c == "5" || c == "6" || c == "7" || c == "8" || c == "9";
+    return
+        c == "0" || c == "1" || c == "2" || c == "3" || c == "4" || c == "5" || c == "6" || c == "7" ||
+            c == "8" ||
+            c == "9";
 }
 
 fn join_chars(cs: Vec<str>) -> str {
@@ -735,24 +1099,45 @@ fn join_chars(cs: Vec<str>) -> str {
 /// lexeme, stored verbatim.
 fn valid_number(cs: Vec<str>) -> bool {
     let n = cs.len();
-    if (n == 0) { return false; }
+    if (n == 0) {
+        return false;
+    }
     let i = 0;
-    if (cs[0] == "-") { i = 1; }
+    if (cs[0] == "-") {
+        i = 1;
+    }
     let intd = 0;
-    while (i < n && is_digit(cs[i])) { i = i + 1; intd = intd + 1; }
-    if (intd == 0) { return false; }
+    while (i < n && is_digit(cs[i])) {
+        i = i + 1;
+        intd = intd + 1;
+    }
+    if (intd == 0) {
+        return false;
+    }
     if (i < n && cs[i] == ".") {
         i = i + 1;
         let fracd = 0;
-        while (i < n && is_digit(cs[i])) { i = i + 1; fracd = fracd + 1; }
-        if (fracd == 0) { return false; }
+        while (i < n && is_digit(cs[i])) {
+            i = i + 1;
+            fracd = fracd + 1;
+        }
+        if (fracd == 0) {
+            return false;
+        }
     }
     if (i < n && (cs[i] == "e" || cs[i] == "E")) {
         i = i + 1;
-        if (i < n && (cs[i] == "+" || cs[i] == "-")) { i = i + 1; }
+        if (i < n && (cs[i] == "+" || cs[i] == "-")) {
+            i = i + 1;
+        }
         let exd = 0;
-        while (i < n && is_digit(cs[i])) { i = i + 1; exd = exd + 1; }
-        if (exd == 0) { return false; }
+        while (i < n && is_digit(cs[i])) {
+            i = i + 1;
+            exd = exd + 1;
+        }
+        if (exd == 0) {
+            return false;
+        }
     }
     return i == n;
 }
@@ -760,14 +1145,30 @@ fn valid_number(cs: Vec<str>) -> bool {
 fn jparse_value(cur: ?Cur) -> (opaque, str) {
     jskip(cur);
     let c = jpeek(cur);
-    if (c == "") { return (noopaque(), "json: unexpected end of input"); }
-    if (c == "n") { return jparse_lit(cur, "null", jnull()); }
-    if (c == "t") { return jparse_lit(cur, "true", jbool(true)); }
-    if (c == "f") { return jparse_lit(cur, "false", jbool(false)); }
-    if (c == "\"") { return jparse_string(cur); }
-    if (c == "-" || is_digit(c)) { return jparse_number(cur); }
-    if (c == "[") { return jparse_array(cur); }
-    if (c == "{") { return jparse_object(cur); }
+    if (c == "") {
+        return (noopaque(), "json: unexpected end of input");
+    }
+    if (c == "n") {
+        return jparse_lit(cur, "null", jnull());
+    }
+    if (c == "t") {
+        return jparse_lit(cur, "true", jbool(true));
+    }
+    if (c == "f") {
+        return jparse_lit(cur, "false", jbool(false));
+    }
+    if (c == "\"") {
+        return jparse_string(cur);
+    }
+    if (c == "-" || is_digit(c)) {
+        return jparse_number(cur);
+    }
+    if (c == "[") {
+        return jparse_array(cur);
+    }
+    if (c == "{") {
+        return jparse_object(cur);
+    }
     return (noopaque(), f"json: unexpected `{c}` at index {cur.pos}");
 }
 
@@ -775,7 +1176,9 @@ fn jparse_lit(cur: ?Cur, word: str, v: Json) -> (opaque, str) {
     let start = cur.pos;
     let ok = true;
     for (let wch of word) {
-        if (jpeek(cur) != f"{wch}") { ok = false; }
+        if (jpeek(cur) != f"{wch}") {
+            ok = false;
+        }
         cur.pos = cur.pos + 1;
     }
     if (ok == false) {
@@ -786,7 +1189,7 @@ fn jparse_lit(cur: ?Cur, word: str, v: Json) -> (opaque, str) {
 
 fn jparse_string(cur: ?Cur) -> (opaque, str) {
     let start = cur.pos;
-    cur.pos = cur.pos + 1;   // opening quote
+    cur.pos = cur.pos + 1; // opening quote
     let out: Vec<str> = Vec::new();
     let closed = false;
     let open = true;
@@ -802,15 +1205,23 @@ fn jparse_string(cur: ?Cur) -> (opaque, str) {
             }
             let e = cur.cs[cur.pos];
             cur.pos = cur.pos + 1;
-            if (e == "n") { out.push("\n"); }
-            else if (e == "t") { out.push("\t"); }
-            else if (e == "r") { out.push("\r"); }
-            else if (e == "b") { out.push("\b"); }
-            else if (e == "f") { out.push("\f"); }
-            else if (e == "\"") { out.push("\""); }
-            else if (e == "\\") { out.push("\\"); }
-            else if (e == "/") { out.push("/"); }
-            else if (e == "u") {
+            if (e == "n") {
+                out.push("\n");
+            } else if (e == "t") {
+                out.push("\t");
+            } else if (e == "r") {
+                out.push("\r");
+            } else if (e == "b") {
+                out.push("\b");
+            } else if (e == "f") {
+                out.push("\f");
+            } else if (e == "\"") {
+                out.push("\"");
+            } else if (e == "\\") {
+                out.push("\\");
+            } else if (e == "/") {
+                out.push("/");
+            } else if (e == "u") {
                 return (noopaque(), "json: \\u escapes are not supported in this build");
             } else {
                 return (noopaque(), f"json: bad escape at index {cur.pos - 1}");
@@ -848,7 +1259,7 @@ fn jparse_array(cur: ?Cur) -> (opaque, str) {
     if (cur.depth > 64) {
         return (noopaque(), "json: nesting deeper than 64");
     }
-    cur.pos = cur.pos + 1;   // '['
+    cur.pos = cur.pos + 1; // '['
     let v = jarr();
     jskip(cur);
     if (jpeek(cur) == "]") {
@@ -858,7 +1269,9 @@ fn jparse_array(cur: ?Cur) -> (opaque, str) {
     let again = true;
     while (again) {
         let item = jparse_value(cur);
-        if (item.1 != "") { return (noopaque(), item.1); }
+        if (item.1 != "") {
+            return (noopaque(), item.1);
+        }
         let boxed = unwrap_box(item);
         v.arr.push(boxed);
         jskip(cur);
@@ -881,7 +1294,7 @@ fn jparse_object(cur: ?Cur) -> (opaque, str) {
     if (cur.depth > 64) {
         return (noopaque(), "json: nesting deeper than 64");
     }
-    cur.pos = cur.pos + 1;   // '{'
+    cur.pos = cur.pos + 1; // '{'
     let v = jobj();
     jskip(cur);
     if (jpeek(cur) == "}") {
@@ -895,7 +1308,9 @@ fn jparse_object(cur: ?Cur) -> (opaque, str) {
             return (noopaque(), f"json: expected a key string at index {cur.pos}");
         }
         let key = jparse_string(cur);
-        if (key.1 != "") { return (noopaque(), key.1); }
+        if (key.1 != "") {
+            return (noopaque(), key.1);
+        }
         let kdoc = opaque::downcast<Json>(unwrap_box(key));
         let kstr = kdoc.str;
         jskip(cur);
@@ -904,7 +1319,9 @@ fn jparse_object(cur: ?Cur) -> (opaque, str) {
         }
         cur.pos = cur.pos + 1;
         let val = jparse_value(cur);
-        if (val.1 != "") { return (noopaque(), val.1); }
+        if (val.1 != "") {
+            return (noopaque(), val.1);
+        }
         v.keys.push(kstr);
         v.vals.push(unwrap_box(val));
         jskip(cur);
@@ -962,7 +1379,9 @@ impl Json {
                     // in the verifier — coerce first, then dispatch)
                     let ae: Json = opaque::downcast<Json>(self.arr[i]);
                     let e = ae.encode(w);
-                    if (e != nil) { return e; }
+                    if (e != nil) {
+                        return e;
+                    }
                 }
                 w.end_array();
             },
@@ -972,7 +1391,9 @@ impl Json {
                     w.key(self.keys[i]);
                     let ve: Json = opaque::downcast<Json>(self.vals[i]);
                     let e = ve.encode(w);
-                    if (e != nil) { return e; }
+                    if (e != nil) {
+                        return e;
+                    }
                 }
                 w.end_object();
             },
@@ -991,14 +1412,18 @@ impl Json {
 /// because opaque does).
 entry fn json_dec(s: str) -> (?opaque, str) {
     let v = json_parse(s);
-    if (v.1 != "") { return (nil, v.1); }
+    if (v.1 != "") {
+        return (nil, v.1);
+    }
     return (v.0, "");
 }
 
 fn json_parse(s: str) -> (opaque, str) {
     let cur: ?Cur = Cur { cs: split_chars(s), pos: 0, depth: 0 };
     let v = jparse_value(cur);
-    if (v.1 != "") { return (noopaque(), v.1); }
+    if (v.1 != "") {
+        return (noopaque(), v.1);
+    }
     jskip(cur);
     if (cur.pos != cur.cs.len()) {
         return (noopaque(), f"json: trailing data at index {cur.pos}");
@@ -1069,17 +1494,35 @@ entry fn sample_doc() -> opaque {
 }
 
 fn sha256_h() -> Vec<u32> {
-    let h: Vec<u32> = Vec<u32>::from([
-        1779033703, 3144134277u32, 1013904242, 2773480762u32,
-        1359893119, 2600822924u32, 528734635, 1541459225,
-    ]);
+    let h: Vec<u32> =
+        Vec<u32>::from(
+            [
+                1779033703,
+                3144134277u32,
+                1013904242,
+                2773480762u32,
+                1359893119,
+                2600822924u32,
+                528734635,
+                1541459225,
+            ],
+        );
     return h;
 }
 
 fn sha512_h() -> Vec<u64> {
-    let h: Vec<u64> = Vec<u64>::from([
-        7640891576956012808u64, 13503953896175478587u64, 4354685564936845355u64, 11912009170470909681u64,
-        5840696475078001361u64, 11170449401992604703u64, 2270897969802886507u64, 6620516959819538809u64,
-    ]);
+    let h: Vec<u64> =
+        Vec<u64>::from(
+            [
+                7640891576956012808u64,
+                13503953896175478587u64,
+                4354685564936845355u64,
+                11912009170470909681u64,
+                5840696475078001361u64,
+                11170449401992604703u64,
+                2270897969802886507u64,
+                6620516959819538809u64,
+            ],
+        );
     return h;
 }
