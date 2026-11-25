@@ -98,7 +98,10 @@ pipeline lives in the `Doc`.
   dropped) — never diffs below the adapter. Edit ≡ cold is
   property-tested per stage: token splice ≡ cold lex
   (`crates/rut-lexer/tests/splice_props.rs`), edited doc ≡ cold parse
-  (`crates/rut-ast/tests/doc_edit_props.rs`).
+  (`crates/rut-ast/tests/doc_edit_props.rs`) — the tests' seeds derive
+  from each file's bytes, never its path, so every checkout runs the
+  same fixed sequences (doc K = 16, splice K = 64), and a found
+  counterexample becomes a literal pin.
 - **Doors are questions**: no raw `src()`/`toks()`/`line_starts()`
   handouts on `Doc` — text is `text(span)`, lines are
   `line_of`/`line_span`, tokens are `tokens_in(span)`, `name_at(pos)`

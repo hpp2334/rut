@@ -7,8 +7,10 @@
 //! helper's own law pinned as a side effect), `Source::edit`, then
 //! `splice_tokens` — and the spliced token stream and line table must
 //! equal a cold `lex_normalized` over the edited text, exactly. The
-//! PRNG is deterministic (xorshift seeded from the file path), so a
-//! failure reproduces bit-for-bit.
+//! PRNG is deterministic (law 5: the seed is a hash of the file's
+//! BYTES, never its path, and every checkout runs the same fixed 64
+//! sequences per file), so a failure reproduces bit-for-bit, on
+//! every path the tree lives at.
 
 use rut_lexer::lexer::{canonical, lex_normalized};
 use rut_lexer::source::{Edit, Source};
@@ -39,10 +41,11 @@ impl Rng {
     }
 }
 
-fn seed_of(path: &std::path::Path) -> u64 {
+/// law 5: FNV-1a over the file's bytes — the seed never sees the path
+fn seed_of(bytes: &[u8]) -> u64 {
     let mut h: u64 = 0xcbf2_9ce4_8422_2325;
-    for b in path.to_string_lossy().bytes() {
-        h ^= b as u64;
+    for b in bytes {
+        h ^= *b as u64;
         h = h.wrapping_mul(0x0100_0000_01b3);
     }
     h
@@ -178,6 +181,8 @@ fn corpus() -> Vec<std::path::PathBuf> {
 
 #[test]
 fn spliced_tokens_equal_cold_lex_over_the_corpus() {
+    // law 5: equal bytes under two names give equal seeds
+    assert_eq!(seed_of(b"let a = 1;\n"), seed_of(b"let a = 1;\n"));
     let files = corpus();
     assert!(!files.is_empty(), "the corpus roots must exist");
     let mut suffix_survivors = 0usize;
@@ -189,9 +194,9 @@ fn spliced_tokens_equal_cold_lex_over_the_corpus() {
         if raw.len() > 128 * 1024 {
             continue;
         }
-        let seed = seed_of(f);
+        let seed = seed_of(raw.as_bytes());
         let steps = if raw.len() > 16 * 1024 { 3 } else { 8 };
-        for seq in 0..3 {
+        for seq in 0..64 {
             let file = f.file_name().unwrap().to_string_lossy().into_owned();
             assert_splice_cold(&file, seq, &raw, seed, steps, &mut suffix_survivors);
             steps_total += steps;
