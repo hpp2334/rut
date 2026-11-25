@@ -16,7 +16,7 @@ fn run(src: &str) -> Result<Vec<String>, String> {
 
     let tree = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../..");
     let mut world = Vec::new();
-    for d in ["rut/ink", "rut/pouch"] {
+    for d in ["rut/ink", "rut/pouch", "rut/futures"] {
         world.extend(
             rut_native::dir_pkgs(&tree.join(d))
                 .map_err(|e| e.to_string())?
@@ -37,7 +37,7 @@ fn run(src: &str) -> Result<Vec<String>, String> {
         // both texts compile over the same declaration)
         rut_driver::Mounted::source("probe", src).manifest(rut_driver::Manifest::lib(
             "probe",
-            &["calc_host", "ink", "pouch"],
+            &["calc_host", "ink", "pouch", "futures"],
         )),
     )
     .entrypoint("probe")
@@ -59,6 +59,10 @@ fn run(src: &str) -> Result<Vec<String>, String> {
         }),
     );
     hosts.install_host_pkg(&ctx, rut_std::math::pkg());
+    // the async intrinsics' bodies (`__launch`/`__abort`/`__sleep`) —
+    // declared by the mounted async_host pkg, bound here like the CLI's
+    // run chain binds them; inert for probes that never launch
+    hosts.install_host_pkg(&ctx, rut_std::async_host::pkg());
     hosts.verify_against(&ctx.flatten());
     let limits = Limits {
         fuel: Some(10_000_000),
@@ -71,11 +75,14 @@ fn run(src: &str) -> Result<Vec<String>, String> {
         .hosts(hosts)
         .build()
         .map_err(|t| format!("boot: {}", t.msg))?;
-    let result = vm
-        .call::<_, ()>("main", ())
-        .map_err(|t| format!("run: {}", t.msg));
+    vm.call::<_, ()>("main", ())
+        .map_err(|t| format!("run: {}", t.msg))?;
+    // the engine's driving protocol: launched futures progress only
+    // when driven — the native embedder's lane drains to idle after
+    // the entry (the CLI run lane's shape); idle is the honest return
+    vm.run_until_idle(rut_vm::interp::Wait::Block)
+        .map_err(|t| format!("drive: {}", t.msg))?;
     let out = lines.borrow().clone();
-    result?;
     Ok(out)
 }
 
@@ -309,6 +316,37 @@ entry fn main() {
     if (pair.1) {
         log.info(f"{a} {pair.0}");
     }
+}
+"#,
+    );
+}
+
+#[test]
+fn an_async_block_tail_survives_formatting() {
+    // the awaited async block's tail is the program's observable: fmt
+    // used to drop the tail, and the formatted text logged `tail 0`
+    // where the original logged `tail 3`. (The tail's value does not
+    // ride the future's result in this build — `return`s set T — so
+    // the tail is observed through the captured cell it writes.)
+    probe(
+        "async-tail",
+        r#"
+use ink::{ Logger };
+use futures::{ launch_future };
+class Box {
+    v: i32;
+}
+entry fn main() {
+    let log = Logger::new("a");
+    let b = Box { v: 0 };
+    let f = async {
+        let g = async {
+            b.v = 1 + 2
+        };
+        await g;
+        log.info(f"tail {b.v}");
+    };
+    launch_future(f);
 }
 "#,
     );

@@ -2,7 +2,7 @@
 //! deliberately does NOT pin: comment reattachment shapes, literal
 //! verbatim preservation, re-paren decisions, `[style]` parsing.
 
-use rut_ast::parser::Mode;
+use rut_ast::parser::{parse_with_recover, Mode};
 use rut_fmt::{format, Style};
 
 fn fmt(src: &str) -> String {
@@ -423,6 +423,55 @@ fn statement_if_with_tail_arms_prints_multiline() {
     assert_eq!(
         fmt("fn fact(n: i32) -> i32 { if (n <= 1) { 1 } else { n * fact(n - 1) } }"),
         "fn fact(n: i32) -> i32 {\n    if (n <= 1) {\n        1\n    } else {\n        n * fact(n - 1)\n    }\n}\n"
+    );
+}
+
+// ---- async blocks ----
+
+#[test]
+fn an_async_block_keeps_its_tail_through_formatting() {
+    // the mint's tail is the block's VALUE — the arm used to print the
+    // statements and drop the tail (`async { 1 + 2 }` → `async { }`).
+    // The formatted output's dump must hold the whole
+    // `Block { stmts: [], tail: Binary }`.
+    let out = fmt("fn f() {\n    let x = async { 1 + 2 };\n}");
+    let p = parse_with_recover(out, Mode::Impl);
+    assert!(
+        p.ast().is_clean(),
+        "the formatted text must reparse clean: {:?}",
+        p.ast().errors()
+    );
+    let dump = rut_ast::AstPrinter::text_of(p.ast(), p.text(p.span()));
+    let body = dump
+        .split("AsyncBlock")
+        .nth(1)
+        .expect("the AsyncBlock must be in the dump");
+    let (_, after_stmts) = body
+        .split_once("stmts:")
+        .expect("the body's Block dumps its stmts");
+    let (between, after_tail) = after_stmts
+        .split_once("tail:")
+        .expect("the tail must survive formatting");
+    assert!(
+        !between.contains('@'),
+        "the async body must hold no statements:\n{dump}"
+    );
+    assert!(
+        after_tail.contains("Binary"),
+        "the tail must be the `1 + 2` binary:\n{dump}"
+    );
+}
+
+#[test]
+fn an_async_block_is_idempotent() {
+    // the arm never advanced `passed` past the block's `{`, so a second
+    // pass inserted an empty line after `async {` (ground truth 9)
+    let src = "fn f() {\n    let f = async { a = 1; a };\n}";
+    let once = fmt(src);
+    assert_eq!(fmt(&once), once, "fmt(fmt(x)) != fmt(x)");
+    assert!(
+        !once.contains("async {\n\n"),
+        "an empty line after `async {{`:\n{once}"
     );
 }
 

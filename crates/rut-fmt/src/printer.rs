@@ -1695,15 +1695,25 @@ impl<'a> P<'a> {
             ExprRef::AsyncBlock(h) => {
                 let d = h.get(self.a);
                 // `async { .. }` — the async primitive; the block always
-                // breaks (a mint is a statement-sized thing)
+                // breaks (a mint is a statement-sized thing). The tail
+                // prints like a statement (the comment drains ride it),
+                // minus the `;` — the whole mint prints, every time.
                 let blk = d.body.get(self.a);
                 let stmts: Vec<StmtRef> = blk.stmts.to_vec();
+                let tail = blk.tail;
                 self.text("async ");
                 self.text("{");
+                self.passed = self.passed.max(d.body.span(self.a).lo);
                 self.level += 1;
                 self.nl();
                 for s in stmts {
                     self.stmt(s);
+                }
+                if let Some(t) = tail {
+                    let span = t.span(self.a);
+                    self.begin_el(span, Begin::Stmt);
+                    self.expr_tokens(t);
+                    self.end_el(span);
                 }
                 self.drain_close(d.body.span(self.a).hi);
                 self.level -= 1;
