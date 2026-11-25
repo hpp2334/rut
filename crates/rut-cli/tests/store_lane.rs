@@ -132,8 +132,9 @@ fn rut(home: &Path, args: &[&str]) -> (i32, String, String) {
 }
 
 /// The store dir a pinned dep lands in — the pin IS the address.
-fn store_dir_for(home: &Path, spec: &str, pin: &str) -> PathBuf {
-    home.join("deps").join(format!("{spec}@{}", &pin[..16]))
+fn store_dir_for(home: &Path, spec: &str, url: &str, pin: &str) -> PathBuf {
+    home.join("deps")
+        .join(rut_driver::store_dir_keyed(spec, pin, url))
 }
 
 /// Pack one leaf pkg (`name`, `body`) into bundle bytes — the served
@@ -180,7 +181,7 @@ fn install_publishes_the_store_layout_and_reruns_are_store_first() {
 
     // THE LAYOUT: `<deps>/util@<pin16>/` — the pin IS the address —
     // artifact + meta + the extracted tree
-    let dir = store_dir_for(&home, "util", &pin);
+    let dir = store_dir_for(&home, "util", &url, &pin);
     let artifact = dir.join("artifact.rutbundle");
     assert!(artifact.is_file(), "the artifact lands: {:?}", dir);
     assert_eq!(
@@ -298,7 +299,7 @@ fn a_zip_dep_publishes_the_unpacked_tree_and_runs_offline() {
 
     // the layout: the artifact named by the url's kind, the meta
     // naming the SOURCE transport, the tree unpacked verbatim
-    let dir = store_dir_for(&home, "gen", &pin);
+    let dir = store_dir_for(&home, "gen", &url, &pin);
     assert_eq!(
         std::fs::read(dir.join("artifact.zip")).unwrap(),
         zip,
@@ -516,7 +517,7 @@ fn the_embedder_remote_caches_flat_beside_the_store_dirs() {
     let home = root.join("home");
     let (code, _out, err) = rut(&home, &["install", app.to_str().unwrap()]);
     assert_eq!(code, 0, "install publishes beside the flat entry: {err}");
-    let dir = store_dir_for(&home, "util", &pin);
+    let dir = store_dir_for(&home, "util", &url, &pin);
     assert!(dir.is_dir(), "the store dir landed: {:?}", dir);
     assert!(
         entry.is_file(),

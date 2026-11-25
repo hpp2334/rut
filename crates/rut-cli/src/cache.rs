@@ -99,7 +99,7 @@ impl StoreRemote {
     pub(crate) fn lookup(&self, url: &str) -> Option<Vec<u8>> {
         let spec = self.rows.iter().find(|(_, u)| u == url)?.0.as_str();
         let pin = self.pins.get(url)?;
-        let dir = store_dep_dir(spec, pin);
+        let dir = store_dep_dir(spec, url, pin);
         let meta = store_meta_of(&dir)?;
         if meta.sha256 != *pin {
             return None;
@@ -132,9 +132,11 @@ impl DepRemote for StoreRemote {
 
 // ── the store lanes: hit / publish / meta / eviction ─────────────────
 
-/// The store dir for one pinned row: `<deps>/<spec>@<pin16>/`.
-fn store_dep_dir(spec: &str, pin: &str) -> PathBuf {
-    PathBuf::from(rut_driver::deps_dir()).join(rut_driver::store_dir(spec, pin))
+/// The store dir for one pinned row: `<deps>/<spec>@<pin16>/` — keyed
+/// by what determines the bytes (the toolchain's wire VERSION rides a
+/// COMPILED artifact's address, [`rut_driver::store_dir_keyed`]).
+fn store_dep_dir(spec: &str, url: &str, pin: &str) -> PathBuf {
+    PathBuf::from(rut_driver::deps_dir()).join(rut_driver::store_dir_keyed(spec, pin, url))
 }
 
 /// A dep dir's meta, parsed — `None` on any absence or parse refusal
@@ -149,7 +151,7 @@ fn store_meta_of(dir: &std::path::Path) -> Option<StoreMeta> {
 /// ⇒ the artifact bytes. `install` warms through here — a hit
 /// never touches the wire and never re-hashes.
 pub(crate) fn store_hit(spec: &str, url: &str, pin: &str) -> Option<Vec<u8>> {
-    let dir = store_dep_dir(spec, pin);
+    let dir = store_dep_dir(spec, url, pin);
     let meta = store_meta_of(&dir)?;
     if meta.sha256 != pin {
         return None;
@@ -181,7 +183,7 @@ fn unpack_entries(url: &str, bytes: &[u8]) -> Result<Vec<(String, Vec<u8>)>, Str
 /// does NOT vouch the pin is corrupt by definition and gets
 /// republished over.
 pub(crate) fn store_publish(spec: &str, url: &str, pin: &str, bytes: &[u8]) -> Result<(), String> {
-    let dir = store_dep_dir(spec, pin);
+    let dir = store_dep_dir(spec, url, pin);
     match store_meta_of(&dir) {
         Some(meta) if meta.sha256 == pin => return Ok(()),
         _ => {
@@ -195,7 +197,7 @@ pub(crate) fn store_publish(spec: &str, url: &str, pin: &str, bytes: &[u8]) -> R
     std::fs::create_dir_all(&deps)
         .map_err(|e| format!("{}: cannot create the dep store: {e}", deps.display()))?;
     // the tmp sibling fills first — the whole dir lands by ONE rename
-    let addr = rut_driver::store_dir(spec, pin);
+    let addr = rut_driver::store_dir_keyed(spec, pin, url);
     let tmp = deps.join(format!(".{addr}.tmp-{}", std::process::id()));
     let _ = std::fs::remove_dir_all(&tmp);
     std::fs::create_dir_all(&tmp).map_err(|e| format!("{}: {e}", tmp.display()))?;
@@ -489,9 +491,9 @@ fn hash_closure(
             // lock's pin). Absent = uncached — the key differs until
             // the install lands, and no entry may ride it.
             let spec = specs.get(url).map(String::as_str).unwrap_or(name);
-            let entry = pins
-                .get(url)
-                .map(|pin| store_dep_dir(spec, pin).join(rut_driver::store_artifact_name(url)));
+            let entry = pins.get(url).map(|pin| {
+                store_dep_dir(spec, url, pin).join(rut_driver::store_artifact_name(url))
+            });
             match entry.and_then(|p| std::fs::read(&p).ok()) {
                 Some(bytes) => field(buf, &bytes),
                 None => {
@@ -725,7 +727,7 @@ mod tests {
             entry.display()
         );
         // and the artifact the key rode is the store's own bytes
-        let artifact = store_dep_dir("util", pin).join(rut_driver::store_artifact_name(url));
+        let artifact = store_dep_dir("util", url, pin).join(rut_driver::store_artifact_name(url));
         assert_eq!(std::fs::read(&artifact).unwrap(), bytes);
     }
 
@@ -744,7 +746,7 @@ mod tests {
         store_publish("util", url, pin, &bytes).expect("publish");
 
         // the layout: artifact + meta + the extracted tree
-        let dir = store_dep_dir("util", pin);
+        let dir = store_dep_dir("util", url, pin);
         let artifact = dir.join(rut_driver::store_artifact_name(url));
         assert_eq!(artifact.file_name().unwrap(), "artifact.rutbundle");
         assert_eq!(std::fs::read(&artifact).unwrap(), bytes);
@@ -799,7 +801,7 @@ mod tests {
         )])
         .expect("pack the bundle");
         store_publish("util", url, pin, &bytes).expect("first publish");
-        let artifact = store_dep_dir("util", pin).join(rut_driver::store_artifact_name(url));
+        let artifact = store_dep_dir("util", url, pin).join(rut_driver::store_artifact_name(url));
         let stamp = std::fs::metadata(&artifact).unwrap().modified().unwrap();
         std::thread::sleep(std::time::Duration::from_millis(20));
 
@@ -822,18 +824,18 @@ mod tests {
             "dep `util` — sha256 pin mismatch for {url}: rut.lock pins {pin}, the fetched bytes hash to deadbeef"
         );
         evict_poisoned_cache(&err);
-        assert!(!store_dep_dir("util", pin).exists(), "evicted");
+        assert!(!store_dep_dir("util", url, pin).exists(), "evicted");
         store_publish("util", url, pin, &bytes).expect("re-publish after eviction");
         assert_eq!(std::fs::read(&artifact).unwrap(), bytes, "healed");
 
         // a corrupt META, by contrast, vouches nothing — the publish
         // repairs the whole dir in place
-        let meta_path = store_dep_dir("util", pin).join(rut_driver::META_NAME);
+        let meta_path = store_dep_dir("util", url, pin).join(rut_driver::META_NAME);
         std::fs::write(&meta_path, b"not json at all").unwrap();
         store_publish("util", url, pin, &bytes).expect("republish over the corrupt meta");
         assert_eq!(std::fs::read(&artifact).unwrap(), bytes);
         assert!(
-            store_meta_of(&store_dep_dir("util", pin)).is_some(),
+            store_meta_of(&store_dep_dir("util", url, pin)).is_some(),
             "the meta is whole again"
         );
     }
@@ -857,7 +859,7 @@ mod tests {
         let zip = rut_driver::bundle::write_srczip(&entries).expect("pack the zip");
         store_publish("ink", url, pin, &zip).expect("publish");
 
-        let dir = store_dep_dir("ink", pin);
+        let dir = store_dep_dir("ink", url, pin);
         // the artifact is the zip, named by the url's kind
         assert_eq!(
             std::fs::read(dir.join("artifact.zip")).unwrap(),
@@ -892,26 +894,31 @@ mod tests {
         let _home = Home::new("evict");
         let pin = "4197b14904bd9a5d8b0995d86b7d1b1e50d80e9cb1a1c1e6e2a5e8e9c0d1b2a3";
         let other = "2f6e6a20c3d4e5f60718293a4b5c6d7e8f90a1b2c3d4e5f60718293a4b5c6d7e";
+        let url = "https://x/util.rutbundle";
+        let other_url = "https://x/pouch.rutbundle";
         let bundle = |b: &[u8]| {
             rut_driver::bundle::write_bundle(&[("mod.rutc".to_string(), b.to_vec())]).unwrap()
         };
-        store_publish("util", "https://x/util.rutbundle", pin, &bundle(b"u")).unwrap();
-        store_publish("pouch", "https://x/pouch.rutbundle", other, &bundle(b"p")).unwrap();
+        store_publish("util", url, pin, &bundle(b"u")).unwrap();
+        store_publish("pouch", other_url, other, &bundle(b"p")).unwrap();
 
         // a non-pin error evicts nothing
         evict_poisoned_cache("some unrelated failure");
-        assert!(store_dep_dir("util", pin).is_dir());
+        assert!(store_dep_dir("util", url, pin).is_dir());
 
         // the pin error's phrase (the mount door's exact law) names the
         // url — its store dir goes, the innocent neighbor stays
         let err = format!(
-            "dep `util` — sha256 pin mismatch for https://x/util.rutbundle: rut.lock pins {pin}, the fetched bytes hash to deadbeef"
+            "dep `util` — sha256 pin mismatch for {url}: rut.lock pins {pin}, the fetched bytes hash to deadbeef"
         );
         evict_poisoned_cache(&err);
         assert!(
-            !store_dep_dir("util", pin).exists(),
+            !store_dep_dir("util", url, pin).exists(),
             "the poisoned dir is gone"
         );
-        assert!(store_dep_dir("pouch", other).is_dir(), "the neighbor stays");
+        assert!(
+            store_dep_dir("pouch", other_url, other).is_dir(),
+            "the neighbor stays"
+        );
     }
 }

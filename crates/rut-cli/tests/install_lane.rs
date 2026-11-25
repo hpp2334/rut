@@ -196,8 +196,9 @@ fn one_dep(url: &str) -> String {
 /// The store dir a pinned dep lands in
 /// (`<RUT_HOME>/deps/<spec>@<sha[:16]>/`) — the content-drift test
 /// must clear it, the fetcher is store-first.
-fn store_dir_for(home: &Path, spec: &str, pin: &str) -> PathBuf {
-    home.join("deps").join(format!("{spec}@{}", &pin[..16]))
+fn store_dir_for(home: &Path, spec: &str, url: &str, pin: &str) -> PathBuf {
+    home.join("deps")
+        .join(rut_driver::store_dir_keyed(spec, pin, url))
 }
 
 // -- 1 ----------------------------------------------------------------
@@ -458,7 +459,7 @@ fn locked_refuses_content_drift_and_never_touches_the_lock() {
     let fresh_pin = rut_driver::sha256_hex(&fresh);
     assert_ne!(stale_pin, fresh_pin);
     server.re_serve("util.rutbundle", fresh);
-    let entry = store_dir_for(&home, "util", &stale_pin);
+    let entry = store_dir_for(&home, "util", &url, &stale_pin);
     assert!(entry.is_dir(), "the install warmed the store");
     std::fs::remove_dir_all(&entry).unwrap();
 
@@ -485,7 +486,7 @@ fn locked_refuses_content_drift_and_never_touches_the_lock() {
     // verify-then-publish atomicity: the drifted bytes entered the
     // store NOWHERE — no dir at the fresh address, no tmp siblings
     assert!(
-        !store_dir_for(&home, "util", &fresh_pin).exists(),
+        !store_dir_for(&home, "util", &url, &fresh_pin).exists(),
         "drifted bytes publish nothing"
     );
     let deps = home.join("deps");
@@ -605,7 +606,7 @@ fn locked_warms_a_cold_store_for_the_offline_run() {
 
     // the cold store: the entry vanishes (the CI machine's first
     // `--locked`), and the verify pass re-downloads it
-    std::fs::remove_dir_all(store_dir_for(&home, "util", &pin)).unwrap();
+    std::fs::remove_dir_all(store_dir_for(&home, "util", &url, &pin)).unwrap();
     let (code, out, err) = rut(&home, &["install", app.to_str().unwrap(), "--locked"]);
     assert_eq!(code, 0, "--locked warms a cold store: {err}");
     assert!(
@@ -615,7 +616,7 @@ fn locked_warms_a_cold_store_for_the_offline_run() {
         "the warm summary, strictly: {out}"
     );
     assert!(
-        store_dir_for(&home, "util", &pin)
+        store_dir_for(&home, "util", &url, &pin)
             .join("artifact.rutbundle")
             .is_file(),
         "the download published into the store"
@@ -660,7 +661,7 @@ fn a_poisoned_entry_refuses_evicts_and_locked_install_heals() {
     let pin = rut_driver::parse_lock(&lock).unwrap().deps()[0]
         .sha256
         .clone();
-    let entry = store_dir_for(&home, "util", &pin);
+    let entry = store_dir_for(&home, "util", &url, &pin);
 
     // the offline run answers from the warm store
     server.set_up(false);

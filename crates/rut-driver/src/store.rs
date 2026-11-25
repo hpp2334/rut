@@ -88,6 +88,27 @@ pub fn store_dir(name: &str, pin: &str) -> String {
     format!("{name}@{}", &pin[..end])
 }
 
+/// The store dir for one pinned row, keyed by what determines the
+/// artifact's bytes: the bare [`store_dir`] address for a SOURCE zip
+/// (its bytes are toolchain-independent), the same address carrying
+/// the module-binary wire VERSION for a COMPILED `.rutbundle` —
+/// `futures@<pin16>.v13`. The law: a compiled dependency is served
+/// only to the toolchain that wrote it — its bytes are the writing
+/// compiler's output, and a reader that cannot load them must never
+/// be served them, so the key names the writer the way the lock names
+/// the bytes. An entry written by another toolchain lands at a
+/// different address: a miss, never a load — and the next
+/// `rut install` republishes under the tagged address (a store heals
+/// on its next install).
+pub fn store_dir_keyed(name: &str, pin: &str, url: &str) -> String {
+    let dir = store_dir(name, pin);
+    if store_format(url) == "rutbundle" {
+        format!("{dir}.v{}", rut_core::binary::VERSION)
+    } else {
+        dir
+    }
+}
+
 /// `artifact.<ext>` — the pinned bytes as downloaded; the extension
 /// is the url's own artifact kind (`.zip` source transport,
 /// `.rutbundle` compiled), the same law the old flat cache named by.
@@ -254,6 +275,31 @@ mod tests {
         // total function: truncation to what is there
         assert_eq!(store_dir("x", "abc"), "x@abc");
         assert_eq!(store_dir("x", ""), "x@");
+    }
+
+    #[test]
+    fn a_compiled_artifacts_address_names_the_toolchain() {
+        // the key names whatever determines the bytes: a COMPILED
+        // artifact's bytes are the writing toolchain's output, so its
+        // address carries the module-binary wire VERSION; a source
+        // zip's bytes are toolchain-independent and keep the bare pin
+        let zip_url = "https://cdn.jsdelivr.net/gh/hpp2334/rut@std-v19/dist/std/futures.zip";
+        assert_eq!(
+            store_dir_keyed("futures", PIN, zip_url),
+            format!("futures@{}", &PIN[..16]),
+            "a source zip's address stays the bare pin"
+        );
+        let bundle_url = "https://example.com/futures.rutbundle";
+        assert_eq!(
+            store_dir_keyed("futures", PIN, bundle_url),
+            format!("futures@{}.v{}", &PIN[..16], rut_core::binary::VERSION),
+            "a compiled artifact's address names the writing toolchain"
+        );
+        // the writer's discipline is not the caller's problem here either
+        assert_eq!(
+            store_dir_keyed("futures", &PIN.to_ascii_uppercase(), bundle_url),
+            format!("futures@{}.v{}", &PIN[..16], rut_core::binary::VERSION)
+        );
     }
 
     // ---- the home + the roots ----

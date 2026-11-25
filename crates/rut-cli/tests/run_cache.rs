@@ -64,8 +64,9 @@ fn cache_entries(home: &Path) -> Vec<PathBuf> {
 
 /// The store dir a pinned dep lands in
 /// (`<RUT_HOME>/deps/<spec>@<sha[:16]>/`) — the pin IS the address.
-fn store_dir_for(home: &Path, spec: &str, pin: &str) -> PathBuf {
-    home.join("deps").join(format!("{spec}@{}", &pin[..16]))
+fn store_dir_for(home: &Path, spec: &str, url: &str, pin: &str) -> PathBuf {
+    home.join("deps")
+        .join(rut_driver::store_dir_keyed(spec, pin, url))
 }
 
 #[test]
@@ -451,7 +452,7 @@ fn a_generic_url_dep_runs_identically_on_the_miss_and_the_hit() {
     let (code, err) = rut_run(&home, &["install", app.to_str().unwrap()]);
     assert_eq!(code, 0, "install: {err}");
 
-    let artifact = store_dir_for(&home, "gen", &pin).join("artifact.zip");
+    let artifact = store_dir_for(&home, "gen", &url, &pin).join("artifact.zip");
     assert!(artifact.is_file(), "the url dep's store artifact lands");
     assert_miss_then_hit(&home, &app);
     assert_eq!(
@@ -545,7 +546,7 @@ fn a_url_dep_closure_writes_only_the_resolved_key_and_the_second_run_hits_it() {
     // `<uncached>` entry beside it.
     let (code, err) = rut_run(&home, &["run", app.to_str().unwrap()]);
     assert_eq!(code, 0, "first run: {err}");
-    let artifact = store_dir_for(&home, "util", &pin).join("artifact.rutbundle");
+    let artifact = store_dir_for(&home, "util", &url, &pin).join("artifact.rutbundle");
     assert!(artifact.is_file(), "the url dep's store artifact lands");
     assert_eq!(
         cache_entries(&home).len(),

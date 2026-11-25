@@ -298,13 +298,6 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
             );
             return Err(());
         }
-        let is_placeholder = |c: &mut Self, p: TypeId| -> bool {
-            let t = c.ctx.types.type_at(p).name;
-            let t = c.ctx.interner.name(t).to_string();
-            gf.params
-                .iter()
-                .any(|g| format!("#{}", c.ctx.name(*g)) == t)
-        };
         let mut aregs = Vec::new();
         let mut arg_tys = Vec::new();
         for (i, a) in args.iter().enumerate() {
@@ -312,9 +305,20 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
             // the site already bound is concrete here, so the argument
             // compiles at that type (an integer literal inside `[..]`
             // must not fall back to the i32 default and overwrite the
-            // explicit binding at inference)
+            // explicit binding at inference). A type that still carries
+            // an UNBOUND placeholder anywhere — nested inside a wrapper
+            // included — must not hint: an async block hinted
+            // `Future<#T>` binds its element at the placeholder row (a
+            // template-level type, never a runtime one), the mirror
+            // request then spells the template's own placeholders, and
+            // the owner materializes that placeholder compile below its
+            // template window — the template root's dedup hands the row
+            // a fid outside the window the same encode writes, and the
+            // decode refuses the toolchain's own artifact (the
+            // launched-async pin). The old gate checked the top-level
+            // name only and lied for every wrapper shape.
             let hinted = self.ctx.subst_template_ty(gf.args[i], &env);
-            let hint = if is_placeholder(self, hinted) {
+            let hint = if self.mentions_template_row(hinted, &gf.params) {
                 None
             } else {
                 Some(hinted)
@@ -410,6 +414,40 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
     ) -> TcResult<()> {
         let names: Vec<IdentId> = gf.params.clone();
         self.infer_named_placeholders(param, arg, &names, env, sp)
+    }
+
+    /// Does this type mention one of the target's `#<param>` rows — at
+    /// its top or nested inside any wrapper (`?T`, `[T]`, `Weak<T>`,
+    /// `Future<T>`, a fn shape, a record's fields)? The hint lane's
+    /// gate (see the call site): a param type that still carries an
+    /// unbound placeholder anywhere must not reach the argument's
+    /// compile as a hint.
+    fn mentions_template_row(&mut self, t: TypeId, params: &[IdentId]) -> bool {
+        let ptext = self.ctx.types.type_at(t).name;
+        let ptext = self.ctx.interner.name(ptext).to_string();
+        if params
+            .iter()
+            .any(|g| format!("#{}", self.ctx.name(*g)) == ptext)
+        {
+            return true;
+        }
+        match self.ctx.types.kind(t).clone() {
+            TyKind::Array { elem }
+            | TyKind::Opt { elem }
+            | TyKind::Weak { elem }
+            | TyKind::Future { elem } => self.mentions_template_row(elem, params),
+            TyKind::Fn {
+                params: pp,
+                ret: pr,
+            } => {
+                pp.iter().any(|&p| self.mentions_template_row(p, params))
+                    || self.mentions_template_row(pr, params)
+            }
+            TyKind::Data { fields } => fields
+                .iter()
+                .any(|f| self.mentions_template_row(f.ty, params)),
+            _ => false,
+        }
     }
 
     /// [`Self::infer_placeholders`] against a method's OWN generic
