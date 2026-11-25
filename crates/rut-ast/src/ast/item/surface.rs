@@ -83,6 +83,10 @@ pub struct SurfaceStructNode {
     pub span: Span,
     /// the `{..}` region, braces included — the head slice's right cut
     pub body_span: Span,
+    /// did the body frame eat the struct's own `}`? `false` when the
+    /// parse closed the body at EOF — the struct is still open (the
+    /// edit lane's survivor rule asks exactly this)
+    pub closed: bool,
     /// the modifier chain in source order — `vis()`/`linkage()` derive
     /// from it
     pub modifiers: Vec<ModifierNode>,
@@ -111,6 +115,10 @@ pub struct BuiltinTyNode {
     pub span: Span,
     /// the `{..}` region, braces included — the head slice's right cut
     pub body_span: Span,
+    /// did the frame eat the member list's own `}`? `false` when the
+    /// parse closed the list at EOF — the item is still open (the
+    /// edit lane's survivor rule asks exactly this)
+    pub closed: bool,
     /// the modifier chain in source order — `vis()`/`ambient()` derive
     /// from it
     pub modifiers: Vec<ModifierNode>,
@@ -140,6 +148,10 @@ pub struct BuiltinPrimitiveNode {
     pub span: Span,
     /// the `{..}` region, braces included — the head slice's right cut
     pub body_span: Span,
+    /// did the frame eat the member list's own `}`? `false` when the
+    /// parse closed the list at EOF — the item is still open (the
+    /// edit lane's survivor rule asks exactly this)
+    pub closed: bool,
     /// the modifier chain in source order — `vis()`/`ambient()` derive
     /// from it
     pub modifiers: Vec<ModifierNode>,
@@ -168,6 +180,10 @@ pub struct BuiltinImplNode {
     /// starts at the item's FIRST token — the leading modifier when
     /// one is spelled, the linkage keyword otherwise
     pub span: Span,
+    /// did the frame eat the member list's own `}`? `false` when the
+    /// parse closed the list at EOF — the impl is still open (the
+    /// edit lane's survivor rule asks exactly this)
+    pub closed: bool,
     /// the modifier chain in source order
     pub modifiers: Vec<ModifierNode>,
     /// the receiver primitive's name and its own span

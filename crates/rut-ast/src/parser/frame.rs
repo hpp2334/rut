@@ -47,8 +47,10 @@ pub(crate) enum Done {
     Method(crate::MethodRef),
     /// a struct/class/interface/impl/host-struct body: (fields,
     /// methods, the brace pair's span — braces included; the decl
-    /// node's `body_span`, the LSP head slice's right cut)
-    Body(Vec<crate::FieldRef>, Vec<crate::MethodRef>, Span),
+    /// node's `body_span`, the LSP head slice's right cut — and
+    /// whether the body's own `}` landed; EOF did not close it, and
+    /// the edit lane's survivor rule asks exactly this)
+    Body(Vec<crate::FieldRef>, Vec<crate::MethodRef>, Span, bool),
     WhenParts {
         scrut: ExprRef,
         arms: Vec<Handle<crate::WhenArmNode>>,

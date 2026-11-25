@@ -266,27 +266,29 @@ impl<'a> Lexer<'a> {
                     self.note_line();
                 }
                 b'/' if self.peek2() == b'/' => {
-                    while !self.at_end() && self.peek() != b'\n' {
-                        self.pos += 1;
-                    }
-                    self.note_comment(lo, true);
+                    let Some(CommentScan::Line { end, closed }) = comment_at(self.src, self.pos)
+                    else {
+                        unreachable!("the arm's guard saw `//`");
+                    };
+                    self.pos = end;
+                    self.note_comment(lo, closed);
                 }
                 b'/' if self.peek2() == b'*' => {
+                    let Some(CommentScan::Block { end, closed }) = comment_at(self.src, self.pos)
+                    else {
+                        unreachable!("the arm's guard saw `/*`");
+                    };
                     self.pos += 2;
-                    let mut closed = false;
-                    while self.pos + 1 < self.src.len() + 1 && !self.at_end() {
-                        if self.peek() == b'*' && self.peek2() == b'/' {
-                            self.pos += 2;
-                            closed = true;
-                            break;
-                        }
-                        let b = self.peek();
+                    while self.pos < end {
+                        let b = self.src[self.pos];
                         self.pos += 1;
                         if b == b'\n' {
                             self.note_line();
                         }
                     }
-                    if !closed {
+                    if closed {
+                        self.pos += 2; // the closer
+                    } else {
                         self.err(self.span(lo), "unterminated block comment");
                     }
                     self.note_comment(lo, closed);
@@ -721,22 +723,29 @@ impl<'a> Lexer<'a> {
             let before = self.pos;
             match c {
                 b'/' if self.peek2() == b'/' => {
+                    // hole-specific: the hole's own `}` terminates a
+                    // line comment here, so this stays the hole scan —
+                    // the comment grammar below (block) is the shared
+                    // routine's
                     while !self.at_end() && self.peek() != b'\n' && self.peek() != b'}' {
                         self.pos += 1;
                     }
                 }
                 b'/' if self.peek2() == b'*' => {
+                    let Some(CommentScan::Block { end, closed }) = comment_at(self.src, self.pos)
+                    else {
+                        unreachable!("the arm's guard saw `/*`");
+                    };
                     self.pos += 2;
-                    while !self.at_end() {
-                        if self.peek() == b'*' && self.peek2() == b'/' {
-                            self.pos += 2;
-                            break;
-                        }
-                        let b = self.peek();
+                    while self.pos < end {
+                        let b = self.src[self.pos];
                         self.pos += 1;
                         if b == b'\n' {
                             self.note_line();
                         }
+                    }
+                    if closed {
+                        self.pos += 2;
                     }
                 }
                 b'0'..=b'9' => self.lex_number(hlo),
@@ -867,5 +876,51 @@ fn utf8_len(b: u8) -> usize {
         0xE0..=0xEF => 3,
         0xF0..=0xF7 => 4,
         _ => 1,
+    }
+}
+
+/// The comment grammar's ONE home — the main scan, the f-string
+/// hole's block-comment skip and the splice's gap walk all ask it, so
+/// the splice's window never disagrees with a cold lex about where a
+/// comment opens or whether it closed. A comment opens at byte `i`
+/// when the pair there is `//` or `/*`; the verdict carries the
+/// CONTENT end (the newline for a line comment — the newline itself
+/// not included; the `*` of `*/` for a block one) and whether the
+/// comment CLOSED (a `//` at the text's end and a `/*` with no `*/`
+/// stay open — an open comment holds every position past its opener).
+pub(crate) enum CommentScan {
+    Line { end: usize, closed: bool },
+    Block { end: usize, closed: bool },
+}
+
+pub(crate) fn comment_at(src: &[u8], i: usize) -> Option<CommentScan> {
+    match (src.get(i), src.get(i + 1)) {
+        (Some(b'/'), Some(b'/')) => {
+            let mut j = i + 2;
+            while j < src.len() && src[j] != b'\n' {
+                j += 1;
+            }
+            Some(CommentScan::Line {
+                end: j,
+                closed: j < src.len(),
+            })
+        }
+        (Some(b'/'), Some(b'*')) => {
+            let mut j = i + 2;
+            while j + 1 < src.len() {
+                if src[j] == b'*' && src[j + 1] == b'/' {
+                    return Some(CommentScan::Block {
+                        end: j,
+                        closed: true,
+                    });
+                }
+                j += 1;
+            }
+            Some(CommentScan::Block {
+                end: src.len(),
+                closed: false,
+            })
+        }
+        _ => None,
     }
 }

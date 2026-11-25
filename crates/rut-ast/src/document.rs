@@ -807,4 +807,24 @@ fn main() -> nil {
         let old = d.text(d.span()).to_string();
         assert_edit_cold(&mut d, &old, "use ink::{ Logger }\nfn bb() {}\n");
     }
+
+    #[test]
+    fn an_open_item_at_eof_is_not_a_survivor() {
+        // law 2 over every brace-bodied root kind: typing the item's
+        // closing text at EOF reparses the open item whole — no
+        // bolted-on tail items, no stale rows, ≡ cold
+        let cases = [
+            ("struct S {\n    x: i32,\n", "}\n"),
+            ("class C {\n    x: i32,\n", "}\n"),
+            ("enum E {\n    A,\n", "}\n"),
+            ("interface I {\n    fn m(self);\n", "}\n"),
+            ("impl S {\n    fn m(self) -> i32 {\n", "}\n}\n"),
+            ("use pkg::{ a,\n", "};\n"),
+        ];
+        for (src, tail) in cases {
+            let mut d = doc(src);
+            let new = format!("{src}{tail}");
+            assert_edit_cold(&mut d, src, &new);
+        }
+    }
 }

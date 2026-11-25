@@ -177,6 +177,9 @@ pub(crate) struct UseFrame {
     /// the glob leaf's span — the `*` of a flat `pkg::*` walk or a
     /// brace list's star
     glob: Option<Span>,
+    /// a brace leaf was opened and its `}` never landed — the use is
+    /// still open at EOF (the edit lane's survivor rule asks this)
+    brace_open: bool,
 }
 
 impl UseFrame {
@@ -188,6 +191,7 @@ impl UseFrame {
             names: Vec::new(),
             group: None,
             glob: None,
+            brace_open: false,
         }
     }
 
@@ -227,6 +231,7 @@ impl UseFrame {
         if matches!(p.tok(), Tok::LBrace) {
             let brace_lo = p.span().lo;
             p.bump(); // {
+            self.brace_open = true;
             if !self.brace_names(p) {
                 p.sync_stmt();
                 return self.partial(p);
@@ -296,6 +301,7 @@ impl UseFrame {
                 names: std::mem::take(&mut self.names),
                 group: self.group.take(),
                 glob: self.glob.take(),
+                closed: !self.brace_open,
                 doc: DocData::default(),
             }
         );
@@ -320,6 +326,7 @@ impl UseFrame {
                 names: std::mem::take(&mut self.names),
                 group: None,
                 glob: self.glob.take(),
+                closed: !self.brace_open,
                 doc: DocData::default(),
             }
         );
@@ -329,10 +336,12 @@ impl UseFrame {
     /// the brace leaf — `::{A, B}` — one or more idents, plus the
     /// brace star (`{ A, * }` / `{ *, A }` — the glob rides beside the
     /// names). `false` when the list failed to parse (the caller
-    /// resyncs).
+    /// resyncs). The frame's `brace_open` clears exactly when the
+    /// leaf's own `}` lands.
     fn brace_names(&mut self, p: &mut Parser) -> bool {
         loop {
             if p.eat_punct(Tok::RBrace) {
+                self.brace_open = false;
                 return true;
             }
             if matches!(p.tok(), Tok::Star) {
@@ -345,7 +354,9 @@ impl UseFrame {
                 self.push_name(n);
             }
             if !p.eat_punct(Tok::Comma) {
-                p.expect(Tok::RBrace);
+                if p.expect(Tok::RBrace).is_some() {
+                    self.brace_open = false;
+                }
                 return true;
             }
         }
@@ -557,6 +568,9 @@ pub(crate) struct EnumFrame {
     /// the body's left boundary — the `{` (hi recorded at the pop)
     body_lo: u32,
     members: Vec<MemberRef>,
+    /// the member list's `}` landed — false when EOF closed the list
+    /// (the enum is still open; the edit lane's survivor rule asks)
+    closed: bool,
 }
 
 impl EnumFrame {
@@ -570,6 +584,7 @@ impl EnumFrame {
             },
             body_lo: 0,
             members: Vec::new(),
+            closed: false,
         }
     }
 
@@ -591,6 +606,7 @@ impl EnumFrame {
         self.body_lo = p.expect(Tok::LBrace).map_or(p.prev_end, |s| s.lo);
         loop {
             if p.eat_punct(Tok::RBrace) {
+                self.closed = true;
                 break;
             }
             let (before, dmark) = (p.pos, p.mark());
@@ -609,7 +625,9 @@ impl EnumFrame {
                     );
                     self.members.push(node.allocate(&mut p.ast));
                     if !p.eat_punct(Tok::Comma) {
-                        if !p.eat_punct(Tok::RBrace) {
+                        if p.eat_punct(Tok::RBrace) {
+                            self.closed = true;
+                        } else {
                             let found = p.peek(0).describe();
                             p.err_here(format!("expected `,` or `}}`, found {found}"));
                             // skip the stray tokens so the member list's tail
@@ -619,7 +637,7 @@ impl EnumFrame {
                                 continue;
                             }
                             // the stray run may end at the enum's own `}` — take it
-                            p.eat_punct(Tok::RBrace);
+                            self.closed = p.eat_punct(Tok::RBrace);
                         }
                         break;
                     }
@@ -633,7 +651,7 @@ impl EnumFrame {
                     Self::sync_member(p);
                     self.members.push(MemberRef::Error(p.fence(before, dmark)));
                     if !p.eat_punct(Tok::Comma) {
-                        p.eat_punct(Tok::RBrace);
+                        self.closed = p.eat_punct(Tok::RBrace);
                         break;
                     }
                 }
@@ -646,6 +664,7 @@ impl EnumFrame {
                 // braces included — the `{`..`}` region the loop just
                 // consumed (a missing brace degenerates to the cut)
                 body_span: p.span_from(self.body_lo),
+                closed: self.closed,
                 modifiers: std::mem::take(&mut self.modifiers),
                 name: crate::Name {
                     ident: self.name.id,
@@ -853,6 +872,8 @@ impl TyDeclFrame {
                         // no braces on the newtype spelling — the
                         // boundary degenerates to the terminator cut
                         body_span: p.span_from(self.lo),
+                        // the `;` closed the newtype decl
+                        closed: true,
                         modifiers: std::mem::take(&mut self.modifiers),
                         name: crate::Name {
                             ident: self.name.id,
@@ -869,13 +890,14 @@ impl TyDeclFrame {
                 Step::Pop(Done::Item(node.allocate(&mut p.ast)))
             }
             (TdStage::NewtypeTy, Done::Failed) => Step::Pop(Done::Failed),
-            (TdStage::Body, Done::Body(fields, methods, body_span)) => {
+            (TdStage::Body, Done::Body(fields, methods, body_span, closed)) => {
                 let item = if self.is_class {
                     with_doc!(
                         p,
                         ClassNode {
                             span: p.span_from(self.lo),
                             body_span,
+                            closed,
                             modifiers: std::mem::take(&mut self.modifiers),
                             name: crate::Name {
                                 ident: self.name.id,
@@ -896,6 +918,7 @@ impl TyDeclFrame {
                         StructNode {
                             span: p.span_from(self.lo),
                             body_span,
+                            closed,
                             modifiers: std::mem::take(&mut self.modifiers),
                             name: crate::Name {
                                 ident: self.name.id,
@@ -956,12 +979,13 @@ impl InterfaceFrame {
 
     pub(crate) fn absorb(&mut self, p: &mut Parser, d: Done) -> Step {
         match d {
-            Done::Body(_, methods, body_span) => {
+            Done::Body(_, methods, body_span, closed) => {
                 let node = with_doc!(
                     p,
                     InterfaceNode {
                         span: p.span_from(self.lo),
                         body_span,
+                        closed,
                         modifiers: std::mem::take(&mut self.modifiers),
                         name: crate::Name {
                             ident: self.name.id,
@@ -1049,9 +1073,10 @@ impl ImplFrame {
                 self.stage = ImStage::Methods;
                 Step::Push(Frame::TypeBody(TypeBodyFrame::new(BodyMode::Inherent)))
             }
-            (ImStage::Methods, Done::Body(_, methods, _body)) => {
+            (ImStage::Methods, Done::Body(_, methods, _body, closed)) => {
                 let node = ImplNode {
                     span: p.span_from(self.lo),
+                    closed,
                     generics: std::mem::take(&mut self.generics),
                     bounds: std::mem::take(&mut self.bounds),
                     target: self.target.take().expect("impl without a target"),
@@ -1181,12 +1206,15 @@ impl TypeBodyFrame {
 
     fn members_top(&mut self, p: &mut Parser) -> Step {
         loop {
-            if p.eat_punct(Tok::RBrace) || p.at_eof() {
+            let closed = p.eat_punct(Tok::RBrace);
+            if closed || p.at_eof() {
                 let fields = std::mem::take(&mut self.fields);
                 let methods = std::mem::take(&mut self.methods);
                 // hi at the `}` — braces included, byte-exact
                 let body = p.span_from(self.body_lo);
-                return Step::Pop(Done::Body(fields, methods, body));
+                // the `}` closed the body; EOF did not — the edit
+                // lane's survivor rule asks exactly this
+                return Step::Pop(Done::Body(fields, methods, body, closed));
             }
             self.before = p.pos;
             self.dmark = p.mark();
@@ -2072,11 +2100,15 @@ impl SurfaceFrame {
 
     fn members_top(&mut self, p: &mut Parser) -> Step {
         loop {
-            if p.eat_punct(Tok::RBrace) || p.at_eof() {
+            let closed = p.eat_punct(Tok::RBrace);
+            if closed || p.at_eof() {
                 let body = p.span_from(self.body_lo);
                 let item = if self.is_impl {
                     BuiltinImplNode {
                         span: p.span_from(self.lo),
+                        // the `}` closed the member list; EOF did not —
+                        // the edit lane's survivor rule asks exactly this
+                        closed,
                         modifiers: std::mem::take(&mut self.modifiers),
                         prim: crate::Name {
                             ident: self.name.id,
@@ -2091,6 +2123,7 @@ impl SurfaceFrame {
                         BuiltinPrimitiveNode {
                             span: p.span_from(self.lo),
                             body_span: body,
+                            closed,
                             modifiers: std::mem::take(&mut self.modifiers),
                             name: crate::Name {
                                 ident: self.name.id,
@@ -2107,6 +2140,7 @@ impl SurfaceFrame {
                         BuiltinTyNode {
                             span: p.span_from(self.lo),
                             body_span: body,
+                            closed,
                             modifiers: std::mem::take(&mut self.modifiers),
                             name: crate::Name {
                                 ident: self.name.id,
@@ -2167,12 +2201,13 @@ impl SurfaceFrame {
             }
             // a host struct body arrives as (fields, no methods) — any
             // `fn` member was diagnosed by the body frame and is dropped
-            (SuStage::Members, Done::Body(fields, _methods, body_span)) => {
+            (SuStage::Members, Done::Body(fields, _methods, body_span, closed)) => {
                 let node = with_doc!(
                     p,
                     SurfaceStructNode {
                         span: p.span_from(self.lo),
                         body_span,
+                        closed,
                         modifiers: std::mem::take(&mut self.modifiers),
                         name: crate::Name {
                             ident: self.name.id,

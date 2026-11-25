@@ -19,6 +19,10 @@ pub struct EnumNode {
     pub span: Span,
     /// the `{..}` region, braces included — the head slice's right cut
     pub body_span: Span,
+    /// did the frame eat the member list's own `}`? `false` when the
+    /// parse closed the list at EOF — the enum is still open (the
+    /// edit lane's survivor rule asks exactly this)
+    pub closed: bool,
     /// the modifier chain in source order — `vis()` derives from it
     pub modifiers: Vec<ModifierNode>,
     pub name: Name,

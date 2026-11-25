@@ -241,21 +241,26 @@ arenas! {
     modules: crate::ast::item::ModuleNode => Module, "Module",
     mod_decls: crate::ast::item::ModDeclNode => ModDecl, "ModDecl",
     uses: crate::ast::item::UseNode => Use, "Use" (
-        |n: &Self| n.names.is_empty() && n.group.is_none() && n.glob.is_none()
+        |n: &Self| !n.closed || (n.names.is_empty() && n.group.is_none() && n.glob.is_none())
     ),
     aliases: crate::ast::item::AliasNode => Alias, "Alias",
     module_lets: crate::ast::item::ModuleLetNode => ModuleLet, "ModuleLet",
-    enums: crate::ast::item::EnumNode => Enum, "Enum",
-    structs: crate::ast::item::StructNode => Struct, "Struct",
-    classes: crate::ast::item::ClassNode => Class, "Class",
-    interfaces: crate::ast::item::InterfaceNode => Interface, "Interface",
-    impls: crate::ast::item::ImplNode => Impl, "Impl",
+    enums: crate::ast::item::EnumNode => Enum, "Enum" (|n: &Self| !n.closed),
+    structs: crate::ast::item::StructNode => Struct, "Struct" (|n: &Self| !n.closed),
+    classes: crate::ast::item::ClassNode => Class, "Class" (|n: &Self| !n.closed),
+    interfaces: crate::ast::item::InterfaceNode => Interface, "Interface" (|n: &Self| !n.closed),
+    impls: crate::ast::item::ImplNode => Impl, "Impl" (|n: &Self| !n.closed),
     fns: crate::ast::item::FnNode => Fn, "Fn" (|n: &Self| !n.closed),
     surface_fns: crate::ast::item::SurfaceFnNode => SurfaceFn, "SurfaceFn",
-    surface_structs: crate::ast::item::SurfaceStructNode => SurfaceStruct, "SurfaceStruct",
-    builtin_tys: crate::ast::item::BuiltinTyNode => BuiltinTy, "BuiltinTy",
-    builtin_primitives: crate::ast::item::BuiltinPrimitiveNode => BuiltinPrimitive, "BuiltinPrimitive",
-    builtin_impls: crate::ast::item::BuiltinImplNode => BuiltinImpl, "BuiltinImpl",
+    surface_structs: crate::ast::item::SurfaceStructNode => SurfaceStruct, "SurfaceStruct" (
+        |n: &Self| !n.closed
+    ),
+    builtin_tys: crate::ast::item::BuiltinTyNode => BuiltinTy, "BuiltinTy" (|n: &Self| !n.closed),
+    builtin_primitives: crate::ast::item::BuiltinPrimitiveNode => BuiltinPrimitive,
+    "BuiltinPrimitive" (|n: &Self| !n.closed),
+    builtin_impls: crate::ast::item::BuiltinImplNode => BuiltinImpl, "BuiltinImpl" (
+        |n: &Self| !n.closed
+    ),
     // members
     field_decls: crate::ast::item::FieldDeclNode => FieldDecl, "FieldDecl",
     method_decls: crate::ast::item::MethodDeclNode => MethodDecl, "MethodDecl",

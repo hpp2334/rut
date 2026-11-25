@@ -35,6 +35,12 @@ pub struct UseNode {
     /// expansion lives in the compile/editor lanes, not the tree); a
     /// glob leaf is a COMPLETE leaf.
     pub glob: Option<Span>,
+    /// did the brace leaf eat its own `}`? `false` when the group is
+    /// being typed and the parse closed it at EOF — the use is still
+    /// open (the edit lane's survivor rule asks exactly this); `true`
+    /// whenever no brace leaf was opened, the flat and glob leaves
+    /// having nothing to close
+    pub closed: bool,
     pub doc: DocData,
 }
 

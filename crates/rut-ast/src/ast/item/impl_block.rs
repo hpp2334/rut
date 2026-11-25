@@ -10,6 +10,10 @@ use rut_lexer::span::Span;
 #[derive(Clone, Debug)]
 pub struct ImplNode {
     pub span: Span,
+    /// did the body frame eat the impl's own `}`? `false` when the
+    /// parse closed the body at EOF — the impl is still open (the
+    /// edit lane's survivor rule asks exactly this)
+    pub closed: bool,
     /// the declared generic binders — the definition site
     pub generics: Vec<IdentId>,
     /// bounds accepted for grammar uniformity; the collector ignores

@@ -20,6 +20,10 @@ pub struct StructNode {
     /// the `{..}` region, braces included — the head slice's right cut
     /// (the LSP verbatim law: decl text is a span×src slice)
     pub body_span: Span,
+    /// did the body frame eat the decl's own `}`? `false` when the
+    /// parse closed the body at EOF — the decl is still open (the
+    /// edit lane's survivor rule asks exactly this)
+    pub closed: bool,
     /// the modifier chain in source order — `vis()` derives from it
     pub modifiers: Vec<ModifierNode>,
     pub name: Name,
@@ -55,6 +59,11 @@ pub struct ClassNode {
     /// the positional one-field decl (`class JsonI64(i64);`) — arms the
     /// call construction at the checker
     pub newtype: bool,
+    /// did the body frame eat the decl's own `}`? `false` when the
+    /// parse closed the body at EOF — the decl is still open (the
+    /// edit lane's survivor rule asks exactly this); `true` for the
+    /// newtype spelling, whose terminator is the `;`
+    pub closed: bool,
     pub fields: Vec<FieldRef>,
     pub methods: Vec<MethodRef>,
     pub doc: DocData,
@@ -74,6 +83,10 @@ pub struct InterfaceNode {
     pub span: Span,
     /// the `{..}` region, braces included — the head slice's right cut
     pub body_span: Span,
+    /// did the body frame eat the interface's own `}`? `false` when
+    /// the parse closed the body at EOF — the interface is still open
+    /// (the edit lane's survivor rule asks exactly this)
+    pub closed: bool,
     /// the modifier chain in source order — `vis()` derives from it
     pub modifiers: Vec<ModifierNode>,
     pub name: Name,

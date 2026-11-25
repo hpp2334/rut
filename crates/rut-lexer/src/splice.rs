@@ -12,7 +12,7 @@
 //! text — the `splice ≡ cold lex` law, property-tested over the
 //! corpus (`tests/splice_props.rs`).
 
-use crate::lexer::{lex_normalized, lex_window};
+use crate::lexer::{comment_at, lex_normalized, lex_window, CommentScan};
 use crate::source::{Edit, Source};
 use crate::token::{FPart, Tok, Token};
 
@@ -192,45 +192,35 @@ fn shift_token(t: &mut Token, by: i64) {
 
 /// The comment holding `ws` inside one gap of the old stream — its
 /// opener's offset. A gap holds nothing but whitespace and comments
-/// (every other byte lexed into the tokens around it), so a byte scan
-/// sees every opener. `//` runs to its newline — a `/*` inside it is
-/// comment text, not an opener, and a line comment never spans a line
-/// start. `/*` runs to its `*/`, or to the end of the text when open:
-/// an open comment holds every position past its opener, the
+/// (every other byte lexed into the tokens around it), so the walk
+/// asks the LEXER's one comment routine at each byte — the same
+/// grammar a cold lex runs, one home, never a second spelling. A line
+/// comment never holds a line start (it dies at its newline); a
+/// closed block comment holds the positions inside it; an OPEN one
+/// holds every position past its opener to the text's end — the
 /// edit-at-EOF inside it included.
 fn comment_holding(text: &str, lo: usize, hi: usize, ws: usize) -> Option<usize> {
     let b = text.as_bytes();
     let mut i = lo;
     while i < hi {
-        match b[i] {
-            b'/' if i + 1 < hi && b[i + 1] == b'/' => {
-                while i < hi && b[i] != b'\n' {
-                    i += 1;
-                }
+        match comment_at(b, i) {
+            Some(CommentScan::Line { end, .. }) => {
+                // a line comment ends at its newline (or the text's
+                // end, open) — no line start is ever inside it
+                i = end;
             }
-            b'/' if i + 1 < hi && b[i + 1] == b'*' => {
-                let opener = i;
-                let mut j = i + 2;
-                let mut closed = false;
-                while j + 1 < hi {
-                    if b[j] == b'*' && b[j + 1] == b'/' {
-                        j += 2;
-                        closed = true;
-                        break;
-                    }
-                    j += 1;
-                }
+            Some(CommentScan::Block { end, closed }) => {
                 let holds = if closed {
-                    opener < ws && ws < j
+                    i < ws && ws < end + 2
                 } else {
-                    opener < ws && ws <= hi
+                    i < ws
                 };
                 if holds {
-                    return Some(opener);
+                    return Some(i);
                 }
-                i = if closed { j } else { hi };
+                i = if closed { end + 2 } else { b.len() };
             }
-            _ => i += 1,
+            None => i += 1,
         }
     }
     None
@@ -436,5 +426,23 @@ mod tests {
                 "the window opened inside the open construct: {change:?} over {text:?}"
             );
         }
+    }
+
+    #[test]
+    fn a_line_comments_text_is_not_a_block_comment_opener() {
+        // the one-home pin: a `/*` inside a `//` line comment is line
+        // comment TEXT for the lexer, not a block comment opener — the
+        // window must not pull back into the line comment's bytes
+        // (bytes 11..27 hold `// /* stray open`)
+        let text = "let a = 1;\n// /* stray open\nlet b = 2;\n";
+        let new = "let a = 1;\n// /* stray open\nlet bb = 2;\n";
+        let (_, mut toks) = src_toks(text);
+        let change = apply_edit(text, new, &mut toks);
+        let (_, cold) = src_toks(new);
+        assert_eq!(toks, cold, "spliced ≡ cold past the line comment");
+        assert!(
+            change.window_lo <= 11 || change.window_lo >= 28,
+            "the window opened inside the line comment's text: {change:?}"
+        );
     }
 }
