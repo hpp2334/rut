@@ -186,9 +186,9 @@ impl Doc {
         // text ⇒ byte-identical rows); the boundary is the first
         // dropped item's start (a dropped item's rows can start before
         // the first dirty token, never before its own item). The
-        // boundary settled BELOW every survivor-held row (`dirty_unit`'s
-        // rows rule), so this filter keeps every survivor's rows and
-        // drops only the dropped region's
+        // partition's clause and `dirty_unit`'s rows rule settled the
+        // boundary BELOW every survivor-held row, so this filter keeps
+        // every survivor's rows and drops only the dropped region's
         let survivors: Vec<Diag> = self.ast.errors()[self.parse_from..]
             .iter()
             .filter(|d| d.span.lo < bnd)
@@ -333,9 +333,10 @@ impl Doc {
     ///   window are byte-identical text, so an item built purely from
     ///   them survives slot-stable), `Ast::is_incomplete` says no (a
     ///   construct still open at EOF is re-derived whole), and it
-    ///   holds no parse row at or after the boundary (one that does
-    ///   pulls the boundary back to the earliest such holder, so the
-    ///   survivors' row filter keeps all their rows and drops none).
+    ///   holds no parse row at or after the splice's window (one that
+    ///   does pulls the boundary back to the earliest such holder, so
+    ///   the survivors' row filter keeps all their rows and drops
+    ///   none).
     ///   Every non-survivor is reparsed (to EOF — item boundaries are
     ///   not trusted past damage). The window start sits at/before the
     ///   edit's start, so old-text item spans compare against it
@@ -369,14 +370,39 @@ impl Doc {
                 (lo as i64 - delta).max(e.start as i64) as u32
             }
         };
-        // law 2: an item is a survivor only if it is CLEAN, CLOSED
-        // item-shaped — closed means `Ast::is_incomplete` says no: a
-        // construct still open at EOF (a fn whose body never got its
-        // `}`) is not a survivor, so the boundary stops there and the
-        // tail reparse re-derives it whole
-        let mut drop_from = parsed.partition_point(|it| {
-            it.span(&self.ast).hi <= change.window_lo && !self.ast.is_incomplete(it.any())
-        });
+        // law 2: an item is a survivor only if it is a CLEAN, CLOSED
+        // item — closed: `Ast::is_incomplete` says no (a construct
+        // still open at EOF is re-derived whole); clean: it holds no
+        // parse row at or after the splice's window (a row the
+        // boundary would cut is never re-derived once the boundary
+        // passes it — the item holding one is reparsed instead, the
+        // rows rule below settling the boundary between the remaining
+        // survivors the same way). A row attributes to the LAST item
+        // starting at or before it; rows before the first item hold to
+        // no item.
+        let rows = &self.ast.errors()[self.parse_from..];
+        let window = change.window_lo;
+        let holds_cut_row = |items: &[ItemRef], i: usize| -> bool {
+            let lo = items[i].span(&self.ast).lo;
+            let next = items
+                .get(i + 1)
+                .map_or(u32::MAX, |it| it.span(&self.ast).lo);
+            let from = rows.partition_point(|d| d.span.lo < window);
+            rows[from..]
+                .iter()
+                .take_while(|d| d.span.lo < next)
+                .any(|d| d.span.lo >= lo)
+        };
+        let survivor_flags: Vec<bool> = parsed
+            .iter()
+            .enumerate()
+            .map(|(i, it)| {
+                it.span(&self.ast).hi <= window
+                    && !self.ast.is_incomplete(it.any())
+                    && !holds_cut_row(parsed, i)
+            })
+            .collect();
+        let mut drop_from = survivor_flags.partition_point(|survives| *survives);
         // The boundary must settle between two CLEAN items — recovery is
         // NOT item-local: a failed frame's sync skim and its expects read
         // tokens past the item's own span, and a clean item's recovery
@@ -394,6 +420,10 @@ impl Doc {
         // boundary backtracks to the earliest such holder — a row the
         // boundary passes is dropped by the survivors' filter and never
         // re-derived (the window opens past the item that produced it).
+        // The partition's clause settles rows at/after the WINDOW; this
+        // rule catches the ones at/after the BOUNDARY, whose producer
+        // is a survivor the global attribution misses (a recovery skim
+        // lands past its item, on the next item's first token).
         //
         // Backtracking is always sound: an earlier window only re-derives
         // more, and the parse state at a clean item boundary of the
@@ -434,8 +464,9 @@ impl Doc {
         }
         if drop_from == parsed.len() {
             // past the last item: the fresh items append; every parse
-            // row survives — and every survivor answered closed (the
-            // partition's clause), so no open construct rides along
+            // row survives — and every survivor answered closed AND
+            // holds no row at or after the window (the partition's
+            // clause), so nothing stale rides along
             return (drop_from, change.start, u32::MAX);
         }
         let d_lo = parsed[drop_from].span(&self.ast).lo;
@@ -820,6 +851,26 @@ fn main() -> nil {
             ("interface I {\n    fn m(self);\n", "}\n"),
             ("impl S {\n    fn m(self) -> i32 {\n", "}\n}\n"),
             ("use pkg::{ a,\n", "};\n"),
+        ];
+        for (src, tail) in cases {
+            let mut d = doc(src);
+            let new = format!("{src}{tail}");
+            assert_edit_cold(&mut d, src, &new);
+        }
+    }
+
+    #[test]
+    fn a_damaged_last_semi_item_is_not_a_survivor() {
+        // law 2's clean half over the `;`-terminated kinds: the old
+        // parse holds the missing-`;` row AT the append point — the
+        // damaged last item is not a survivor; the append reparses it
+        // whole instead of keeping the stale row and bolting a fence
+        // on (each spelling watched red at 859ed547)
+        let cases = [
+            ("type A = i32\n", ";\n"),
+            ("let a = 1\n", ";\n"),
+            ("mod m\n", ";\n"),
+            ("host fn f()\n", ";\n"),
         ];
         for (src, tail) in cases {
             let mut d = doc(src);
