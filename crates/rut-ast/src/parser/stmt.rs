@@ -41,6 +41,10 @@ pub(crate) struct BlockFrame {
     /// and continues (v1's fn/method bodies had already expected the
     /// brace themselves)
     lax: bool,
+    /// the frame has eaten its own `{` — a block that closes without
+    /// one owns no token and spans nothing (the span law: a node with
+    /// no token of its own is zero-width where the brace was expected)
+    braced: bool,
     stmts: Vec<StmtRef>,
     /// the tail expression: the last statement closed by the block's
     /// `}` (no `;`) — the block's implicit value, Rust-style
@@ -54,6 +58,7 @@ impl BlockFrame {
         BlockFrame {
             lo: p.span().lo,
             lax: false,
+            braced: true,
             stmts: Vec::new(),
             tail: None,
             before: p.pos,
@@ -66,6 +71,7 @@ impl BlockFrame {
         BlockFrame {
             lo,
             lax: true,
+            braced: false,
             stmts: Vec::new(),
             tail: None,
             before: p.pos,
@@ -76,17 +82,28 @@ impl BlockFrame {
     /// enclosing item can still complete
     pub(crate) fn empty(&self, p: &mut Parser) -> Handle<BlockNode> {
         BlockNode {
-            span: Span::new(self.lo, p.span().hi),
+            span: self.closed_span(p),
             stmts: Vec::new(),
             tail: None,
         }
         .alloc_plain(&mut p.ast)
     }
 
+    /// the span of a CLOSING block: ends at its own last token — the
+    /// `}` when the frame ate one, nothing when it never did
+    fn closed_span(&self, p: &Parser) -> Span {
+        if self.braced {
+            p.span_from(self.lo)
+        } else {
+            Span::new(p.prev_end, p.prev_end)
+        }
+    }
+
     pub(crate) fn step(&mut self, p: &mut Parser) -> Step {
         if self.lax {
             if let Some(sp) = p.expect(Tok::LBrace) {
                 self.lo = sp.lo;
+                self.braced = true;
             }
         } else if p.expect(Tok::LBrace).is_none() {
             return Step::Pop(Done::Failed);
@@ -97,7 +114,7 @@ impl BlockFrame {
     fn next_stmt(&mut self, p: &mut Parser) -> Step {
         if p.eat_punct(Tok::RBrace) || p.at_eof() {
             let node = BlockNode {
-                span: Span::new(self.lo, p.span().hi),
+                span: self.closed_span(p),
                 stmts: std::mem::take(&mut self.stmts),
                 tail: self.tail.take(),
             }
@@ -798,7 +815,11 @@ impl WhenFrame {
             p.err_here("expression arms must be comma-separated");
         }
         let node = WhenArmNode {
-            span: p.span(),
+            // the arm ends at its OWN last token — the comma when one
+            // is written, else the body's closer (`span_from` ends at
+            // `prev_end`); the bare current token was the NEXT arm's
+            // opener
+            span: p.span_from(self.arm_sp.lo),
             pats: std::mem::take(&mut self.arm_pats),
             body,
         }

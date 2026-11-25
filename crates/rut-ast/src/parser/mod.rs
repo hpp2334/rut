@@ -14,7 +14,9 @@
 //! `ErrorNode`s into the very list they belong to (the recovery
 //! ladder); docs graft at allocation — always on, from the enriched
 //! [`Graft`] rows (the grammar never consults comments); node spans end
-//! at the item's own terminator (`prev_end` — exact spans). The ONE
+//! at the item's own terminator (`prev_end` — exact spans), the
+//! token-less ones included: a node with no token of its own — a block
+//! that never received its `{` — spans nothing. The ONE
 //! engine entry is [`parse_item_window`]: a cold parse is the window
 //! covering everything, the `Doc` edit lane rides it with the dirty
 //! tail; `parse`/`parse_with_recover` are wrappers over `Doc::parse`.

@@ -116,7 +116,9 @@ pipeline lives in the `Doc`.
   `legend.rs`), no lsp code matches `Tok::`.
 - **The span law (v3.1)**: a decl's span starts at its FIRST source
   token — modifiers included — and ends at its own terminator (`}` /
-  `;`). The brace-bodied type decls (class/struct/interface/enum and
+  `;`); a block's and a when-arm's span end at their own last token,
+  and a block that never received its `{` spans nothing. The
+  brace-bodied type decls (class/struct/interface/enum and
   the surface/builtin family) also record `body_span` (the `{..}`
   region, braces included) — the head slice's right cut.
 - **The modifier-node law**: modifiers are spanned child nodes

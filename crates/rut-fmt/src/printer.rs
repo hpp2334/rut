@@ -45,11 +45,7 @@
 //!
 //! **Spans (v2)**: node spans are EXACT — a node ends at its own last
 //! token (`prev_end`), no next-token tail — so `span.hi` IS the
-//! element's content end (`content_end`). TWO survivors of the v1
-//! overshoot: the when-ARM's span (built from the bare current token
-//! after its comma = the NEXT arm's opener — the arm walk keeps its
-//! `floor` correction) and the BLOCK's (built from the token AFTER the
-//! `}` — `block_end` walks the token stream back onto the `}`).
+//! element's content end (`content_end`).
 
 use rut_ast::*;
 
@@ -179,11 +175,6 @@ pub(super) struct P<'a> {
     style: &'a Style,
     /// the NORMALIZED source — comment text slices out of it verbatim
     src: &'a str,
-    /// the lexed token stream — spans index the same normalized text;
-    /// `block_end` reads it (block spans are the one v2 overshoot:
-    /// built from the token AFTER the `}`, so the block's true end
-    /// comes from the tokens, not the span)
-    toks: &'a [rut_lexer::token::Token],
     /// the pipeline owner — `line_of` reads its own line geometry
     /// (the lex rode the same byte scan; no second table here)
     doc: &'a rut_ast::Doc,
@@ -210,7 +201,6 @@ impl<'a> P<'a> {
     pub(super) fn new(
         a: &'a Ast,
         src: &'a str,
-        toks: &'a [rut_lexer::token::Token],
         style: &'a Style,
         runs: Vec<CommentRun>,
         doc: &'a rut_ast::Doc,
@@ -219,7 +209,6 @@ impl<'a> P<'a> {
             a,
             style,
             src,
-            toks,
             doc,
             runs,
             ri: 0,
@@ -249,32 +238,9 @@ impl<'a> P<'a> {
     /// the element's TRUE content end. v2 node spans are EXACT (the
     /// item-span law: a node ends at its OWN last consumed token —
     /// `prev_end`, no next-token tail), so `span.hi` IS the content
-    /// end; the v1 token-walk that peeled the overshoot off is gone
-    /// from this lane (it survives, block-only, as [`Self::block_end`]).
+    /// end.
     fn content_end(&self, span: Span) -> u32 {
         span.hi
-    }
-
-    /// a BLOCK's true content end. Block spans are the one v2
-    /// overshoot that survives: `BlockFrame` builds them from
-    /// `p.span().hi` AFTER the `}` is eaten — the NEXT token's hi (the
-    /// zero-width Eof token's at the file end) — so the `}` is the
-    /// token just before span.hi. The walk: skip the one token ending
-    /// EXACTLY at span.hi that starts after span.lo (tokens are
-    /// disjoint — at most one can end at any byte), landing on the
-    /// block's own `}`.
-    fn block_end(&self, span: Span) -> u32 {
-        let n = self.toks.partition_point(|t| t.span.hi <= span.hi);
-        let mut j = n;
-        while j > 0 {
-            let t = &self.toks[j - 1];
-            if t.span.hi == span.hi && t.span.lo > span.lo {
-                j -= 1;
-                continue;
-            }
-            return t.span.hi;
-        }
-        span.lo
     }
 
     /// chars on the currently-open line (0 when the line is fresh)
@@ -1463,7 +1429,7 @@ impl<'a> P<'a> {
             self.expr_tokens(t);
             self.end_el(span);
         }
-        self.drain_close(self.block_end(h.span(self.a)));
+        self.drain_close(h.span(self.a).hi);
         self.level -= 1;
         self.nl();
         self.text("}");
@@ -1476,14 +1442,9 @@ impl<'a> P<'a> {
         self.text("{");
         self.level += 1;
         self.nl();
-        // the WHEN-arm's node span is DISPLACED (built from the bare
-        // current token = the NEXT arm's opener), so each arm's begin
-        // bound is the PREVIOUS arm's displaced span.lo — which IS this
-        // arm's real first token
-        let mut floor = self.passed;
         for a in arms {
             let span = a.span(self.a);
-            self.begin_el(Span::new(floor, floor), Begin::Stmt);
+            self.begin_el(span, Begin::Stmt);
             let arm = a.get(self.a);
             for (i, p) in arm.pats.iter().enumerate() {
                 if i > 0 {
@@ -1500,7 +1461,6 @@ impl<'a> P<'a> {
             // boosted `passed` to the body's last token
             self.drain_trailing_bare(self.passed);
             self.nl();
-            floor = span.lo;
         }
         self.drain_close(self.content_end(node));
         self.level -= 1;
@@ -1536,13 +1496,13 @@ impl<'a> P<'a> {
             self.text(" }");
             self.in_flat -= 1;
             if !self.over_on_flat(m) {
-                self.passed = self.passed.max(self.block_end(b.span(self.a)));
+                self.passed = self.passed.max(b.span(self.a).hi);
                 return;
             }
             self.rollback(m);
         }
         self.block(b);
-        self.passed = self.passed.max(self.block_end(b.span(self.a)));
+        self.passed = self.passed.max(b.span(self.a).hi);
     }
 
     /// inline-flat eligibility: only terminal statements whose
@@ -1684,7 +1644,7 @@ impl<'a> P<'a> {
                     self.expr_tokens(t);
                     self.end_el(span);
                 }
-                self.drain_close(self.block_end(b.span(self.a)));
+                self.drain_close(b.span(self.a).hi);
                 self.level -= 1;
                 self.nl();
                 self.text("}");
