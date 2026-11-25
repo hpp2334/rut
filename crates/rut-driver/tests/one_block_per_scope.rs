@@ -197,6 +197,23 @@ fn a_re_shipped_block_registers_once_per_scope() {
         }),
         "`main` creates a closure — one of its registers is function-typed"
     );
+    // the closure's type IS common's row — the one `apply` names as its
+    // first parameter — not merely some row inside the table
+    let apply = prog
+        .funcs
+        .iter()
+        .find(|f| prog.interner.name(f.name) == "apply")
+        .expect("`apply` links: `wrapped` calls it");
+    for &r in &main.regs {
+        if (r as usize) < prog.types.types.len()
+            && matches!(
+                prog.types.types[r as usize].kind,
+                rut_core::types::TyKind::Fn { .. }
+            )
+        {
+            assert_eq!(r, apply.params[0], "the closure's type is common's row");
+        }
+    }
 }
 
 #[test]

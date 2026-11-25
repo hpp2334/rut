@@ -493,8 +493,9 @@ impl TypeTable {
     }
 
     /// [`Self::id_for_pub`] without the trap: `None` when the dense
-    /// index sits below its scope's registered base (a row stranded by a
-    /// later base move — the seed attach re-registers requester scopes).
+    /// index sits below its scope's registered base (a row no registered
+    /// block claims — neither door moves a base another block already
+    /// registered).
     pub fn id_for_pub_checked(&self, dense: u32) -> Option<TypeId> {
         if dense < self.boot_len {
             return Some(pack(BOOT_SCOPE, dense));

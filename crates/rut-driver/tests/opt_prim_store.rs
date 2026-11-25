@@ -679,8 +679,23 @@ fn version_gate_rejects_stale_artifacts() {
     // the poison type's boot row — `TyKind::Err` at boot id 20 (the
     // tykind-err lane): the boot prefix rides the wire, so the extra
     // row shifts every non-boot dense id and stale v24 artifacts
-    // misalign under the new boot line
-    assert_eq!(VERSION, 25, "the tykind-err cut owns this VERSION bump");
+    // misalign under the new boot line; v26 is one block per scope —
+    // a scope's type block registers ONCE in a table
+    // (`TypeTable::use_block` no longer appends a later surface's
+    // re-shipped copy of an already-registered scope). A surface built
+    // under the fix carries one copy of every carried block, so a
+    // consumer may read each block as running from its base to the
+    // next base. A v25 surface still carries the stale copies BETWEEN
+    // two live bases; the consumer attributes them to the scope below,
+    // a structural spelling (`intern`) then leaves the table through
+    // the wrong scope, and the VM dies at boot on an out-of-range type
+    // id. Refused with the standard version error; the recipe is `rut
+    // run --repack`, and a compiled `.rutbundle` dep re-packs at its
+    // source
+    assert_eq!(
+        VERSION, 26,
+        "the one-block-per-scope cut owns this VERSION bump"
+    );
     let out = rut_driver::compile_module(
         "entry fn main() -> i64 { let a: [?i64] = [nil; 2]; a[0] = 1; let x = a[0]; return x; }",
         rut_ast::parser::Mode::Impl,

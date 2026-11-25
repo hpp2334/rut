@@ -418,7 +418,7 @@ fn stale_versions_reject_stale_artifacts() {
     bytes.extend_from_slice(&7u32.to_le_bytes());
     let err = rut_core::binary::decode(&bytes).unwrap_err();
     assert!(err.contains("unsupported module binary version 7"), "{err}");
-    // and a fresh compile round-trips under v25 (surfaces on the wire
+    // and a fresh compile round-trips under v26 (surfaces on the wire
     // since v16; v17 added the owner-anchored instantiation ledger,
     // v18 the exported generic fns' placeholder signatures, v19 the
     // builder's engine-surface withdrawal, v20 the bracket markers +
@@ -428,10 +428,12 @@ fn stale_versions_reject_stale_artifacts() {
     // symbol/boot rows and the surface section's filler byte are gone,
     // v24 the field dial — every `Data` row's fields gain one vis tag
     // byte, the member-vis field plan's Act 1, v25 the poison type's
-    // boot row — `TyKind::Err` at boot id 20, the tykind-err lane)
+    // boot row — `TyKind::Err` at boot id 20, the tykind-err lane, v26
+    // one block per scope — `use_block` no longer appends a later
+    // surface's re-shipped copy of an already-registered scope)
     let out = compiled("app_main", "entry fn main() -> i32 { return 4; }");
     let prog = out.program.expect("program");
     let bytes = rut_core::binary::encode(&prog);
-    assert_eq!(&bytes[4..8], &25u32.to_le_bytes(), "the header carries v25");
+    assert_eq!(&bytes[4..8], &26u32.to_le_bytes(), "the header carries v26");
     assert!(rut_core::binary::decode(&bytes).is_ok());
 }

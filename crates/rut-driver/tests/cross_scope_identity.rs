@@ -150,8 +150,9 @@ fn a_lambda_in_a_reseeded_owner_keeps_each_seeds_body() {
 /// uses only `Mutation` namefully (so its own binding remaps base's
 /// iface ids into ITS numbering — the rows it re-ships carry them) and
 /// exports a row over `Mutation`; `app` binds base's surface FIRST (the
-/// correct remap) and THEN mid's — the later use_block re-registers
-/// base-scope rows whose iface ids are now mid-private, and the app's
+/// correct remap) and THEN mid's — the later `use_block` skips
+/// base-scope rows (one block per scope), so the first copy's remap
+/// stands, and the app's
 /// `mk` call's return row must still decode as `Mutation<i32>`, never
 /// as the adjacent `Readable<..>` position.
 const RE_BASE: &str = "\

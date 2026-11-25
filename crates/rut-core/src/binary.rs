@@ -785,7 +785,18 @@ pub const MAGIC: &[u8; 4] = b"RUTC";
 /// extra row shifts every non-boot dense id: a v24 artifact's type table
 /// misaligns under the new boot line — refused with the standard version
 /// error; the recipe is re-pack + re-tag + `rut install` re-pin.
-pub const VERSION: u32 = 25;
+/// v26: one block per scope — a scope's type block registers ONCE in a
+/// table (`TypeTable::use_block` no longer appends a later surface's
+/// re-shipped copy of an already-registered scope). A surface built under
+/// the fix carries one copy of every carried block, so a consumer may
+/// read each block as running from its base to the next base. A v25
+/// surface still carries the stale copies BETWEEN two live bases; the
+/// consumer attributes them to the scope below, a structural spelling
+/// (`intern`) then leaves the table through the wrong scope, and the VM
+/// dies at boot on an out-of-range type id. Refused with the standard
+/// version error; the recipe is `rut run --repack`, and a compiled
+/// `.rutbundle` dep re-packs at its source.
+pub const VERSION: u32 = 26;
 
 pub fn encode(prog: &Program) -> Vec<u8> {
     let mut e = Enc::default();
