@@ -20,6 +20,29 @@ pub fn verify(prog: &Program) -> Result<(), String> {
         }
         let nregs = f.regs.len();
         let ctx = |m: String| format!("function {} (#{fi}): {m}", prog.func_name(f));
+        // the signature's type ids must be in the table — the op loop checks
+        // only its own operands, and `Interp::new`'s ref-register scan indexes
+        // the table with every one of these
+        for (i, &t) in f.regs.iter().enumerate() {
+            if t >= ntypes {
+                return Err(ctx(format!(
+                    "register r{i} type id {t} out of range ({ntypes} rows)"
+                )));
+            }
+        }
+        for (i, &t) in f.params.iter().enumerate() {
+            if t >= ntypes {
+                return Err(ctx(format!(
+                    "param #{i} type id {t} out of range ({ntypes} rows)"
+                )));
+            }
+        }
+        if f.ret >= ntypes {
+            return Err(ctx(format!(
+                "return type id {} out of range ({ntypes} rows)",
+                f.ret
+            )));
+        }
         for (pc, op) in f.code.iter().enumerate() {
             let bad = |m: String| ctx(format!("op @{pc}: {m}"));
             // every register operand must be in range
@@ -765,6 +788,7 @@ mod tests {
         Program {
             interner,
             funcs: vec![main, callee],
+            types: rut_core::types::TypeTable::boot(),
             ..Default::default()
         }
     }
@@ -781,5 +805,31 @@ mod tests {
     fn a_call_to_a_bodyless_host_thunk_verifies() {
         let prog = prog_with_call("map_new", Some("map_new"));
         verify(&prog).expect("a host thunk is the one legal bodyless callee");
+    }
+
+    #[test]
+    fn a_signature_type_id_outside_the_table_refuses() {
+        let n = rut_core::types::TypeTable::boot().types.len() as u32;
+        let mut prog = prog_with_call("map_new", Some("map_new"));
+        prog.funcs[0].regs = vec![n];
+        let err = verify(&prog).expect_err("a register naming a row outside the table must refuse");
+        assert!(
+            err.contains("register r0 type id 21 out of range (21 rows)"),
+            "{err}"
+        );
+        let mut prog = prog_with_call("map_new", Some("map_new"));
+        prog.funcs[0].params = vec![n];
+        let err = verify(&prog).expect_err("a param naming a row outside the table must refuse");
+        assert!(
+            err.contains("param #0 type id 21 out of range (21 rows)"),
+            "{err}"
+        );
+        let mut prog = prog_with_call("map_new", Some("map_new"));
+        prog.funcs[0].ret = n;
+        let err = verify(&prog).expect_err("a return naming a row outside the table must refuse");
+        assert!(
+            err.contains("return type id 21 out of range (21 rows)"),
+            "{err}"
+        );
     }
 }

@@ -132,29 +132,6 @@ fn diags_of(g: &rut_driver::GraphOutput) -> String {
         .join("\n")
 }
 
-/// Every type id a function spells — params, return, registers — must
-/// land inside the linked table. A dangling id is the boot-time panic
-/// (`Interp::new`'s ref-register scan indexes the table with it).
-fn assert_type_ids_in_range(prog: &rut_core::binary::Program) {
-    let n = prog.types.types.len();
-    for (fi, f) in prog.funcs.iter().enumerate() {
-        let mut ids: Vec<(&str, u32)> = vec![("ret", f.ret)];
-        for p in &f.params {
-            ids.push(("param", *p));
-        }
-        for r in &f.regs {
-            ids.push(("reg", *r));
-        }
-        for (what, id) in ids {
-            assert!(
-                id == u32::MAX || (id as usize) < n,
-                "fn #{fi} `{}`: a {what} type id {id} sits outside the linked table ({n} rows)",
-                prog.interner.name(f.name),
-            );
-        }
-    }
-}
-
 fn run_main(modules: &[(&str, &str)]) -> i32 {
     let g = graph(modules);
     assert!(g.diags.is_empty(), "{}", diags_of(&g));
@@ -180,7 +157,7 @@ fn a_re_shipped_block_registers_once_per_scope() {
     let g = graph(WORLD);
     assert!(g.diags.is_empty(), "{}", diags_of(&g));
     let prog = rut_core::link::flatten(g.program.expect("program"));
-    assert_type_ids_in_range(&prog);
+    rut_vm::verify::verify(&prog).expect("verify");
     // the entry's own closure: a function-typed register of its own
     let main = prog
         .funcs
