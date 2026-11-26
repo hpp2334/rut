@@ -635,81 +635,180 @@ fn use_with_an_empty_leaf_diagnoses() {
     }
 }
 
+/// The refusal sentence — the law, byte-for-byte (the parser's
+/// `STAR_MSG`): a use names its leaves; the star is no leaf.
+const STAR_MSG: &str =
+    "there is no `*` in a `use` — a `use` names its leaves (`use pkg::{ A, B }`)";
+
 #[test]
-fn glob_use_leaves_parse_clean_and_complete() {
-    // the glob leaf — the star terminates the walk and IS the leaf:
-    // `glob` carries the star's span, `names` stay empty, the walked
-    // path survives, and the leaf is COMPLETE (the incomplete rung's
-    // absence rule names the glob)
-    let flat = |src: &str, want_path: &[&str]| {
-        let (doc, diags) = parse(src, Mode::Impl);
+fn a_star_at_the_use_leaf_is_refused_at_the_star() {
+    // the flat star — at the leaf, under either visibility: ONE diag at
+    // the star, the walked path kept whole, no leaf, the group absent,
+    // the node the frame's partial rung (incomplete)
+    for (src, mode, want_path, want_pub) in [
+        ("use pkg::*;\n", Mode::Impl, vec!["pkg"], false),
+        ("use pkg::a::*;\n", Mode::Impl, vec!["pkg", "a"], false),
+        (
+            "use pkg::a::b::*;\n",
+            Mode::Impl,
+            vec!["pkg", "a", "b"],
+            false,
+        ),
+        ("pub use pkg::*;\n", Mode::Impl, vec!["pkg"], true),
+        ("pub use core::*;\n", Mode::Decl, vec!["core"], true),
+    ] {
+        let (doc, diags) = parse(src, mode);
         let ast = doc.ast();
-        assert!(diags.is_empty(), "{src}: {diags:?}");
+        assert_eq!(diags.len(), 1, "{src}: one diag, no cascade: {diags:?}");
+        assert_eq!(diags[0].msg, STAR_MSG, "{src}: the law's sentence");
+        assert_eq!(
+            diags[0].span.lo,
+            src.find('*').unwrap() as u32,
+            "{src}: the diag sits at the star"
+        );
         let items = ast.root().items(ast);
         match items[0] {
             ItemRef::Use(h) => {
                 let u = h.get(ast);
                 let segs: Vec<&str> = u.path.iter().map(|s| ast.name(s.ident)).collect();
                 assert_eq!(segs, want_path, "{src}: the walked path survives");
-                assert!(u.names.is_empty(), "{src}: the glob leaf imports no name");
-                let Some(star) = u.glob else {
-                    panic!("{src}: the star's span");
-                };
-                assert_eq!(doc.text(star), "*", "{src}: the glob is the star itself");
-                assert!(
-                    !ast.is_incomplete(h.any()),
-                    "{src}: a glob leaf is a COMPLETE leaf"
-                );
-            }
-            k => panic!("{src}: expected a use item, got {k:?}"),
-        }
-    };
-    flat("use pkg::*;\n", &["pkg"]);
-    // the nested walk — the star at any depth, nothing pops
-    flat("use pkg::a::*;\n", &["pkg", "a"]);
-    flat("use pkg::a::b::*;\n", &["pkg", "a", "b"]);
-    // the brace star rides BESIDE the names, in either spelled slot
-    for (src, want_names) in [
-        ("use pkg::{ A, * };\n", vec!["A"]),
-        ("use pkg::{ *, A };\n", vec!["A"]),
-        ("use pkg::{*};\n", Vec::<&str>::new()),
-    ] {
-        let (doc, diags) = parse(src, Mode::Impl);
-        let ast = doc.ast();
-        assert!(diags.is_empty(), "{src}: {diags:?}");
-        let items = ast.root().items(ast);
-        match items[0] {
-            ItemRef::Use(h) => {
-                let u = h.get(ast);
-                assert_eq!(u.path.len(), 1, "{src}: the degenerate path");
-                assert!(u.group.is_some(), "{src}: the brace group is stamped");
-                let Some(star) = u.glob else {
-                    panic!("{src}: the brace star");
-                };
-                assert_eq!(doc.text(star), "*", "{src}: the glob is the star itself");
-                let nms: Vec<&str> = u.names.iter().map(|n| ast.name(n.ident)).collect();
-                assert_eq!(nms, want_names, "{src}: the names beside the star");
-                assert!(
-                    !ast.is_incomplete(h.any()),
-                    "{src}: a glob leaf is a COMPLETE leaf"
-                );
+                assert!(u.names.is_empty(), "{src}: the star is no leaf");
+                assert!(u.group.is_none(), "{src}: no brace group was spelled");
+                assert_eq!(u.vis() == Vis::Pub, want_pub, "{src}: the vis");
             }
             k => panic!("{src}: expected a use item, got {k:?}"),
         }
     }
-    // the negative law: `use pkg::A::B::*;` is LEGAL — the glob leaf
-    // never runs the nothing-pops diagnosis (`use pkg::A::B;` still does)
-    let (doc, diags) = parse("use pkg::A::B::*;\n", Mode::Impl);
+    // the item survives beside its neighbours — never a fence
+    let src = "use pkg::*;\nfn f() -> nil { }\n";
+    let (doc, diags) = parse(src, Mode::Impl);
     let ast = doc.ast();
-    assert!(diags.is_empty(), "the deep glob is legal: {diags:?}");
-    match ast.root().items(ast)[0] {
-        ItemRef::Use(h) => {
-            let u = h.get(ast);
-            let segs: Vec<&str> = u.path.iter().map(|s| ast.name(s.ident)).collect();
-            assert_eq!(segs, vec!["pkg", "A", "B"], "the walked path survives");
-            assert!(u.names.is_empty() && u.glob.is_some(), "the glob leaf");
+    assert_eq!(diags.len(), 1, "one diag: {diags:?}");
+    assert_eq!(diags[0].msg, STAR_MSG);
+    let items = ast.root().items(ast);
+    assert!(
+        items.len() >= 2 && matches!(items[0], ItemRef::Use(_)),
+        "the use survives: {items:?}"
+    );
+    assert!(
+        matches!(items[1], ItemRef::Fn(_)),
+        "the fn survives: {items:?}"
+    );
+    assert!(
+        !items.iter().any(|i| matches!(i, ItemRef::Error(_))),
+        "no fence: {items:?}"
+    );
+}
+
+#[test]
+fn a_star_in_a_brace_list_is_refused_and_skipped() {
+    // the brace star — refused at the star and skipped as a list
+    // member: the idents on both sides survive, the group closes, the
+    // node is COMPLETE, and the item behind the list survives
+    for (src, want_path, want_names, want_group, want_pub) in [
+        (
+            "use pkg::{ A, * };\n",
+            vec!["pkg"],
+            vec!["A"],
+            "{ A, * }",
+            false,
+        ),
+        (
+            "use pkg::{ *, B };\n",
+            vec!["pkg"],
+            vec!["B"],
+            "{ *, B }",
+            false,
+        ),
+        (
+            "use pkg::{ A, *, B };\n",
+            vec!["pkg"],
+            vec!["A", "B"],
+            "{ A, *, B }",
+            false,
+        ),
+        ("use pkg::{ * };\n", vec!["pkg"], Vec::new(), "{ * }", false),
+        (
+            "use pkg::a::{ A, * };\n",
+            vec!["pkg", "a"],
+            vec!["A"],
+            "{ A, * }",
+            false,
+        ),
+        (
+            "use pkg::a::{ * };\n",
+            vec!["pkg", "a"],
+            Vec::new(),
+            "{ * }",
+            false,
+        ),
+        (
+            "pub use pkg::{ * };\n",
+            vec!["pkg"],
+            Vec::new(),
+            "{ * }",
+            true,
+        ),
+    ] {
+        let (doc, diags) = parse(src, Mode::Impl);
+        let ast = doc.ast();
+        assert_eq!(diags.len(), 1, "{src}: one diag, no cascade: {diags:?}");
+        assert_eq!(diags[0].msg, STAR_MSG, "{src}: the law's sentence");
+        assert_eq!(
+            diags[0].span.lo,
+            src.find('*').unwrap() as u32,
+            "{src}: the diag sits at the star"
+        );
+        let items = ast.root().items(ast);
+        match items[0] {
+            ItemRef::Use(h) => {
+                let u = h.get(ast);
+                let segs: Vec<&str> = u.path.iter().map(|s| ast.name(s.ident)).collect();
+                assert_eq!(segs, want_path, "{src}: the walked path survives");
+                let nms: Vec<&str> = u.names.iter().map(|n| ast.name(n.ident)).collect();
+                assert_eq!(nms, want_names, "{src}: the idents around the star");
+                let g = u.group.expect("the brace group is stamped");
+                assert_eq!(doc.text(g), want_group, "{src}: the list as spelled");
+                assert!(!ast.is_incomplete(h.any()), "{src}: the group closes");
+                assert_eq!(u.vis() == Vis::Pub, want_pub, "{src}: the vis");
+            }
+            k => panic!("{src}: expected a use item, got {k:?}"),
         }
-        k => panic!("expected a use item, got {k:?}"),
+        assert!(
+            !items.iter().any(|i| matches!(i, ItemRef::Error(_))),
+            "{src}: the item behind the list survives: {items:?}"
+        );
+    }
+}
+
+#[test]
+fn an_empty_brace_list_on_a_walked_path_is_a_leaf_less_use() {
+    // a spelled brace group IS the leaf, empty or not: the pop guard
+    // runs for the brace-less spellings only — an empty list at any
+    // depth parses clean, binds nothing, and invents nothing
+    for (src, want_path, want_group) in [
+        ("use pkg::a::{ };\n", vec!["pkg", "a"], "{ }"),
+        ("use pkg::a::b::{ };\n", vec!["pkg", "a", "b"], "{ }"),
+    ] {
+        let (doc, diags) = parse(src, Mode::Impl);
+        let ast = doc.ast();
+        assert!(
+            diags.is_empty(),
+            "{src}: a leaf-less use is clean: {diags:?}"
+        );
+        let items = ast.root().items(ast);
+        match items[0] {
+            ItemRef::Use(h) => {
+                let u = h.get(ast);
+                let segs: Vec<&str> = u.path.iter().map(|s| ast.name(s.ident)).collect();
+                assert_eq!(segs, want_path, "{src}: the walked path survives whole");
+                assert!(u.names.is_empty(), "{src}: no leaf was invented");
+                let g = u.group.expect("the group is stamped");
+                assert_eq!(doc.text(g), want_group, "{src}");
+                assert!(!ast.is_incomplete(h.any()), "{src}: a group is a leaf");
+            }
+            k => panic!("{src}: expected a use item, got {k:?}"),
+        }
     }
 }
 

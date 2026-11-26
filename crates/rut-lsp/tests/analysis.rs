@@ -231,3 +231,23 @@ fn unattributable_spans_skip() {
         diag_rows(&a)
     );
 }
+
+#[test]
+fn a_star_on_a_use_line_is_one_parse_diag() {
+    // the law reaches the editor as ONE parse diag on line 0, whether
+    // the star is the leaf or a brace-list member
+    let mut s = S::boot();
+    let uri = "file:///t/star.rut";
+    for src in ["use json::*;\n", "use json::{ parse, * };\n"] {
+        let a = s.analyze(uri, src);
+        assert_eq!(
+            diag_rows(&a),
+            vec![(
+                "there is no `*` in a `use` — a `use` names its leaves (`use pkg::{ A, B }`)"
+                    .to_string(),
+                0
+            )],
+            "{src:?}: {a}"
+        );
+    }
+}

@@ -85,14 +85,12 @@ the mounted package's bare `[a-zA-Z0-9_]+` name — or the consumer's
 own package (its name, or one of its `mod` edges; see the
 intra-package import below) — then zero or more **module segments**
 walking the package's file modules, then the leaf — a brace list of
-names (optionally `*`), a single name, or `*`:
+names, or a single name:
 
 ```text
 use tur_kit::layout::grid::Cell;       // one name from a nested module
 use tur_kit::layout::{ Column, Span }  // several names from a module
 use ink::Logger;                       // the degenerate root path
-use tur_kit::layout::*;                // a glob — the module's whole pub surface
-use tur_kit::{ Cell, * };              // a star may ride inside the brace list
 ```
 
 Importing a *module itself* (`use tur_kit::layout;`) is an error —
@@ -131,29 +129,19 @@ always-public exemption), and anything stricter refuses, naming the
 origin package — `` `Box.v` — `v` is private to package `dep` —
 declare it `pub` to cross ``.
 
-**The glob — a `*` leaf.** A star binds the walked path's whole `pub`
-surface — bare at the leaf (`use tur_kit::layout::*;`) or riding
-inside the brace list (`use tur_kit::{ Cell, * };`): pub fns, types,
-and lets, plus the target's own `pub use` re-exports. Modules are
-namespaces, not imports — a `pub mod` edge never glob-binds (the
-qualified spellings reach it). The glob's laws:
+**A `use` names its leaves — there is no `*`.** The glob leaf is gone
+from the grammar, in both of its spellings — bare at the leaf
+(`use tur_kit::layout::*;`) and inside a brace list
+(`use tur_kit::{ Cell, * };`). A `*` on a use line is a parse error at
+the star, naming the fix:
 
-- **Precedence: glob < explicit leaf < own declaration.** A name the
-  file spells on any use line, or declares at its top level, never
-  glob-binds — the shadowing is silent; spell the name explicitly to
-  win.
-- **Two different globs, one name: the second use line errors.** When
-  `a::*` and `b::*` both bring `NAME` into one file, the second line
-  refuses — `` `NAME` arrives from both `a::*` and `b::*` — import it
-  explicitly `` — validation stays total and happens at the use line,
-  where both surfaces are known. Globbing the same head twice is
-  idempotent.
-- **A glob rides the re-export.** `pub use pkg::*;` re-exports the
-  bound names — they join the re-exporter's public surface, and
-  downstream consumers may list or glob them.
-- **The exemptions.** The must-bind law above and the
-  unreferenced-name lint do not apply to globs — the line spells no
-  leaves to bind or reference.
+```text
+there is no `*` in a `use` — a `use` names its leaves (`use pkg::{ A, B }`)
+```
+
+Every name a file binds, it spells: its own declaration, or an explicit
+leaf on one of its `use` lines. To bring a module's names into a file,
+list them — `use tur_kit::layout::{ Cell, Column, Span };`.
 
 **A `use` binds its own file.** The binding a `use` creates is
 visible in the file that wrote it and nowhere else: every file of a

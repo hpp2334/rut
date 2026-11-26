@@ -786,13 +786,13 @@ pub mod rut_new {
     /// the leaf module `m`: the leaf kinds the lanes gate — a fn, a
     /// type (+ its impl), a module let, a `pub(pkg)` fn, a private
     /// fn, a nested `grid`, and the use rows (a private import, a
-    /// `pub use` re-export, a glob). `SHARED` (line 24) is `grid`'s
-    /// twin name: two globs of distinct heads both bind it
-    pub const M: &str = "pub mod grid;\n\nuse grid::{ cell };\npub use grid::{ G };\nuse grid::*;\n\npub struct Counter {\n    n: i32,\n}\nimpl Counter {\n    pub fn bump(self) -> i32 { return self.n + 1; }\n}\npub fn mk(n: i32) -> Counter { return Counter { n: n }; }\nfn secret() -> i32 { return 5; }\npub(pkg) fn pkgfn() -> i32 { return 6; }\npub let STEP: i32 = 2;\npub struct Box2<T> {\n    v: T,\n}\nimpl<T> Box2<T> {\n    pub fn get(self) -> T { return self.v; }\n}\npub fn mk_box<T>(v: T) -> Box2<T> { return Box2 { v: v }; }\npub let SHARED: i32 = 10;\n";
+    /// `pub use` re-export, a private import of the nested module's
+    /// let)
+    pub const M: &str = "pub mod grid;\n\nuse grid::{ cell };\npub use grid::{ G };\nuse grid::{ GK };\n\npub struct Counter {\n    n: i32,\n}\nimpl Counter {\n    pub fn bump(self) -> i32 { return self.n + 1; }\n}\npub fn mk(n: i32) -> Counter { return Counter { n: n }; }\nfn secret() -> i32 { return 5; }\npub(pkg) fn pkgfn() -> i32 { return 6; }\npub let STEP: i32 = 2;\npub struct Box2<T> {\n    v: T,\n}\nimpl<T> Box2<T> {\n    pub fn get(self) -> T { return self.v; }\n}\npub fn mk_box<T>(v: T) -> Box2<T> { return Box2 { v: v }; }\n";
 
-    /// `m`'s nested module (`SHARED`, line 4 — the glob-overlap twin)
+    /// `m`'s nested module (`GK`, the let the private import names)
     pub const GRID: &str =
-        "pub fn cell() -> i32 { return 9; }\npub let G: i32 = 1;\npub let GK: i32 = 1;\npub let SHARED: i32 = 20;\n";
+        "pub fn cell() -> i32 { return 9; }\npub let G: i32 = 1;\npub let GK: i32 = 1;\n";
 
     /// `child`'s own child
     pub const SUB: &str = "pub fn deep() -> i32 { return 4; }\n";
@@ -802,7 +802,7 @@ pub mod rut_new {
     pub const CALC_ROOT: &str = "pub mod math;\npub fn ctop() -> i32 { return 10; }\n";
 
     /// the dep's `math` module — `m`'s shape under its own names
-    pub const CALC_MATH: &str = "pub mod grid;\n\nuse grid::{ cell };\npub use grid::{ G };\nuse grid::*;\n\npub struct Calc {\n    d: i32,\n}\nimpl Calc {\n    pub fn deg(self) -> i32 { return self.d; }\n}\npub fn cmk(d: i32) -> Calc { return Calc { d: d }; }\nfn hidden() -> i32 { return 0; }\npub(pkg) fn cpkg() -> i32 { return 6; }\npub let CPI: f64 = 3.14;\n";
+    pub const CALC_MATH: &str = "pub mod grid;\n\nuse grid::{ cell };\npub use grid::{ G };\nuse grid::{ GK };\n\npub struct Calc {\n    d: i32,\n}\nimpl Calc {\n    pub fn deg(self) -> i32 { return self.d; }\n}\npub fn cmk(d: i32) -> Calc { return Calc { d: d }; }\nfn hidden() -> i32 { return 0; }\npub(pkg) fn cpkg() -> i32 { return 6; }\npub let CPI: f64 = 3.14;\n";
 
     pub const CALC_GRID: &str =
         "pub fn cell() -> i32 { return 9; }\npub let G: i32 = 1;\npub let GK: i32 = 1;\n";

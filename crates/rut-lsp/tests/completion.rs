@@ -1831,60 +1831,6 @@ both_uri_shapes! {
     }
 }
 
-// ---- round 5: the glob ledger rides the bare tier ----
-
-both_uri_shapes! {
-    #[test]
-    fn the_glob_ledger_rides_the_bare_tier() {
-        // the identical glob spelled twice is ONE binding (the
-        // compiler's ledger keys the head): the bare tier offers what
-        // one glob offers, each name once, with no import edit; a name
-        // BOTH of two distinct heads' globs bind is no bare offer (a
-        // plain offer the compile rejects is a trap) — the auto-import
-        // tier still names it, its explicit leaf resolving the clash —
-        // while a name one glob binds stays a bare offer
-        let (mut s, _io) = rut_new::boot();
-        let uri = rut_new::at("src/child/mod.rut");
-        // (is a BARE offer — no import edit, how many items carry it)
-        let bare = |items: &[Value], name: &str| {
-            (
-                item(items, name)["additionalTextEdits"].is_null(),
-                labels(items).iter().filter(|l| **l == name).count(),
-            )
-        };
-        let complete = |s: &mut S, uses: &str| {
-            let src = format!("{uses}fn k() -> i32 {{ return 0 }}\n");
-            s.complete_at(&uri, &src, "return ", 1)
-        };
-        for uses in ["use m::*;\n", "use m::*;\nuse m::*;\n"] {
-            let items = complete(&mut s, uses);
-            for want in ["mk", "Counter", "mk_box"] {
-                assert_eq!(
-                    bare(&items, want),
-                    (true, 1),
-                    "[{uses:?}] `{want}` is one bare offer: {:?}",
-                    labels(&items)
-                );
-            }
-        }
-        let items = complete(&mut s, "use m::*;\nuse app::m::*;\n");
-        for name in ["mk", "Counter"] {
-            assert!(
-                import_offer(&items, name).is_some(),
-                "the auto-import tier still names `{name}`: {:?}",
-                labels(&items)
-            );
-            assert!(!bare(&items, name).0, "no BARE offer of a both-bound name: {name}");
-        }
-        // the carve-out: `mk`/`Counter` ride `m::*` alone, `cell` the
-        // grid glob alone — only `SHARED` is both-bound
-        let items = complete(&mut s, "use m::*;\nuse app::m::grid::*;\n");
-        for name in ["mk", "Counter", "cell"] {
-            assert!(bare(&items, name).0, "a one-bound name is a bare offer: {name}");
-        }
-    }
-}
-
 #[test]
 fn the_typed_prefix_rides_the_cursor_s_own_name_span() {
     // DELTA (Act 4 — the prefix is the ONE classification's name span):

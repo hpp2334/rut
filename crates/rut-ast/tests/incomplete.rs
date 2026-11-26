@@ -259,18 +259,46 @@ fn the_flat_and_braced_use_leaves_are_complete() {
             assert_eq!(d.text(g), "{A, B}");
         }
     }
-    // the glob leaf is a COMPLETE leaf too — the star is the leaf, in
-    // both spellings (`use p::*;` flat, `use p::{ * }` braced)
-    for src in ["use p::*;\n", "use p::{*};\n", "use p::{ A, * };\n"] {
-        let d = parse_clean(src);
-        let ast = d.ast();
-        for i in ast.root().items(ast) {
-            if let ItemRef::Use(u) = *i {
-                let ud = u.get(ast);
-                assert!(!ast.is_incomplete(u.any()), "{src} is incomplete");
-                assert!(ud.glob.is_some(), "{src}: the star's span rides the node");
-            }
-        }
+}
+
+#[test]
+fn a_refused_star_leaf_is_a_partial_use() {
+    // the flat `*` takes the frame's partial rung: the path kept, no
+    // leaf, the node INCOMPLETE — and a real node sits at the star for
+    // the cursor's walk (the consumer convention `node_at(pos - 1)`)
+    let src = "use p::*;\n";
+    let (doc, diags) = parse(src, Mode::Impl);
+    assert_eq!(diags.len(), 1, "one diag: {diags:?}");
+    let ast = doc.ast();
+    let items = ast.root().items(ast);
+    let Some(ItemRef::Use(u)) = items.iter().find(|i| matches!(i, ItemRef::Use(_))) else {
+        panic!("a partial use expected, items: {items:?}")
+    };
+    assert!(
+        ast.is_incomplete(u.any()),
+        "the star is no leaf: incomplete"
+    );
+    let star = src.find('*').unwrap() as u32;
+    let at = ast.node_at(star).expect("a real node at the star");
+    assert!(
+        ast.ancestors(at).any(|h| h.is::<UseNode>()),
+        "the use is an ancestor of the star: {}",
+        at.kind_name()
+    );
+    // inside a brace list the star is skipped and the group closes —
+    // the node is COMPLETE
+    for src in ["use p::{ * };\n", "use p::{ A, * };\n"] {
+        let (doc, diags) = parse(src, Mode::Impl);
+        assert_eq!(diags.len(), 1, "{src}: one diag: {diags:?}");
+        let ast = doc.ast();
+        let items = ast.root().items(ast);
+        let Some(ItemRef::Use(u)) = items.iter().find(|i| matches!(i, ItemRef::Use(_))) else {
+            panic!("{src}: a use expected, items: {items:?}")
+        };
+        assert!(
+            !ast.is_incomplete(u.any()),
+            "{src}: the group closed, so the use is complete"
+        );
     }
 }
 

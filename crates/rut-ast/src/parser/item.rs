@@ -159,6 +159,11 @@ pub(crate) fn classify_pub(p: &mut Parser, mods: Vec<ModifierNode>) -> Option<Fr
 
 // ---- use ----
 
+/// The refusal of a `*` on a use line — a use names its leaves; the
+/// star is no leaf, bare or inside a brace list.
+const STAR_MSG: &str =
+    "there is no `*` in a `use` — a `use` names its leaves (`use pkg::{ A, B }`)";
+
 /// `pub? use pkg::A::B::{C, D};` / `use pkg::A::B::C;` — the path walks
 /// `ident (:: ident)*` (`path[0]` is the package, the middle segments
 /// name modules), then the leaf is a brace list or a single name (the
@@ -174,9 +179,6 @@ pub(crate) struct UseFrame {
     /// the `{..}` group's span (braces included) — stamped only when
     /// the group's closing brace landed
     group: Option<Span>,
-    /// the glob leaf's span — the `*` of a flat `pkg::*` walk or a
-    /// brace list's star
-    glob: Option<Span>,
     /// a brace leaf was opened and its `}` never landed — the use is
     /// still open at EOF (the edit lane's survivor rule asks this)
     brace_open: bool,
@@ -190,7 +192,6 @@ impl UseFrame {
             path: Vec::new(),
             names: Vec::new(),
             group: None,
-            glob: None,
             brace_open: false,
         }
     }
@@ -242,11 +243,12 @@ impl UseFrame {
             // brace leaf or the `::ident` single-name leaf
             loop {
                 if matches!(p.tok(), Tok::Star) {
-                    // the glob leaf — the star terminates the walk;
-                    // nothing pops (the leaf is the star itself)
-                    self.glob = Some(p.span());
-                    p.bump();
-                    break;
+                    // a `*` is no leaf: one diag at the star, then the
+                    // partial use (the leaf never materialized) — never
+                    // a fence
+                    p.err(p.span(), STAR_MSG);
+                    p.sync_stmt();
+                    return self.partial(p);
                 }
                 let Some(seg) = p.expect_ident("a path segment") else {
                     p.sync_stmt();
@@ -270,13 +272,11 @@ impl UseFrame {
                 }
             }
         }
-        if self.names.is_empty() && self.glob.is_none() {
+        if self.names.is_empty() && self.group.is_none() {
             // no brace leaf: the single-name leaf is the LAST path
             // segment — `use pkg::A;` (the flat form) and
             // `use pkg::A::B::C;` pop it; `use pkg::A::B;` spells a mod
-            // path with nothing at the leaf. A glob leaf never runs
-            // this — the star IS the leaf (`use pkg::A::B::*;` imports
-            // the walked path's surface, nothing pops, no error).
+            // path with nothing at the leaf
             match self.path.len() {
                 0 | 1 => {} // `use pkg::{};` — names stay empty, as today
                 3 => p.err_here(
@@ -300,7 +300,7 @@ impl UseFrame {
                 name_span,
                 names: std::mem::take(&mut self.names),
                 group: self.group.take(),
-                glob: self.glob.take(),
+                glob: None,
                 closed: !self.brace_open,
                 doc: DocData::default(),
             }
@@ -325,7 +325,7 @@ impl UseFrame {
                 name_span,
                 names: std::mem::take(&mut self.names),
                 group: None,
-                glob: self.glob.take(),
+                glob: None,
                 closed: !self.brace_open,
                 doc: DocData::default(),
             }
@@ -333,11 +333,10 @@ impl UseFrame {
         Step::Pop(Done::Item(node.allocate(&mut p.ast)))
     }
 
-    /// the brace leaf — `::{A, B}` — one or more idents, plus the
-    /// brace star (`{ A, * }` / `{ *, A }` — the glob rides beside the
-    /// names). `false` when the list failed to parse (the caller
-    /// resyncs). The frame's `brace_open` clears exactly when the
-    /// leaf's own `}` lands.
+    /// the brace leaf — `::{A, B}` — one or more idents — a `*` is
+    /// refused at the star and skipped (`STAR_MSG`). `false` when the
+    /// list failed to parse (the caller resyncs). The frame's
+    /// `brace_open` clears exactly when the leaf's own `}` lands.
     fn brace_names(&mut self, p: &mut Parser) -> bool {
         loop {
             if p.eat_punct(Tok::RBrace) {
@@ -345,7 +344,10 @@ impl UseFrame {
                 return true;
             }
             if matches!(p.tok(), Tok::Star) {
-                self.glob = Some(p.span());
+                // a `*` is no list member: one diag at the star, the
+                // star is skipped — the names around it survive, the
+                // group closes
+                p.err(p.span(), STAR_MSG);
                 p.bump();
             } else {
                 let Some(n) = p.expect_ident("a used name") else {

@@ -345,6 +345,45 @@ fn a_missing_leaf_hint_names_the_module_it_lives_in() {
 }
 
 #[test]
+fn a_bare_call_to_a_sibling_modules_name_names_the_module() {
+    // the "declared elsewhere" hint — re-homed from the retired glob
+    // suite (its only pin there): `use helpers::deep::{ triple }`
+    // binds deep's leaf alone; helpers' own root fn `twice` stays
+    // module-resident, and the miss names where it lives
+    let mut app = rut_driver::Mounted::source(
+        "app",
+        "use helpers::deep::{ triple };\n\
+         mod helpers;\n\
+         entry fn main() -> i32 { return triple(3) + twice(3); }\n",
+    );
+    app.mods.insert(
+        "helpers".to_string(),
+        mod_source(
+            "helpers",
+            Vis::Self_,
+            "mod deep;\npub fn twice(x: i32) -> i32 { return x * 2; }\n",
+        ),
+    );
+    app.mods.insert(
+        "helpers/deep".to_string(),
+        mod_source(
+            "helpers/deep",
+            Vis::Pub,
+            "pub fn triple(x: i32) -> i32 { return x * 3; }\n",
+        ),
+    );
+    let g = graph_of(vec![app], "app");
+    assert_eq!(g.diags.len(), 1, "exactly one diagnostic: {:?}", msgs(&g));
+    assert!(
+        g.diags[0]
+            .msg
+            .contains("`twice` is declared in module `helpers`"),
+        "got: {}",
+        g.diags[0].msg
+    );
+}
+
+#[test]
 fn a_deep_walk_miss_reads_the_walked_module() {
     // `use imp::grid::{ Tool };` — the walked module spells `::`-joined
     let mut app = rut_driver::Mounted::source(

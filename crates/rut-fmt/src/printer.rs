@@ -706,7 +706,7 @@ impl<'a> P<'a> {
                     }
                     self.text(self.a.name(seg.ident));
                 }
-                if d.glob.is_none() && d.names.is_empty() {
+                if d.glob.is_none() && d.names.is_empty() && d.group.is_none() {
                     self.text(";");
                 } else if d.glob.is_some() && d.group.is_none() {
                     self.text("::*;");

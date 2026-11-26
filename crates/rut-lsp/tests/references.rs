@@ -583,46 +583,6 @@ both_uri_shapes! {
 
 both_uri_shapes! {
     #[test]
-    fn the_glob_ledger_rides_references() {
-        // the identical glob spelled twice is ONE binding (the
-        // compiler's ledger keys the head): the same reference set as
-        // the single glob — the use sites, the root's qualified use,
-        // the decl; the glob lines themselves never count. A name BOTH
-        // of two distinct heads' globs bind counts nothing, as any
-        // twice-bound name
-        let (mut s, _io) = rut_new::boot();
-        let uri = rut_new::at("src/child/mod.rut");
-        let m = rut_new::at("src/m/mod.rut");
-        let root = rut_new::at("src/mod.rut");
-        let uris = |hits: &[Value]| -> Vec<String> {
-            hits.iter()
-                .map(|l| l["uri"].as_str().unwrap().to_string())
-                .collect()
-        };
-        for src in [
-            "use m::*;\nfn k() -> i32 { return mk(41).bump(); }\n",
-            "use m::*;\nuse m::*;\nfn k() -> i32 { return mk(41).bump(); }\n",
-        ] {
-            let hits = s.refs_in(&uri, src, "mk(41)", 1, 0, true);
-            assert_eq!(uris(&hits), vec![uri.clone(), m.clone(), root.clone()], "{src:?}: {hits:?}");
-            let here: Vec<&Value> = hits.iter().filter(|l| l["uri"] == uri.as_str()).collect();
-            assert_eq!(here.len(), 1, "the one use site: {hits:?}");
-            assert_eq!(
-                span_of(src, here[0]).0 as u32,
-                byte_of(src, "mk(41)", 1),
-                "the use site, never a glob line: {hits:?}"
-            );
-        }
-        let src = "use m::*;\nuse app::m::*;\nfn k() -> i32 { return mk(41).bump() + STEP; }\n";
-        for (needle, off) in [("mk(41)", 0), ("+ STEP", 2)] {
-            let hits = s.refs_in(&uri, src, needle, 1, off, true);
-            assert!(hits.is_empty(), "[{needle}] a both-bound name: {hits:?}");
-        }
-    }
-}
-
-both_uri_shapes! {
-    #[test]
     fn a_member_call_site_is_a_reference_position() {
         // find-references ON a member use (a method call) answers the
         // call sites (and the declaration on request) — the member

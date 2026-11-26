@@ -10,6 +10,7 @@ mod common;
 
 use common::span_free;
 use rut_ast::parser::{parse_with_recover, Mode};
+use rut_ast::ItemRef;
 
 fn corpus() -> Vec<std::path::PathBuf> {
     let mut out = Vec::new();
@@ -210,13 +211,20 @@ impl Circle {
     assert_eq!(out2, out, "formatting must be idempotent");
 }
 
-/// the glob leaf — the star round-trips in both spellings: the flat
-/// `use pkg::*;` prints its `::*`, the brace star prints as one more
-/// list member (`{ A, * }` — the tree records the star's span, not its
-/// spelled slot), each reparses to the same tree, and formatting is
-/// idempotent.
+/// The leaf law — a `*` on a use line is refused (the parser's
+/// `STAR_MSG`); the ordinary leaves keep their spellings, and a clean
+/// leaf-less group round-trips to a tree that is still leaf-less.
 #[test]
-fn glob_use_round_trips_with_its_star() {
+fn use_leaves_round_trip_and_a_star_is_refused() {
+    // the refusal: the same sentence, one diag, from the parse the
+    // formatter refuses to guess at
+    let err = rut_fmt::format("use pkg::*;\n", Mode::Impl, &rut_fmt::Style::default())
+        .expect_err("a star is refused");
+    assert_eq!(err.len(), 1, "exactly one diag: {err:?}");
+    assert_eq!(
+        err[0].msg,
+        "there is no `*` in a `use` — a `use` names its leaves (`use pkg::{ A, B }`)"
+    );
     let p = |src: &str| {
         let parsed = parse_with_recover(src.to_string(), Mode::Impl);
         assert!(
@@ -237,30 +245,7 @@ fn glob_use_round_trips_with_its_star() {
         assert_eq!(out2, out, "formatting must be idempotent: {src:?}");
         out
     };
-    assert_eq!(p("use pkg::*;\n"), "use pkg::*;\n", "the flat star prints");
-    assert_eq!(
-        p("use pkg::a::b::*;\n"),
-        "use pkg::a::b::*;\n",
-        "the nested walk prints whole, star at the leaf"
-    );
-    assert_eq!(
-        p("use pkg::{ A, * };\n"),
-        "use pkg::{ A, * };\n",
-        "the brace star prints as a list member"
-    );
-    assert_eq!(
-        p("use pkg::{ *, A };\n"),
-        "use pkg::{ A, * };\n",
-        "the spelled slot is not the tree — the star canonicalizes last"
-    );
-    // the pub re-export spelling over a glob
-    assert_eq!(
-        p("pub use pkg::*;\n"),
-        "pub use pkg::*;\n",
-        "the vis prefix prints before the glob"
-    );
-    // the ordinary leaves keep their spellings (the guard against the
-    // star leaking into them)
+    // the ordinary leaves keep their spellings
     assert_eq!(
         p("use pkg::{ helper, Widget };\n"),
         "use pkg::{ helper, Widget };\n",
@@ -271,6 +256,20 @@ fn glob_use_round_trips_with_its_star() {
         "use pkg::{ A };\n",
         "the flat single-name leaf still normalizes to braces"
     );
+    // the empty group: a leaf-less use at a walked depth prints a group
+    // that reparses to the same leaf-less tree (the round-trip is the
+    // assertion — not the spacing)
+    let out = p("use pkg::a::{ };\n");
+    let q = parse_with_recover(out.clone(), Mode::Impl);
+    let ast = q.ast();
+    let items = ast.root().items(ast);
+    let Some(ItemRef::Use(h)) = items.iter().find(|i| matches!(i, ItemRef::Use(_))) else {
+        panic!("the printed text reparses to a use: {out:?} / {items:?}")
+    };
+    let u = h.get(ast);
+    let segs: Vec<&str> = u.path.iter().map(|s| ast.name(s.ident)).collect();
+    assert_eq!(segs, vec!["pkg", "a"], "the path survives the round trip");
+    assert!(u.names.is_empty(), "no leaf reappears: {out:?}");
 }
 
 /// `pub use` — the re-export: the printer spells the vis prefix, the

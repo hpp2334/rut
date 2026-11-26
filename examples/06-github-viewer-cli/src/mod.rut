@@ -33,10 +33,6 @@ use json::{
 use futures::launch_future;
 use http::{ HttpClient, Response };
 use rgh_host::{ out, eprint, write_file, append_file, exit };
-// the glob leaf — `dep::*` pulls the walked path's whole pub surface
-// (nmapset's HashMap/HashSet ride in once the binding expansion lands;
-// the parse records the star and the tree treats the leaf as complete)
-use nmapset::*;
 
 // ------------------------------------------------------------- argv ----
 
