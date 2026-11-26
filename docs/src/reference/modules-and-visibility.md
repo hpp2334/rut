@@ -378,8 +378,8 @@ user code runs at load.**
 ### Entry points
 
 The embedder loads a module and then explicitly calls an entry
-function — `entry fn main` for a script, sync or async. `entry fn`
-publishes a function to the *embedder*; `entry` is orthogonal to
+function — `entry fn main` for a script; an entry fn is sync. `entry
+fn` publishes a function to the *embedder*; `entry` is orthogonal to
 visibility and does not combine with `pub`. Consequences of
 declarations-only loading: no use side-effect ordering, no load-order
 bugs, deterministic and cheap loads.

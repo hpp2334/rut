@@ -77,10 +77,12 @@ area=9
 - **No parameter properties**: parameters are parameters — the
   `Self { field: name }` literal makes the param→field mapping explicit.
 
-- **`async` class methods are allowed** — same function, `await` in the
-  body. No partially constructed instance ever exists across an
-  `await`: the `Self { .. }` literal is an ordinary expression, and
-  locals live in the coroutine frame.
+- **`async` class methods are not woven in this build** — they parse,
+  and the checker refuses one wherever it reaches it, dead or called
+  (a generic async method, or one in a generic class nothing has
+  instantiated, is simply never reached). Async points live in free
+  fns or `async { }` blocks inside sync methods
+  ([async](async.md)).
 
 ### `[constructor]` — the designated construction surface
 
