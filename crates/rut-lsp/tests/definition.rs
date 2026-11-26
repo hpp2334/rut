@@ -1529,3 +1529,32 @@ fn an_own_module_reexport_of_a_dependency_name_jumps_across() {
         "the leaf's spelling",
     );
 }
+
+both_uri_shapes! {
+#[test]
+fn a_package_private_re_export_across_packages_jumps_nowhere() {
+    // HIGH 2's mirror: only a full `pub use` crosses a package
+    // boundary. A `pub(pkg)` re-export stays inside its package (law
+    // 2's edge), so a foreign consumer's leaf binds nothing — the same
+    // answer the compiler's must-bind gives ("mark it `pub`").
+    const UTIL_SRC: &str = "pub fn helper() -> i32 { return 3; }\n";
+    let mut s = S::boot();
+    s.index_mod_at("file:///deps/util/src/mod.rut", "util", "", UTIL_SRC);
+    s.index_mod_at(
+        "file:///deps/mid/src/mod.rut",
+        "mid",
+        "",
+        "pub(pkg) use util::{ helper };\n",
+    );
+    let uri = "file:///t/main.rut";
+    let src = "use mid::{ helper };\nfn k() -> i32 { return helper(); }\n";
+    assert!(
+        s.def_in(uri, src, "return helper", 1, 7).is_empty(),
+        "a package-private re-export crosses no package boundary"
+    );
+    assert!(
+        s.def_in(uri, src, "{ helper }", 1, 2).is_empty(),
+        "the leaf's spelling binds nothing either"
+    );
+}
+}

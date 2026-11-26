@@ -384,10 +384,11 @@ fn compile_program_inner(
     // `UseBinding` — one use leaf's row: `file` the importing file's
     // mod path, `head` the dep head text, `leaf` the bound bare name,
     // `qualified` flat vs `head::path::{leaf}`, `composed` the
-    // host-row spelling when qualified (`net::ping`), `pub_use` the
-    // use's OWN vis (a `pub use` is a re-export edge — its const
-    // bindings ride the unit's surface, spelled by the file's mod
-    // path), `span` the use item's span (the must-bind law's error
+    // host-row spelling when qualified (`net::ping`), `pub_use` a full
+    // `pub use` (the ONLY vis that lays a cross-package surface row —
+    // law 3; a `pub(pkg)`/`pub(super)` re-export is law 2's
+    // package-private edge and crosses nothing, so its bindings ride no
+    // surface), `span` the use item's span (the must-bind law's error
     // site).
     struct UseBinding {
         file: String,
@@ -454,7 +455,7 @@ fn compile_program_inner(
                     leaf: n.ident,
                     qualified,
                     composed,
-                    pub_use: u.vis() != rut_ast::Vis::Self_,
+                    pub_use: u.vis() == rut_ast::Vis::Pub,
                     span,
                 });
             }

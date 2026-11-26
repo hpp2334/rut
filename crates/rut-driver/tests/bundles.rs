@@ -624,3 +624,64 @@ fn a_directory_still_holding_rut_json_gets_the_pointed_refusal() {
         "{err}"
     );
 }
+
+#[test]
+fn a_packed_re_export_loads_when_the_re_exporter_owns_no_fn() {
+    // HIGH 1 (wire validation): a v27 re-export surface row's `local`
+    // names the DECLARING unit's fn table — `validate_surface` must not
+    // bound it against the re-exporter's own `funcs_len`. The chain is
+    // utilx (`pub fn f`) → midx (`pub use utilx::{ f };`, NO own fn) →
+    // app. The packed bundle must LOAD and the program must run.
+    let base = rut_testkit::Scratch::new("bundle-reexport");
+    let write = |name: &str, manifest: &str, src: &str| -> std::path::PathBuf {
+        let dir = base.join(name);
+        std::fs::create_dir_all(dir.join("src")).unwrap();
+        std::fs::write(dir.join("rut.jsonc"), manifest).unwrap();
+        std::fs::write(dir.join("src/mod.rut"), src).unwrap();
+        dir
+    };
+    write(
+        "utilx",
+        r#"{"name": "utilx"}"#,
+        "pub fn f() -> i32 { return 7; }\n",
+    );
+    write(
+        "midx",
+        r#"{"name": "midx", "deps": {"utilx": {"path": "../utilx"}}}"#,
+        "pub use utilx::{ f };\n",
+    );
+    let app = write(
+        "app",
+        r#"{"name": "app", "deps": {"midx": {"path": "../midx"}}}"#,
+        "use midx::{ f };\nentry fn main() -> i32 { return f(); }\n",
+    );
+
+    let bytes = pack_dir(&app).unwrap();
+    let loaded = match rut_driver::Bundle::parse(&bytes).and_then(|b| b.walk()) {
+        Ok(l) => l,
+        Err(e) => panic!("LOAD REFUSED: {e}"),
+    };
+    // the program runs on the loaded bundle: `main` answers f's 7
+    let g = loaded
+        .pkgs
+        .iter()
+        .fold(rut_driver::RutRun::new(), |r, p| r.mount(p.clone()))
+        .entrypoint(&loaded.root)
+        .compile()
+        .expect("compile the loaded walk");
+    assert!(g.graph.diags.is_empty(), "{:?}", g.graph.diags);
+    let flat = rut_core::link::flatten(g.graph.program.expect("linked program"));
+    rut_vm::verify::verify(&flat).expect("verify");
+    let limits = rut_vm::interp::Limits {
+        fuel: Some(2_000_000),
+        heap_limit_bytes: Some(16 * 1024 * 1024),
+        interrupt_every: 1024,
+    };
+    let mut vm = rut_vm::interp::Vm::builder()
+        .program(std::rc::Rc::new(flat))
+        .limits(limits)
+        .hosts(rut_vm::interp::HostRegistry::new())
+        .build()
+        .expect("vm");
+    assert_eq!(vm.call::<_, i32>("main", ()).expect("run"), 7);
+}

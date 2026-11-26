@@ -278,6 +278,27 @@ pub(crate) fn reexport_declaring(
     }
 }
 
+/// Is a `pub use` row declared in `row_file` visible to `consumer`? A
+/// row in the consumer's OWN package may be package-private (law 2's
+/// edge — the leaf's visibility is gated separately); a row in another
+/// package must be a full `pub use` (law 3 is the across-package law,
+/// and the wire carries no vis).
+fn row_crosses(w: &World, consumer: FileId, row_file: &File, vis: Vis) -> bool {
+    let same_pkg = match (
+        row_file.stamp.module.as_deref(),
+        w.file(consumer).stamp.module.as_deref(),
+    ) {
+        (Some(a), Some(b)) => a == b,
+        (None, None) => true,
+        _ => false,
+    };
+    if same_pkg {
+        vis != Vis::Self_
+    } else {
+        vis == Vis::Pub
+    }
+}
+
 /// The file a `pub use` row of one of `in_scope` targets for `name` —
 /// the surface edge the compiler binds (law 3). The row's path resolves
 /// through the world: an own-package head walks the intra-package law,
@@ -315,7 +336,7 @@ pub(crate) fn reexport_target_files(
         let u = f
             .uses()
             .into_iter()
-            .find(|u| u.vis() != Vis::Self_ && u.name() == name)?;
+            .find(|u| u.name() == name && row_crosses(w, prefer, f, u.vis()))?;
         let path = u.path();
         let (head, interior) = path.split_first()?;
         let pkg = f.stamp.module.as_deref();

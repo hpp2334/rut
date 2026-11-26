@@ -845,6 +845,44 @@ fn a_re_exported_host_const_binds_across_packages() {
         assert_eq!(run_main_i32(&g), 1, "[host const / {column}]");
         let _ = pi_bits;
     }
+    // HIGH 2's const twin: the same `pub use` gate lays the const row,
+    // so a package-private const re-export crosses nothing either.
+    let midx = rut_driver::Mounted::source("midx", "pub(pkg) use host_pkg::{ PI };\n")
+        .manifest(rut_driver::Manifest::lib("midx", &["host_pkg"]));
+    let g = match rut_driver::RutRun::new()
+        .mount(host.clone())
+        .mount(midx)
+        .mount(
+            rut_driver::Mounted::source(
+                "app",
+                "use midx::{ PI };\nentry fn main() -> i32 { return 0; }\n",
+            )
+            .manifest(rut_driver::Manifest::lib("app", &["midx"])),
+        )
+        .entrypoint("app")
+        .compile()
+    {
+        Ok(c) => c.graph,
+        Err(e) => rut_driver::GraphOutput {
+            diags: vec![rut_lexer::diag::Diag::new(
+                rut_lexer::span::Span::new(0, 0),
+                e.msg,
+            )],
+            program: None,
+        },
+    };
+    assert_eq!(
+        g.diags.len(),
+        1,
+        "[host const / pub(pkg)] exactly one diagnostic: {:?}",
+        msgs(&g)
+    );
+    assert!(
+        g.diags[0].msg.contains("`PI` is not exported by `midx`")
+            && g.diags[0].msg.contains("mark it `pub`"),
+        "got: {}",
+        g.diags[0].msg
+    );
 }
 
 #[test]
@@ -872,4 +910,34 @@ fn a_stale_artifact_refuses() {
         ),
         "the STANDARD version error"
     );
+}
+
+#[test]
+fn a_package_private_re_export_stays_inside_the_package() {
+    // HIGH 2: law 3 is an ACROSS-package law and the wire carries no
+    // vis. Only a full `pub use` lays a surface row; a `pub(pkg)` (or
+    // `pub(super)`) re-export is law 2's package-private edge and a
+    // foreign consumer must bind nothing.
+    let g = cross_chain_graph(
+        "pub fn f() -> i32 { return 7; }\n",
+        "pub(pkg) use utilx::{ f };\n",
+        &[],
+        "use midx::{ f };\nentry fn main() -> i32 { return f(); }\n",
+    );
+    assert_eq!(g.diags.len(), 1, "exactly one diagnostic: {:?}", msgs(&g));
+    assert!(
+        g.diags[0].msg.contains("`f` is not exported by `midx`")
+            && g.diags[0].msg.contains("mark it `pub`"),
+        "got: {}",
+        g.diags[0].msg
+    );
+    // the package-private edge still binds INSIDE its package
+    let g = cross_chain_graph(
+        "pub fn f() -> i32 { return 7; }\n",
+        "pub(pkg) use utilx::{ f };\npub fn wrap() -> i32 { return f(); }\n",
+        &[],
+        "use midx::{ wrap };\nentry fn main() -> i32 { return wrap(); }\n",
+    );
+    assert!(g.diags.is_empty(), "inside midx it binds: {:?}", msgs(&g));
+    assert_eq!(run_main_i32(&g), 7);
 }

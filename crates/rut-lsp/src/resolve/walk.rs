@@ -630,7 +630,8 @@ fn use_graph_defs(
         }
     }
     // no declaration in scope: a `pub use` re-export row of the dep is
-    // the surface edge the compiler binds — its target is the answer
+    // the surface edge the compiler binds — its target is the answer.
+    // Only the kinds the surface carries: a module `let` has no row.
     if out.is_empty() {
         for t in super::scope::reexport_target_files(w, file, name, &in_scope) {
             let f = w.file(t);
@@ -642,13 +643,6 @@ fn use_graph_defs(
                         node: ty.h,
                     },
                 ));
-            }
-            if let Some(l) = f
-                .lets()
-                .into_iter()
-                .find(|l| l.name() == name && l.vis() == Vis::Pub)
-            {
-                out.push((f, Def::Node { file: t, node: l.h }));
             }
             for fv in f
                 .fns()

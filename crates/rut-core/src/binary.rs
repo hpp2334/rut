@@ -1933,7 +1933,11 @@ fn decode_surface(
 /// already enforce). Names were checked at read; type ids are the
 /// exporter's packed `(scope, local)` spellings — boot ids are shared,
 /// everything else must land inside a carried scope block; fn refs and
-/// trait locals are the exporter's module-local ids.
+/// trait locals are the exporter's module-local ids. A v27 `pub use`
+/// re-export row is the exception: its fn `local` names the DECLARING
+/// unit's fn table (the row's `scope` tag names that unit), so only an
+/// unscoped row is bounded against this program's own `funcs_len` — the
+/// declaring unit's bound is link's (`final_func_base`).
 fn validate_surface(
     s: &Surface,
     boot: usize,
@@ -1982,7 +1986,12 @@ fn validate_surface(
             ty(p)?;
         }
         ty(f.ret)?;
-        if f.local as usize >= funcs_len {
+        // a v27 re-export row's `local` names the DECLARING unit's fn
+        // table (its `scope` tag names that unit), not this program's
+        // own `funcs_len` — the bound cannot be checked here; LINK owns
+        // it (`final_func_base`). An ordinary row (no scope tag) is this
+        // program's own fn and stays bounded.
+        if f.scope.is_none() && f.local as usize >= funcs_len {
             let fname = s.names.name(f.name);
             return Err(format!(
                 "bad surface fn `{fname}` (local {} outside the func table)",
