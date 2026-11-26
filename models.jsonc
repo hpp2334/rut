@@ -1,9 +1,14 @@
-// Model references (providerID/modelID) — main = Z.AI Coding Plan.
+// Model references (providerID/modelID) — main = Z.AI Coding Plan;
+// oc = OpenCode Go (the batch's pair while the zai plan's limit is out).
 // One pair, no peak window: complex = orchestrator/workers/reviews,
 // balance = watch subagents + the monitor session.
 {
   "main": {
     "complex": "zai-coding-plan/glm-5.4",
     "balance": "zai-coding-plan/glm-5.3-flash"
+  },
+  "oc": {
+    "main": "opencode-go/glm-5.3",
+    "balance": "opencode-go/deepseek-v4.1-flash"
   }
 }
