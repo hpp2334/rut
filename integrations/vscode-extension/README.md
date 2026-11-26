@@ -46,7 +46,9 @@ references, inlay-hint, and signature-help providers against
 no JSON-RPC and no language-client dependency — the module's results
 are already LSP values, serialized by serde_json. The workspace is
 indexed with `workspace.findFiles` and pushed into the module
-(`index_file`) — the same scan the CLI's own lanes bound.
+(`index_file(uri, src, pkg?)` — the package name rides the push
+whenever a manifest names the file's folder; the same scan the CLI's
+own lanes bound).
 
 The dep walk lives in the crate too, behind the actor ABI: the
 extension injects a **read-only host environment** (`src/env.ts` —

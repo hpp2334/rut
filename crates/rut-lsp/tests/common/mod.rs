@@ -682,10 +682,21 @@ impl S {
 
     // ---- the workspace-scan push + the deps face ----
 
-    /// index one workspace file under its open-doc stamp
+    /// index one workspace file under its open-doc stamp — the ownerless
+    /// shape (the ABI's `pkg = None`: the uri shape derives the name)
     pub fn index_file(&mut self, uri: &str, src: &str) {
-        self.pool
-            .run_until(self.lsp.index_file(spelled(uri), src.to_string()));
+        self.index_file_as(uri, src, None);
+    }
+
+    /// index one workspace file carrying the package name the host knows
+    /// — the ABI's optional `pkg` (law 1: the stamp names the package
+    /// whenever the host knows it)
+    pub fn index_file_as(&mut self, uri: &str, src: &str, pkg: Option<&str>) {
+        self.pool.run_until(self.lsp.index_file(
+            spelled(uri),
+            src.to_string(),
+            pkg.map(str::to_string),
+        ));
     }
 
     /// index one dep source file at a MOD PATH — the envelope answers

@@ -132,9 +132,13 @@ export class RutLsp {
     return JSON.parse(await this.lsp.signature_help(uri, src, line, character));
   }
 
-  /** index one workspace file (the host's stand-in for the server's fs walk) */
-  async indexFile(uri, src) {
-    await this.lsp.index_file(uri, src);
+  /**
+   * index one workspace file (the host's stand-in for the server's fs
+   * walk); `pkg` is the package name the host knows (the owning
+   * manifest's) — omitted for a file no manifest owns
+   */
+  async indexFile(uri, src, pkg) {
+    await this.lsp.index_file(uri, src, pkg);
   }
 
   /** parse one `rut.jsonc` — the dep table, or the error envelope */

@@ -100,16 +100,17 @@ export async function indexWorkspace(rut: RutLsp): Promise<void> {
         // the file's OWNING project stamps it: a `mod.rut` under the
         // owner's `src/` shell stamps its mod path (the dir relative to
         // the OWNER, minus the `src/` shell — `src/mod.rut` is the root
-        // `''`) — the position-path tier's data. A file with no owner,
-        // or outside the shell, keeps the plain unstamped shape (the
-        // dep walk re-stamps the deps it mounts anyway)
+        // `''`) — the position-path tier's data. A file with no owner
+        // stays the plain unstamped shape (the dep walk re-stamps the
+        // deps it mounts anyway); an owned file outside the shell keeps
+        // its package name but no mod path.
         const ownerFs = folder ? ownerDir(folder.fsPath, file.fsPath, projectDirs) : null;
         const pkg = ownerFs ? (owners.get(ownerFs) ?? null) : null;
         if (pkg && ownerFs && path.basename(file.fsPath) === 'mod.rut') {
             const rel = path.relative(ownerFs, path.dirname(file.fsPath));
             const modPath = stripSrcShell(rel);
             if (modPath === null) {
-                await rut.indexFile(file.toString(), dec.decode(bytes));
+                await rut.indexFile(file.toString(), dec.decode(bytes), pkg);
                 continue;
             }
             const stamped = await rut.indexModAt(file.toString(), pkg, modPath, dec.decode(bytes));
@@ -124,7 +125,10 @@ export async function indexWorkspace(rut: RutLsp): Promise<void> {
             }
             continue;
         }
-        await rut.indexFile(file.toString(), dec.decode(bytes));
+        // the file's own package name rides the push whenever a manifest
+        // names the folder; a file no manifest owns stays unnamed (the
+        // core's uri-shape fallback)
+        await rut.indexFile(file.toString(), dec.decode(bytes), pkg ?? undefined);
     }
     // the declared children, breadth-first: each stamped edge probes
     // `NAME.rut` beside the declaring file (BOTH spellings is the

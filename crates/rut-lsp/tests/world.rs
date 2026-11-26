@@ -3,21 +3,13 @@
 //! flips (that act keeps the scenario, replaces the assertion, renames the test).
 //!
 //! Act 1 (one world) flipped five of the Phase 0 pins in place; the other
-//! six record answers that survive the act. The UNSTAMPED cross-package
-//! lanes are uri-shape-keyed: under a project dir whose name never spells
-//! the package they answer nothing (an `index_file` push carries no
-//! stamp.module, and the pkg-name derivation has nothing to grip) — those
-//! pins ride `both_uri_shapes!` and record both answers, verbatim.
+//! six record answers that survive the act. The cross-package lanes answer
+//! by the file's STAMP: a workspace push carries the package name the host
+//! knows (the ABI's optional `pkg`), so one answer holds under a project
+//! dir that spells the package and under one that hides it — those pins
+//! ride `both_uri_shapes!` and record that answer, verbatim.
 mod common;
 use common::*;
-
-/// is the running shape the one whose project dirs spell the package name?
-/// (`spelled` is the identity there; the hiding shape renames the dir to
-/// `pN`.) The unstamped cross-package lanes key on that spelling, so their
-/// answers are shape-keyed — the pins below record both answers.
-fn names_shape() -> bool {
-    spelled("file:///ws/a/lib.rut") == "file:///ws/a/lib.rut"
-}
 
 both_uri_shapes! {
 #[test]
@@ -46,6 +38,33 @@ fn the_check_lane_compiles_every_open_files_live_text() {
 }
 }
 
+both_uri_shapes! {
+#[test]
+fn a_named_push_is_checked_at_the_package_root() {
+    // the consequence of the stamp: a file pushed WITH its package name
+    // rides the check lane (an unstamped push is parse-only) and files
+    // at the package root `""` — the shape a walk-mounted entry file
+    // already has.
+    let root = "file:///ws/pkg/mod.rut";
+    let root_src = "mod kid;\nentry fn main() -> nil {\n    let x: i32 = kid::one();\n}\n";
+    let mut s = S::boot();
+    s.index_mod_at("file:///ws/pkg/kid/mod.rut", "pkg", "kid", "pub fn one() -> i32 { return 1; }\n");
+    s.index_file_as(root, root_src, Some("pkg"));
+    let d = s.analyze(root, root_src)["diags"].as_array().unwrap().clone();
+    assert!(d.is_empty(), "{d:?}"); // the root's `mod kid;` resolves: the file sits at ""
+    // the named push turns the check lane on: a type mismatch publishes
+    // (the parse-only lane would stay silent)
+    let bad = "mod kid;\nentry fn main() -> nil {\n    let x: i32 = kid::one();\n    let y: i32 = \"s\";\n}\n";
+    let d = s.analyze(root, bad)["diags"].as_array().unwrap().clone();
+    assert_eq!(d.len(), 1, "{d:?}");
+    assert!(d[0]["message"].as_str().unwrap().contains("but the initializer is `str`"), "{d:?}");
+    // a parse diagnostic still publishes on the same lane
+    let broken = "mod kid;\nentry fn main() -> nil {\n    let x: i32 = ;\n}\n";
+    let d = s.analyze(root, broken)["diags"].as_array().unwrap().clone();
+    assert!(!d.is_empty(), "the named push publishes its parse diagnostics");
+}
+}
+
 const A_LIB: &str = "file:///ws/a/lib.rut";
 const A_DISK: &str = "pub fn make() -> i32 { return 1; }\n";
 const A_LIVE: &str =
@@ -57,32 +76,21 @@ both_uri_shapes! {
 #[test]
 fn cross_file_navigation_reads_the_live_buffer_of_an_open_file() {
     let mut s = S::boot();
-    s.index_file(A_LIB, A_DISK);
+    s.index_file_as(A_LIB, A_DISK, Some("a"));
     s.analyze(A_LIB, A_LIVE); // open and edited: `make` sits on line 2 char 8 and returns str
-    if names_shape() {
-        // the naming shape: the open file's buffer is the truth — the
-        // live signature at its live line
-        let md = markdown(s.hover_at("file:///t/one.rut", USE_MAKE, "make()", 1));
-        assert!(md.contains("pub fn make() -> str") && md.contains("lib.rut:3"), "{md}");
-        let hits = s.def_at("file:///t/one.rut", USE_MAKE, "make()", 1);
-        assert_eq!(hits.len(), 1, "{hits:?}");
-        // the plan wrote (2, 8) here; the live buffer spells `pub fn `
-        // before the name — the declaring ident starts at char 7, the
-        // same column the plan's own Before value pinned in the disk
-        // text ((0, 7)). Pinned at the tree's answer.
-        assert_eq!(pos_pair(&hits[0]["range"]["start"]), (2, 7));
-        let md = markdown(s.hover_at("file:///t/two.rut", USE_EXTRA, "extra()", 1));
-        assert!(md.contains("pub fn extra() -> i32"), "{md}");
-    } else {
-        // the hiding shape: the unstamped cross-package lane still answers
-        // nothing — an `index_file` push carries no stamp.module and the
-        // pkg-name derivation has no `a` to grip (recorded; the lane is a
-        // separate plan's business)
-        let h = s.hover_at("file:///t/one.rut", USE_MAKE, "make()", 1);
-        assert!(no_hover(&h), "{h:?}");
-        assert!(s.def_at("file:///t/one.rut", USE_MAKE, "make()", 1).is_empty());
-        assert!(no_hover(&s.hover_at("file:///t/two.rut", USE_EXTRA, "extra()", 1)));
-    }
+    // the open file's buffer is the truth — the live signature at its
+    // live line
+    let md = markdown(s.hover_at("file:///t/one.rut", USE_MAKE, "make()", 1));
+    assert!(md.contains("pub fn make() -> str") && md.contains("lib.rut:3"), "{md}");
+    let hits = s.def_at("file:///t/one.rut", USE_MAKE, "make()", 1);
+    assert_eq!(hits.len(), 1, "{hits:?}");
+    // the plan wrote (2, 8) here; the live buffer spells `pub fn `
+    // before the name — the declaring ident starts at char 7, the
+    // same column the plan's own Before value pinned in the disk
+    // text ((0, 7)). Pinned at the tree's answer.
+    assert_eq!(pos_pair(&hits[0]["range"]["start"]), (2, 7));
+    let md = markdown(s.hover_at("file:///t/two.rut", USE_EXTRA, "extra()", 1));
+    assert!(md.contains("pub fn extra() -> i32"), "{md}");
 }
 }
 
@@ -90,30 +98,21 @@ both_uri_shapes! {
 #[test]
 fn a_closed_file_keeps_its_last_buffer_text() {
     let mut s = S::boot();
-    s.index_file(A_LIB, A_DISK);
+    s.index_file_as(A_LIB, A_DISK, Some("a"));
     s.analyze(A_LIB, A_LIVE);
     s.forget(A_LIB);
     let (l, c) = pos_of(A_LIVE, "make", 1);
     let closed = s.hover_pos(A_LIB, l, c);
-    assert!(no_hover(&closed), "{closed:?}"); // stays (both shapes): a closed uri answers null
-    if names_shape() {
-        // the naming shape: the file keeps the buffer it held at close —
-        // the same three live-buffer answers as when it was open
-        let md = markdown(s.hover_at("file:///t/one.rut", USE_MAKE, "make()", 1));
-        assert!(md.contains("pub fn make() -> str") && md.contains("lib.rut:3"), "{md}");
-        let hits = s.def_at("file:///t/one.rut", USE_MAKE, "make()", 1);
-        assert_eq!(pos_pair(&hits[0]["range"]["start"]), (2, 7)); // see the sibling pin: the plan's (2, 8) was a miscount
-        let md = markdown(s.hover_at("file:///t/two.rut", USE_EXTRA, "extra()", 1));
-        assert!(md.contains("pub fn extra() -> i32"), "{md}");
-    } else {
-        // the hiding shape: the unstamped cross-package lane is still dead —
-        // null and [] (recorded; the lane is a separate plan's business)
-        let h = s.hover_at("file:///t/one.rut", USE_MAKE, "make()", 1);
-        assert!(no_hover(&h), "{h:?}");
-        assert!(s.def_at("file:///t/one.rut", USE_MAKE, "make()", 1).is_empty());
-        assert!(no_hover(&s.hover_at("file:///t/two.rut", USE_EXTRA, "extra()", 1)));
-    }
-    assert!(markdown(s.hover_at(A_LIB, A_LIVE, "make", 1)).contains("pub fn make() -> str")); // stays: reopen (both shapes)
+    assert!(no_hover(&closed), "{closed:?}"); // stays: a closed uri answers null
+    // the file keeps the buffer it held at close — the same three
+    // live-buffer answers as when it was open
+    let md = markdown(s.hover_at("file:///t/one.rut", USE_MAKE, "make()", 1));
+    assert!(md.contains("pub fn make() -> str") && md.contains("lib.rut:3"), "{md}");
+    let hits = s.def_at("file:///t/one.rut", USE_MAKE, "make()", 1);
+    assert_eq!(pos_pair(&hits[0]["range"]["start"]), (2, 7)); // see the sibling pin: the plan's (2, 8) was a miscount
+    let md = markdown(s.hover_at("file:///t/two.rut", USE_EXTRA, "extra()", 1));
+    assert!(md.contains("pub fn extra() -> i32"), "{md}");
+    assert!(markdown(s.hover_at(A_LIB, A_LIVE, "make", 1)).contains("pub fn make() -> str")); // stays: reopen
 }
 }
 
@@ -125,21 +124,13 @@ fn body_over_decl_applies_to_unstamped_surfaces_too() {
     let src = "use pkg::{ make };\nentry fn main() -> nil {\n    let x = make();\n}\n";
     let uri = "file:///t/main.rut";
     let mut s = S::boot();
-    s.index_file("file:///deps/pkg/pkg.d.rut", surface);
-    s.index_file("file:///deps/pkg/mod.rut", body);
+    s.index_file_as("file:///deps/pkg/pkg.d.rut", surface, Some("pkg"));
+    s.index_file_as("file:///deps/pkg/mod.rut", body, Some("pkg"));
     let hits = s.def_in(uri, src, "{ make }", 1, 2);
-    if names_shape() {
-        // the naming shape: the unstamped `.d.rut` surface carries its
-        // derived Decl mode — the body answers, once
-        assert_eq!(hits.len(), 1, "{hits:?}");
-        assert_eq!(hits[0]["uri"], "file:///deps/pkg/mod.rut");
-        assert_eq!(pos_pair(&hits[0]["range"]["start"]), (0, 7));
-    } else {
-        // the hiding shape: the unstamped lane is dead — the derivation
-        // has no `pkg` to grip (recorded; the lane is a separate plan's
-        // business)
-        assert!(hits.is_empty(), "{hits:?}");
-    }
+    // the `.d.rut` surface carries its Decl mode — the body answers, once
+    assert_eq!(hits.len(), 1, "{hits:?}");
+    assert_eq!(hits[0]["uri"], "file:///deps/pkg/mod.rut");
+    assert_eq!(pos_pair(&hits[0]["range"]["start"]), (0, 7));
     let mut s = S::boot();
     s.index_mod_at("file:///deps/pkg/pkg.d.rut", "pkg", "", surface);
     s.index_mod_at("file:///deps/pkg/mod.rut", "pkg", "", body);
@@ -313,24 +304,14 @@ fn references_agree_with_hover_about_an_open_scratch_file() {
     assert!(no_hover(&h), "{h:?}");
     // the lib rides the workspace scan's lane: the two queries agree
     // on the found answer
-    s.index_file(A_LIB, A_DISK);
-    if names_shape() {
-        let hits = s.refs_in(A_LIB, A_DISK, "make", 1, 0, false);
-        assert_eq!(hits.len(), 2, "{hits:?}");
-        assert!(hits.iter().all(|l| l["uri"] == "file:///t/main.rut"), "{hits:?}");
-        let starts: Vec<(i64, i64)> = hits.iter().map(|l| pos_pair(&l["range"]["start"])).collect();
-        assert_eq!(starts, [(0, 9), (2, 12)], "{hits:?}");
-        let md = markdown(s.hover_at("file:///t/main.rut", USE_MAKE, "make()", 1));
-        assert!(md.contains("pub fn make() -> i32"), "{md}");
-    } else {
-        // the hiding shape: the unstamped cross-package lane is still
-        // dead — the pkg-name derivation has no renamed dir to grip
-        // (recorded; the lane is a separate plan's business)
-        let hits = s.refs_in(A_LIB, A_DISK, "make", 1, 0, false);
-        assert!(hits.is_empty(), "{hits:?}");
-        let h = s.hover_at("file:///t/main.rut", USE_MAKE, "make()", 1);
-        assert!(no_hover(&h), "{h:?}");
-    }
+    s.index_file_as(A_LIB, A_DISK, Some("a"));
+    let hits = s.refs_in(A_LIB, A_DISK, "make", 1, 0, false);
+    assert_eq!(hits.len(), 2, "{hits:?}");
+    assert!(hits.iter().all(|l| l["uri"] == "file:///t/main.rut"), "{hits:?}");
+    let starts: Vec<(i64, i64)> = hits.iter().map(|l| pos_pair(&l["range"]["start"])).collect();
+    assert_eq!(starts, [(0, 9), (2, 12)], "{hits:?}");
+    let md = markdown(s.hover_at("file:///t/main.rut", USE_MAKE, "make()", 1));
+    assert!(md.contains("pub fn make() -> i32"), "{md}");
 }
 }
 

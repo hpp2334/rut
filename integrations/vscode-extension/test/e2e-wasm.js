@@ -914,14 +914,14 @@ async function main() {
     }
 
     // CROSS-FILE: a `use gadgets::{ Widget }` doc jumps into the
-    // exporting module (indexed via rut.indexFile, pkg matched by its path
-    // segment) — both the use-statement name and the usage sites
+    // exporting module (indexed via rut.indexFile carrying its package
+    // name — the push's pkg slot) — both the use name and the usage sites
     {
         const libUri = 'file:///ws/gadgets/lib.rut';
         // the export is `pub` — a cross-package leaf binds only `pub`
         // rows (the compiler's leaf gate, mirrored by the use tier)
         const libSrc = ['pub class Widget {', '    id: i32;', '}', ''].join('\n');
-        await rut.indexFile(libUri, libSrc);
+        await rut.indexFile(libUri, libSrc, 'gadgets');
         const uri = 'file:///ws/e2e-def-cross.rut';
         const src = [
             'use gadgets::{ Widget };',
@@ -1318,7 +1318,7 @@ async function main() {
     }
 
     // CROSS-FILE, both directions: the lib is indexed via rut.indexFile
-    // (pkg matched by its path segment); the importing doc's use name +
+    // (carrying its package name); the importing doc's use name +
     // usage are the EXACT reference set of the lib's decl — queried from
     // the doc side AND from the lib-decl side
     {
@@ -1327,8 +1327,9 @@ async function main() {
         const mainUri = 'file:///ws/e2e-refs-cross.rut';
         const mainSrc =
             'use gadgets::{ Widget };\nfn main() -> nil {\n    let w = Widget.new();\n}\n';
-        await rut.indexFile(libUri, libSrc);
-        await rut.indexFile(mainUri, mainSrc); // the extension indexes every workspace file
+        await rut.indexFile(libUri, libSrc, 'gadgets');
+        // unnamed: no manifest owns this file (the ownerless fallback)
+        await rut.indexFile(mainUri, mainSrc);
         const a = await rut.analyze(mainUri, mainSrc);
         if (a.diags.length !== 0) {
             bad.push(
@@ -2496,6 +2497,32 @@ async function main() {
         assert.ok(defs.length > 0, 'the class name defines');
         eqKeys(defs[0], ['range', 'uri'], 'location');
         eqKeys(defs[0].range, ['start', 'end'], 'location.range');
+
+        // indexFile: the workspace-scan push carries its package name. It
+        // answers no envelope (void), so the call shape IS its key set —
+        // (uri, src, pkg) — and the lane it turns on: a named push at a
+        // dir that never spells the package answers the cross-package jump
+        assert.strictEqual(
+            core.indexFile.length,
+            3,
+            `indexFile carries (uri, src, pkg): arity ${core.indexFile.length}`,
+        );
+        const libUri = 'file:///ws/never-wirepkg/lib.rut';
+        const libSrc = 'pub fn probe() -> i32 { return 1; }\n';
+        await core.indexFile(libUri, libSrc, 'wirepkg');
+        const userUri = 'file:///ws/wire-pkg-user.rut';
+        const userSrc = 'use wirepkg::{ probe };\nfn main() -> nil {\n    let x = probe();\n}\n';
+        await core.analyze(userUri, userSrc);
+        const probeDefs = await core.definition(
+            userUri,
+            ...identAt(userSrc, /let x = probe\(\);/, 'probe'),
+        );
+        assert.ok(
+            probeDefs.length > 0,
+            `the named push answers its package: ${JSON.stringify(probeDefs)}`,
+        );
+        eqKeys(probeDefs[0], ['range', 'uri'], 'named-push location');
+        assert.strictEqual(probeDefs[0].uri, libUri, 'the jump lands on the pushed file');
 
         // inlay hints + signature help
         for (const h of await core.inlayHint(

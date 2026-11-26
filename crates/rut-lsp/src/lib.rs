@@ -70,7 +70,10 @@
 //!                                              fires on the `(` keystroke,
 //!                                              the analyze lane
 //!                                              debounces)
-//!   index_file(uri, src)                       index a workspace file
+//!   index_file(uri, src, pkg?)                  index a workspace file
+//!                                              (pkg: the name the host
+//!                                              knows; None = the
+//!                                              uri-shape fallback)
 //!   parse_manifest(text) -> String             rut.jsonc bytes -> the
 //!                                              dep-table JSON (or the
 //!                                              error envelope)
@@ -386,12 +389,14 @@ impl Lsp {
     }
 
     /// index one workspace file (the host's stand-in for an fs walk —
-    /// server's fs walk — the 500-file cap is the caller's). Re-indexing
-    /// a URI replaces its entry. The await is ordering only.
-    pub async fn index_file(&self, uri: String, src: String) {
+    /// server's fs walk — the 500-file cap is the caller's). `pkg` is
+    /// the package name the host knows (`None` for a file no manifest
+    /// owns — the uri-shape fallback). Re-indexing a URI replaces its
+    /// entry. The await is ordering only.
+    pub async fn index_file(&self, uri: String, src: String, pkg: Option<String>) {
         let _ = self
             .rpc(|tx| {
-                actor::event_loop::Msg::Cmd(actor::event_loop::Cmd::IndexFile { uri, src, tx })
+                actor::event_loop::Msg::Cmd(actor::event_loop::Cmd::IndexFile { uri, src, pkg, tx })
             })
             .await;
     }

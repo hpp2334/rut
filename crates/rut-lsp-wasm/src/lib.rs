@@ -150,8 +150,10 @@ impl RutLsp {
     }
 
     /// index one workspace file (the host's stand-in for an fs walk)
-    pub async fn index_file(&self, uri: String, src: String) {
-        self.core.index_file(uri, src).await;
+    /// carrying the package name the host knows (the owning manifest's);
+    /// `pkg` omitted = a file no manifest owns (the uri-shape fallback)
+    pub async fn index_file(&self, uri: String, src: String, pkg: Option<String>) {
+        self.core.index_file(uri, src, pkg).await;
     }
 
     /// parse one `rut.jsonc` — the dep-table JSON out (or the error

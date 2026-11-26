@@ -211,13 +211,17 @@ impl Session {
     }
 
     /// the host's workspace scan push: mount one file under its
-    /// open-doc-capable workspace stamp (unstamped — the pkg name is
-    /// the uri's derivation business). Re-indexing a uri replaces its
-    /// entry; an OPEN file keeps its buffer (the incoming text
-    /// drops).
-    pub(crate) fn index_file(&mut self, uri: &str, src: String) {
+    /// open-doc-capable workspace stamp. LAW 1: a workspace file's stamp
+    /// names its package whenever the host knows it (`pkg` rides the
+    /// push); the uri-shape derivation remains only for a file no
+    /// manifest owns (`pkg` `None`). Re-indexing a uri replaces its
+    /// entry; an OPEN file keeps its buffer (the incoming text drops).
+    pub(crate) fn index_file(&mut self, uri: &str, src: String, pkg: Option<String>) {
         self.drop_shifted_inlays(uri);
-        let file = File::from_src(crate::world::Stamp::workspace(uri, None, None), src);
+        let file = File::from_src(
+            crate::world::Stamp::workspace(uri, pkg.as_deref(), None),
+            src,
+        );
         self.world.mount(file);
     }
 

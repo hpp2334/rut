@@ -288,8 +288,12 @@ export class RutLsp {
     src: string
   ): Promise<LspSignatureHelp | null>;
 
-  /** index one workspace file (the host's stand-in for the fs walk) */
-  indexFile(uri: string, src: string): Promise<void>;
+  /**
+   * index one workspace file (the host's stand-in for the fs walk);
+   * `pkg` is the package name the host knows (the owning manifest's) —
+   * omitted for a file no manifest owns
+   */
+  indexFile(uri: string, src: string, pkg?: string): Promise<void>;
 
   /** parse one `rut.jsonc` — the dep table, or the error envelope */
   parseManifest(text: string): Promise<DepTable | Envelope>;

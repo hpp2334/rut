@@ -151,6 +151,9 @@ pub enum Cmd {
     IndexFile {
         uri: String,
         src: String,
+        /// the package name the host knows (the owning manifest's);
+        /// `None` for a file no manifest owns (the uri-shape fallback)
+        pkg: Option<String>,
         tx: Tx,
     },
     ParseManifest {
@@ -412,11 +415,12 @@ fn dispatch(l: &mut Loop, cmd: Cmd) {
             ch,
             tx,
         } => reply(tx, l.session.signature_help(&uri, &src, line, ch)),
-        Cmd::IndexFile { uri, src, tx } => {
+        Cmd::IndexFile { uri, src, pkg, tx } => {
             // the wire's String moves into the parse — a fresh read,
             // zero copies end to end. The file rides the workspace
-            // stamp (the scan's shape); an open file keeps its buffer
-            l.session.index_file(&uri, src);
+            // stamp (the scan's shape) carrying the package name when
+            // the host knows it; an open file keeps its buffer
+            l.session.index_file(&uri, src, pkg);
             done(tx);
         }
         Cmd::ParseManifest { text, tx } => match l.session.parse_manifest(&text) {
