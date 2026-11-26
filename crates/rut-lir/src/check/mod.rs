@@ -752,10 +752,6 @@ pub struct Ctx<'a> {
     /// frame type → (yield's vtable slot) — the await expansion reads
     /// this to aim its `CallI` at the awaited frame's woven yield
     pub frame_yield_slot: std::collections::HashMap<TypeId, u32>,
-    /// frame type → its checkpoint enum (the await expansion mints the
-    /// next state's singleton into the awaited... no — into the PARKING
-    /// frame; the map serves the weave's own bookkeeping and tests)
-    pub async_fns: std::collections::HashSet<IdentId>,
     /// whether `use` is resolved by the driver (module loading on)
     pub allow_uses: bool,
     /// this unit's own pkg spec (= the module name). Every decl's
@@ -1071,7 +1067,6 @@ impl<'a> Ctx<'a> {
             async_block_sigs: std::collections::HashMap::new(),
             async_block_founds: std::collections::HashMap::new(),
             frame_yield_slot: std::collections::HashMap::new(),
-            async_fns: std::collections::HashSet::new(),
             allow_uses: false,
             own_spec: String::new(),
             mods: ModInputs::flat(),

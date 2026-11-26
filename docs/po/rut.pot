@@ -11409,8 +11409,8 @@ msgid ""
 "Only `pub` names enter a module's export table; a non-exported declaration "
 "is _known_ inside its module but _nameable_ nowhere else — which is how "
 "libraries hide implementation surfaces behind exported ones. Hiding stops at "
-"the checker's door: every non-generic, non-async fn/method body is "
-"type-checked even when nothing calls it."
+"the checker's door: every non-generic fn/method body is type-checked even "
+"when nothing calls it."
 msgstr ""
 
 #: src/reference/primitive-types.md:3

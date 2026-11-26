@@ -116,7 +116,6 @@ pub(crate) fn ensure_layout(
         .expect("Future has exactly one member");
     ctx.extra_vtable_fills.push((frame_ty, slot, fid));
     ctx.frame_yield_slot.insert(frame_ty, slot);
-    ctx.async_fns.insert(fname);
     let l = Layout {
         frame_ty,
         ckpt_ty,

@@ -457,5 +457,4 @@ and every class member — carries a visibility:
   non-exported declaration is *known* inside its module but *nameable*
   nowhere else — which is how libraries hide implementation surfaces
   behind exported ones. Hiding stops at the checker's door: every
-  non-generic, non-async fn/method body is type-checked even when
-  nothing calls it.
+  non-generic fn/method body is type-checked even when nothing calls it.

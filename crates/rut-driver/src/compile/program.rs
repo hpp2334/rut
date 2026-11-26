@@ -1407,17 +1407,6 @@ fn compile_program_inner(
     let mut roots: Vec<Inst> = Vec::new();
     for name in ctx.entries.clone() {
         if ctx.find_free_fn(name) {
-            // an async fn is not host-callable (its woven body takes the
-            // (frame, cx) pair): it compiles at its call sites
-            if ctx
-                .fn_nodes
-                .iter()
-                .find(|(n, _)| *n == name)
-                .map(|(_, n)| n.get(ctx.ast).is_async())
-                .unwrap()
-            {
-                continue;
-            }
             roots.push(Inst {
                 key: FnKey::Free(name),
                 subst: vec![],
@@ -2410,7 +2399,7 @@ fn compile_program_inner(
             iface_origins: vec![],
         });
     }
-    // the dead-code-checking roots: every PRIVATE non-generic non-async
+    // the dead-code-checking roots: every PRIVATE non-generic
     // free fn and every private concrete-class/enum method compiles too
     // — the fused typecheck+codegen walk must see real source whether or
     // not anything calls it (a bogus body in dead code is a real
@@ -2423,14 +2412,19 @@ fn compile_program_inner(
     // dedups, so a private fn an earlier root's call site already
     // reached compiles exactly once.
     //
-    // A private FREE fn with trait-object parameters stays call-site-
-    // shaped: the call mints its Inst with one concrete origin per box
-    // param (the specialization law — the origins ride the KEY), so an
-    // origin-less eager root would be a SECOND instantiation whose boxed
-    // lanes refuse (the origin law). Its body checks at its call sites,
-    // where the origins are known. Methods need no such gate — their
-    // Inst keys never carry origins — and generic/async bodies stay
-    // call-site shapes everywhere (no substitution / no weave).
+    // A body is call-site-shaped only when its Inst key NEEDS a call
+    // site: a generic substitution, or a trait-object parameter's
+    // `iface_origins`. A private FREE fn with box params stays
+    // call-site-shaped: the call mints its Inst with one concrete origin
+    // per box param (the specialization law — the origins ride the KEY),
+    // so an origin-less eager root would be a SECOND instantiation whose
+    // boxed lanes refuse (the origin law). Its body checks at its call
+    // sites, where the origins are known. Methods need no such gate —
+    // their Inst keys never carry origins — and a generic body stays
+    // call-site-shaped everywhere (no substitution roots it). `async`
+    // is neither a substitution nor an origin: a non-generic free fn is
+    // a compile root whatever its modifiers, so a dead async body
+    // checks right here, exactly like a sync one.
     {
         let mut late_roots: Vec<Inst> = Vec::new();
         for (name, node) in ctx.fn_nodes.clone() {
@@ -2439,7 +2433,7 @@ fn compile_program_inner(
                 continue;
             }
             let fd = node.get(ctx.ast);
-            if !fd.generics.is_empty() || fd.is_async() {
+            if !fd.generics.is_empty() {
                 continue;
             }
             // the signature resolves in the fn's module (phase 3)
