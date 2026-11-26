@@ -4,7 +4,7 @@
 //! THE MANIFEST (the native lane's truth): `rut/biz/` is the project
 //! root — the TWO-PACKAGE law's biz side — and every package it names
 //! (ui, and through ui pouch/nmapset/nmap_host) is walked by
-//! [`walk_dir`] with the primed OFFLINE REMOTE ([`std_remote`];
+//! [`walk_dir`] with the primed OFFLINE REMOTE (`std_remote`;
 //! dist/std-v19 plays the wire — the PINNED source zips, so no gate
 //! networks). The four passes run FOR
 //! REAL. The manifest, not a Rust fn, is the pkg list. [`probe_dir`]
@@ -31,7 +31,7 @@
 //! `*_run` chain here. The DECLARATION is structural: `web` has no
 //! artifact and no pathable row, so the consumers that name it (the
 //! app root, ui, the crossing harness) carry a presence-only deps row
-//! stamped in Rust ([`declare_web`]) — the hand lane's only spelling
+//! stamped in Rust (`declare_web`) — the hand lane's only spelling
 //! while the pathless-descriptor grammar stays deferred.
 //!
 //! What died here before this file's current shape: the old
@@ -154,7 +154,7 @@ pub(crate) fn biz_manifest() -> rut_driver::Manifest {
 
 /// ui's module tree, offered whole: the root module plus its five
 /// mounted children (all `pub mod` — biz crosses into each). The pkg
-/// rides its real manifest ([`ui_manifest`]) — the mirror states the
+/// rides its real manifest (`ui_manifest`) — the mirror states the
 /// same declaration the walk reads.
 pub fn ui_pkg() -> Mounted {
     let mods: std::collections::BTreeMap<String, rut_driver::ModSource> = [
@@ -178,7 +178,7 @@ pub fn ui_pkg() -> Mounted {
 /// pub — the probe's use paths cross — `app` private). This is the
 /// handed-over ABI TREE both the native mirror (mount_lane) and the
 /// wasm lane (loader.js's rows wire) compose. The pkg rides its real
-/// manifest ([`biz_manifest`]) — the root declares exactly what its
+/// manifest (`biz_manifest`) — the root declares exactly what its
 /// modules `use`.
 pub fn biz_pkg() -> Mounted {
     let mods: std::collections::BTreeMap<String, rut_driver::ModSource> = [
@@ -321,12 +321,12 @@ fn std_remote() -> rut_native::HttpRemote {
 }
 
 /// The manifest lane's directory walk: [`rut_native::load_dir_with`]
-/// over [`std_remote`] — the same embedder shape the other examples
+/// over `std_remote` — the same embedder shape the other examples
 /// spell, with the offline flavor swapped in. One noop-waker poll
 /// settles the READY futures: every url row is a primed cache hit, so
 /// nothing ever awaits the wire. After the walk, the embedder stamps
-/// the structural `web` row ([`declare_web`]) onto the walked
-/// consumers that name the surface ([`WEB_CONSUMERS`]) — their
+/// the structural `web` row (`declare_web`) onto the walked
+/// consumers that name the surface (`WEB_CONSUMERS`) — their
 /// rut.jsonc text cannot carry it, and the embedder's registration is
 /// what puts `web` in these worlds.
 #[cfg(not(target_arch = "wasm32"))]

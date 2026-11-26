@@ -153,7 +153,7 @@ impl<'a> Ctx<'a> {
     /// engine weaves impls for async fn frames; user impls register
     /// through the same trait (launcher-drivable). Mirrors
     /// `mk_iterator_inst` — the descriptor's params exclude the
-    /// receiver, which the vtable ABI always supplies as argv[0].
+    /// receiver, which the vtable ABI always supplies as argv\[0\].
     ///
     /// v20: NOT a user-visible trait anymore — the row is the internal
     /// designated-slot allocation for the closed `Future<T>` class (the

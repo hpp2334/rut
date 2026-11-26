@@ -13,7 +13,7 @@
 //! two rows, the same url under two names is one.
 //!
 //! Parsing goes through the manifest's JSONC front stage
-//! ([`jsonc::strip`], the position law lives there) — comments and
+//! (`jsonc::strip`, the position law lives there) — comments and
 //! trailing commas are legal, so hand-edits still load — then
 //! `serde_json`, then the value laws, PATH-TARGETED like the
 //! manifest's: `deps[1].sha256: must be 64 hex digits…`, hex stored
@@ -21,8 +21,6 @@
 //! refused, `format` must be `"rutlock"`, `format_version` must be the
 //! exact known version. Unknown keys ride — forward compatibility, the
 //! manifest's rule.
-//!
-//! [`jsonc::strip`]: crate::bundle::manifest::jsonc::strip
 
 use std::collections::BTreeSet;
 

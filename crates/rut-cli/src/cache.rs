@@ -36,7 +36,7 @@ pub(crate) fn offline_remote_for(project: &std::path::Path) -> StoreRemote {
 /// The GET door for the two lanes whose JOB is downloading: the wire
 /// armed (`HttpRemote::online`'s hard timeouts, redirects, size cap)
 /// but NO cache write — the store's publish is verify-then-rename,
-/// never the remote's flat cache write. Only [`get_bytes`] is ever
+/// never the remote's flat cache write. Only [`get_bytes`](rut_native::HttpRemote::get_bytes) is ever
 /// called on this handle.
 pub(crate) fn get_remote() -> rut_native::HttpRemote {
     rut_native::HttpRemote::online(PathBuf::from(rut_driver::deps_dir()))

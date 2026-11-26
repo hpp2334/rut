@@ -3,7 +3,7 @@
 //! pkg is example-local (survey §4): `web.d.rut` declares the ten
 //! crossings; this crate binds the bodies twice —
 //!
-//! - **wasm32** ([`web_dom`]): the real page, web_sys behind
+//! - **wasm32** (`web_dom`): the real page, web_sys behind
 //!   target-gating (the workspace's FIRST wasm-bindgen-family dep),
 //!   raw exports `rut_web_boot` / `rut_web_pump` / `rut_web_last_error`
 //!   / `rut_web_alloc` (the `rut-wasm` ABI pattern);

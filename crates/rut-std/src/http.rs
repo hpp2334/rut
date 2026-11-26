@@ -61,7 +61,7 @@
 //!   nothing): taking the body lane stands the gate down.
 //! - CANCEL IS THE WIRE-ABORT: a PARKED read/drain/send registers its
 //!   completer's identity ([`rut_vm::Completer::id`], the Arc address)
-//!   in the per-pkg [`CancelReg`]; the row family's `__cancel` arm
+//!   in the per-pkg `CancelReg`; the row family's `__cancel` arm
 //!   takes the slot and marks the source with the sticky read failure
 //!   `"cancelled"` — remaining readers degrade to nil +
 //!   `read_error() == "cancelled"` (the data-not-a-trap lane), a

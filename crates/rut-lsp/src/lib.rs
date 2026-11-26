@@ -7,10 +7,10 @@
 //! [`Lsp`].
 //!
 //! Every method on [`Lsp`] is an ASYNC RPC bridge (the actor seam):
-//! the call posts one [`actor::event_loop::Msg`] on the loop's mpsc inbox and
+//! the call posts one `actor::event_loop::Msg` on the loop's mpsc inbox and
 //! awaits a oneshot reply, while ONE long-lived loop task owns the
 //! `Session` exclusively and answers messages FIFO — sync
-//! handlers over `&mut Session` (see [`actor::event_loop`]). A dropped
+//! handlers over `&mut Session` (see `actor::event_loop`). A dropped
 //! loop answers the error envelope; a panicked handler isolates to its
 //! own reply channel. Every text answer is the JSON envelope:
 //!
@@ -97,8 +97,8 @@
 //! An LSP serves a long-lived editing session, so the instance OWNS
 //! its session state (the one world) for its lifetime — the
 //! host holds one [`Lsp`] per boot and mutates it per request. The
-//! state lives in `Session` (see [`session`]), owned exclusively by
-//! the loop task ([`actor::event_loop`]); the host's [`Lsp`] is the
+//! state lives in `Session` (see `session`), owned exclusively by
+//! the loop task (`actor::event_loop`); the host's [`Lsp`] is the
 //! inbox handle. Calls serialize on the loop's FIFO — concurrent
 //! unresolved calls resolve in send order, and no caller ever borrows
 //! the state.

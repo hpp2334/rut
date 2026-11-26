@@ -486,7 +486,7 @@ impl TypeTable {
     /// Pack a dense index into this table's id space. Handles multi-scope
     /// tables: used blocks keep the scope they were declared under.
     #[inline]
-    /// The packed id for a dense index (the pub twin of [`Self::id_for`],
+    /// The packed id for a dense index (the pub twin of `Self::id_for`,
     /// for the driver's seed-region registration).
     pub fn id_for_pub(&self, dense: u32) -> TypeId {
         self.id_for(dense)

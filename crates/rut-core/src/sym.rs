@@ -20,7 +20,7 @@
 //! ```
 
 /// An interned name — an index into an [`Interner`]. Ids below
-/// [`WELL_KNOWN.len()`] are the pre-interned well-known table and are
+/// `WELL_KNOWN.len()` are the pre-interned well-known table and are
 /// valid in *every* interner; ids above are instance-local.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, PartialOrd, Ord)]
 pub struct IdentId(pub u32);

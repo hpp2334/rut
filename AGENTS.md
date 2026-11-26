@@ -2,13 +2,17 @@
 
 ## Lint gate: warnings are errors; keep clippy and fmt green
 
-The workspace denies every warn-level rustc/clippy lint
+The workspace denies every warn-level rustc/clippy/rustdoc lint
 (`[workspace.lints] warnings = "deny"` in the root `Cargo.toml`,
 reaching all members through `[lints] workspace = true`) — the local
 gates are `cargo fmt --all --check`, `cargo clippy --workspace
---all-targets`, clippy on the wasm32 target, and `cargo nextest run`
-(there is no CI; the deny-by-default workspace lints make any of
-these fail loudly on drift). Practical consequences:
+--all-targets`, clippy on the wasm32 target, `cargo nextest run`, and
+`RUSTDOCFLAGS="-D warnings" cargo doc --workspace --no-deps` (rustdoc
+warnings are denied through the same `[lints]` table, and the command
+carries `-D warnings` itself, so a toolchain change cannot turn the
+lane green with warnings). There is no CI; the deny-by-default
+workspace lints make any of these fail loudly on drift. Practical
+consequences:
 
 - A new warning anywhere in a member crate fails the build — fix the
   cause; if a lint is genuinely wrong for a site, a scoped

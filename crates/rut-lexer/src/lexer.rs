@@ -29,7 +29,7 @@ pub(crate) fn normalize(src: &str) -> String {
 }
 
 /// The canonical text for `src` WITHOUT owning it: borrowed when the
-/// source is already LF-clean (zero copies), one [`normalize`]-shaped
+/// source is already LF-clean (zero copies), one `normalize`-shaped
 /// pass when dirty. The read-only door — the LSP check lane builds its
 /// text rows from this; no tokens ever come out, so nothing can pair
 /// spans with a foreign text.

@@ -9,7 +9,7 @@
 //! over it — lives in `rut-native` (the native host's crate); this
 //! module stays compiler-free and FS-free. Packing itself (compiling
 //! the closure, emitting the `.rutc` groups) lives in the pack module
-//! ([`crate::pack`]); this module stays compiler-free.
+//! ([`mod@crate::pack`]); this module stays compiler-free.
 //!
 //! Format, layout ledger, and load-time checks:
 //! `docs/src/reference/bundles.md` (the rut book).

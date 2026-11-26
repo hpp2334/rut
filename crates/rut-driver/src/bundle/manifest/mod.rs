@@ -71,7 +71,7 @@
 //! The manifest text is **JSONC** — `//` line comments, `/* */` block
 //! comments, and trailing commas are all legal — parsed by
 //! `serde_json` behind a syntax-stripping front stage
-//! ([`jsonc::strip`], the position law lives there): the comment and
+//! (`jsonc::strip`, the position law lives there): the comment and
 //! comma bytes become spaces, `serde_json` sees plain JSON, and a
 //! malformed file's error keeps the parser's own wording under a
 //! `line N:` prefix that names the ORIGINAL file's line. Everything
@@ -201,7 +201,7 @@ fn underscore_refused_top(key: &str) -> ManifestError {
 }
 
 /// Parse the manifest: **JSONC** syntax (comments + trailing commas,
-/// stripped by [`jsonc::strip`] before the parser sees them — the
+/// stripped by `jsonc::strip` before the parser sees them — the
 /// positions never move), then standard JSON (`serde_json`), then this
 /// format's value laws — top-level `name`, `type` (the declared kind),
 /// the `entry` object, and the dep objects `deps` / `dev-deps` whose

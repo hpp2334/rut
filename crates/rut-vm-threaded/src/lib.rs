@@ -7,10 +7,10 @@
 //! The backend is selected by the `rut_threaded` capability cfg emitted by
 //! `build.rs` (native x86_64/aarch64 — see the module docs there):
 //!
-//! - [`native`] — `become`-threaded handlers: each op ends by replacing its
+//! - `native` — `become`-threaded handlers: each op ends by replacing its
 //!   frame with the next handler's, so dispatch is a tail jump and hot state
 //!   stays in registers.
-//! - [`wasm`] — a portable loop over the same [`Machine`] methods, for wasm
+//! - `wasm` — a portable loop over the same [`Machine`] methods, for wasm
 //!   and any other target without verified tail calls.
 //!
 //! Both backends call the **same** `Machine::op_*` methods, so behavior is

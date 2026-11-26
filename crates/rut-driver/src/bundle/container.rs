@@ -1,7 +1,7 @@
 //! The `.rutbundle` container — a deterministic zip archive
 //! carrying a module's `rut.jsonc` and its rut sources (the packaging
 //! reference lives at `docs/src/reference/bundles.md`). The archive
-//! mechanics live in [`super::zip`] (the community `zip` crate behind
+//! mechanics live in `super::zip` (the community `zip` crate behind
 //! a thin layer); this module is the format's POLICY: which entries
 //! may ride, which methods the format accepts, and where the zip64
 //! refusal sits — the crate reads zip64 transparently, the bundle

@@ -98,7 +98,7 @@ impl HostWakes {
         *g
     }
 
-    /// [`wait_since`] with a deadline: park until the generation moves
+    /// [`Self::wait_since`] with a deadline: park until the generation moves
     /// past `seen` or `timeout` elapses — answers whether a settle
     /// fired. `None` waits forever (the condvar's plain `wait`; the
     /// driving protocol's `Wait::Block` arm). The caller supplies the

@@ -24,13 +24,13 @@
 //! **Parens**: the AST has no paren nodes; the printer keeps a child's
 //! group exactly where the child's bare spelling would not re-parse to
 //! the same node in the role it sits in (law 1 — the role table in
-//! [`Role`]). The matrix gate (`tests/paren_matrix.rs`) referees the
+//! `Role`). The matrix gate (`tests/paren_matrix.rs`) referees the
 //! table cell by cell; the VM-verified suite
 //! (`tests/semantic_equiv.rs`) referees the programs.
 //!
 //! **Literals print verbatim**: every `LitNode` carries its exact
 //! token span, so atoms slice their spelling out of the normalized
-//! source ([`P::src_slice`]) — radix, underscores, exponent shapes,
+//! source (`P::src_slice`) — radix, underscores, exponent shapes,
 //! escape spellings, and raw-string hash levels survive byte-exact
 //! (the LSP verbatim law's fmt twin). The f-string composite slices
 //! its delimiters and chunk text and reprints only the hole

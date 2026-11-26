@@ -27,7 +27,7 @@ pub struct FuncCode {
     pub name: IdentId,
     pub params: Vec<TypeId>,
     pub ret: TypeId,
-    /// method receiver type (params[0]) — Some for methods
+    /// method receiver type (params\[0\]) — Some for methods
     pub is_method: bool,
     pub n_captures: u32,
     pub regs: Vec<TypeId>,
@@ -536,7 +536,7 @@ pub struct Program {
     pub scope: crate::id::ScopeId,
     /// the name context for every [`IdentId`] in this program — type
     /// names, field names, trait/method names, function names, exports,
-    /// and the in-memory [`Surface`](Surface). Self-contained: a decoded
+    /// and the in-memory [`Surface`]. Self-contained: a decoded
     /// program rebuilds it from the binary's name table.
     pub interner: Interner,
     /// exported surface, for using modules — on the wire since v16

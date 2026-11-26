@@ -5,7 +5,7 @@
 //! all modules share the same fixed **boot type prefix** (`TypeTable::boot`),
 //! and each module's remaining types are appended after it. Function ids
 //! and const-pool indices are offset; every `TypeId` reachable from a
-//! type, trait, const, function or op is remapped ("type_id<T>()
+//! type, trait, const, function or op is remapped ("`type_id<T>()`
 //! constants are re-based with everything else").
 //!
 //! **Interface ids are global, not offset**: an interface bound as an

@@ -382,7 +382,7 @@ impl NativeTable {
     /// old value in-crossing and store the new (same handle, `newly =
     /// false`); `Vacant` → a fresh monotonic birth holding `val`
     /// (`newly = true`). The packed answer is bit-for-bit the h-family's.
-    /// `val` arrives pre-owned — see [`NativeTable::hvput_ref`].
+    /// `val` arrives pre-owned — see `NativeTable::hvput_ref`.
     pub fn hvput(
         &mut self,
         vm: &Vm,
@@ -422,7 +422,7 @@ impl NativeTable {
 
     /// The valued get (the `map_hvget` body): the stored [`ValSlot`]
     /// answers AS-IS — the ROW turns a `Ref` (the seal box) into the
-    /// `?opaque` answer; see [`NativeTable::hvget_ref`]. Absent →
+    /// `?opaque` answer; see `NativeTable::hvget_ref`. Absent →
     /// `None` (the miss crosses as nil). An `Empty` entry — an
     /// h-family birth read through a valued lane — TRAPS loudly (§0.8
     /// g: a caller bug, never a silent nil).
@@ -749,7 +749,7 @@ const FNV_PRIME: u64 = 1099511628211;
 
 /// FNV-1a 64 over an octet range — the ONE str/bytes hasher, shared by
 /// every lane that hashes octets. The constants are the checksum law
-/// (see [`FNV_OFFSET`]); the s/sv lanes hash OVER the borrowed range
+/// (see `FNV_OFFSET`); the s/sv lanes hash OVER the borrowed range
 /// and it answers the same bits [`hash_payload`] answers for the same
 /// octets, by construction.
 pub fn hash_bytes(bytes: &[u8]) -> u64 {

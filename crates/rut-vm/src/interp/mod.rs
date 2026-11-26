@@ -240,7 +240,7 @@ const TY_ANY: TypeId = u32::MAX;
 impl Vm {
     /// The construction door — `Vm::builder().program(..)/.compiled(..)..build()`.
     /// `Vm::new` is crate-internal; every embedder boots through the
-    /// builder ([`builder`](super::builder)).
+    /// builder ([`builder`]).
     pub fn builder() -> crate::interp::VmBuilder {
         crate::interp::VmBuilder::default()
     }
@@ -450,7 +450,7 @@ impl Vm {
 
     /// The machine's ONE wake cell (a clone of the Arc the boot join
     /// carried over from the registry) — the sugars mint every host
-    /// future's [`Completer`](crate::Completer) against it, and the
+    /// future's [`Completer`] against it, and the
     /// driving loop's park lane (`wait_hosts`, ridden by
     /// `run_until_idle`) waits on it. Every settle bumps the
     /// generation; a waiter that parked before it wakes.
@@ -1023,7 +1023,7 @@ pub enum Drive {
 /// while it waits for host work.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Wait {
-    /// Park on [`HostWakes`](crate::HostWakes) whenever nothing but
+    /// Park on [`HostWakes`] whenever nothing but
     /// settling host futures remains — the native embedder's policy
     /// (the workers settle on other threads; the parked wake is the
     /// protocol's whole point). A host that never settles hangs the
@@ -1037,7 +1037,7 @@ pub enum Wait {
     NonBlock,
 }
 
-/// [`Vm::run_until_idle`'s] answer.
+/// [`Vm::run_until_idle`]'s answer.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Idle {
     /// Every frame retired — the ready queue, the timers, and the

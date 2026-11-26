@@ -163,7 +163,7 @@ impl RutLsp {
     /// hand the core the READ-ONLY host environment — one object
     /// carrying `read` / `readDir` / `isDir` / `notify` (the JS face's
     /// `HostEnv`, `js/index.d.ts`), wrapped into the core's
-    /// [`rut_lsp::env::Io`] by [`JsEnv`]. Replace-on-reinject; the
+    /// [`rut_lsp::env::Io`] by `JsEnv`. Replace-on-reinject; the
     /// await is ordering only.
     pub async fn set_env(&self, env: js_sys::Object) {
         let io = Rc::new(JsEnv::new(env)) as Rc<dyn rut_lsp::env::Io>;

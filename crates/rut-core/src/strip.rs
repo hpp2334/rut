@@ -9,9 +9,9 @@
 //! degrades to pc-only text on `(0, 0)`/empty.
 //!
 //! The mechanics are clean because every name in a `.rutc` is an
-//! [`IdentId`] index into one [`Interner`], and the binary serializes
+//! [`IdentId`](crate::sym::IdentId) index into one [`Interner`](crate::sym::Interner), and the binary serializes
 //! only the instance-local **tail** of the name table — "renaming" is
-//! rewriting those tail strings ([`Interner::remap_tail`]). Ids,
+//! rewriting those tail strings ([`Interner::remap_tail`](crate::sym::Interner::remap_tail)). Ids,
 //! opcodes, vtables, fn tables: untouched. No format-version bump —
 //! tail strings are opaque, and a stripped binary decodes and verifies
 //! identically (`0`/empty `pos` is the documented stripped encoding).
@@ -29,7 +29,7 @@
 //! instantiation-ledger keys), so a consistent map preserves all
 //! cross-group identity for free (interning is content-addressed).
 //!
-//! The keep-set ([`KEEP`]-shaped walks in [`strip_programs`]) rides
+//! The keep-set (`KEEP`-shaped walks in [`strip_programs`]) rides
 //! verbatim: well-known names (never in the tail), `FuncCode.host_id`
 //! (embedder registry keys), `SurfaceFn.host` (async registration
 //! rows), `InstFnKind::HostThunk` names, `Program::exports` (hosts call
@@ -171,7 +171,7 @@ impl SymbolMap {
 /// Steps: (1) walk all programs + surfaces, collect the keep-set; (2)
 /// collect the renameable union — every tail string not in the keep-set;
 /// (3) sort, number `%0..`, build the name map; (4) per program:
-/// [`Interner::remap_tail`] via the map, `mem::take` each fn's
+/// [`Interner::remap_tail`](crate::sym::Interner::remap_tail) via the map, `mem::take` each fn's
 /// `spans`/`pos` into the section (fn table order); (5) the uniqueness
 /// assert — loud on any mangled ∩ kept collision (`%` makes it
 /// unreachable; the assert is the defense in depth).

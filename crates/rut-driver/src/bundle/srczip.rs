@@ -9,7 +9,7 @@
 //!
 //! The laws this module owns:
 //!
-//! - **Placement** ([`validate_grammar`]): `.rut` code lives ONLY
+//! - **Placement** (`validate_grammar`): `.rut` code lives ONLY
 //!   under a `src/` shell; `rut.jsonc` only at a package root
 //!   (the archive root or `deps/<identity>/`); a `.rutbundle` only as
 //!   a dep's IR file. Everything else rides inert (README, LICENSE,
