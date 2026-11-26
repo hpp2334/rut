@@ -77,6 +77,10 @@ aligned with no high-priority issues (4d). Phases run strictly sequentially
   The long task text goes only into the dispatched session prompts,
   never into the subagent.
 - Never implement a phase in this session. You orchestrate and verify only.
+- **After EVERY phase — landed, stopped, failed or skipped — record new
+  findings** (4f): whatever the phase surfaced that no plan in the batch
+  covers goes into the run log's NEW FINDINGS section, with its evidence.
+  Findings are recorded, never fixed: a fix needs a plan, at the user's ask.
 - Poll status every **60 seconds**. Do not use blocking waits.
 - Models come from **`models.jsonc`** (repo root), never `opencode.jsonc`.
   There is ONE pair, no window: `main.complex` and `main.balance`. Re-resolve
@@ -112,6 +116,7 @@ aligned with no high-priority issues (4d). Phases run strictly sequentially
 | Review loop makes no progress (fix round lands an empty diff / no new commit, or two consecutive rounds return an identical HIGH set) | Anti-deadlock guard — the loop's only forced exit besides success: treat as STALLED, retry the round ONCE; still stuck → stop the batch, record it. |
 | Review subagent itself fails (no verdict / crashes / times out) | Retry the review ONCE with a fresh subagent; if it still fails, record the skipped gate and continue to the next phase, flagging the phase in the final report. |
 | Phase fails after retry | **Stop the batch** — later phases likely depend on it. Leave everything for review. |
+| A phase surfaces a defect OUTSIDE every plan's scope | Record it as a finding at the phase's end (4f), with its evidence. Never fix it inside the batch; name its candidate home; continue. |
 | Anything else unexpected | Choose the least destructive option, record it, keep going if safe. |
 
 ## Workflow
@@ -178,6 +183,7 @@ best-effort and record your assumptions.
 Create `/tmp/opencode/rut-batch-plan-impl/run.md` and record, as you go: the plan
 source, the parsed phase list, every autonomous decision (with reason), each
 session id, and each phase result. The final report is generated from this.
+Give it a **NEW FINDINGS** section, filled after every phase (4f).
 
 ### 3. Preconditions
 
@@ -233,7 +239,10 @@ Write the phase prompt to a payload file (never interpolate raw text into
 #     (plus a short body listing what was done).
 #   - Then PUSH to the remote: git push (add -u <remote> <branch> if the
 #     branch has no upstream yet). A phase is only done once pushed.
-#   - Finish with a summary: what changed, files touched, test/build results.
+#   - Finish with a summary: what changed, files touched, test/build results,
+#     and NEW FINDINGS — defects or inconsistencies you noticed OUTSIDE this
+#     phase's scope (file:line + one line each, with the evidence; do not fix
+#     them), or "none".
 
 jq -n --rawfile text /tmp/opencode/rut-batch-plan-impl/phase<n>.txt '{text:$text}' \
   > /tmp/opencode/rut-batch-plan-impl/phase<n>.json
@@ -294,6 +303,7 @@ COMMITS: <hashes + subjects, or "none">
 PUSHED: <yes/no — no "[ahead" in status -sb>
 DIRTY: <yes/no>
 SUMMARY: <final assistant text, max ~30 lines>
+NEW FINDINGS: <the worker's NEW FINDINGS lines, verbatim; or "none">
 ```
 
 #### d. Plan-alignment review loop (review subagent — YOUR model)
@@ -333,11 +343,15 @@ REVIEW (read-only):
      phase text) or any correctness, data-loss, security, or
      breaking-regression issue.
    - MINOR: style, naming, nice-to-haves — record but do NOT gate on these.
+   A defect you notice OUTSIDE the phase's scope is a FINDING, not a verdict
+   item: list it with file:line and the evidence you saw — you never fix it,
+   and it never changes VERDICT.
 
 RESPOND with exactly this and nothing else:
 VERDICT: ALIGNED | NOT_ALIGNED
 HIGH: <numbered list, each with file:line and a one-line fix hint, or "none">
 MINOR: <short list or "none">
+FINDINGS: <defects noticed OUTSIDE the phase's scope — file:line + one line each + the evidence; or "none">
 SUMMARY: <max ~15 lines>
 ```
 
@@ -373,13 +387,43 @@ HIGH items.
 Phase succeeded only when ALL hold: `STATUS: DONE`, `OUTCOME: succeeded`,
 at least one commit, `PUSHED: yes`, clean tree, **and the review loop of 4d
 has closed** (`VERDICT: ALIGNED`, `HIGH: none`). Then leave the sessions
-as-is and start the next phase (back to 4a).
+as-is, record the phase's findings (4f), and start the next phase (back to
+4a).
 
 Otherwise (FAILED / STALLED / TIMEOUT): retry ONCE per policy (fresh session,
 same prompt; interrupt first if stalled). Retry succeeds → continue. Retry
 fails too → **stop the batch** and go to the final report. In a parallel
 phase, retry only the failed TASK; the phase completes when ALL tasks are
-DONE + succeeded + pushed + clean.
+DONE + succeeded + pushed + clean. However a phase ends — landed, stopped,
+retried or failed — its findings are recorded (4f) before anything else
+starts.
+
+#### f. Record new findings (you)
+
+Before the next phase starts — after EVERY phase end, including one that
+stopped, was retried or was skipped — append to the run log's **NEW
+FINDINGS** section everything the phase surfaced that no plan in the batch
+covers. Three sources: the worker's summary (its NEW FINDINGS lines, plus
+anything it reported under a premise shift or as unresolved), the reviewer's
+FINDINGS lines and the MINOR items that name a real defect, and what you
+verified yourself while checking their reports.
+
+One entry per finding, numbered `F<n>`:
+
+- where it was found — the phase, `file:line`;
+- the evidence — a reproduction (the commands and their output) or the
+  quoted lines;
+- what makes it a finding — which two things disagree, or what a user loses;
+- whether it blocks the batch (it almost never does) and, if not, its
+  candidate home: a queued plan, a follow-up clean-up, or a ruling the user
+  must make.
+
+Verify before recording — a finding you did not see yourself is a claim: run
+it, read it, or mark it "unverified". Write "none" in the phase's log entry
+when the phase surfaced nothing. The final report lists them (step 5). A
+finding is never fixed inside the batch: fixing one needs a plan — propose
+it in the run log's follow-up list, and write that plan only when the user
+asks.
 
 ### 4p. Parallel task phases (a phase with several tasks)
 
@@ -403,7 +447,8 @@ When the plan splits a phase into tasks T1..Tn:
    X's facts, the watcher says so in its report and the orchestrator
    authors the follow-up.
 4. **Completion**: all tasks green → the whole-phase review loop of 4d (one
-   reviewer on `$BALANCE_REF`, fix rounds routed per scope) → next phase. A
+   reviewer on `$BALANCE_REF`, fix rounds routed per scope) → record findings
+   (4f) → next phase. A
    failed task retries alone (policy table). Sibling pushes may land
    mid-flight — expected.
 
@@ -432,6 +477,7 @@ After the last phase (or on abort), summarize from the run log:
 Batch plan complete: <k>/<N> phases done (base <BASE> -> HEAD <short hash>)
   1. <title>  ✓ <commit> pushed, review passed (r<N> rounds)   ses_xxx
   2. <title>  ✗ STALLED in review round 2 (retried once, failed)   ses_yyy — left untouched
+New findings recorded (run log, NEW FINDINGS): <F1 … — one line each, or "none">
 Overall: git diff --stat <BASE>..HEAD
 Autonomous decisions: <auto-stash hash, retry counts, review-round counts, skipped gates, assumptions made>
 All sessions were kept (never deleted) — resume any of them from the session list.
