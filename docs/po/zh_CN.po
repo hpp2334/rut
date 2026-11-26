@@ -3381,7 +3381,7 @@ msgid ""
 "```"
 msgstr ""
 
-#: src/tutorial/modules.md:46 src/reference/modules-and-visibility.md:408
+#: src/tutorial/modules.md:46 src/reference/modules-and-visibility.md:412
 msgid "Visibility"
 msgstr "可见性"
 
@@ -3389,12 +3389,12 @@ msgstr "可见性"
 msgid "Every declaration has a visibility, and unannotated means **module-private** — the safe default. Nothing leaks unless it says `pub`:"
 msgstr "每个声明都有一个可见性，不标注即**模块私有**——这是安全的默认。除非写明 `pub`，任何东西都不会外泄："
 
-#: src/tutorial/modules.md:52 src/reference/modules-and-visibility.md:414
+#: src/tutorial/modules.md:52 src/reference/modules-and-visibility.md:418
 #: src/reference/literals-and-inference.md:129
 msgid "Form"
 msgstr "形式"
 
-#: src/tutorial/modules.md:52 src/reference/modules-and-visibility.md:414
+#: src/tutorial/modules.md:52 src/reference/modules-and-visibility.md:418
 #: src/reference/primitive-types.md:25
 #: src/reference/builtin-generic-types.md:85
 #: src/reference/builtin-generic-types.md:96
@@ -3407,7 +3407,7 @@ msgstr "形式"
 msgid "Meaning"
 msgstr "含义"
 
-#: src/tutorial/modules.md:54 src/reference/modules-and-visibility.md:416
+#: src/tutorial/modules.md:54 src/reference/modules-and-visibility.md:420
 msgid "`pub fn ..`"
 msgstr "`pub fn ..`"
 
@@ -3415,7 +3415,7 @@ msgstr "`pub fn ..`"
 msgid "public — importable by any module, other packages included"
 msgstr "公开——任何模块都可导入，其他包也不例外"
 
-#: src/tutorial/modules.md:55 src/reference/modules-and-visibility.md:417
+#: src/tutorial/modules.md:55 src/reference/modules-and-visibility.md:421
 msgid "`pub(pkg) fn ..`"
 msgstr "`pub(pkg) fn ..`"
 
@@ -3423,7 +3423,7 @@ msgstr "`pub(pkg) fn ..`"
 msgid "visible everywhere in this package's module tree"
 msgstr "在本包的模块树内处处可见"
 
-#: src/tutorial/modules.md:56 src/reference/modules-and-visibility.md:418
+#: src/tutorial/modules.md:56 src/reference/modules-and-visibility.md:422
 msgid "`pub(super) fn ..`"
 msgstr "`pub(super) fn ..`"
 
@@ -8686,22 +8686,22 @@ msgid "**The leaf gate reads the row.** A consumer importing the module may spel
 msgstr "**叶子门读取该行。** 导入该模块的消费方可以像拼写它的任何 `pub` 名字一样拼写再导出的名字 —— `use mid::{ helper }` 点名的是 `mid` *确实*声明过的名字 —— 而同一个名字若躲在私有 `use` 之后，就仍是它一贯的未知导入。"
 
 #: src/reference/modules-and-visibility.md:253
-msgid "**A dependency's name may ride the edge.** `pub use` of a dep's name is a re-export edge, not a private import: the name surfaces through the re-exporting module, so a consumer validates its import against _that_ module — the deeper package stays an implementation detail of the exporter. The exporter's compiled surface still owns value binding: a leaf that binds nothing there states it at the use line, exactly like any other import."
-msgstr "**依赖的名字可以搭乘这条边。** 对依赖名字的 `pub use` 是再导出边，不是私有导入：名字经再导出模块浮出，消费方针对*那个*模块校验自己的导入 —— 更深处的包保持为导出方的实现细节。导出方编译出的表面仍掌管值绑定：在那里绑定不到任何东西的叶子会在 use 行说明，与其他导入一模一样。"
+msgid "**A dependency's name may ride the edge.** `pub use` of a dep's name is a re-export edge, not a private import: the name surfaces through the re-exporting module, so a consumer validates its import against _that_ module — the deeper package stays an implementation detail of the exporter. The exporter's compiled surface carries the re-export as a **surface row** whose origin is the declaring package: a fn, generic fn, type (class/struct), enum, interface, or host-surface const re-export binds through it like any of the exporter's own `pub` names, and a chain of re-exports collapses to the original declaration. A module `let` has no surface row (it is not a surface const), so a `pub use` naming one refuses at the re-exporting use line."
+msgstr "**依赖的名字可以搭乘这条边。** 对依赖名字的 `pub use` 是再导出边，不是私有导入：名字经再导出模块浮出，消费方针对*那个*模块校验自己的导入 —— 更深处的包保持为导出方的实现细节。导出方编译出的表面把再导出携带为一条**表面行**，其源头是声明它的包：fn、泛型 fn、类型（class/struct）、enum、interface 或宿主表面 const 的再导出都像导出方自己的任何 `pub` 名字一样经它绑定，而再导出的链条会坍缩回最初的声明。模块 `let` 没有表面行（它不是表面 const），所以点名它的 `pub use` 会在再导出方的 use 行被拒绝。"
 
-#: src/reference/modules-and-visibility.md:260
+#: src/reference/modules-and-visibility.md:264
 msgid "**The editor reads the edge.** Re-exported names complete through the module (`use mid::{ ⏐` offers `helper`, the detail naming the edge), and the imported names carry the re-export visibility."
 msgstr "**编辑器也读取这条边。** 再导出的名字经该模块补全（`use mid::{ ⏐` 会提供 `helper`，详情栏点名这条边），且被导入的名字携带再导出可见性。"
 
-#: src/reference/modules-and-visibility.md:264
+#: src/reference/modules-and-visibility.md:268
 msgid "**`pub async fn` crosses package surfaces.** A plain `pub async fn` exports like any `pub fn`. The exporter materializes the sugar law's export shape beside the woven body — a hidden start wrapper spelling `fn f(p) -> Future<T>` that mints the frame — and the surface row carries the declared **answer** type. The consumer's `use` binds the name, a call answers the closed `Future<answer>`, and `await` drives it like any future: the wrapper mints the frame in the one unit that knows its full layout, and the drive reaches the exporter's woven body through the frame's yield slot exactly as a local call would. The one gap is the **generic** async fn — the weave refuses generics, no row materializes, and a use leaf naming one refuses at the use line: `` `grab` is a generic `pub async fn` — generic async fns do not cross package surfaces yet ``."
 msgstr "**`pub async fn` 跨越包表面。**普通的 `pub async fn` 与任何 `pub fn` 一样导出。导出方在织入的函数体旁物化糖法则的导出形态——一个拼作 `fn f(p) -> Future<T>` 的隐藏启动包装器，由它铸造帧——表面行携带声明的**应答**类型。消费方的 `use` 绑定该名字，调用应答封闭的 `Future<answer>`，`await` 像驱动任何 future 一样驱动它：包装器在唯一知道完整布局的单元里铸造帧，驱动经帧的产出槽位抵达导出方织入的函数体，与本地调用一模一样。唯一的缺口是**泛型** async fn——织入拒绝泛型，没有行物化，点名它的 use 叶子在 use 行被拒绝：`` `grab` is a generic `pub async fn` — generic async fns do not cross package surfaces yet ``。"
 
-#: src/reference/modules-and-visibility.md:278
+#: src/reference/modules-and-visibility.md:282
 msgid "The head may also name the **consumer's own package** — the intra-package import. The package's own name resolves to its root module, and a `mod` edge of its own tree resolves by walking from the file the `use` is written in (the current module first, then the ancestors — the same walk qualified positions take):"
 msgstr "开头也可以命名**消费方自己的包** —— 这就是包内导入。包自己的名字解析到它的根模块，自己树里的一条 `mod` 边则从写下 `use` 的那个文件出发解析（先当前模块，再各级祖先 —— 与限定位置走的是同一条路）："
 
-#: src/reference/modules-and-visibility.md:284
+#: src/reference/modules-and-visibility.md:288
 msgid ""
 "```rut\n"
 "use imp::{ TodoList, Task };   // beside `mod imp;` — imp's pub names\n"
@@ -8715,72 +8715,72 @@ msgstr ""
 "mod imp;\n"
 "```"
 
-#: src/reference/modules-and-visibility.md:290
+#: src/reference/modules-and-visibility.md:294
 msgid "The leaves obey the same laws every crossing does. Each must be a declaration of the walked module, **visible from the importing file**: a bare, private member of `imp` is not importable — `pub` or `pub(pkg)` is (import is no visibility bypass). A module itself is not an import — walk it (`use imp::grid::{ Cell }`, not `use imp::{ grid }`). And the binding is per file, exactly like a dep use: a module needs its own `use` line. One head must never answer as two things: a name that is both a declared dep and an own module edge is a loud ambiguity — rename one of the two."
 msgstr "叶子遵守每一次穿越都遵守的法则。每个叶子都必须是走到的模块里的一条声明，且**从导入文件可见**：`imp` 的裸私有成员不可导入 —— `pub` 或 `pub(pkg)` 才可以（导入不是可见性旁路）。模块本身不可导入 —— 走进它（`use imp::grid::{ Cell }`，而非 `use imp::{ grid }`）。绑定与依赖 use 完全一样按文件生效：一个模块需要自己的 `use` 行。一个开头绝不能同时是两个东西：一个名字既是已声明的依赖、又是本包自己的模块边，就是响亮的歧义 —— 给其中之一改名。"
 
-#: src/reference/modules-and-visibility.md:300
+#: src/reference/modules-and-visibility.md:304
 msgid "The head itself is **declaration-scoped**: a package may `use` exactly the heads its own manifest names — `deps` ∪ (`dev-deps` when the package is the program root) ∪ `core`. Mounting stays transitive (a dep's own `deps` still join the program's closure), but a head that is mounted without being declared by _this_ package is the resolver's dedicated diagnostic, naming who pulled it in and the row to add ([dependency kinds](dependency-kinds.md))."
 msgstr "头本身是**按声明划定的**：一个包只能 `use` 自己清单点名的头——`deps` ∪（作为程序根时的 `dev-deps`）∪`core`。挂载仍是传递的（依赖自己的 `deps`依然进入程序的闭包），但一个被挂载却未被*本*包声明的头会触发解析器的专门诊断，指名是谁把它拉进来的、要添加哪一行（[dependencykinds](dependency-kinds.md)）。"
 
-#: src/reference/modules-and-visibility.md:308
+#: src/reference/modules-and-visibility.md:312
 msgid "The engine's builtin names — the primitives, `opaque`, `panic`, `type_id<T>()`, `str(x)` — are **ambient**: no `use` is needed for them. The gated names resolve only through `use core::{ .. }`: the surface const `NAN`, the disposal context `DisposalContext`, the weak reference `Weak<T>`, and the closed async pair (`Future<T>`, `RunContext`) — the engine's weave never needs the import, only source that spells one of the names does. The bracket markers (`[disposal]`/`[iterable]`/`[constructor]`) need no import — the marker word is the designation, not a name ([Host fns and declaration files](host-fns.md)). Package code (`pouch`, `ink`, `nmapset`, ...) mounts only through `use`."
 msgstr "引擎的内建名字——各基本类型、`opaque`、`panic`、`type_id<T>()`、`str(x)`——是**环境性的**：使用它们无需 `use`。被把守的名字只能经 `use core::{ .. }` 解析：表面常量 `NAN`、disposal 上下文 `DisposalContext`、弱引用 `Weak<T>`，以及封闭的 async 对（`Future<T>`、`RunContext`）——引擎的编织从不需要导入，需要导入的只是拼写了其中某个名字的源代码。括号标记（`[disposal]`/`[iterable]`/`[constructor]`）无需导入——标记词就是指定，不是名字（[宿主 fn 与声明文件](host-fns.md)）。包代码（`pouch`、`ink`、`nmapset`、...）只经 `use` 挂载。"
 
-#: src/reference/modules-and-visibility.md:322
+#: src/reference/modules-and-visibility.md:326
 msgid "Qualified positions"
 msgstr "限定位置"
 
-#: src/reference/modules-and-visibility.md:324
+#: src/reference/modules-and-visibility.md:328
 msgid "Inside one package, a declaration of another module is nameable where a path is legal — a type annotation, a call, a field read — by **qualified position**: `layout::Column`, `store::Source<str>`, `widget::mk(3)`. The head resolves against the current module's scope, then the module's ancestors up to the package root; positions never take a _dep_ package head — `use` statements are the only cross-package door. `use` is also the intra-package import — a use head may be this package's own name, or one of its `mod` edges (see [Uses](#uses)) — so a cross-file name binds bare once imported; positions stay spelling-free: `imp::grid::Cell` never needed an import, and still spells. `::` is THE path separator — every name-resolution path (use paths, qualified positions, enum members, statics/associated fns, dep module paths) spells its segments with it; `.` is value access only (fields, instance methods, tuple indices — see [Lexical structure](lexical-structure.md)). One separator, two doors:"
 msgstr "同一个包内，另一个模块的声明在任何路径合法处都可直接指名——类型标注、调用、字段读取——即**限定位置**：`layout::Column`、`store::Source<str>`、`widget::mk(3)`。头在当前模块的作用域中解析，然后沿模块的祖先上溯到包根；位置永远不接受_依赖_包的头——`use` 语句是跨包的唯一大门。`use` 也是包内导入——use 的头可以是本包自己的名字，或它的某条 `mod` 边（见 [use](#uses)）——所以跨文件的名称一经导入即可裸用；位置则无需任何拼写：`imp::grid::Cell` 从不需要导入，照写不误。`::` 是唯一的路径分隔符——每条名称解析路径（use 路径、限定位置、枚举成员、静态项/关联函数、依赖模块路径）都用它分隔段；`.` 只做值访问（字段、实例方法、元组下标——见 [词法结构](lexical-structure.md)）。一个分隔符，两扇门："
 
-#: src/reference/modules-and-visibility.md:341
+#: src/reference/modules-and-visibility.md:345
 msgid "form"
 msgstr "形式"
 
-#: src/reference/modules-and-visibility.md:341 src/reference/stdlib.md:86
+#: src/reference/modules-and-visibility.md:345 src/reference/stdlib.md:86
 #: src/reference/typed-bytecode.md:114
 msgid "spelling"
 msgstr "拼写"
 
-#: src/reference/modules-and-visibility.md:341 src/reference/embedding.md:547
+#: src/reference/modules-and-visibility.md:345 src/reference/embedding.md:547
 msgid "door"
 msgstr "门"
 
-#: src/reference/modules-and-visibility.md:343
+#: src/reference/modules-and-visibility.md:347
 msgid "use path"
 msgstr "use 路径"
 
-#: src/reference/modules-and-visibility.md:343
+#: src/reference/modules-and-visibility.md:347
 msgid "`use pkg::a::b::{ C }`"
 msgstr ""
 
-#: src/reference/modules-and-visibility.md:343
+#: src/reference/modules-and-visibility.md:347
 msgid "`::` — cross-package **and own-package module**, the import"
 msgstr "`::` —— 跨包与本包模块，导入语句"
 
-#: src/reference/modules-and-visibility.md:344
+#: src/reference/modules-and-visibility.md:348
 msgid "qualified position"
 msgstr "限定位置"
 
-#: src/reference/modules-and-visibility.md:344
+#: src/reference/modules-and-visibility.md:348
 msgid "`a::b::C` / `a::b::f(..)`"
 msgstr "`a::b::C` / `a::b::f(..)`"
 
-#: src/reference/modules-and-visibility.md:344
+#: src/reference/modules-and-visibility.md:348
 msgid "`::` — intra-package, at the use site"
 msgstr "`::` —— 包内，在使用处"
 
-#: src/reference/modules-and-visibility.md:346
+#: src/reference/modules-and-visibility.md:350
 msgid "Module-level `let`"
 msgstr "模块级 `let`"
 
-#: src/reference/modules-and-visibility.md:348
+#: src/reference/modules-and-visibility.md:352
 msgid "Initializers must be **load-time literals** — this build accepts an `Int`, `Float`, `Str`, or `Bool` literal and nothing else. An operator, an enum member, a record literal, `[nil; n]`, `type_id<T>()`, or any call is refused:"
 msgstr "初始化式必须是**加载期字面量**——本构建接受 `Int`、`Float`、`Str` 或 `Bool` 字面量，别的都不行。运算符、枚举成员、记录字面量、`[nil; n]`、`type_id<T>()` 或任何调用都会被拒绝："
 
-#: src/reference/modules-and-visibility.md:357
+#: src/reference/modules-and-visibility.md:361
 msgid ""
 "```rut\n"
 "let KIND_ADD: i64 = 1;                 // fine: an Int literal\n"
@@ -8788,91 +8788,91 @@ msgid ""
 "```"
 msgstr ""
 
-#: src/reference/modules-and-visibility.md:362
+#: src/reference/modules-and-visibility.md:366
 msgid "There is no mutable module state: program state is constructed in `main`, or held by the embedder and passed across the boundary. **No user code runs at load.**"
 msgstr "不存在可变的模块状态：程序状态在 `main` 中构造，或由嵌入方持有并跨边界传入。**加载期间不会运行任何用户代码。**"
 
-#: src/reference/modules-and-visibility.md:366
+#: src/reference/modules-and-visibility.md:370
 msgid "Entry points"
 msgstr "入口点"
 
-#: src/reference/modules-and-visibility.md:368
+#: src/reference/modules-and-visibility.md:372
 msgid "The embedder loads a module and then explicitly calls an entry function — `entry fn main` for a script; an entry fn is sync. `entry fn` publishes a function to the _embedder_; `entry` is orthogonal to visibility and does not combine with `pub`. Consequences of declarations-only loading: no use side-effect ordering, no load-order bugs, deterministic and cheap loads."
 msgstr "嵌入方加载模块后会显式调用一个入口函数 —— 脚本就是 `entry fn main`；入口函数是同步的。`entry fn` 把函数发布给 _嵌入方_；`entry` 与可见性正交，且不与 `pub` 组合。只含声明的加载带来的结果：不存在 use 副作用的顺序问题，不存在加载顺序 bug，加载行为确定且开销低。"
 
-#: src/reference/modules-and-visibility.md:375
+#: src/reference/modules-and-visibility.md:379
 msgid "Bindings: `let` and `const`"
 msgstr "绑定：`let` 与 `const`"
 
-#: src/reference/modules-and-visibility.md:377
+#: src/reference/modules-and-visibility.md:381
 msgid "Mutability is the **default**. A `let` binding may be reassigned (`x = e`), written through (`p.x = 3`, `xs[0] = 7`), and passed where a writer is expected — including every method call: parameters are mutable too, so `fn step(p: Point)` may write the caller's point, and there is no `mut` parameter spelling to grant it."
 msgstr "可变是**默认**。`let` 绑定可以重新赋值（`x = e`）、穿透写入（`p.x = 3`、`xs[0] = 7`）、并在任何期待写入者的位置使用——包括每一次方法调用：参数同样是可变的，`fn step(p: Point)` 可以写入调用方的点，而且不存在授予这一权限的 `mut` 参数拼写。"
 
-#: src/reference/modules-and-visibility.md:383
+#: src/reference/modules-and-visibility.md:387
 msgid "`let x = e;` — a **mutable binding**, the ordinary shape."
 msgstr "`let x = e;`——**可变绑定**，普通的形状。"
 
-#: src/reference/modules-and-visibility.md:384
+#: src/reference/modules-and-visibility.md:388
 msgid "`const x = e;` — the **opt-out**: a _const binding_ refuses the binding's own reassignment, diagnosing ``cannot reassign `x` — a `const` binding is not reassignable``."
 msgstr "`const x = e;`——**退出选择**：一个_常量绑定_拒绝绑定自身的重新赋值，诊断为 ``cannot reassign `x` — a `const` binding is not reassignable``。"
 
-#: src/reference/modules-and-visibility.md:388
+#: src/reference/modules-and-visibility.md:392
 msgid "**The const opt-out is shallow — reassignment only.** It gates the one operation that rebinds the name: `x = ...` on a const binding errors. It is _not_ deep immutability — writes through the binding stay legal, so `p.x = 3` on a `const p` compiles and mutates the shared object, exactly as on a `let`. Nothing in rut freezes a record; if you need a value no one can write through, build a fresh one (a literal, or a copy of the fields you need) rather than expecting `const` to guard it."
 msgstr "**const 的退出是浅层的——只管重新赋值。**它把守的是唯一一个让名字重新绑定的操作：对常量绑定做 `x = ...` 会报错。它_不是_深层不可变——透过绑定的写入仍然合法，对 `const p` 做 `p.x = 3` 照样编译并改动共享对象，与 `let` 上完全一样。rut 里没有任何东西会冻结记录；如果你需要一个没人能穿透写入的值，请构造一个新的（一个字面量，或所需字段的副本），而不是指望 `const` 替你把守。"
 
-#: src/reference/modules-and-visibility.md:396
+#: src/reference/modules-and-visibility.md:400
 msgid "Sharing is not gated at all: every non-primitive is a shared cell (see [By-reference and nullable](by-reference-and-nullable.md)), writes are visible through every handle, and a const binding shares like any other — `const` is _about the name_, never a copy or a fence."
 msgstr "共享完全不被把关：每个非基本类型值都是共享单元（参见[按引用与可空](by-reference-and-nullable.md)），写入经所有句柄可见，常量绑定也和任何绑定一样共享——`const` 只_关乎名字_，绝不是复制，也不是栅栏。"
 
-#: src/reference/modules-and-visibility.md:401
+#: src/reference/modules-and-visibility.md:405
 msgid "**Two meanings of \"const\".** This page's `const` is the _const binding_ — the statement head `const x = e;` in rut source. The **surface const** is a different animal: the load-time constants a dependency's `.d.rut` interface (or a host package) exports, bound bare by a `use` — spelled `let` in the interface, never `const` (see [Host fns and declaration files](host-fns.md#the-surface-grammar))."
 msgstr "**\"const\" 的两种含义。**本页的 `const` 是_常量绑定_——rut 源码里的语句头 `const x = e;`。**表面常量**是另一种东西：依赖的 `.d.rut` 接口（或宿主包）导出的加载期常量，经一条 `use` 裸名绑定——在接口里拼作 `let`，从不是 `const`（参见[宿主 fn 与声明文件](host-fns.md#the-surface-grammar)）。"
 
-#: src/reference/modules-and-visibility.md:410
+#: src/reference/modules-and-visibility.md:414
 msgid "Modules form a tree per package (the package root is the root module `mod.rut`; each declared child is a module file). Every declaration — and every class member — carries a visibility:"
 msgstr "每个包的模块构成一棵树（包根就是根模块 `mod.rut`；每个被声明的子模块都是一个模块文件）。每个声明 —— 以及每个类成员 —— 都带有一个可见性："
 
-#: src/reference/modules-and-visibility.md:416
+#: src/reference/modules-and-visibility.md:420
 msgid "**public** — nameable by any rut module (other packages included)"
 msgstr "**public** —— 可被任何 rut 模块命名（包括其他包）"
 
-#: src/reference/modules-and-visibility.md:417
+#: src/reference/modules-and-visibility.md:421
 msgid "visible everywhere inside this **package** (its whole module tree)"
 msgstr "在整个**包**内可见（整棵模块树）"
 
-#: src/reference/modules-and-visibility.md:418
+#: src/reference/modules-and-visibility.md:422
 msgid "visible to the **parent module's subtree** only"
 msgstr "仅对**父模块的子树**可见"
 
-#: src/reference/modules-and-visibility.md:419
+#: src/reference/modules-and-visibility.md:423
 msgid "_(unannotated)_"
 msgstr "_（无标注）_"
 
-#: src/reference/modules-and-visibility.md:419
+#: src/reference/modules-and-visibility.md:423
 msgid "module-private — visible in this module and its descendants; **the default**"
 msgstr "模块私有 —— 在本模块及其后代中可见；**默认值**"
 
-#: src/reference/modules-and-visibility.md:421
+#: src/reference/modules-and-visibility.md:425
 msgid "Unannotated = private to the declaring module _and its descendants_ (a child module sees its ancestors' privates, never a sibling's)."
 msgstr "无标注 = 对声明模块_及其后代_私有（子模块能看到祖先的私有项，永远看不到兄弟的）。"
 
-#: src/reference/modules-and-visibility.md:423
+#: src/reference/modules-and-visibility.md:427
 msgid "The paren forms `pub(mod)` / `pub(self)` are gone — a paren scope other than `super`/`pkg` is the ordinary `pub(..)` error."
 msgstr ""
 
-#: src/reference/modules-and-visibility.md:425
+#: src/reference/modules-and-visibility.md:429
 msgid "Applies uniformly: `let`, `enum`, `struct`, `class`, `interface`, `impl` (an impl exports with its target type), `fn`, `type` aliases, the `mod` edge itself (`pub mod` opens the child's `pub` members to other packages; a plain `mod` keeps the child package-internal), and the `use` edge (`pub use` re-exports its imported names — see [Uses](#uses)). On a `class` declaration it means the _type name_ is visible."
 msgstr "统一适用于：`let`、`enum`、`struct`、`class`、`interface`、`impl`（impl 随其目标类型一起导出）、`fn`、`type` 别名、`mod` 边本身（`pub mod` 把子模块的 `pub` 成员开放给其他包；裸 `mod` 让子模块保持包内），以及 `use` 边（`pub use` 再导出其导入的名字 —— 见 [Uses](#uses)）。在 `class` 声明上，它指_类型名_可见。"
 
-#: src/reference/modules-and-visibility.md:432
+#: src/reference/modules-and-visibility.md:436
 msgid "**Class members take the same forms**: an unannotated field or method is module-private; `pub` (optionally scoped) exposes it. See [Classes and constructors](classes.md)."
 msgstr "**类成员采用同样的形式**：未加注解的字段或方法是模块私有的；`pub`（可带作用域）将其公开。参见[类与构造器](classes.md)。"
 
-#: src/reference/modules-and-visibility.md:435
+#: src/reference/modules-and-visibility.md:439
 msgid "**Struct fields are always public** — the field law has no dial (see [Structs](structs.md)). **Impl-block methods take the `pub` dial** — `pub fn` exports cross-module, plain `fn` is module-private — the same law a class's methods follow, enums included (see [Structs](structs.md) and [Enums](enums.md)). Interface members take no `pub` at all — they are as visible as their interface; satisfaction reads a type's **public** inherent members (see [Interfaces and dispatch](interfaces.md))."
 msgstr ""
 
-#: src/reference/modules-and-visibility.md:443
+#: src/reference/modules-and-visibility.md:447
 msgid "Visibility is checked at compile time; it has no runtime representation. Only `pub` names enter a module's export table; a non-exported declaration is _known_ inside its module but _nameable_ nowhere else — which is how libraries hide implementation surfaces behind exported ones. Hiding stops at the checker's door: every non-generic fn/method body is type-checked even when nothing calls it."
 msgstr "可见性在编译期检查；它没有运行时表示。只有 `pub` 名称会进入模块的导出表；未导出的声明在其模块内部是 _已知_ 的，但在其他任何地方都 _无法命名_ —— 库正是借此把实现细节隐藏在导出接口之后。这种隐藏止步于检查器门前：每个非泛型 fn/方法体即使无人调用也会被类型检查。"
 
@@ -18817,7 +18817,7 @@ msgstr "异步下降"
 msgid "`async fn` compiles to a state machine: each `await` is a checkpoint state in the hidden frame, resume dispatch is the existing jump-table op, locals become frame fields, and suspension is a plain return. The op set grows zero rows for this — the driven half is an ordinary itable call through the future's designated yield slot (the closed `Future` class's engine ABI). The full protocol lives in [Async and await](async.md) and [launched futures](launched-futures.md)."
 msgstr ""
 
-#: src/reference/compiler.md:192 src/reference/module-binary.md:130
+#: src/reference/compiler.md:192 src/reference/module-binary.md:133
 msgid "Determinism"
 msgstr "确定性"
 
@@ -19482,7 +19482,7 @@ msgid ""
 "```\n"
 "offset  field\n"
 "0       magic \"RUTC\"                      # 4 bytes\n"
-"4       version: u32                      # VERSION = 26; refuses any other value\n"
+"4       version: u32                      # VERSION = 27; refuses any other value\n"
 "8       name: str\n"
 "        name table: u32 count, then count × str\n"
 "        types: u32 count, then per type { name: IdentId, kind }\n"
@@ -19527,158 +19527,158 @@ msgid "**Instantiation ledger**: the owner-anchored identity of every instantiat
 msgstr "**实例化台账**：程序编译过的每个实例化的属主锚定身份——先是类型行 `(owner, decl, arguments, type id)`，再是函数身份（种类、替换值、局部 fn id）。实例化归声明包所有，链接把共享同一键的行统一为全程序唯一的一行；消费方针对打包二进制的台账解析自己的请求。类型导出在其旁携带自己的泛型参数表（见下方表面）。"
 
 #: src/reference/module-binary.md:113
-msgid "**Surface**: the exported surface rides after `exports` — funcs (module rows spelled mod-qualified, with their async/host rows), consts, the carried type descriptors + scope blocks + type exports (generic exports carry their parameter names in order), interface declarations (`SurfaceIface` — every module publishes the interfaces it declares; a consumer links them into one merged table), the inherent method surfaces (the linkable-classes phase's one row per class with methods), and the native rows with their ambient bits. There are no impl-registration rows on the wire — satisfaction is structural, so nothing registers. Names are ids into the name table above; decode rejects any id its tables cannot resolve."
-msgstr "**表面**：导出的表面在 `exports` 之后承载——函数（模块行以模块限定拼写，带各自的 async/host 行）、常量、随行的类型描述符 + 作用域块 + 类型导出（泛型导出按顺序携带自己的参数名）、接口声明（`SurfaceIface`——每个模块都发布自己声明的接口；消费方把它们链接成一张合并表）、固有方法表面（可链接类阶段每个有方法的类一行），以及带环境位的内建行。线上没有实现注册行——满足是结构性的，无需注册。名称是上方名称表的 id；解码拒绝任何其表无法解析的 id。"
+msgid "**Surface**: the exported surface rides after `exports` — funcs (module rows spelled mod-qualified, with their async/host rows; v27 adds a `pub use` re-export row's DECLARING-unit scope tag for a fn and an owner tag for a generic fn / type, so the consumer binds the re-export like any of the exporter's own exports), consts, the carried type descriptors + scope blocks + type exports (generic exports carry their parameter names in order), interface declarations (`SurfaceIface` — every module publishes the interfaces it declares; a consumer links them into one merged table), the inherent method surfaces (the linkable-classes phase's one row per class with methods), and the native rows with their ambient bits. There are no impl-registration rows on the wire — satisfaction is structural, so nothing registers. Names are ids into the name table above; decode rejects any id its tables cannot resolve."
+msgstr "**表面**：导出的表面在 `exports` 之后承载——函数（模块行以模块限定拼写，带各自的 async/host 行；v27 为一个 `pub use` 再导出行的 fn 增加声明单元的作用域标记，为泛型 fn / 类型增加归属标记，使消费方像导出方自己的任何导出一样绑定该再导出）、常量、随行的类型描述符 + 作用域块 + 类型导出（泛型导出按顺序携带自己的参数名）、接口声明（`SurfaceIface`——每个模块都发布自己声明的接口；消费方把它们链接成一张合并表）、固有方法表面（可链接类阶段每个有方法的类一行），以及带环境位的内建行。线上没有实现注册行——满足是结构性的，无需注册。名称是上方名称表的 id；解码拒绝任何其表无法解析的 id。"
 
-#: src/reference/module-binary.md:125
+#: src/reference/module-binary.md:128
 msgid "**Versioning policy**: the version `u32` must equal the toolchain's exactly — there is no migration or best-effort decode. A byte that changes observable behavior bumps the version; artifacts from older compilers are refused with the standard version error."
 msgstr "**版本策略**：版本 `u32` 必须与工具链的完全一致——没有迁移，也没有尽力解码。改变可观察行为的字节会推进版本；旧编译器的工件以标准的版本错误拒绝。"
 
-#: src/reference/module-binary.md:132
+#: src/reference/module-binary.md:135
 msgid "Same AST + same dependency versions + same compiler version ⇒ byte-identical bytes. Serialization order is fixed (mount order, manifest order, pool order), so binaries are cacheable by content hash, two builds diff to nothing, and a trace captured against one binary can be restored against a locally rebuilt one ([Diagnostics, traces, and symbolication](diagnostics.md))."
 msgstr "相同 AST + 相同依赖版本 + 相同编译器版本 ⇒ 逐字节相同。序列化顺序是固定的（挂载顺序、清单顺序、池顺序），因此二进制可按内容哈希缓存，两次构建 diff 为零，而针对一个二进制捕获的追踪可以针对本地重建的二进制还原（[诊断、追踪与符号化](diagnostics.md)）。"
 
-#: src/reference/module-binary.md:139
+#: src/reference/module-binary.md:142
 msgid "Strip levels"
 msgstr "剥离级别"
 
-#: src/reference/module-binary.md:141
+#: src/reference/module-binary.md:144
 msgid "The symbolication data rides in every function: the `spans` table (pc → byte offset) and the parallel `pos` table (pc → line/col). A build that skips filling `pos` produces a binary whose traces still capture and render, degrading to pc-only text. Names ride the interner; dropping name strings is a publishing choice, and stripped traces restore through recompilation-by-determinism (see [Diagnostics, traces, and symbolication](diagnostics.md))."
 msgstr "符号化数据随每个函数走：`spans` 表（pc → 字节偏移）与平行的 `pos` 表（pc → 行/列）。跳过填充 `pos` 的构建产出的二进制，其追踪仍能捕获并渲染，只是退化为仅 pc 的文本。名字随驻留器走；丢弃名字字符串是发布时的选择，被剥离的追踪经由确定性重编译还原（见[诊断、追踪与符号化](diagnostics.md)）。"
 
-#: src/reference/module-binary.md:149
+#: src/reference/module-binary.md:152
 msgid "Both strippable halves are format-legal encodings, not special cases: tail strings are opaque to the format (rewriting them to mangled `%N` names touches no id, opcode, or table), and `0`/empty `pos` is the documented stripped encoding — a stripped binary decodes and verifies identically, no version bump required. The toolchain lane that produces and restores them — the mangle/keep-set law, the private `.rutsym` sidecar, and `run --symbols` — is [Symbol stripping and `.rutsym` sidecars](symbol-stripping.md)."
 msgstr "两个可剥离的部分都是格式合法的编码，不是特例：尾部字符串对格式是透明的（把它们改写成 `%N` 这样的改名不触碰任何 id、操作码或表），而 `0`/空 `pos` 就是有文档记载的已剥离编码——剥离后的二进制照样解码与校验，不需要版本升级。产出并还原它们的工具链车道——改名/保留集法则、私有的 `.rutsym` 旁车、以及 `run --symbols`——见[符号剥离与 `.rutsym` 旁车](symbol-stripping.md)。"
 
-#: src/reference/module-binary.md:158
+#: src/reference/module-binary.md:161
 msgid "Type ids at rest and at link"
 msgstr "静止时与链接时的类型 id"
 
-#: src/reference/module-binary.md:160
+#: src/reference/module-binary.md:163
 msgid "Type ids are program-global in a linked binary only because **link** already rebased them. At rest (per module, pre-link) ids are module-local; the boot table — the fixed primitive and builtin prefix — is shared by every module, and each module's remaining types append after it. Every type id reachable from a type descriptor, interface signature, constant, function signature, or op operand is remapped at link, and `type_id<T>()` constants rebase with everything else."
 msgstr ""
 
-#: src/reference/module-binary.md:168
+#: src/reference/module-binary.md:171
 msgid "`type_id<T>()` values are `u32`, comparable, and unique per _instantiated_ type within a VM run: `Vec<f32>` ≠ `Vec<f64>`, `[i32; 3]` ≠ `[i32; 4]` (the constant length is part of the identity), and `Point` = `Point` across modules — identity is assigned at link ([Reified types and layout](reified-types.md))."
 msgstr "`type_id<T>()` 的值是 `u32`，可比较，且在单次 VM 运行内对每个_已实例化_类型唯一：`Vec<f32>` ≠ `Vec<f64>`，`[i32; 3]` ≠ `[i32; 4]`（常量长度是同一性的一部分），而跨模块的 `Point` = `Point`——同一性在链接时分配（[具体化类型与布局](reified-types.md)）。"
 
-#: src/reference/module-binary.md:174
+#: src/reference/module-binary.md:177
 msgid "Interface and vtable tables"
 msgstr ""
 
-#: src/reference/module-binary.md:176
+#: src/reference/module-binary.md:179
 msgid "Interfaces serialize with their member signatures; interface ids merge by name at link — an interface imported in one module and declared in another is one interface, and every capability probe and itable slot lands on the same global table."
 msgstr ""
 
-#: src/reference/module-binary.md:180
+#: src/reference/module-binary.md:183
 msgid "Interface-member slots are a global table of `(iface, member)` pairs; vtables are per-type sparse maps slot → function id, merged at link. The slots a type fills are decided at its boxing sites — the boundaries where satisfaction was proved — and reach every call site from there. Nothing registers: a type that never crosses an interface-typed boundary fills nothing."
 msgstr ""
 
-#: src/reference/module-binary.md:187
+#: src/reference/module-binary.md:190
 msgid "Verification (load time)"
 msgstr "校验（加载期）"
 
-#: src/reference/module-binary.md:189
+#: src/reference/module-binary.md:192
 msgid "Before any code executes, the verifier re-checks every function in the binary:"
 msgstr "在任何代码执行之前，校验器会重新检查二进制里的每个函数："
 
-#: src/reference/module-binary.md:192 src/reference/bundles.md:456
+#: src/reference/module-binary.md:195 src/reference/bundles.md:456
 msgid "check"
 msgstr "检查"
 
-#: src/reference/module-binary.md:192
+#: src/reference/module-binary.md:195
 msgid "rule"
 msgstr "规则"
 
-#: src/reference/module-binary.md:194
+#: src/reference/module-binary.md:197
 msgid "register range"
 msgstr "寄存器范围"
 
-#: src/reference/module-binary.md:194
+#: src/reference/module-binary.md:197
 msgid "every register operand \\< the function's register-file size; `NOREG` legal only where an optional operand is defined"
 msgstr "每个寄存器操作数 \\< 该函数的寄存器文件大小；`NOREG` 仅在定义了可选操作数之处合法"
 
-#: src/reference/module-binary.md:195
+#: src/reference/module-binary.md:198
 msgid "pool spans"
 msgstr "池跨度"
 
-#: src/reference/module-binary.md:195
+#: src/reference/module-binary.md:198
 msgid "every `(off, argc)` span lands inside its function's `argv` / `labels` pool"
 msgstr "每个 `(off, argc)` 跨度都落在其函数的 `argv` / `labels` 池之内"
 
-#: src/reference/module-binary.md:196
+#: src/reference/module-binary.md:199
 msgid "type operands"
 msgstr "类型操作数"
 
-#: src/reference/module-binary.md:196
+#: src/reference/module-binary.md:199
 msgid "every type id names a row of the type table"
 msgstr "每个类型 id 都指名类型表的一行"
 
-#: src/reference/module-binary.md:197
+#: src/reference/module-binary.md:200
 msgid "jump targets"
 msgstr "跳转目标"
 
-#: src/reference/module-binary.md:197
+#: src/reference/module-binary.md:200
 msgid "every `jmp`/`br`/`brtable` target is in range"
 msgstr "每个 `jmp`/`br`/`brtable` 目标都在范围内"
 
-#: src/reference/module-binary.md:198
+#: src/reference/module-binary.md:201
 msgid "call arity"
 msgstr "调用元数"
 
-#: src/reference/module-binary.md:198
+#: src/reference/module-binary.md:201
 msgid "call argument counts match the callee's declared signature"
 msgstr "调用实参数量与被调用者声明的签名匹配"
 
-#: src/reference/module-binary.md:199
+#: src/reference/module-binary.md:202
 msgid "enum members"
 msgstr "枚举成员"
 
-#: src/reference/module-binary.md:199
+#: src/reference/module-binary.md:202
 msgid "`EnumNew` member indices in range, target actually an enum"
 msgstr "`EnumNew` 成员索引在范围内，目标确实是枚举"
 
-#: src/reference/module-binary.md:200
+#: src/reference/module-binary.md:203
 msgid "interface slots"
 msgstr ""
 
-#: src/reference/module-binary.md:200
+#: src/reference/module-binary.md:203
 msgid "`CallI` slot ids name a row of the global iface-slot table"
 msgstr ""
 
-#: src/reference/module-binary.md:201
+#: src/reference/module-binary.md:204
 msgid "host thunks"
 msgstr "宿主 thunk"
 
-#: src/reference/module-binary.md:201
+#: src/reference/module-binary.md:204
 msgid "bodyless functions are skipped (nothing to verify)"
 msgstr "无函数体的函数被跳过（没有可校验的东西）"
 
-#: src/reference/module-binary.md:203
+#: src/reference/module-binary.md:206
 msgid "A failed verification is a **load error** naming the module and function — `function name (#i): op @pc: message`. Corrupted binaries never execute. Verification is structural: it re-establishes what the compiler enforced at emit time, so a hand-corrupted or stale artifact fails here instead of misbehaving at runtime."
 msgstr "校验失败是一次点名模块与函数的**加载错误**——`function name (#i): op @pc: message`。损坏的二进制绝不执行。校验是结构性的：它重新确立编译器在发出时强制的东西，因此手工损坏或陈旧的产物在这里失败，而不是在运行时行为不端。"
 
-#: src/reference/module-binary.md:209
+#: src/reference/module-binary.md:212
 msgid "The constant pool and load-time expressions"
 msgstr "常量池与加载期表达式"
 
-#: src/reference/module-binary.md:211
+#: src/reference/module-binary.md:214
 msgid "Module-level `let` initializers must be **load-time literals** — the checker accepts an `Int`, `Float`, `Str`, or `Bool` literal only:"
 msgstr "模块级 `let` 初始化器必须是**加载期字面量**——检查器只接受 `Int`、`Float`、`Str` 或 `Bool` 字面量："
 
-#: src/reference/module-binary.md:218
+#: src/reference/module-binary.md:221
 msgid "An operator, an enum member, a record literal, a fixed-array literal, `type_id<T>()`, `[nil; n]`, or `Vec<T>(n)` is refused there; a call to a user function is the same compile error — there is no deferred evaluation. The literal that survives becomes a constant-pool entry at emit."
 msgstr "运算符、枚举成员、记录字面量、定长数组字面量、`type_id<T>()`、`[nil; n]` 或 `Vec<T>(n)` 在这里都会被拒绝；对用户函数的调用是同一个编译错误——没有延迟求值。存活的字面量在发射时成为常量池条目。"
 
-#: src/reference/module-binary.md:224
+#: src/reference/module-binary.md:227
 msgid "`type_id<T>()`, wherever it is spelled, never executes: it folds to a constant from the type table. `debug` position folding and trace symbolication are covered in [Diagnostics, traces, and symbolication](diagnostics.md)."
 msgstr "`type_id<T>()` 无论拼写在哪里都绝不执行：它从类型表折叠成常量。`debug` 位置折叠与追踪符号化见[诊断、追踪与符号化](diagnostics.md)。"
 
-#: src/reference/module-binary.md:229 src/reference/symbol-stripping.md:152
+#: src/reference/module-binary.md:232 src/reference/symbol-stripping.md:152
 msgid "What is not here"
 msgstr "这里没有什么"
 
-#: src/reference/module-binary.md:231
+#: src/reference/module-binary.md:234
 msgid "A `.d.rut` declaration surface does not produce a binary — it has no bodies, so it compiles to a signature surface only ([Host fns and declaration files](host-fns.md)). And a `.rutbundle` is binaries plus their container: the compiled packages ride as `.rutc` binaries (this format), splice-needed packages and host pkgs as source groups ([Module bundles](bundles.md))."
 msgstr "`.d.rut` 声明表面不会产出二进制——它没有函数体，只编译为签名表面（[宿主函数与声明文件](host-fns.md)）。而 `.rutbundle` 是二进制加它们的容器：编译过的包以 `.rutc` 二进制随行（本格式），需要拼接的包与宿主包则以源码组随行（[模块捆绑包](bundles.md)）。"
 

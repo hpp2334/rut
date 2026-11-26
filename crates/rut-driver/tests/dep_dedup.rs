@@ -451,6 +451,7 @@ fn t10_the_collision_was_real() {
         &rut_driver::ModInputs::flat(),
         &[],
         &[],
+        &[],
     );
     assert!(
         out.program.is_none() && out.diags.iter().any(|d| d.msg.contains("duplicate")),

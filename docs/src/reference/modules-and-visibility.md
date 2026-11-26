@@ -254,9 +254,13 @@ Consequences:
   name is a re-export edge, not a private import: the name surfaces
   through the re-exporting module, so a consumer validates its import
   against *that* module — the deeper package stays an implementation
-  detail of the exporter. The exporter's compiled surface still owns
-  value binding: a leaf that binds nothing there states it at the use
-  line, exactly like any other import.
+  detail of the exporter. The exporter's compiled surface carries the
+  re-export as a **surface row** whose origin is the declaring package:
+  a fn, generic fn, type (class/struct), enum, interface, or host-surface
+  const re-export binds through it like any of the exporter's own `pub`
+  names, and a chain of re-exports collapses to the original declaration.
+  A module `let` has no surface row (it is not a surface const), so a
+  `pub use` naming one refuses at the re-exporting use line.
 - **The editor reads the edge.** Re-exported names complete through
   the module (`use mid::{ ⏐` offers `helper`, the detail naming the
   edge), and the imported names carry the re-export visibility.

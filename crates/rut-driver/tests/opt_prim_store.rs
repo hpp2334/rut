@@ -691,10 +691,15 @@ fn version_gate_rejects_stale_artifacts() {
     // the wrong scope, and the VM dies at boot on an out-of-range type
     // id. Refused with the standard version error; the recipe is `rut
     // run --repack`, and a compiled `.rutbundle` dep re-packs at its
-    // source
+    // source; v27 is a re-export is a surface row — the surface's fn
+    // rows gain a declaring-unit scope tag and its type / generic-fn
+    // rows gain an owner tag, so a `pub use` re-export binds like any
+    // of the exporter's exports (a v26 row has no tag bytes: the
+    // decoder misparses the next row as one, so stale artifacts are
+    // refused rather than misread)
     assert_eq!(
-        VERSION, 26,
-        "the one-block-per-scope cut owns this VERSION bump"
+        VERSION, 27,
+        "the re-export-is-a-surface-row cut owns this VERSION bump"
     );
     let out = rut_driver::compile_module(
         "entry fn main() -> i64 { let a: [?i64] = [nil; 2]; a[0] = 1; let x = a[0]; return x; }",

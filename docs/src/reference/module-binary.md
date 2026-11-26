@@ -50,7 +50,7 @@ host.
 ```
 offset  field
 0       magic "RUTC"                      # 4 bytes
-4       version: u32                      # VERSION = 26; refuses any other value
+4       version: u32                      # VERSION = 27; refuses any other value
 8       name: str
         name table: u32 count, then count × str
         types: u32 count, then per type { name: IdentId, kind }
@@ -112,7 +112,10 @@ offset  field
   beside this (see the surface below).
 - **Surface**: the exported surface rides after `exports` —
   funcs (module rows spelled mod-qualified, with their async/host
-  rows), consts, the
+  rows; v27 adds a `pub use` re-export row's DECLARING-unit scope tag
+  for a fn and an owner tag for a generic fn / type, so the consumer
+  binds the re-export like any of the exporter's own exports), consts,
+  the
   carried type descriptors + scope blocks + type exports (generic
   exports carry their parameter names in order), interface
   declarations (`SurfaceIface` — every module publishes the interfaces

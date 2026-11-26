@@ -247,6 +247,17 @@ pub fn foreign_scopes(prog: &Program) -> std::collections::BTreeSet<crate::id::S
             }
         }
     }
+    // v27: a `pub use` re-export fn row names its DECLARING unit's
+    // scope — the bundle must carry (and the consumer must ensure) that
+    // unit even when no type block or call operand of this program
+    // references it
+    for f in &prog.surface.funcs {
+        if let Some(s) = f.scope {
+            if s != crate::id::BOOT_SCOPE {
+                out.insert(s);
+            }
+        }
+    }
     for fc in &prog.funcs {
         for op in &fc.code {
             match op {
@@ -340,6 +351,10 @@ pub fn rebase(
     for f in s.funcs.iter_mut() {
         f.params = f.params.iter().map(|&p| rb_t(p)).collect();
         f.ret = rb_t(f.ret);
+        // v27: a re-export row's declaring-unit scope rebases like every
+        // carried id — an un-remapped scope would resolve against the
+        // wrong unit's function base at link
+        f.scope = f.scope.map(&map);
     }
     for c in s.consts.iter_mut() {
         c.ty = rb_t(c.ty);

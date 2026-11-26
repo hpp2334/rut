@@ -278,6 +278,72 @@ pub(crate) fn reexport_declaring(
     }
 }
 
+/// The file a `pub use` row of one of `in_scope` targets for `name` —
+/// the surface edge the compiler binds (law 3). The row's path resolves
+/// through the world: an own-package head walks the intra-package law,
+/// a foreign head is the dependency's `(package, module)` pair, and the
+/// walk is transitive with a seen-set. `[]` = no re-export row, or a
+/// cycle. This is a SURFACE-row lookup, not a declaration-path chase:
+/// the row's spelled path names the target's exporting spelling.
+pub(crate) fn reexport_target_files(
+    w: &World,
+    prefer: FileId,
+    name: &str,
+    in_scope: &[FileId],
+) -> Vec<FileId> {
+    fn resolve(
+        w: &World,
+        prefer: FileId,
+        file: FileId,
+        name: &str,
+        seen: &mut Vec<(FileId, String)>,
+    ) -> Option<FileId> {
+        if seen.iter().any(|(f, n)| *f == file && n == name) {
+            return None;
+        }
+        seen.push((file, name.to_string()));
+        let f = w.file(file);
+        // the row's target is a declaration here — the walk's end
+        if f.ty(name).is_some()
+            || f.lets().into_iter().any(|l| l.name() == name)
+            || f.fns()
+                .into_iter()
+                .any(|fv| fv.name() == name && fv.owner().is_none())
+        {
+            return Some(file);
+        }
+        let u = f
+            .uses()
+            .into_iter()
+            .find(|u| u.vis() != Vis::Self_ && u.name() == name)?;
+        let path = u.path();
+        let (head, interior) = path.split_first()?;
+        let pkg = f.stamp.module.as_deref();
+        let target = match crate::resolve::mods::position_head(w, file, head) {
+            Some(start) => {
+                let walked = crate::resolve::mods::position_walk(w, pkg, file, &start, interior)
+                    .unwrap_or(start);
+                module_at(w, prefer, pkg, &walked)
+            }
+            None => {
+                let module = interior.join("/");
+                crate::resolve::mods::find_mod(w, Some(head), &module)
+            }
+        }?;
+        resolve(w, prefer, target, name, seen)
+    }
+    let mut out: Vec<FileId> = Vec::new();
+    for &start in in_scope {
+        let mut seen = Vec::new();
+        if let Some(t) = resolve(w, prefer, start, name, &mut seen) {
+            if !out.contains(&t) {
+                out.push(t);
+            }
+        }
+    }
+    out
+}
+
 /// The file a name's re-export edge lands on: `cur` when the name is a
 /// declaration there, the DECLARING module's file when it is one of
 /// `cur`'s re-export rows (the chain walked to its end).
@@ -292,7 +358,9 @@ fn declaring_file(w: &World, pkg: Option<&str>, prefer: FileId, cur: FileId, nam
 /// the walked module and binds the name's DECLARATION — its own decl
 /// there, or the one its `pub use` re-export row names (law 5's walk:
 /// the row carries its target, so the chain resolves to the declaring
-/// module; a cycle or a cross-package edge binds nothing) — visible
+/// module; a cycle binds nothing, and a row that names a DEPENDENCY is
+/// law 3's surface edge — [`reexport_target_files`] follows it to the
+/// declaring package's decl) — visible
 /// from the importing file ([`rut_lir::check::vis_crosses`] —
 /// `import is no visibility bypass`; the compiler's own-use binding
 /// reads the same walk and then the TARGET module's decl tables:
@@ -319,9 +387,18 @@ fn leaf_scope<'a>(
     let cur = declaring_file(w, pkg, file, cur, name);
     let from = w.file(file).stamp.mod_path.as_deref().unwrap_or("");
     let def_mod = crate::resolve::mods::mod_path_of(w.file(cur));
-    out.extend(decl_rows_visible(w.file(cur), name, |vis| {
+    let mut rows = decl_rows_visible(w.file(cur), name, |vis| {
         rut_lir::check::vis_crosses(from, def_mod, vis)
-    }));
+    });
+    // law 3's cross-package hand-off: the walked module's row names a
+    // DEPENDENCY (the compiler hands the binding to that surface) — the
+    // target's declaration is the answer, `pub` like any crossing leaf
+    if rows.is_empty() {
+        for t in reexport_target_files(w, file, name, &[cur]) {
+            rows.extend(decl_rows_visible(w.file(t), name, |vis| vis == Vis::Pub));
+        }
+    }
+    out.extend(rows);
 }
 
 /// one CROSS-package use edge's resolve — the (pkg, interior)
@@ -371,7 +448,7 @@ fn use_bound<'a>(
     let mut tys: Vec<(&File, TyView<'a>)> = Vec::new();
     let mut lets: Vec<(&File, LetView<'a>)> = Vec::new();
     let mut fns: Vec<(&File, FnView<'a>)> = Vec::new();
-    for id in in_scope {
+    for &id in &in_scope {
         if id == file {
             continue;
         }
@@ -390,6 +467,23 @@ fn use_bound<'a>(
         for fv in f.fns() {
             if fv.name() == name && fv.owner().is_none() && fv.vis() == Vis::Pub {
                 fns.push((f, fv));
+            }
+        }
+    }
+    // no declaration in scope: the name may be a `pub use` re-export row
+    // of the dep — the surface edge the compiler binds, its target
+    // resolved through the world (law 3). Only the kinds the surface
+    // carries: a module `let` is not a surface const, so it stays silent.
+    if tys.is_empty() && lets.is_empty() && fns.is_empty() {
+        for t in reexport_target_files(w, file, name, &in_scope) {
+            let f = w.file(t);
+            if let Some(ty) = f.ty(name).filter(|t| t.vis() == Vis::Pub) {
+                tys.push((f, ty));
+            }
+            for fv in f.fns() {
+                if fv.name() == name && fv.owner().is_none() && fv.vis() == Vis::Pub {
+                    fns.push((f, fv));
+                }
             }
         }
     }
@@ -539,8 +633,9 @@ pub(crate) fn type_via_imports<'a>(w: &'a World, file: FileId, name: &str) -> Op
 /// compiler's qualified leaf is decls-plus-rows: an own-package
 /// `pub use` row NAMES its target, so the tail follows law 5's walk
 /// to the DECLARING module exactly as the compiler's `*_in` lookups
-/// do; a cross-package path stays decls-only — its edge is the
-/// surface's, Phase 2) with the leaves tier-gated by visibility:
+/// do; a cross-package path stays decls-only — the re-export edge is
+/// a USE row's (the surface owns it), never a path chased across the
+/// boundary — with the leaves tier-gated by visibility:
 /// [`rut_lir::check::vis_crosses`] against the reading file
 /// intra-package, `pub`-only cross-package, ambient rows passing. A
 /// head the file does not bind answers NONE — never the flat sweep.

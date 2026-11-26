@@ -255,6 +255,12 @@ pub fn strip_programs(groups: &mut [(String, &mut Program)]) -> Result<SymbolMap
             for p in &g.params {
                 keep.insert(prog.interner.name(*p).to_string());
             }
+            // v27: a re-export row's owner anchor is the spec a consumer
+            // routes its instantiation request to — it must survive the
+            // mangle or the request names nobody
+            if let Some(o) = g.owner {
+                keep.insert(prog.interner.name(o).to_string());
+            }
         }
         // THE DELIVERY LAW'S NAME SURFACE (v22): a consumer compiles
         // against the binary's SURFACE — the riding-source lane is gone,
@@ -267,6 +273,11 @@ pub fn strip_programs(groups: &mut [(String, &mut Program)]) -> Result<SymbolMap
         }
         for t in &prog.surface.type_exports {
             keep.insert(prog.interner.name(t.name).to_string());
+            // v27: a re-export row's owner anchor (the declaring package
+            // a generic instantiation routes to) survives the mangle
+            if let Some(o) = t.owner {
+                keep.insert(prog.interner.name(o).to_string());
+            }
         }
         for ih in &prog.surface.inherents {
             for m in &ih.methods {
@@ -454,6 +465,7 @@ mod tests {
                 params: vec![],
                 ret: TY_NIL,
                 local: 0,
+                scope: None,
                 is_async: true,
                 host: Some(tick),
             }],

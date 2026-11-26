@@ -457,6 +457,31 @@ fn own_leaf_defs(w: &World, file: FileId, walked: &str, name: &str) -> Vec<Def> 
             node: fv.h,
         });
     }
+    // law 3's cross-package hand-off: the walked module's row names a
+    // DEPENDENCY (the compiler binds the row from that surface) — the
+    // target's declaration is the answer, `pub` like any crossing leaf.
+    // Only the kinds the surface carries: a module `let` has no row.
+    if defs.is_empty() {
+        for t in super::scope::reexport_target_files(w, file, name, &[f]) {
+            let target = w.file(t);
+            if let Some(ty) = target.ty(name).filter(|t| t.vis() == Vis::Pub) {
+                defs.push(Def::Node {
+                    file: t,
+                    node: ty.h,
+                });
+            }
+            for fv in target
+                .fns()
+                .into_iter()
+                .filter(|f| f.name() == name && f.owner().is_none() && f.vis() == Vis::Pub)
+            {
+                defs.push(Def::Node {
+                    file: t,
+                    node: fv.h,
+                });
+            }
+        }
+    }
     defs
 }
 
@@ -563,7 +588,7 @@ fn use_graph_defs(
             .collect(),
     };
     let mut out: Vec<(&File, Def)> = Vec::new();
-    for id in in_scope {
+    for &id in &in_scope {
         if id == file {
             continue;
         }
@@ -602,6 +627,42 @@ fn use_graph_defs(
                     node: fv.h,
                 },
             ));
+        }
+    }
+    // no declaration in scope: a `pub use` re-export row of the dep is
+    // the surface edge the compiler binds — its target is the answer
+    if out.is_empty() {
+        for t in super::scope::reexport_target_files(w, file, name, &in_scope) {
+            let f = w.file(t);
+            if let Some(ty) = f.ty(name).filter(|t| t.vis() == Vis::Pub) {
+                out.push((
+                    f,
+                    Def::Node {
+                        file: t,
+                        node: ty.h,
+                    },
+                ));
+            }
+            if let Some(l) = f
+                .lets()
+                .into_iter()
+                .find(|l| l.name() == name && l.vis() == Vis::Pub)
+            {
+                out.push((f, Def::Node { file: t, node: l.h }));
+            }
+            for fv in f
+                .fns()
+                .into_iter()
+                .filter(|f| f.name() == name && f.owner().is_none() && f.vis() == Vis::Pub)
+            {
+                out.push((
+                    f,
+                    Def::Node {
+                        file: t,
+                        node: fv.h,
+                    },
+                ));
+            }
         }
     }
     // the body over the decl surface (`prefer_bodies`): a pkg indexing

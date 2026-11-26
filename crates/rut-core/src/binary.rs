@@ -75,6 +75,11 @@ pub struct SurfaceFn {
     pub ret: TypeId,
     /// module-local function id (the exporter's)
     pub local: u32,
+    /// the fn id's unit scope: `None` — the exporter's own scope
+    /// (ordinary rows); `Some(s)` — the DECLARING unit of a `pub use`
+    /// re-export row. The row's `(scope, local)` is the declaring
+    /// fn's identity; the consumer binds it and `ensure`s that unit.
+    pub scope: Option<crate::id::ScopeId>,
     /// `host async fn` — the host future lane: the importing compiler
     /// weaves the call into a cold engine-woven Future frame whose row
     /// family (`{host}__start`/`__yield`/`__take`/`__cancel`) the
@@ -125,8 +130,15 @@ pub struct SurfaceType {
     /// the id's scope: `None` — the exporter's own scope (ordinary rows);
     /// `Some(s)` — an explicit one. A transparent alias to a BOOT type
     /// (`pub type Meters = i64;`) points at the shared boot
-    /// table: its id needs no rebase, so the row spells scope 0.
+    /// table: its id needs no rebase, so the row spells scope 0. A
+    /// `pub use` re-export row spells the DECLARING unit's scope.
     pub scope: Option<crate::id::ScopeId>,
+    /// the DECLARING package's mount key for a GENERIC row (the owner
+    /// an instantiation request routes to): `None` — the exporter owns
+    /// it (ordinary rows); `Some(name)` — a `pub use` re-export row
+    /// names the unit that compiled the template, never the
+    /// re-exporter.
+    pub owner: Option<IdentId>,
 }
 
 /// One exported trait declaration (trait impls may live in
@@ -260,6 +272,11 @@ pub struct SurfaceGenericFn {
     /// argument types, receivers excluded, placeholders spelled
     pub args: Vec<TypeId>,
     pub ret: TypeId,
+    /// the DECLARING package's mount key for a `pub use` re-export row
+    /// (the owner an instantiation request routes to): `None` — the
+    /// exporter owns the body (ordinary rows); `Some(name)` — the
+    /// re-exporter names the unit that compiled the template.
+    pub owner: Option<IdentId>,
 }
 
 /// One exported GENERIC body's template row (v22): the placeholder
@@ -796,7 +813,15 @@ pub const MAGIC: &[u8; 4] = b"RUTC";
 /// dies at boot on an out-of-range type id. Refused with the standard
 /// version error; the recipe is `rut run --repack`, and a compiled
 /// `.rutbundle` dep re-packs at its source.
-pub const VERSION: u32 = 26;
+/// v27: a re-export is a surface row — the surface section's fn rows gain
+/// a declaring-unit scope tag, and its type and generic-fn rows gain an
+/// owner tag (the `pub use` re-export's DECLARING package). A v26 surface
+/// has neither tag; the decoder would read the next row's bytes as the
+/// tag, misparse the section, and bind a re-exported name to whatever id
+/// happens to sit there. Refused with the standard version error; the
+/// recipe is `rut run --repack`, and a compiled `.rutbundle` dep re-packs
+/// at its source.
+pub const VERSION: u32 = 27;
 
 pub fn encode(prog: &Program) -> Vec<u8> {
     let mut e = Enc::default();
@@ -1046,15 +1071,29 @@ pub fn encode(prog: &Program) -> Vec<u8> {
 /// their ambient bits — in that wire order.
 /// A module's rows spell their module path qualified (`math::sqrt`,
 /// the host rows' `net::connect` convention); the root's stay bare.
+/// v27: a `pub use` re-export is a surface row of the re-exporter — a
+/// fn row carries the DECLARING unit's scope tag, and a type or
+/// generic-fn row carries the declaring package's owner tag, so a
+/// consumer binds the row like any of the exporter's own exports
+/// (nothing chases a path across a package boundary).
 fn encode_surface(e: &mut Enc, s: &Surface) {
     // funcs: the usable name, its signature, the exporter's local fn
-    // id, and the async/host rows (decl/native modules only)
+    // id, the declaring unit's scope (v27 re-export rows), and the
+    // async/host rows (decl/native modules only)
     e.u32(s.funcs.len() as u32);
     for f in &s.funcs {
         e.u32(f.name.0);
         e.tys(&f.params);
         e.u32(f.ret);
         e.u32(f.local);
+        // v27: the declaring unit's scope tag
+        match f.scope {
+            Some(sc) => {
+                e.u8(1);
+                e.u16(sc);
+            }
+            None => e.u8(0),
+        }
         e.u8(f.is_async as u8);
         match f.host {
             Some(h) => {
@@ -1103,6 +1142,14 @@ fn encode_surface(e: &mut Enc, s: &Surface) {
             }
             None => e.u8(0),
         }
+        // v27: the declaring package's owner tag (generic re-export rows)
+        match t.owner {
+            Some(o) => {
+                e.u8(1);
+                e.u32(o.0);
+            }
+            None => e.u8(0),
+        }
     }
     // exported generic fns: names + placeholder signatures (the bodies
     // ride the request machinery)
@@ -1115,6 +1162,14 @@ fn encode_surface(e: &mut Enc, s: &Surface) {
         }
         e.tys(&g.args);
         e.u32(g.ret);
+        // v27: the declaring package's owner tag (re-export rows)
+        match g.owner {
+            Some(o) => {
+                e.u8(1);
+                e.u32(o.0);
+            }
+            None => e.u8(0),
+        }
     }
     // trait decls: keyed by the exporter's trait-table index
     e.u32(s.ifaces.len() as u32);
@@ -1666,6 +1721,7 @@ fn decode_surface(
         let params = d.tys()?;
         let ret = d.u32()?;
         let local = d.u32()?;
+        let scope = if d.u8()? != 0 { Some(d.u16()?) } else { None };
         let is_async = d.u8()? != 0;
         let host = if d.u8()? != 0 { Some(name(d)?) } else { None };
         s.funcs.push(SurfaceFn {
@@ -1673,6 +1729,7 @@ fn decode_surface(
             params,
             ret,
             local,
+            scope,
             is_async,
             host,
         });
@@ -1721,6 +1778,7 @@ fn decode_surface(
             params.push(name(d)?);
         }
         let scope = if d.u8()? != 0 { Some(d.u16()?) } else { None };
+        let owner = if d.u8()? != 0 { Some(name(d)?) } else { None };
         s.type_exports.push(SurfaceType {
             name: tname,
             local,
@@ -1729,6 +1787,7 @@ fn decode_surface(
             newtype,
             params,
             scope,
+            owner,
         });
     }
     // exported generic fns
@@ -1746,11 +1805,13 @@ fn decode_surface(
             args.push(d.u32()?);
         }
         let ret = d.u32()?;
+        let owner = if d.u8()? != 0 { Some(name(d)?) } else { None };
         s.fn_generics.push(SurfaceGenericFn {
             name: gname,
             params,
             args,
             ret,
+            owner,
         });
     }
     // trait decls
@@ -3283,6 +3344,7 @@ mod tests {
             params: vec![TY_I32],
             ret: TY_I32,
             local: 0,
+            scope: None,
             is_async: false,
             host: None,
         });
@@ -3293,6 +3355,7 @@ mod tests {
             params: vec![],
             ret: TY_NIL,
             local: 0,
+            scope: None,
             is_async: true,
             host: Some(p.interner.intern("rt::sleep")),
         });
@@ -3312,6 +3375,7 @@ mod tests {
             newtype: false,
             params: Vec::new(),
             scope: None,
+            owner: None,
         });
         p.surface.ifaces.push(SurfaceIface {
             local: 0,
@@ -3353,6 +3417,7 @@ mod tests {
             params: vec![],
             ret: TY_I32,
             local: 0,
+            scope: None,
             is_async: false,
             host: None,
         });

@@ -1433,3 +1433,99 @@ fn struct_lit_tail_caret_past_the_name_typedefs_the_type() {
     assert_eq!(pos_pair(&tys[0]["range"]["start"]), (0, 10), "{tys:?}");
 }
 }
+
+both_uri_shapes! {
+#[test]
+fn a_re_exported_name_across_packages_jumps_to_the_declaration() {
+    // law 3: a `pub use` of a DEPENDENCY name is a surface row of the
+    // re-exporter. The consumer's `use mid::{ helper }` binds it, so
+    // both the call site and the use leaf jump to the DECLARING
+    // package's declaration (the same answer the compiler's binding
+    // lands on), flat and through a walked module.
+    const UTIL_SRC: &str = "pub fn helper() -> i32 { return 3; }\n";
+    let mut s = S::boot();
+    s.index_mod_at(
+        "file:///deps/util/src/mod.rut",
+        "util",
+        "",
+        UTIL_SRC,
+    );
+    s.index_mod_at(
+        "file:///deps/mid/src/mod.rut",
+        "mid",
+        "",
+        "pub mod sub;\npub use util::{ helper };\n",
+    );
+    s.index_mod_at(
+        "file:///deps/mid/src/sub/mod.rut",
+        "mid",
+        "sub",
+        "pub use util::{ helper };\n",
+    );
+    let uri = "file:///t/main.rut";
+    // the flat leaf: the call site and the leaf both land in util
+    let flat = "use mid::{ helper };\nfn k() -> i32 { return helper(); }\n";
+    assert_jump(
+        &s.def_in(uri, flat, "return helper", 1, 7),
+        "file:///deps/util/src/mod.rut",
+        UTIL_SRC,
+        "pub fn helper",
+        1,
+        "the flat leaf's call site",
+    );
+    assert_jump(
+        &s.def_in(uri, flat, "{ helper }", 1, 2),
+        "file:///deps/util/src/mod.rut",
+        UTIL_SRC,
+        "pub fn helper",
+        1,
+        "the flat leaf's spelling",
+    );
+    // the walked module's column
+    let walked = "use mid::sub::{ helper };\nfn k() -> i32 { return helper(); }\n";
+    assert_jump(
+        &s.def_in(uri, walked, "return helper", 1, 7),
+        "file:///deps/util/src/mod.rut",
+        UTIL_SRC,
+        "pub fn helper",
+        1,
+        "the walked leaf's call site",
+    );
+}
+}
+
+#[test]
+fn an_own_module_reexport_of_a_dependency_name_jumps_across() {
+    // law 3's own-lane hand-off: `b` (a module of app) re-exports a
+    // DEPENDENCY's name; the root's `use b::{ helper }` binds the
+    // dependency's surface row, so the jump lands on util's decl — the
+    // same answer the compiler's synthetic surface binding lands on.
+    const UTIL_SRC: &str = "pub fn helper() -> i32 { return 3; }\n";
+    let mut s = S::boot();
+    s.index_mod_at("file:///deps/util/src/mod.rut", "util", "", UTIL_SRC);
+    let root = "file:///deps/app/mod.rut";
+    let src = "mod b;\nuse b::{ helper };\nfn k() -> i32 { return helper(); }\n";
+    s.index_mod_at(root, "app", "", src);
+    s.index_mod_at(
+        "file:///deps/app/b.rut",
+        "app",
+        "b",
+        "pub use util::{ helper };\n",
+    );
+    assert_jump(
+        &s.def_in(root, src, "return helper", 1, 7),
+        "file:///deps/util/src/mod.rut",
+        UTIL_SRC,
+        "pub fn helper",
+        1,
+        "the own-lane foreign edge's call site",
+    );
+    assert_jump(
+        &s.def_in(root, src, "{ helper }", 1, 2),
+        "file:///deps/util/src/mod.rut",
+        UTIL_SRC,
+        "pub fn helper",
+        1,
+        "the leaf's spelling",
+    );
+}

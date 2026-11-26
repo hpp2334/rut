@@ -159,6 +159,7 @@ impl<'a> GraphCompiler<'a> {
         let (text, is_decl, bound) = (src.text.clone(), src.is_decl, src.bound.clone());
         let layout = src.layout.clone();
         let own_uses = src.own_uses.clone();
+        let foreign_uses = src.foreign_uses.clone();
         let groups = build_seed_groups(&self.programs, &self.done, owner, seeds);
         let mode = if is_decl { Mode::Decl } else { Mode::Impl };
         let out = crate::compile::compile_program_pre(
@@ -172,6 +173,7 @@ impl<'a> GraphCompiler<'a> {
             &Seeds { groups: &groups },
             &layout,
             &own_uses,
+            &foreign_uses,
             // the replay of a unit that already passed the must-bind
             // gate (same text, same bindings) — no classification input
             // to carry

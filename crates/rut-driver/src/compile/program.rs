@@ -71,6 +71,13 @@ fn unbound_use_msg(
         // a `pub async fn` that crossed nowhere is the generic refusal
         // (the weave refuses generics, so the surface carried no row)
         Some(d) if d.kind == crate::mods::DeclKind::Fn && d.is_async => pub_async_surface_gap(leaf),
+        // a module `let` is not a surface const: it has no surface row,
+        // so a `pub use` naming one refuses at the re-exporting use
+        // line — the honest name for the ONE kind that stays refused
+        Some(d) if d.kind == crate::mods::DeclKind::ModuleLet => format!(
+            "`{leaf}` is a module let — a module let does not cross package surfaces; \
+             it binds only inside its own package"
+        ),
         // everything else (a compiled dep's binary, a `pub` shape the
         // surface does not carry): the bare law
         _ => format!(
@@ -156,6 +163,7 @@ pub fn compile_program(
         &rut_lir::check::ModInputs::flat(),
         &[],
         &[],
+        &[],
     )
 }
 
@@ -185,6 +193,7 @@ pub fn compile_program_resolved(
     seeds: &Seeds<'_>,
     mods: &rut_lir::check::ModInputs,
     own_uses: &[(String, String, String)],
+    foreign_uses: &[(String, String, Vec<String>)],
     dep_decls: &[(
         String,
         std::collections::BTreeMap<String, Vec<crate::mods::DeclRow>>,
@@ -204,6 +213,7 @@ pub fn compile_program_resolved(
         seeds,
         mods,
         own_uses,
+        foreign_uses,
         dep_decls,
         true,
     )
@@ -223,6 +233,7 @@ pub fn compile_program_pre(
     seeds: &Seeds<'_>,
     mods: &rut_lir::check::ModInputs,
     own_uses: &[(String, String, String)],
+    foreign_uses: &[(String, String, Vec<String>)],
     dep_decls: &[(
         String,
         std::collections::BTreeMap<String, Vec<crate::mods::DeclRow>>,
@@ -237,6 +248,7 @@ pub fn compile_program_pre(
         seeds,
         mods,
         own_uses,
+        foreign_uses,
         dep_decls,
         false,
     )
@@ -278,6 +290,7 @@ fn compile_program_inner(
     seeds: &Seeds<'_>,
     mods: &rut_lir::check::ModInputs,
     own_uses: &[(String, String, String)],
+    foreign_uses: &[(String, String, Vec<String>)],
     dep_decls: &[(
         String,
         std::collections::BTreeMap<String, Vec<crate::mods::DeclRow>>,
@@ -446,6 +459,51 @@ fn compile_program_inner(
                 });
             }
         }
+    }
+    // law 3's cross-package hand-off: the graph's own-lane walk found
+    // `use b::{ f }` where `b` (a module of this package) re-exports a
+    // DEPENDENCY's `f`. The row's path is the target's exporting
+    // spelling — head = the dependency, interior = the walked module,
+    // leaf = the name — so the binding is a use of THIS file against the
+    // dependency's SURFACE row (nothing chases a path across the
+    // boundary). The synthetic row shares the consumer's own
+    // `(file, leaf)` site: the must-bind ledger already covers it, and a
+    // `pub use` here re-exports the dependency's row in turn.
+    for (file, leaf, path) in foreign_uses {
+        if path.len() < 2 {
+            continue;
+        }
+        let head = &path[0];
+        let interior = &path[1..path.len() - 1];
+        let Some(id) = frozen.lookup(leaf) else {
+            continue;
+        };
+        let Some(orig) = use_bindings
+            .iter()
+            .find(|b| b.file == *file && b.leaf == id)
+        else {
+            continue;
+        };
+        let (qualified, composed) = if interior.is_empty() {
+            (false, String::new())
+        } else {
+            (true, format!("{}::{leaf}", interior.join("::")))
+        };
+        if use_bindings
+            .iter()
+            .any(|b| b.file == *file && b.head == *head && b.leaf == id)
+        {
+            continue;
+        }
+        use_bindings.push(UseBinding {
+            file: file.clone(),
+            head: head.clone(),
+            leaf: id,
+            qualified,
+            composed,
+            pub_use: orig.pub_use,
+            span: orig.span,
+        });
     }
     // the binding sites for one dep surface row: `text` is the row's
     // surface spelling — bare, or `net::ping` for a host mod row.
@@ -617,6 +675,39 @@ fn compile_program_inner(
     // after the binding passes (spelled mod-qualified, like every
     // module row)
     let mut reexport_consts: Vec<(String, rut_core::IdentId, TypeId, u64)> = Vec::new();
+    // v27: the `pub use` re-export rows of the non-value kinds — one per
+    // (importing file's mod path, bound leaf). A row carries the
+    // DECLARING unit's identity (the fn's `(scope, local)`, the type's
+    // scope + local, the generic's owner), never the re-exporter's, so a
+    // chain of re-exports collapses to the original spelling. Each vector
+    // is sorted by (file, leaf text) before it is laid: the pack's bytes
+    // must not depend on the dep iteration order.
+    let mut reexport_fns: Vec<(String, rut_core::IdentId, rut_core::binary::SurfaceFn)> =
+        Vec::new();
+    let mut reexport_generic_fns: Vec<(
+        String,
+        rut_core::IdentId,
+        rut_core::binary::SurfaceGenericFn,
+    )> = Vec::new();
+    let mut reexport_types: Vec<(String, rut_core::IdentId, rut_core::binary::SurfaceType)> =
+        Vec::new();
+    // a re-exported class carries its DECLARING unit's inherent rows too
+    // — the methods are part of the type's usable surface (a consumer's
+    // interface satisfaction and method calls read them), and their
+    // `local`s name the declaring unit's fns exactly like the type row
+    let mut reexport_inherents: Vec<(
+        String,
+        rut_core::IdentId,
+        rut_core::binary::SurfaceInherent,
+    )> = Vec::new();
+    // the `pub use` use row that imported `id` from the spelled head —
+    // the re-export site a surface row is spelled by (one name, one row)
+    let reexport_site = |head: &str, id: rut_core::IdentId| -> Option<String> {
+        use_bindings
+            .iter()
+            .find(|b| b.head == head && b.leaf == id && b.pub_use)
+            .map(|b| b.file.clone())
+    };
     for (dep_scope, surface, _tmap, origin, head) in trait_maps.iter() {
         let dep_scope = *dep_scope;
         for f in &surface.funcs {
@@ -628,20 +719,50 @@ fn compile_program_inner(
             let exports: Vec<(rut_core::IdentId, TypeId)> = surface
                 .type_exports
                 .iter()
-                .map(|t| (t.name, rut_core::pack(dep_scope, t.local)))
+                .map(|t| {
+                    (
+                        t.name,
+                        rut_core::pack(t.scope.unwrap_or(dep_scope), t.local),
+                    )
+                })
                 .collect();
             let ret2 = ctx.respell_future_ret(f.ret, &exports);
+            // the row's declaring unit: an ordinary row is the exporter's
+            // own (`None`), a re-export row spells the unit that compiled
+            // the fn
+            let row_scope = f.scope.unwrap_or(dep_scope);
             for (site, id) in sites {
                 bound_sites.insert((site.clone(), id));
                 ctx.add_extern_fn(
                     &site,
                     id,
-                    rut_core::pack(dep_scope, f.local),
+                    rut_core::pack(row_scope, f.local),
                     f.params.clone(),
                     ret2,
                     f.is_async,
                     f.host.map(|h| surface.names.name(h).to_string()),
                 );
+                if let Some(file) = reexport_site(head, id) {
+                    reexport_fns.push((
+                        file,
+                        id,
+                        rut_core::binary::SurfaceFn {
+                            name: id,
+                            params: f.params.clone(),
+                            ret: f.ret,
+                            local: f.local,
+                            // the DECLARING unit (a chain's carried scope
+                            // wins; an ordinary row's exporter is
+                            // `dep_scope`)
+                            scope: Some(row_scope),
+                            is_async: f.is_async,
+                            // the host registration name re-interns into
+                            // THIS unit's surface names (only a host row
+                            // carries one)
+                            host: f.host.map(|h| ctx.intern(surface.names.name(h))),
+                        },
+                    ));
+                }
             }
         }
         // the async Future trait objects re-spell at the binding: a
@@ -659,12 +780,36 @@ fn compile_program_inner(
             let text = surface.names.name(g.name);
             for (site, id) in binding_sites(head, text) {
                 bound_sites.insert((site.clone(), id));
-                let params = g
+                let params: Vec<rut_core::IdentId> = g
                     .params
                     .iter()
                     .map(|&p| ctx.intern(surface.names.name(p)))
                     .collect();
-                ctx.add_extern_generic_fn(&site, id, origin.clone(), params, g.args.clone(), g.ret);
+                // the owner anchor: the DECLARING package (a re-export
+                // row's carried owner wins; an ordinary row is this
+                // mount key)
+                let owner = g
+                    .owner
+                    .map(|o| surface.names.name(o).to_string())
+                    .unwrap_or_else(|| origin.clone());
+                ctx.add_extern_generic_fn(&site, id, owner, params.clone(), g.args.clone(), g.ret);
+                if let Some(file) = reexport_site(head, id) {
+                    let owner = g
+                        .owner
+                        .map(|o| ctx.intern(surface.names.name(o)))
+                        .unwrap_or_else(|| ctx.intern(origin));
+                    reexport_generic_fns.push((
+                        file,
+                        id,
+                        rut_core::binary::SurfaceGenericFn {
+                            name: id,
+                            params,
+                            args: g.args.clone(),
+                            ret: g.ret,
+                            owner: Some(owner),
+                        },
+                    ));
+                }
             }
         }
         // the integer prims' numeric methods (core's `builtin impl`
@@ -711,6 +856,12 @@ fn compile_program_inner(
                 // the shared boot table needs no rebase)
                 let scope = t.scope.unwrap_or(dep_scope);
                 let ty_id = rut_core::pack(scope, t.local);
+                // the DECLARING package (a re-export row's owner anchor
+                // wins; an ordinary row is this exporter's)
+                let owner = t
+                    .owner
+                    .map(|o| surface.names.name(o).to_string())
+                    .unwrap_or_else(|| origin.clone());
                 // a used enum: the member paths resolve through the
                 // registry; the descriptor row rode use_types above
                 if let TyKind::Enum { members } = ctx.types.kind(ty_id).clone() {
@@ -718,13 +869,13 @@ fn compile_program_inner(
                 }
                 ctx.add_extern_type(&site, id, ty_id, t.is_class, t.newtype);
                 // the type's origin pkg rides the binding
-                ctx.extern_origins.insert(id, origin.clone());
+                ctx.extern_origins.insert(id, owner.clone());
                 // a linked generic: the template row (its placeholder
                 // fields came across in the carried block), the parameter
                 // names in order, and the declaring pkg — the owner every
                 // instantiation is requested from
                 if t.is_generic {
-                    let params = t
+                    let params: Vec<rut_core::IdentId> = t
                         .params
                         .iter()
                         .map(|&p| ctx.intern(surface.names.name(p)))
@@ -733,12 +884,71 @@ fn compile_program_inner(
                     ctx.add_extern_generic(
                         &site,
                         id,
-                        origin.clone(),
+                        owner.clone(),
                         params,
                         template_row,
                         t.is_class,
                         t.newtype,
                     );
+                }
+                if let Some(file) = reexport_site(head, id) {
+                    let params: Vec<rut_core::IdentId> = t
+                        .params
+                        .iter()
+                        .map(|&p| ctx.intern(surface.names.name(p)))
+                        .collect();
+                    reexport_types.push((
+                        file.clone(),
+                        id,
+                        rut_core::binary::SurfaceType {
+                            name: id,
+                            local: t.local,
+                            is_class: t.is_class,
+                            is_generic: t.is_generic,
+                            newtype: t.newtype,
+                            params,
+                            scope: Some(scope),
+                            // the DECLARING package: the owner anchor a
+                            // generic instantiation routes to, and the
+                            // origin a carried field's visibility hint
+                            // names (a chain's carried owner wins)
+                            owner: t
+                                .owner
+                                .map(|o| ctx.intern(surface.names.name(o)))
+                                .or_else(|| Some(ctx.intern(origin))),
+                        },
+                    ));
+                    // the declaring unit's inherent rows for this class
+                    for ih in &surface.inherents {
+                        if ih.target != ty_id {
+                            continue;
+                        }
+                        let methods: Vec<rut_core::binary::SurfaceMethod> = ih
+                            .methods
+                            .iter()
+                            .map(|m| rut_core::binary::SurfaceMethod {
+                                name: ctx.intern(surface.names.name(m.name)),
+                                params: m.params.clone(),
+                                ret: m.ret,
+                                local: m.local,
+                                has_self: m.has_self,
+                                marker: m.marker,
+                                generics: m
+                                    .generics
+                                    .iter()
+                                    .map(|&g| ctx.intern(surface.names.name(g)))
+                                    .collect(),
+                            })
+                            .collect();
+                        reexport_inherents.push((
+                            file.clone(),
+                            id,
+                            rut_core::binary::SurfaceInherent {
+                                target: ty_id,
+                                methods,
+                            },
+                        ));
+                    }
                 }
             }
         }
@@ -765,6 +975,13 @@ fn compile_program_inner(
             let cx_name = ctx.intern(rut_core::async_frame::RUN_CONTEXT_TYPE);
             let cx_ty = ctx.run_context_ty();
             for ih in &surface.inherents {
+                // the class's declaring unit: an ordinary row is the
+                // exporter's own packed scope; a re-exported class's row
+                // spells its declaring unit (and the method locals belong
+                // to THAT unit's fn table)
+                let target2 =
+                    respell_surface_ty(&ctx.types, ih.target, own_scope, dep_scope, cx_name, cx_ty);
+                let row_scope = rut_core::scope_of(target2);
                 let methods: Vec<rut_core::binary::SurfaceMethod> = ih
                     .methods
                     .iter()
@@ -782,7 +999,7 @@ fn compile_program_inner(
                         ret: respell_surface_ty(
                             &ctx.types, m.ret, own_scope, dep_scope, cx_name, cx_ty,
                         ),
-                        local: rut_core::pack(dep_scope, m.local),
+                        local: rut_core::pack(row_scope, m.local),
                         has_self: m.has_self,
                         marker: m.marker,
                         generics: m
@@ -792,15 +1009,21 @@ fn compile_program_inner(
                             .collect(),
                     })
                     .collect();
-                let target2 =
-                    respell_surface_ty(&ctx.types, ih.target, own_scope, dep_scope, cx_name, cx_ty);
                 ctx.add_extern_inherent(target2, methods);
                 // the class's declaring pkg anchors the mirror requests
                 // (`MutCtx::set<A, R>` — a PLAIN class's generic method —
                 // names its owner through this row; `owner_of_data`
-                // reads it)
+                // reads it). A re-export row carries the declaring
+                // package; an ordinary row is this exporter's.
+                let owner = surface
+                    .type_exports
+                    .iter()
+                    .find(|t| rut_core::pack(t.scope.unwrap_or(dep_scope), t.local) == target2)
+                    .and_then(|t| t.owner)
+                    .map(|o| surface.names.name(o).to_string())
+                    .unwrap_or_else(|| origin.clone());
                 ctx.decl_owner
-                    .insert(ctx.types.type_at(target2).name, origin.clone());
+                    .insert(ctx.types.type_at(target2).name, owner);
             }
         }
         // core's native surface: builtin containers, ifaces, and
@@ -884,11 +1107,16 @@ fn compile_program_inner(
                 let exports: Vec<(rut_core::IdentId, TypeId)> = surface
                     .type_exports
                     .iter()
-                    .map(|t| (t.name, rut_core::pack(dep_scope, t.local)))
+                    .map(|t| {
+                        (
+                            t.name,
+                            rut_core::pack(t.scope.unwrap_or(dep_scope), t.local),
+                        )
+                    })
                     .collect();
                 let ret2 = ctx.respell_future_ret(f.ret, &exports);
                 let row = rut_lir::check::ExternFn {
-                    func: rut_core::pack(dep_scope, f.local),
+                    func: rut_core::pack(f.scope.unwrap_or(dep_scope), f.local),
                     params: f.params.clone(),
                     ret: ret2,
                     is_async: f.is_async,
@@ -1248,6 +1476,7 @@ fn compile_program_inner(
                     params,
                     ret,
                     local,
+                    scope: None,
                     is_async,
                     host: None,
                 });
@@ -1269,6 +1498,41 @@ fn compile_program_inner(
             ty,
             bits,
         });
+    }
+    // v27: the `pub use` re-export rows — the same lay as the consts,
+    // one row per (importing file's mod path, bound leaf), sorted so the
+    // pack's bytes never depend on the dep iteration order. `scope` /
+    // `owner` ride the row verbatim: the DECLARING unit's identity.
+    let row_name_of = |ctx: &mut Ctx, file: &str, name: rut_core::IdentId| -> rut_core::IdentId {
+        if file.is_empty() {
+            name
+        } else {
+            ctx.intern(&format!("{}::{}", file.replace('/', "::"), ctx.name(name)))
+        }
+    };
+    reexport_fns.sort_by_cached_key(|(f, n, _)| (f.clone(), ctx.name(*n).to_string()));
+    reexport_fns.dedup_by(|a, b| a.0 == b.0 && a.1 == b.1);
+    for (file, leaf, mut row) in reexport_fns {
+        row.name = row_name_of(&mut ctx, &file, leaf);
+        surface.funcs.push(row);
+    }
+    reexport_generic_fns.sort_by_cached_key(|(f, n, _)| (f.clone(), ctx.name(*n).to_string()));
+    reexport_generic_fns.dedup_by(|a, b| a.0 == b.0 && a.1 == b.1);
+    for (file, leaf, mut row) in reexport_generic_fns {
+        row.name = row_name_of(&mut ctx, &file, leaf);
+        surface.fn_generics.push(row);
+    }
+    reexport_types.sort_by_cached_key(|(f, n, _)| (f.clone(), ctx.name(*n).to_string()));
+    reexport_types.dedup_by(|a, b| a.0 == b.0 && a.1 == b.1);
+    for (file, leaf, mut row) in reexport_types {
+        row.name = row_name_of(&mut ctx, &file, leaf);
+        surface.type_exports.push(row);
+    }
+    reexport_inherents
+        .sort_by_cached_key(|(f, n, ih)| (f.clone(), ctx.name(*n).to_string(), ih.target));
+    reexport_inherents.dedup_by(|a, b| a.0 == b.0 && a.1 == b.1 && a.2.target == b.2.target);
+    for (_, _, row) in reexport_inherents {
+        surface.inherents.push(row);
     }
     // inherent method surface (the linkable-classes phase): one row
     // per class with exported methods — a plain class's row binds
@@ -1504,6 +1768,7 @@ fn compile_program_inner(
                 params: fd.generics.clone(),
                 args,
                 ret,
+                owner: None,
             });
         ctx.cur_mod = saved_mod;
     }
@@ -1636,6 +1901,7 @@ fn compile_program_inner(
                     d.generics.clone()
                 },
                 scope: None,
+                owner: None,
             });
         }
         for (name, e) in &ctx.enums {
@@ -1647,6 +1913,7 @@ fn compile_program_inner(
                 newtype: false,
                 params: Vec::new(),
                 scope: None,
+                owner: None,
             });
         }
         // type aliases: a single-target alias adds a row keyed
@@ -1665,6 +1932,7 @@ fn compile_program_inner(
                 newtype: false,
                 params: Vec::new(),
                 scope: (scope == rut_core::BOOT_SCOPE).then_some(scope),
+                owner: None,
             });
         }
         // trait surface: declared ifaces with their

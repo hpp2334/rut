@@ -3982,7 +3982,7 @@ msgid ""
 "```"
 msgstr ""
 
-#: src/tutorial/modules.md:46 src/reference/modules-and-visibility.md:408
+#: src/tutorial/modules.md:46 src/reference/modules-and-visibility.md:412
 msgid "Visibility"
 msgstr ""
 
@@ -3992,12 +3992,12 @@ msgid ""
 "— the safe default. Nothing leaks unless it says `pub`:"
 msgstr ""
 
-#: src/tutorial/modules.md:52 src/reference/modules-and-visibility.md:414
+#: src/tutorial/modules.md:52 src/reference/modules-and-visibility.md:418
 #: src/reference/literals-and-inference.md:129
 msgid "Form"
 msgstr ""
 
-#: src/tutorial/modules.md:52 src/reference/modules-and-visibility.md:414
+#: src/tutorial/modules.md:52 src/reference/modules-and-visibility.md:418
 #: src/reference/primitive-types.md:25
 #: src/reference/builtin-generic-types.md:85
 #: src/reference/builtin-generic-types.md:96
@@ -4010,7 +4010,7 @@ msgstr ""
 msgid "Meaning"
 msgstr ""
 
-#: src/tutorial/modules.md:54 src/reference/modules-and-visibility.md:416
+#: src/tutorial/modules.md:54 src/reference/modules-and-visibility.md:420
 msgid "`pub fn ..`"
 msgstr ""
 
@@ -4018,7 +4018,7 @@ msgstr ""
 msgid "public — importable by any module, other packages included"
 msgstr ""
 
-#: src/tutorial/modules.md:55 src/reference/modules-and-visibility.md:417
+#: src/tutorial/modules.md:55 src/reference/modules-and-visibility.md:421
 msgid "`pub(pkg) fn ..`"
 msgstr ""
 
@@ -4026,7 +4026,7 @@ msgstr ""
 msgid "visible everywhere in this package's module tree"
 msgstr ""
 
-#: src/tutorial/modules.md:56 src/reference/modules-and-visibility.md:418
+#: src/tutorial/modules.md:56 src/reference/modules-and-visibility.md:422
 msgid "`pub(super) fn ..`"
 msgstr ""
 
@@ -11073,18 +11073,23 @@ msgid ""
 "re-export edge, not a private import: the name surfaces through the "
 "re-exporting module, so a consumer validates its import against _that_ "
 "module — the deeper package stays an implementation detail of the exporter. "
-"The exporter's compiled surface still owns value binding: a leaf that binds "
-"nothing there states it at the use line, exactly like any other import."
+"The exporter's compiled surface carries the re-export as a **surface row** "
+"whose origin is the declaring package: a fn, generic fn, type "
+"(class/struct), enum, interface, or host-surface const re-export binds "
+"through it like any of the exporter's own `pub` names, and a chain of "
+"re-exports collapses to the original declaration. A module `let` has no "
+"surface row (it is not a surface const), so a `pub use` naming one refuses "
+"at the re-exporting use line."
 msgstr ""
 
-#: src/reference/modules-and-visibility.md:260
+#: src/reference/modules-and-visibility.md:264
 msgid ""
 "**The editor reads the edge.** Re-exported names complete through the module "
 "(`use mid::{ ⏐` offers `helper`, the detail naming the edge), and the "
 "imported names carry the re-export visibility."
 msgstr ""
 
-#: src/reference/modules-and-visibility.md:264
+#: src/reference/modules-and-visibility.md:268
 msgid ""
 "**`pub async fn` crosses package surfaces.** A plain `pub async fn` exports "
 "like any `pub fn`. The exporter materializes the sugar law's export shape "
@@ -11100,7 +11105,7 @@ msgid ""
 "not cross package surfaces yet ``."
 msgstr ""
 
-#: src/reference/modules-and-visibility.md:278
+#: src/reference/modules-and-visibility.md:282
 msgid ""
 "The head may also name the **consumer's own package** — the intra-package "
 "import. The package's own name resolves to its root module, and a `mod` edge "
@@ -11109,7 +11114,7 @@ msgid ""
 "positions take):"
 msgstr ""
 
-#: src/reference/modules-and-visibility.md:284
+#: src/reference/modules-and-visibility.md:288
 msgid ""
 "```rut\n"
 "use imp::{ TodoList, Task };   // beside `mod imp;` — imp's pub names\n"
@@ -11118,7 +11123,7 @@ msgid ""
 "```"
 msgstr ""
 
-#: src/reference/modules-and-visibility.md:290
+#: src/reference/modules-and-visibility.md:294
 msgid ""
 "The leaves obey the same laws every crossing does. Each must be a "
 "declaration of the walked module, **visible from the importing file**: a "
@@ -11130,7 +11135,7 @@ msgid ""
 "own module edge is a loud ambiguity — rename one of the two."
 msgstr ""
 
-#: src/reference/modules-and-visibility.md:300
+#: src/reference/modules-and-visibility.md:304
 msgid ""
 "The head itself is **declaration-scoped**: a package may `use` exactly the "
 "heads its own manifest names — `deps` ∪ (`dev-deps` when the package is the "
@@ -11141,7 +11146,7 @@ msgid ""
 "kinds](dependency-kinds.md))."
 msgstr ""
 
-#: src/reference/modules-and-visibility.md:308
+#: src/reference/modules-and-visibility.md:312
 msgid ""
 "The engine's builtin names — the primitives, `opaque`, `panic`, "
 "`type_id<T>()`, `str(x)` — are **ambient**: no `use` is needed for them. The "
@@ -11155,11 +11160,11 @@ msgid ""
 "only through `use`."
 msgstr ""
 
-#: src/reference/modules-and-visibility.md:322
+#: src/reference/modules-and-visibility.md:326
 msgid "Qualified positions"
 msgstr ""
 
-#: src/reference/modules-and-visibility.md:324
+#: src/reference/modules-and-visibility.md:328
 msgid ""
 "Inside one package, a declaration of another module is nameable where a path "
 "is legal — a type annotation, a call, a field read — by **qualified "
@@ -11177,55 +11182,55 @@ msgid ""
 "structure](lexical-structure.md)). One separator, two doors:"
 msgstr ""
 
-#: src/reference/modules-and-visibility.md:341
+#: src/reference/modules-and-visibility.md:345
 msgid "form"
 msgstr ""
 
-#: src/reference/modules-and-visibility.md:341 src/reference/stdlib.md:86
+#: src/reference/modules-and-visibility.md:345 src/reference/stdlib.md:86
 #: src/reference/typed-bytecode.md:114
 msgid "spelling"
 msgstr ""
 
-#: src/reference/modules-and-visibility.md:341 src/reference/embedding.md:547
+#: src/reference/modules-and-visibility.md:345 src/reference/embedding.md:547
 msgid "door"
 msgstr ""
 
-#: src/reference/modules-and-visibility.md:343
+#: src/reference/modules-and-visibility.md:347
 msgid "use path"
 msgstr ""
 
-#: src/reference/modules-and-visibility.md:343
+#: src/reference/modules-and-visibility.md:347
 msgid "`use pkg::a::b::{ C }`"
 msgstr ""
 
-#: src/reference/modules-and-visibility.md:343
+#: src/reference/modules-and-visibility.md:347
 msgid "`::` — cross-package **and own-package module**, the import"
 msgstr ""
 
-#: src/reference/modules-and-visibility.md:344
+#: src/reference/modules-and-visibility.md:348
 msgid "qualified position"
 msgstr ""
 
-#: src/reference/modules-and-visibility.md:344
+#: src/reference/modules-and-visibility.md:348
 msgid "`a::b::C` / `a::b::f(..)`"
 msgstr ""
 
-#: src/reference/modules-and-visibility.md:344
+#: src/reference/modules-and-visibility.md:348
 msgid "`::` — intra-package, at the use site"
 msgstr ""
 
-#: src/reference/modules-and-visibility.md:346
+#: src/reference/modules-and-visibility.md:350
 msgid "Module-level `let`"
 msgstr ""
 
-#: src/reference/modules-and-visibility.md:348
+#: src/reference/modules-and-visibility.md:352
 msgid ""
 "Initializers must be **load-time literals** — this build accepts an `Int`, "
 "`Float`, `Str`, or `Bool` literal and nothing else. An operator, an enum "
 "member, a record literal, `[nil; n]`, `type_id<T>()`, or any call is refused:"
 msgstr ""
 
-#: src/reference/modules-and-visibility.md:357
+#: src/reference/modules-and-visibility.md:361
 msgid ""
 "```rut\n"
 "let KIND_ADD: i64 = 1;                 // fine: an Int literal\n"
@@ -11233,18 +11238,18 @@ msgid ""
 "```"
 msgstr ""
 
-#: src/reference/modules-and-visibility.md:362
+#: src/reference/modules-and-visibility.md:366
 msgid ""
 "There is no mutable module state: program state is constructed in `main`, or "
 "held by the embedder and passed across the boundary. **No user code runs at "
 "load.**"
 msgstr ""
 
-#: src/reference/modules-and-visibility.md:366
+#: src/reference/modules-and-visibility.md:370
 msgid "Entry points"
 msgstr ""
 
-#: src/reference/modules-and-visibility.md:368
+#: src/reference/modules-and-visibility.md:372
 msgid ""
 "The embedder loads a module and then explicitly calls an entry function — "
 "`entry fn main` for a script; an entry fn is sync. `entry fn` publishes a "
@@ -11253,11 +11258,11 @@ msgid ""
 "side-effect ordering, no load-order bugs, deterministic and cheap loads."
 msgstr ""
 
-#: src/reference/modules-and-visibility.md:375
+#: src/reference/modules-and-visibility.md:379
 msgid "Bindings: `let` and `const`"
 msgstr ""
 
-#: src/reference/modules-and-visibility.md:377
+#: src/reference/modules-and-visibility.md:381
 msgid ""
 "Mutability is the **default**. A `let` binding may be reassigned (`x = e`), "
 "written through (`p.x = 3`, `xs[0] = 7`), and passed where a writer is "
@@ -11266,18 +11271,18 @@ msgid ""
 "parameter spelling to grant it."
 msgstr ""
 
-#: src/reference/modules-and-visibility.md:383
+#: src/reference/modules-and-visibility.md:387
 msgid "`let x = e;` — a **mutable binding**, the ordinary shape."
 msgstr ""
 
-#: src/reference/modules-and-visibility.md:384
+#: src/reference/modules-and-visibility.md:388
 msgid ""
 "`const x = e;` — the **opt-out**: a _const binding_ refuses the binding's "
 "own reassignment, diagnosing ``cannot reassign `x` — a `const` binding is "
 "not reassignable``."
 msgstr ""
 
-#: src/reference/modules-and-visibility.md:388
+#: src/reference/modules-and-visibility.md:392
 msgid ""
 "**The const opt-out is shallow — reassignment only.** It gates the one "
 "operation that rebinds the name: `x = ...` on a const binding errors. It is "
@@ -11288,7 +11293,7 @@ msgid ""
 "rather than expecting `const` to guard it."
 msgstr ""
 
-#: src/reference/modules-and-visibility.md:396
+#: src/reference/modules-and-visibility.md:400
 msgid ""
 "Sharing is not gated at all: every non-primitive is a shared cell (see "
 "[By-reference and nullable](by-reference-and-nullable.md)), writes are "
@@ -11296,7 +11301,7 @@ msgid ""
 "`const` is _about the name_, never a copy or a fence."
 msgstr ""
 
-#: src/reference/modules-and-visibility.md:401
+#: src/reference/modules-and-visibility.md:405
 msgid ""
 "**Two meanings of \"const\".** This page's `const` is the _const binding_ — "
 "the statement head `const x = e;` in rut source. The **surface const** is a "
@@ -11306,47 +11311,47 @@ msgid ""
 "files](host-fns.md#the-surface-grammar))."
 msgstr ""
 
-#: src/reference/modules-and-visibility.md:410
+#: src/reference/modules-and-visibility.md:414
 msgid ""
 "Modules form a tree per package (the package root is the root module "
 "`mod.rut`; each declared child is a module file). Every declaration — and "
 "every class member — carries a visibility:"
 msgstr ""
 
-#: src/reference/modules-and-visibility.md:416
+#: src/reference/modules-and-visibility.md:420
 msgid "**public** — nameable by any rut module (other packages included)"
 msgstr ""
 
-#: src/reference/modules-and-visibility.md:417
+#: src/reference/modules-and-visibility.md:421
 msgid "visible everywhere inside this **package** (its whole module tree)"
 msgstr ""
 
-#: src/reference/modules-and-visibility.md:418
+#: src/reference/modules-and-visibility.md:422
 msgid "visible to the **parent module's subtree** only"
 msgstr ""
 
-#: src/reference/modules-and-visibility.md:419
+#: src/reference/modules-and-visibility.md:423
 msgid "_(unannotated)_"
 msgstr ""
 
-#: src/reference/modules-and-visibility.md:419
+#: src/reference/modules-and-visibility.md:423
 msgid ""
 "module-private — visible in this module and its descendants; **the default**"
 msgstr ""
 
-#: src/reference/modules-and-visibility.md:421
+#: src/reference/modules-and-visibility.md:425
 msgid ""
 "Unannotated = private to the declaring module _and its descendants_ (a child "
 "module sees its ancestors' privates, never a sibling's)."
 msgstr ""
 
-#: src/reference/modules-and-visibility.md:423
+#: src/reference/modules-and-visibility.md:427
 msgid ""
 "The paren forms `pub(mod)` / `pub(self)` are gone — a paren scope other than "
 "`super`/`pkg` is the ordinary `pub(..)` error."
 msgstr ""
 
-#: src/reference/modules-and-visibility.md:425
+#: src/reference/modules-and-visibility.md:429
 msgid ""
 "Applies uniformly: `let`, `enum`, `struct`, `class`, `interface`, `impl` (an "
 "impl exports with its target type), `fn`, `type` aliases, the `mod` edge "
@@ -11356,14 +11361,14 @@ msgid ""
 "it means the _type name_ is visible."
 msgstr ""
 
-#: src/reference/modules-and-visibility.md:432
+#: src/reference/modules-and-visibility.md:436
 msgid ""
 "**Class members take the same forms**: an unannotated field or method is "
 "module-private; `pub` (optionally scoped) exposes it. See [Classes and "
 "constructors](classes.md)."
 msgstr ""
 
-#: src/reference/modules-and-visibility.md:435
+#: src/reference/modules-and-visibility.md:439
 msgid ""
 "**Struct fields are always public** — the field law has no dial (see "
 "[Structs](structs.md)). **Impl-block methods take the `pub` dial** — `pub "
@@ -11374,7 +11379,7 @@ msgid ""
 "members (see [Interfaces and dispatch](interfaces.md))."
 msgstr ""
 
-#: src/reference/modules-and-visibility.md:443
+#: src/reference/modules-and-visibility.md:447
 msgid ""
 "Visibility is checked at compile time; it has no runtime representation. "
 "Only `pub` names enter a module's export table; a non-exported declaration "
@@ -24379,7 +24384,7 @@ msgid ""
 "futures](launched-futures.md)."
 msgstr ""
 
-#: src/reference/compiler.md:192 src/reference/module-binary.md:130
+#: src/reference/compiler.md:192 src/reference/module-binary.md:133
 msgid "Determinism"
 msgstr ""
 
@@ -25165,7 +25170,7 @@ msgid ""
 "```\n"
 "offset  field\n"
 "0       magic \"RUTC\"                      # 4 bytes\n"
-"4       version: u32                      # VERSION = 26; refuses any other "
+"4       version: u32                      # VERSION = 27; refuses any other "
 "value\n"
 "8       name: str\n"
 "        name table: u32 count, then count × str\n"
@@ -25253,18 +25258,21 @@ msgstr ""
 #: src/reference/module-binary.md:113
 msgid ""
 "**Surface**: the exported surface rides after `exports` — funcs (module rows "
-"spelled mod-qualified, with their async/host rows), consts, the carried type "
-"descriptors + scope blocks + type exports (generic exports carry their "
-"parameter names in order), interface declarations (`SurfaceIface` — every "
-"module publishes the interfaces it declares; a consumer links them into one "
-"merged table), the inherent method surfaces (the linkable-classes phase's "
-"one row per class with methods), and the native rows with their ambient "
-"bits. There are no impl-registration rows on the wire — satisfaction is "
-"structural, so nothing registers. Names are ids into the name table above; "
-"decode rejects any id its tables cannot resolve."
+"spelled mod-qualified, with their async/host rows; v27 adds a `pub use` "
+"re-export row's DECLARING-unit scope tag for a fn and an owner tag for a "
+"generic fn / type, so the consumer binds the re-export like any of the "
+"exporter's own exports), consts, the carried type descriptors + scope blocks "
+"+ type exports (generic exports carry their parameter names in order), "
+"interface declarations (`SurfaceIface` — every module publishes the "
+"interfaces it declares; a consumer links them into one merged table), the "
+"inherent method surfaces (the linkable-classes phase's one row per class "
+"with methods), and the native rows with their ambient bits. There are no "
+"impl-registration rows on the wire — satisfaction is structural, so nothing "
+"registers. Names are ids into the name table above; decode rejects any id "
+"its tables cannot resolve."
 msgstr ""
 
-#: src/reference/module-binary.md:125
+#: src/reference/module-binary.md:128
 msgid ""
 "**Versioning policy**: the version `u32` must equal the toolchain's exactly "
 "— there is no migration or best-effort decode. A byte that changes "
@@ -25272,7 +25280,7 @@ msgid ""
 "refused with the standard version error."
 msgstr ""
 
-#: src/reference/module-binary.md:132
+#: src/reference/module-binary.md:135
 msgid ""
 "Same AST + same dependency versions + same compiler version ⇒ byte-identical "
 "bytes. Serialization order is fixed (mount order, manifest order, pool "
@@ -25282,11 +25290,11 @@ msgid ""
 "symbolication](diagnostics.md))."
 msgstr ""
 
-#: src/reference/module-binary.md:139
+#: src/reference/module-binary.md:142
 msgid "Strip levels"
 msgstr ""
 
-#: src/reference/module-binary.md:141
+#: src/reference/module-binary.md:144
 msgid ""
 "The symbolication data rides in every function: the `spans` table (pc → byte "
 "offset) and the parallel `pos` table (pc → line/col). A build that skips "
@@ -25297,7 +25305,7 @@ msgid ""
 "symbolication](diagnostics.md))."
 msgstr ""
 
-#: src/reference/module-binary.md:149
+#: src/reference/module-binary.md:152
 msgid ""
 "Both strippable halves are format-legal encodings, not special cases: tail "
 "strings are opaque to the format (rewriting them to mangled `%N` names "
@@ -25308,11 +25316,11 @@ msgid ""
 "— is [Symbol stripping and `.rutsym` sidecars](symbol-stripping.md)."
 msgstr ""
 
-#: src/reference/module-binary.md:158
+#: src/reference/module-binary.md:161
 msgid "Type ids at rest and at link"
 msgstr ""
 
-#: src/reference/module-binary.md:160
+#: src/reference/module-binary.md:163
 msgid ""
 "Type ids are program-global in a linked binary only because **link** already "
 "rebased them. At rest (per module, pre-link) ids are module-local; the boot "
@@ -25323,7 +25331,7 @@ msgid ""
 "everything else."
 msgstr ""
 
-#: src/reference/module-binary.md:168
+#: src/reference/module-binary.md:171
 msgid ""
 "`type_id<T>()` values are `u32`, comparable, and unique per _instantiated_ "
 "type within a VM run: `Vec<f32>` ≠ `Vec<f64>`, `[i32; 3]` ≠ `[i32; 4]` (the "
@@ -25332,11 +25340,11 @@ msgid ""
 "layout](reified-types.md))."
 msgstr ""
 
-#: src/reference/module-binary.md:174
+#: src/reference/module-binary.md:177
 msgid "Interface and vtable tables"
 msgstr ""
 
-#: src/reference/module-binary.md:176
+#: src/reference/module-binary.md:179
 msgid ""
 "Interfaces serialize with their member signatures; interface ids merge by "
 "name at link — an interface imported in one module and declared in another "
@@ -25344,7 +25352,7 @@ msgid ""
 "same global table."
 msgstr ""
 
-#: src/reference/module-binary.md:180
+#: src/reference/module-binary.md:183
 msgid ""
 "Interface-member slots are a global table of `(iface, member)` pairs; "
 "vtables are per-type sparse maps slot → function id, merged at link. The "
@@ -25354,92 +25362,92 @@ msgid ""
 "nothing."
 msgstr ""
 
-#: src/reference/module-binary.md:187
+#: src/reference/module-binary.md:190
 msgid "Verification (load time)"
 msgstr ""
 
-#: src/reference/module-binary.md:189
+#: src/reference/module-binary.md:192
 msgid ""
 "Before any code executes, the verifier re-checks every function in the "
 "binary:"
 msgstr ""
 
-#: src/reference/module-binary.md:192 src/reference/bundles.md:456
+#: src/reference/module-binary.md:195 src/reference/bundles.md:456
 msgid "check"
 msgstr ""
 
-#: src/reference/module-binary.md:192
+#: src/reference/module-binary.md:195
 msgid "rule"
 msgstr ""
 
-#: src/reference/module-binary.md:194
+#: src/reference/module-binary.md:197
 msgid "register range"
 msgstr ""
 
-#: src/reference/module-binary.md:194
+#: src/reference/module-binary.md:197
 msgid ""
 "every register operand \\< the function's register-file size; `NOREG` legal "
 "only where an optional operand is defined"
 msgstr ""
 
-#: src/reference/module-binary.md:195
+#: src/reference/module-binary.md:198
 msgid "pool spans"
 msgstr ""
 
-#: src/reference/module-binary.md:195
+#: src/reference/module-binary.md:198
 msgid ""
 "every `(off, argc)` span lands inside its function's `argv` / `labels` pool"
 msgstr ""
 
-#: src/reference/module-binary.md:196
+#: src/reference/module-binary.md:199
 msgid "type operands"
 msgstr ""
 
-#: src/reference/module-binary.md:196
+#: src/reference/module-binary.md:199
 msgid "every type id names a row of the type table"
 msgstr ""
 
-#: src/reference/module-binary.md:197
+#: src/reference/module-binary.md:200
 msgid "jump targets"
 msgstr ""
 
-#: src/reference/module-binary.md:197
+#: src/reference/module-binary.md:200
 msgid "every `jmp`/`br`/`brtable` target is in range"
 msgstr ""
 
-#: src/reference/module-binary.md:198
+#: src/reference/module-binary.md:201
 msgid "call arity"
 msgstr ""
 
-#: src/reference/module-binary.md:198
+#: src/reference/module-binary.md:201
 msgid "call argument counts match the callee's declared signature"
 msgstr ""
 
-#: src/reference/module-binary.md:199
+#: src/reference/module-binary.md:202
 msgid "enum members"
 msgstr ""
 
-#: src/reference/module-binary.md:199
+#: src/reference/module-binary.md:202
 msgid "`EnumNew` member indices in range, target actually an enum"
 msgstr ""
 
-#: src/reference/module-binary.md:200
+#: src/reference/module-binary.md:203
 msgid "interface slots"
 msgstr ""
 
-#: src/reference/module-binary.md:200
+#: src/reference/module-binary.md:203
 msgid "`CallI` slot ids name a row of the global iface-slot table"
 msgstr ""
 
-#: src/reference/module-binary.md:201
+#: src/reference/module-binary.md:204
 msgid "host thunks"
 msgstr ""
 
-#: src/reference/module-binary.md:201
+#: src/reference/module-binary.md:204
 msgid "bodyless functions are skipped (nothing to verify)"
 msgstr ""
 
-#: src/reference/module-binary.md:203
+#: src/reference/module-binary.md:206
 msgid ""
 "A failed verification is a **load error** naming the module and function — "
 "`function name (#i): op @pc: message`. Corrupted binaries never execute. "
@@ -25448,17 +25456,17 @@ msgid ""
 "misbehaving at runtime."
 msgstr ""
 
-#: src/reference/module-binary.md:209
+#: src/reference/module-binary.md:212
 msgid "The constant pool and load-time expressions"
 msgstr ""
 
-#: src/reference/module-binary.md:211
+#: src/reference/module-binary.md:214
 msgid ""
 "Module-level `let` initializers must be **load-time literals** — the checker "
 "accepts an `Int`, `Float`, `Str`, or `Bool` literal only:"
 msgstr ""
 
-#: src/reference/module-binary.md:218
+#: src/reference/module-binary.md:221
 msgid ""
 "An operator, an enum member, a record literal, a fixed-array literal, "
 "`type_id<T>()`, `[nil; n]`, or `Vec<T>(n)` is refused there; a call to a "
@@ -25466,7 +25474,7 @@ msgid ""
 "The literal that survives becomes a constant-pool entry at emit."
 msgstr ""
 
-#: src/reference/module-binary.md:224
+#: src/reference/module-binary.md:227
 msgid ""
 "`type_id<T>()`, wherever it is spelled, never executes: it folds to a "
 "constant from the type table. `debug` position folding and trace "
@@ -25474,11 +25482,11 @@ msgid ""
 "symbolication](diagnostics.md)."
 msgstr ""
 
-#: src/reference/module-binary.md:229 src/reference/symbol-stripping.md:152
+#: src/reference/module-binary.md:232 src/reference/symbol-stripping.md:152
 msgid "What is not here"
 msgstr ""
 
-#: src/reference/module-binary.md:231
+#: src/reference/module-binary.md:234
 msgid ""
 "A `.d.rut` declaration surface does not produce a binary — it has no bodies, "
 "so it compiles to a signature surface only ([Host fns and declaration "

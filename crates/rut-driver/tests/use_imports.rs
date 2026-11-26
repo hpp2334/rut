@@ -239,28 +239,14 @@ fn reexport_graph_of(reexport: bool, app_src: &str) -> rut_driver::GraphOutput {
 
 #[test]
 fn a_pub_use_re_exported_name_is_the_pkgs_own_surface() {
-    // the leaf gate's read: a `pub use`'s imported names ride the
-    // module's decl rows, so `use mid::{ helper }` names a row mid
-    // DID declare — the `unknown import` refusal is gone. The
-    // compiled-surface binding does not chase the edge yet (the
-    // must-bind law still speaks, Phase 2 threads the const lane) —
-    // but the surface question this gate owns answers "declared".
+    // the surface owns the edge (law 3): `mid`'s `pub use util::{ helper }`
+    // lays a surface row whose origin is util, so the consumer binds
+    // the name like any of mid's exports and the call runs.
     let src = "use mid::{ helper };\n\
-               entry fn main() -> i32 { return 0; }\n";
+               entry fn main() -> i32 { return helper(); }\n";
     let g = reexport_graph_of(true, src);
-    let msgs = msgs(&g);
-    assert!(
-        !msgs.iter().any(|m| m.contains("unknown import")),
-        "the re-exported name is part of `mid`'s surface: {msgs:?}"
-    );
-    assert_eq!(g.diags.len(), 1, "the binding gap alone speaks: {msgs:?}");
-    assert!(
-        g.diags[0]
-            .msg
-            .contains("`helper` is not part of `mid`'s exported surface"),
-        "got: {}",
-        g.diags[0].msg
-    );
+    assert!(g.diags.is_empty(), "zero diagnostics: {:?}", msgs(&g));
+    assert_eq!(run_main_i32(&g), 3, "the re-exported fn runs");
 }
 
 #[test]
@@ -283,11 +269,9 @@ fn a_private_use_behind_the_same_import_stays_unknown() {
 
 #[test]
 fn a_qualified_leaf_reads_the_re_exported_row_of_the_walked_module() {
-    // the qualified lane's leaf gate: `mid`'s `sub` module re-exports
-    // `util`'s `helper`, so `use mid::sub::{ helper }` names a pub row
-    // of the walked module — neither the `not declared` nor the `not
-    // pub` refusal speaks (the binding gap is the same as the flat
-    // shape's, the only diag left)
+    // the qualified lane: `mid`'s `sub` module re-exports `util`'s
+    // `helper`, so `use mid::sub::{ helper }` binds the surface row
+    // the walked module laid — the call runs.
     let mid = rut_driver::Mounted::source("mid", "pub mod sub;\n")
         .manifest(rut_driver::Manifest::lib("mid", &["util"]));
     let mut mid = mid;
@@ -309,7 +293,7 @@ fn a_qualified_leaf_reads_the_re_exported_row_of_the_walked_module() {
         .mount(
             rut_driver::Mounted::source(
                 "app",
-                "use mid::sub::{ helper };\nentry fn main() -> i32 { return 0; }\n",
+                "use mid::sub::{ helper };\nentry fn main() -> i32 { return helper(); }\n",
             )
             .manifest(rut_driver::Manifest::lib("app", &["mid"])),
         )
@@ -325,21 +309,8 @@ fn a_qualified_leaf_reads_the_re_exported_row_of_the_walked_module() {
             program: None,
         },
     };
-    let msgs = msgs(&g);
-    assert!(
-        !msgs
-            .iter()
-            .any(|m| m.contains("is not declared in") || m.contains("is not `pub`")),
-        "the walked module's re-export row crosses: {msgs:?}"
-    );
-    assert_eq!(g.diags.len(), 1, "the binding gap alone speaks: {msgs:?}");
-    assert!(
-        g.diags[0]
-            .msg
-            .contains("`helper` is not part of `mid`'s exported surface"),
-        "got: {}",
-        g.diags[0].msg
-    );
+    assert!(g.diags.is_empty(), "zero diagnostics: {:?}", msgs(&g));
+    assert_eq!(run_main_i32(&g), 3, "the walked module's re-export runs");
 }
 
 // ---- the own lane: a `pub use` row names its target ----
@@ -509,12 +480,12 @@ fn a_cyclic_re_export_refuses() {
 }
 
 #[test]
-fn a_pub_use_of_a_dependency_name_inside_the_own_lane_refuses() {
+fn a_pub_use_of_a_dependency_name_inside_the_own_lane_binds() {
     // `b` re-exports a DEPENDENCY's `f` (`pub use somepkg::{ f }`) and
-    // the root imports it through the own lane — a cross-package
-    // re-export does not bind until the surface owns the edge, so the
-    // use line refuses and says why.
-    let root = "mod b;\n\nuse b::{ f };\n\nentry fn main() { }\n";
+    // the root imports it through the own lane. Law 3: the row is a
+    // surface row of `b`, so the binding is handed to somepkg's surface
+    // — the root's call runs, and a `pub use` of it re-exports in turn.
+    let root = "mod b;\n\nuse b::{ f };\n\nentry fn main() -> i32 { return f(); }\n";
     let mut app = rut_driver::Mounted::source("app", root)
         .manifest(rut_driver::Manifest::lib("app", &["somepkg"]));
     app.mods.insert(
@@ -544,17 +515,8 @@ fn a_pub_use_of_a_dependency_name_inside_the_own_lane_refuses() {
             program: None,
         },
     };
-    assert_eq!(g.diags.len(), 1, "exactly one diagnostic: {:?}", msgs(&g));
-    assert_eq!(
-        g.diags[0].msg,
-        "`f` is re-exported from `somepkg` — a cross-package re-export does not bind yet"
-    );
-    assert_eq!(g.diags[0].file.as_deref(), Some("app"));
-    assert!(
-        rendered(root, &g).contains("--> app:3:1"),
-        "the arrow names the use line:\n{}",
-        rendered(root, &g)
-    );
+    assert!(g.diags.is_empty(), "zero diagnostics: {:?}", msgs(&g));
+    assert_eq!(run_main_i32(&g), 3, "the own-lane consumer runs");
 }
 
 // ---- the std lane: same gate, the toolchain tree's ink pkg ----
@@ -618,4 +580,296 @@ fn a_valid_std_leaf_compiles_clean() {
                entry fn main() -> i32 { return 0; }\n";
     let g = std_graph_of(src);
     assert!(g.diags.is_empty(), "zero diagnostics: {:?}", msgs(&g));
+}
+
+// ---- across packages: the surface owns the edge ----
+
+/// The ground truth 2 chain: `utilx` declares, `midx` re-exports (at
+/// its root — the flat column — or in its `sub` module — the
+/// qualified column), `app` imports the name and calls it. `midx`
+/// declares `utilx`; `app` declares `midx` alone.
+fn cross_chain_graph(
+    utilx: &str,
+    midx_root: &str,
+    midx_mods: &[(&str, String)],
+    app: &str,
+) -> rut_driver::GraphOutput {
+    let mut midx = rut_driver::Mounted::source("midx", midx_root)
+        .manifest(rut_driver::Manifest::lib("midx", &["utilx"]));
+    for (sub, text) in midx_mods {
+        midx.mods.insert(
+            (*sub).to_string(),
+            rut_driver::ModSource {
+                path: (*sub).to_string(),
+                vis: Vis::Pub,
+                text: text.clone(),
+                file: "mod.rut".to_string(),
+            },
+        );
+    }
+    match rut_driver::RutRun::new()
+        .mount(rut_driver::Mounted::source("utilx", utilx))
+        .mount(midx)
+        .mount(
+            rut_driver::Mounted::source("app", app)
+                .manifest(rut_driver::Manifest::lib("app", &["midx"])),
+        )
+        .entrypoint("app")
+        .compile()
+    {
+        Ok(c) => c.graph,
+        Err(e) => rut_driver::GraphOutput {
+            diags: vec![rut_lexer::diag::Diag::new(
+                rut_lexer::span::Span::new(0, 0),
+                e.msg,
+            )],
+            program: None,
+        },
+    }
+}
+
+#[test]
+fn a_re_exported_name_binds_across_packages() {
+    // THE table: step 1's admitted kinds × {a leaf `use midx::{ x };`,
+    // a qualified `use midx::sub::{ x };`}. `midx` re-exports the
+    // names on utilx's surface; the surface row carries the declaring
+    // unit, so the consumer binds it like any of midx's exports and
+    // the program runs. The refused kind (a module let) has its own
+    // pin below.
+    struct Shape {
+        label: &'static str,
+        decls: &'static str,
+        names: &'static str,
+        app: &'static str,
+        want: i32,
+    }
+    let shapes = [
+        Shape {
+            label: "fn",
+            decls: "pub fn f() -> i32 { return 7; }\n",
+            names: "f",
+            app: "entry fn main() -> i32 { return f(); }\n",
+            want: 7,
+        },
+        Shape {
+            label: "generic fn",
+            decls: "pub fn ident<T>(v: T) -> T { return v; }\n",
+            names: "ident",
+            app: "entry fn main() -> i32 { return ident(5); }\n",
+            want: 5,
+        },
+        Shape {
+            label: "type",
+            decls: "pub struct S { v: i32 }\npub fn make() -> S { return S { v: 7 }; }\n",
+            names: "S, make",
+            app: "entry fn main() -> i32 { let s = make(); return s.v; }\n",
+            want: 7,
+        },
+        Shape {
+            label: "class",
+            decls: "pub class C { pub v: i32 = 0; }\npub fn make() -> C { return C { v: 7 }; }\n",
+            names: "C, make",
+            app: "entry fn main() -> i32 { let c: C = make(); return c.v; }\n",
+            want: 7,
+        },
+        Shape {
+            label: "generic type",
+            decls: "pub struct Cell<T> { v: T }\npub fn wrap<T>(v: T) -> Cell<T> { return Cell { v: v }; }\n",
+            names: "Cell, wrap",
+            app: "entry fn main() -> i32 { let c: Cell<i32> = wrap(5); return c.v; }\n",
+            want: 5,
+        },
+        Shape {
+            label: "enum",
+            decls: "pub enum E { A, B }\n",
+            names: "E",
+            app: "entry fn main() -> i32 { let e = E::A; if (e == E::A) { return 1; } return 0; }\n",
+            want: 1,
+        },
+        Shape {
+            label: "interface",
+            decls: "pub interface Shape { fn area(self) -> i32; }\n\
+                    pub struct Sq { n: i32 }\n\
+                    impl Sq { pub fn area(self) -> i32 { return self.n; } }\n\
+                    pub fn mk() -> Sq { return Sq { n: 4 }; }\n",
+            names: "Shape, Sq, mk",
+            app: "entry fn main() -> i32 { let s: Shape = mk(); return s.area(); }\n",
+            want: 4,
+        },
+    ];
+    for shape in shapes {
+        for column in ["leaf", "qualified"] {
+            let (midx_root, midx_mods, app_src) = if column == "leaf" {
+                (
+                    format!("pub use utilx::{{ {} }};\n", shape.names),
+                    Vec::new(),
+                    format!("use midx::{{ {} }};\n{}", shape.names, shape.app),
+                )
+            } else {
+                (
+                    "pub mod sub;\n".to_string(),
+                    vec![("sub", format!("pub use utilx::{{ {} }};\n", shape.names))],
+                    format!("use midx::sub::{{ {} }};\n{}", shape.names, shape.app),
+                )
+            };
+            let g = cross_chain_graph(shape.decls, &midx_root, &midx_mods, &app_src);
+            assert!(
+                g.diags.is_empty(),
+                "[{} / {column}] zero diagnostics: {:?}",
+                shape.label,
+                msgs(&g)
+            );
+            let got = run_main_i32(&g);
+            assert_eq!(
+                got, shape.want,
+                "[{} / {column}] the program runs",
+                shape.label
+            );
+        }
+    }
+    // (d) the pack stays deterministic: the re-export rows are laid in
+    // (importing file, leaf) order, so the same source encodes the same
+    // bytes twice — never the dep iteration order
+    let once = cross_chain_graph(
+        "pub fn f() -> i32 { return 7; }\n",
+        "pub use utilx::{ f };\n",
+        &[],
+        "use midx::{ f };\nentry fn main() -> i32 { return f(); }\n",
+    );
+    let twice = cross_chain_graph(
+        "pub fn f() -> i32 { return 7; }\n",
+        "pub use utilx::{ f };\n",
+        &[],
+        "use midx::{ f };\nentry fn main() -> i32 { return f(); }\n",
+    );
+    assert_eq!(
+        rut_core::binary::encode(&once.program.expect("linked")),
+        rut_core::binary::encode(&twice.program.expect("linked")),
+        "the same source packs byte-identically"
+    );
+}
+
+#[test]
+fn a_re_exported_module_let_stays_refused() {
+    // the ONE kind step 1 refuses: a module `let` is not a surface
+    // const, so the re-exporter's own `pub use` binds nothing and the
+    // use line names the kind honestly.
+    let g = cross_chain_graph(
+        "pub let MAX: i32 = 7;\n",
+        "pub use utilx::{ MAX };\n",
+        &[],
+        "use midx::{ MAX };\nentry fn main() -> i32 { return MAX; }\n",
+    );
+    assert_eq!(g.diags.len(), 1, "exactly one diagnostic: {:?}", msgs(&g));
+    assert!(
+        g.diags[0].msg.contains("`MAX` is a module let")
+            && g.diags[0].msg.contains("does not cross package surfaces"),
+        "got: {}",
+        g.diags[0].msg
+    );
+}
+
+#[test]
+fn a_re_exported_host_const_binds_across_packages() {
+    // the const kind crosses from its only lawful source — a host
+    // surface const. `host_pkg` folds `PI`, `midx` re-exports it, and
+    // `app` reads it through both the flat and the qualified column.
+    use rut_driver::MountedBody;
+    let host = rut_driver::lower_decl_module(
+        "pub let PI: f64 = 3.141592653589793;\n",
+        &BTreeMap::new(),
+        "host_pkg.d.rut",
+    )
+    .expect("the surface lowers")
+    .named("host_pkg");
+    let host_rows = match &host.body {
+        MountedBody::Host { consts, .. } => consts.clone(),
+        _ => panic!("the host pkg carries a host body"),
+    };
+    let pi_bits = host_rows
+        .iter()
+        .find(|(n, _, _)| n == "PI")
+        .expect("PI folds")
+        .2;
+    for column in ["leaf", "qualified"] {
+        let (midx_root, midx_mods, app_src) = if column == "leaf" {
+            (
+                "pub use host_pkg::{ PI };\n".to_string(),
+                Vec::new(),
+                "use midx::{ PI };\nentry fn main() -> i32 { if (PI == 3.141592653589793f64) { return 1; } return 0; }\n".to_string(),
+            )
+        } else {
+            (
+                "pub mod sub;\n".to_string(),
+                vec![("sub", "pub use host_pkg::{ PI };\n".to_string())],
+                "use midx::sub::{ PI };\nentry fn main() -> i32 { if (PI == 3.141592653589793f64) { return 1; } return 0; }\n".to_string(),
+            )
+        };
+        let mut midx = rut_driver::Mounted::source("midx", &midx_root)
+            .manifest(rut_driver::Manifest::lib("midx", &["host_pkg"]));
+        for (sub, text) in midx_mods {
+            midx.mods.insert(
+                sub.to_string(),
+                rut_driver::ModSource {
+                    path: sub.to_string(),
+                    vis: Vis::Pub,
+                    text,
+                    file: "mod.rut".to_string(),
+                },
+            );
+        }
+        let g = match rut_driver::RutRun::new()
+            .mount(host.clone())
+            .mount(midx)
+            .mount(
+                rut_driver::Mounted::source("app", app_src)
+                    .manifest(rut_driver::Manifest::lib("app", &["midx"])),
+            )
+            .entrypoint("app")
+            .compile()
+        {
+            Ok(c) => c.graph,
+            Err(e) => rut_driver::GraphOutput {
+                diags: vec![rut_lexer::diag::Diag::new(
+                    rut_lexer::span::Span::new(0, 0),
+                    e.msg,
+                )],
+                program: None,
+            },
+        };
+        assert!(
+            g.diags.is_empty(),
+            "[host const / {column}] zero diagnostics: {:?}",
+            msgs(&g)
+        );
+        assert_eq!(run_main_i32(&g), 1, "[host const / {column}]");
+        let _ = pi_bits;
+    }
+}
+
+#[test]
+fn a_stale_artifact_refuses() {
+    // LAW 4: the re-export wire bump refuses older artifacts with the
+    // STANDARD version error — a v26 bundle (this bump's immediate
+    // predecessor) never loads back; stale bytes re-pack at source.
+    let out = rut_driver::compile_module(
+        "entry fn main() -> i32 { return 0; }",
+        rut_ast::parser::Mode::Impl,
+        "gate",
+    );
+    let mut bytes = out.binary.expect("a clean compile encodes");
+    // MAGIC (4 bytes) then the version u32
+    bytes[4..8].copy_from_slice(&26u32.to_le_bytes());
+    let err = match rut_core::binary::decode(&bytes) {
+        Ok(_) => panic!("a v26 bundle decoded; the wire bump must refuse it"),
+        Err(e) => e,
+    };
+    assert_eq!(
+        err,
+        format!(
+            "unsupported module binary version 26 — this toolchain reads {} only; re-pack the directory",
+            rut_core::binary::VERSION
+        ),
+        "the STANDARD version error"
+    );
 }

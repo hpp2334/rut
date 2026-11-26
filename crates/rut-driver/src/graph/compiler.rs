@@ -14,9 +14,15 @@ type GraphOut = (
     Vec<Program>,
     HashMap<String, (usize, rut_core::ScopeId)>,
 );
-/// `validate_qualified_uses`'s ok-result: the validated own-uses
-/// triples plus any ifaces needing consumer-side respell rows.
-type IfaceRespell = (Vec<String>, Vec<(String, String, String)>);
+/// `validate_qualified_uses`'s ok-result: the dep heads to ensure, the
+/// validated own-uses triples, and the cross-package re-export bindings
+/// (`(importing file, leaf, the row's full path)` — law 3 hands a
+/// foreign edge to the dependency's surface lane).
+type IfaceRespell = (
+    Vec<String>,
+    Vec<(String, String, String)>,
+    Vec<(String, String, Vec<String>)>,
+);
 use rut_ast::parser::{parse_with_recover, Mode};
 use rut_lexer::span::Span;
 
@@ -113,6 +119,9 @@ pub(super) struct UnitSrc {
     /// the own-package use bindings the unit validated with — the
     /// replay re-binds the same bare names to their target modules
     pub(super) own_uses: Vec<(String, String, String)>,
+    /// the cross-package re-export hand-offs (`(file, leaf, row path)`)
+    /// — the replay binds the same dependency surface rows
+    pub(super) foreign_uses: Vec<(String, String, Vec<String>)>,
 }
 
 impl<'a> GraphCompiler<'a> {
@@ -290,6 +299,7 @@ impl<'a> GraphCompiler<'a> {
                     params: row.params.clone(),
                     ret: row.ret,
                     local: i as u32,
+                    scope: None,
                     is_async: row.is_async,
                     // the registration name rides the surface: the
                     // importer derives the minted row family's host ids
@@ -583,7 +593,8 @@ impl<'a> GraphCompiler<'a> {
         // module; the own lane walks the consumer's own mod tree and
         // gates its leaves under the crossing predicate. The validated
         // dep heads ensure; the own bindings ride the compile.
-        let (uses, own_uses) = self.validate_qualified_uses(spec, module, parsed.ast(), &layout)?;
+        let (uses, own_uses, foreign_reexports) =
+            self.validate_qualified_uses(spec, module, parsed.ast(), &layout)?;
         // the pkg-rooted module path (`calc::math::sqrt(x)`) spells NO
         // use — the fully-qualified form is self-sufficient — so a
         // DECLARED dep that mounts a mod tree ensures beside the used
@@ -686,6 +697,7 @@ impl<'a> GraphCompiler<'a> {
             &Seeds::none(),
             &layout,
             &own_uses,
+            &foreign_reexports,
             &dep_tables,
         );
         for r in &out.requests {
@@ -717,6 +729,7 @@ impl<'a> GraphCompiler<'a> {
                 bound,
                 layout,
                 own_uses,
+                foreign_uses: foreign_reexports,
             },
         );
         let idx = self.programs.len();
@@ -925,8 +938,15 @@ impl GraphCompiler<'_> {
         layout: &rut_lir::check::ModInputs,
     ) -> Option<IfaceRespell> {
         let dep_heads = dep_use_heads(self.session, spec, &self.root, layout, ast);
+        let mut dep_heads = dep_heads;
         let mut ok = true;
         let mut own_uses: Vec<(String, String, String)> = Vec::new();
+        // law 3's cross-package hand-off: an own module's `pub use` of a
+        // DEPENDENCY name is a surface row of the re-exporter; a
+        // consumer in the same package binds it from the dependency's
+        // surface (the row's path names the target's exporting spelling,
+        // never a path to chase across the boundary)
+        let mut foreign_reexports: Vec<(String, String, Vec<String>)> = Vec::new();
         // a cycle is one fact of the re-export graph, not one per use
         // line that walks into it — the first use line reports it
         let mut cycle_reported = false;
@@ -1085,9 +1105,9 @@ impl GraphCompiler<'_> {
                             // the edge (law 5's one walk) to the
                             // DECLARING module — the six binding
                             // consumers then resolve it exactly as a
-                            // direct leaf. A cycle refuses, and a path
-                            // that leaves the package refuses until the
-                            // surface owns it.
+                            // direct leaf. A cycle refuses; an edge
+                            // that leaves the package is the surface's
+                            // (law 3: the dep's surface binds it).
                             Some(d) if d.kind == crate::mods::DeclKind::Use => {
                                 let row = |m: &str, n: &str| -> Option<Vec<String>> {
                                     table
@@ -1103,12 +1123,20 @@ impl GraphCompiler<'_> {
                                         own_uses.push((from.clone(), text.to_string(), target));
                                     }
                                     rut_lir::check::ReexportEdge::Foreign(head) => {
-                                        bad.push(Diag::new(
-                                            span,
-                                            format!(
-                                                "`{text}` is re-exported from `{head}` — a \
-                                                 cross-package re-export does not bind yet"
-                                            ),
+                                        // the row's full path is the target's
+                                        // exporting spelling: its head is the
+                                        // dependency, its interior the walked
+                                        // module — the surface lane binds it
+                                        let path = d.path.clone().unwrap_or_else(|| {
+                                            vec![head.clone(), text.to_string()]
+                                        });
+                                        if !dep_heads.contains(&head) {
+                                            dep_heads.push(head);
+                                        }
+                                        foreign_reexports.push((
+                                            from.clone(),
+                                            text.to_string(),
+                                            path,
                                         ));
                                     }
                                     rut_lir::check::ReexportEdge::Cycle(chain) => {
@@ -1299,7 +1327,7 @@ impl GraphCompiler<'_> {
         if !ok {
             return None;
         }
-        Some((dep_heads, own_uses))
+        Some((dep_heads, own_uses, foreign_reexports))
     }
 
     /// The dep's per-module decl rows (parsed once per spec — the

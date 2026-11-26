@@ -1397,11 +1397,11 @@ fn qualified_leaves_are_the_module_own_decls_only() {
     // target's use edges never open its qualified surface (the
     // compiler: "`two` is not declared in module `layout` — it lives
     // in module `helper`"). A PRIVATE use, a `pub use` of a
-    // DEPENDENCY name (the surface owns a cross-package edge — Phase
-    // 2; an own-package re-export row resolves now, see
-    // `a_re_exported_leaf_and_its_qualified_spelling_hover_the_declaration`),
-    // and an ambient/prelude name all answer NOTHING; a non-pub leaf
-    // is silent from outside the declaring subtree.
+    // DEPENDENCY name (the surface row is the USE lane's — the
+    // consumer's `use layout::{ two }` binds it; a qualified path
+    // never chases it across the boundary), and an ambient/prelude
+    // name all answer NOTHING; a non-pub leaf is silent from outside
+    // the declaring subtree.
     let mut s = S::boot();
     s.index_mod_at(
         "file:///deps/helper/src/mod.rut",
