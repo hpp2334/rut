@@ -633,7 +633,7 @@ pub(crate) fn type_targets(w: &World, file: FileId, name: &str) -> Option<Vec<De
 /// An import the world cannot satisfy falls back to the flat world
 /// (navigation for a computed head: better a broad answer than none)
 fn chain_for<'a>(w: &'a World, file: FileId, name: &str) -> Vec<&'a File> {
-    let imported = import_map(w, file);
+    let imported = import_map(w.file(file));
     match imported.get(name) {
         Some(pkg) => {
             let filtered: Vec<&File> = w

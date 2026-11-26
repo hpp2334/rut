@@ -7,7 +7,7 @@
 //! resolver the bare tier prices against is [`crate::resolve::scope`].
 //!
 //! Assignment law: a SURFACE or enumeration question lives here
-//! (`use_exports`, `walked_surface`, `surface_names`, `bare`,
+//! (`use_exports`, `walked_surface`, `bare`,
 //! `members`/`members_for` and their row types); a scope or binding
 //! question lives beside it in [`crate::resolve::scope`].
 
@@ -20,40 +20,7 @@ use super::scope::{bound_has, type_decl, type_via_imports, use_bound_scope};
 use crate::resolve::cursor::Recv;
 use crate::world::ty::TyForm;
 use crate::world::views::{FnView, LetView, MemberView, ModView, TyView, UseView};
-use crate::world::{File, FileId, World};
-impl<'a> ExportRow<'a> {
-    /// the row's exported name — `None` for a `mod` edge (a walkable
-    /// child is a namespace segment, never a bound name): the glob
-    /// expansion's name listing reads this
-    pub(crate) fn name(&self) -> Option<&'a str> {
-        match self {
-            ExportRow::Mod(..) => None,
-            ExportRow::Ty(t) => Some(t.name()),
-            ExportRow::Fn(f) => Some(f.name()),
-            ExportRow::Let(l) => Some(l.name()),
-            ExportRow::ReExport(u) => Some(u.name()),
-        }
-    }
-
-    /// the file the row declares in — the glob expansion keys its
-    /// (name, pkg) rows on it (a chained re-export's rows answer from
-    /// the deeper pkg, where the name actually resolves)
-    pub(crate) fn file(&self) -> &'a File {
-        match self {
-            ExportRow::Mod(m, _) => m.file,
-            ExportRow::Ty(t) => t.file,
-            ExportRow::Fn(f) => f.file,
-            ExportRow::Let(l) => l.file,
-            ExportRow::ReExport(u) => u.file,
-        }
-    }
-}
-
-/// the seen-set key for a walked head — `pkg::interior` (one spelling,
-/// both insert sites)
-fn seen_key(pkg: &str, interior: &[String]) -> String {
-    format!("{}::{}", pkg, interior.join("::"))
-}
+use crate::world::{FileId, World};
 
 /// one member-tier row — the view the door found it from
 #[derive(Clone, Copy)]
@@ -280,60 +247,14 @@ pub(crate) fn use_exports<'a>(
 
 /// the walked (pkg, interior mod path)'s export rows beside the
 /// resolved path — the ONE surface enumeration: the use tier
-/// offers it and the glob expansion rides it (`import_map`'s name
-/// listing; the `pub use pkg::*` re-export arm). The pub gates and
-/// the walk live inside; the path is `""` when the walk answers
-/// nothing (the callers render an empty tier, never a wrong one).
+/// offers it. The pub gates and the walk live inside; the path is
+/// `""` when the walk answers nothing (the callers render an empty
+/// tier, never a wrong one).
 pub(crate) fn walked_surface<'a>(
     w: &'a World,
     file: FileId,
     pkg: &str,
     interior: &[String],
-) -> (String, Vec<ExportRow<'a>>) {
-    let mut seen = HashSet::new();
-    // the walked head itself is seen before the walk: a self-glob
-    // or a cycle that returns to the start re-lists nothing (the
-    // initial pkg's rows stay single)
-    seen.insert(seen_key(pkg, interior));
-    walked_surface_in(w, file, pkg, interior, &mut seen)
-}
-
-/// the walked surface's exported names beside the pkg each name
-/// declares in — the DECLARING file's module stamp when one rides
-/// (a chained re-export's rows answer from the deeper pkg, where
-/// the name actually resolves), else the spelled head (the flat
-/// stem laws answer for it). `import_map`'s glob expansion reads
-/// this projection of [`walked_surface`]; a `mod` child is
-/// a walkable segment, never a bound name.
-pub(crate) fn surface_names<'a>(
-    w: &'a World,
-    file: FileId,
-    pkg: &'a str,
-    interior: &[String],
-) -> Vec<(&'a str, &'a str)> {
-    let mut out = Vec::new();
-    for r in walked_surface(w, file, pkg, interior).1 {
-        let Some(name) = r.name() else {
-            continue;
-        };
-        let owner = r.file().stamp.module.as_deref().unwrap_or(pkg);
-        out.push((name, owner));
-    }
-    out
-}
-
-/// the seen-set threaded form — the recursion's spine. A `pub use
-/// pkg::*;` edge met mid-walk expands the walked head's surface
-/// through the world behind the seen-set on walked heads: chained
-/// glob re-exports (`a` pub-globs `b`, the consumer globs `a`)
-/// terminate, so a hand-built host world can never loop the
-/// editor.
-fn walked_surface_in<'a>(
-    w: &'a World,
-    file: FileId,
-    pkg: &str,
-    interior: &[String],
-    seen: &mut HashSet<String>,
 ) -> (String, Vec<ExportRow<'a>>) {
     // the import is the gate-opener, so the `pub builtin` gate
     // does not bind here (this IS the use that names them)
@@ -420,27 +341,6 @@ fn walked_surface_in<'a>(
                 rows.push(ExportRow::ReExport(u));
             }
         }
-        // the glob re-export arm: `pub use json::*;` — the walked
-        // head's whole pub surface joins this module's own, NAMES
-        // only (a `mod` child is a walkable segment, never a
-        // re-exported name; the star itself is never offered).
-        // The expansion rides this same walk; the seen-set on
-        // walked heads keeps chained re-exports from looping
-        for g in f.glob_uses() {
-            if g.vis != Vis::Pub {
-                continue;
-            }
-            let key = seen_key(g.pkg, &g.interior);
-            if !seen.insert(key) {
-                continue;
-            }
-            for r in walked_surface_in(w, file, g.pkg, &g.interior, seen).1 {
-                if matches!(r, ExportRow::Mod(..)) {
-                    continue;
-                }
-                rows.push(r);
-            }
-        }
     }
     (path, rows)
 }
@@ -450,7 +350,7 @@ fn walked_surface_in<'a>(
 /// builtin rows (`prelude builtin` — bound in
 /// every unit, no `use` needed), and the rows the document's use
 /// edges BIND (the file scope's own resolve, [`use_bound_scope`]
-/// — an own-package edge, a dep's leaf, a glob all answer the same
+/// — an own-package edge and a dep's leaf answer the same
 /// way hover does; never a package-name match). Every other
 /// foreign name rides ONLY the auto-import tier: a plain offer the
 /// compile would reject is a trap. Free fns and types only;
@@ -459,7 +359,7 @@ pub(crate) fn bare<'a>(w: &'a World, file: FileId) -> Bare<'a> {
     // the names the document's use edges bind — through the ONE
     // home ([`use_bound_scope`]): a foreign row is offered
     // exactly when the file scope answers its name with it (an
-    // own-package edge, a dep's leaf, a glob — the resolve, never
+    // own-package edge, a dep's leaf — the resolve, never
     // a package-name match)
     let bound = use_bound_scope(w, file);
     let mut out = Bare {

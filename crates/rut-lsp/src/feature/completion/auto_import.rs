@@ -52,10 +52,9 @@ pub(super) fn auto_import_completions(
                 .as_deref()
                 .is_some_and(|m| direct_deps.contains(m))
     };
-    // the (name, pkg) set the glob-aware import map spells — a name a
-    // glob leaf already bound is imported, exactly like an explicit
-    // leaf: never re-offered with an insert edit
-    let imported: HashSet<(&str, &str)> = crate::resolve::pkg::import_map(w, file)
+    // the (name, pkg) set the import map spells — an imported name
+    // is never re-offered with an insert edit
+    let imported: HashSet<(&str, &str)> = crate::resolve::pkg::import_map(w.file(file))
         .into_iter()
         .collect();
     let gated: HashSet<String> = w

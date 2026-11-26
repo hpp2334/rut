@@ -24,7 +24,7 @@ pub(crate) use def::{Def, DefLocation, View};
 // the doors' flat spellings — every consumer reads
 // `crate::resolve::<door>`; the module files own the laws
 pub(crate) use exports::{
-    bare, members, members_for, surface_names, use_exports, ExportRow, MemberRow, UseExports,
+    bare, members, members_for, use_exports, ExportRow, MemberRow, UseExports,
 };
 pub(crate) use member::{
     binding_ty, constructor_of, enclosing_type, expr_ty, iface_decl, impl_method_fn,
@@ -34,5 +34,5 @@ pub(crate) use member::{
 pub(crate) use scope::{
     ambiguous_scope, bound_has, file_scope, functions, module_let_ty, one_name_refused,
     prefer_bodies, prefer_mounted, qualified_module, qualified_scope, type_decl, type_via_imports,
-    use_bound_scope, CandRow, Candidate, FileScope, Via,
+    use_bound_scope, CandRow, Candidate, FileScope,
 };

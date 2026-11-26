@@ -8,7 +8,7 @@
 use crate::doc::is_cap;
 use crate::resolve::cursor::{self, Cursor, UseAt};
 use crate::resolve::def::{Def, View};
-use crate::resolve::{ambiguous_scope, binding_ty, CandRow, Candidate, Via};
+use crate::resolve::{ambiguous_scope, binding_ty, CandRow, Candidate};
 use crate::world::ty::{Ty, TyForm};
 use crate::world::views::{FnView, LetView, MemberView, ModView, TyView};
 use crate::world::{File, FileId, World};
@@ -206,14 +206,8 @@ impl Candidate<'_> {
             ),
         };
         let mut out = format!("`{}` — {kind}", src.replace('\n', " "));
-        match &self.via {
-            Some(Via::Leaf(u)) => {
-                out.push_str(&format!(" — via `{}`", u.src().replace('\n', " ")));
-            }
-            Some(Via::Glob(g)) => {
-                out.push_str(&format!(" — via the glob `{}`", g.spelling()));
-            }
-            None => {}
+        if let Some(u) = &self.via {
+            out.push_str(&format!(" — via `{}`", u.src().replace('\n', " ")));
         }
         if let Some((origin, line)) = provenance.filter(|(o, _)| !o.is_empty()) {
             out.push_str(&format!(" — {origin}:{line}"));
@@ -758,10 +752,10 @@ fn render_name(w: &World, file: FileId, pos: u32, id: IdentId, defs: &[Def]) -> 
     }
     // THE mid-edit candidates: the file binds the name TWICE by
     // distinct bindings — two decls of its own, two use leaves, a
-    // decl beside a leaf, two globs of distinct heads — a one-name
-    // violation the checker refuses; the hover LISTS every binding
+    // decl beside a leaf — a one-name violation the checker refuses;
+    // the hover LISTS every binding
     // (kind + provenance: which decl, which `use` leaf and its
-    // source, which glob), never a pick. A bare `Def` carries none of
+    // source), never a pick. A bare `Def` carries none of
     // that provenance, so the peek reads the rows (rule A). (A local
     // binding answered above — inner layer wins, legal shadowing.)
     if let Some(cands) = ambiguous_scope(w, file, name) {

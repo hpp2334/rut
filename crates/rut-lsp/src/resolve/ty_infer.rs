@@ -290,7 +290,7 @@ fn call_ty<'a>(
         if segs.len() == 1 {
             let name = ast.name(segs[0].name.ident);
             // the ONE home first: what the QUERIED FILE binds by this
-            // name (its own decl, a use leaf, a glob, the ambient rows)
+            // name (its own decl, a use leaf, the ambient rows)
             // — the flat unique-match below is the hook-less callers'
             // window only
             if let Some(QualHit::Fn(fv)) = qual(&[name.to_string()], false) {

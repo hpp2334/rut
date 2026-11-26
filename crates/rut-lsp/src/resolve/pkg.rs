@@ -10,7 +10,7 @@
 
 use std::collections::HashMap;
 
-use crate::world::{File, FileId, World};
+use crate::world::File;
 
 /// does this file speak for `pkg`? — the explicit manifest module
 /// name FIRST (`Stamp::module`, the dep/prelude file's `Some`); on
@@ -38,24 +38,12 @@ pub fn matches_pkg(f: &File, pkg: &str) -> bool {
 /// (name, pkg) set shape the auto-import tier dedups against (and
 /// typeDefinition's computed-head gate restricts by; the bare/type
 /// tiers offer through the file scope's own resolve,
-/// `use_bound_scope`). The explicit leaves answer exactly as
-/// before (leaf →
-/// head); a glob leaf (`use pkg::*`) binds every pub name the walked
-/// path exports — enumerated through the world (the same surface walk
-/// the use tier offers), keyed to the pkg each name declares in (the
-/// head itself on the direct shape), inserted ONLY when the key is
-/// absent (explicit wins; stable first-occurrence merge).
-pub(crate) fn import_map<'a>(w: &'a World, file: FileId) -> HashMap<&'a str, &'a str> {
-    let doc = w.file(file);
-    let mut out: HashMap<&'a str, &'a str> = doc
-        .uses()
+/// `use_bound_scope`). A `use` names its leaves: every entry is an
+/// explicit leaf beside the head it rode, and an already-imported
+/// name is imported.
+pub(crate) fn import_map(doc: &File) -> HashMap<&str, &str> {
+    doc.uses()
         .into_iter()
         .map(|u| (u.name(), u.pkg()))
-        .collect();
-    for g in doc.glob_uses() {
-        for (name, pkg) in crate::resolve::surface_names(w, file, g.pkg, &g.interior) {
-            out.entry(name).or_insert(pkg);
-        }
-    }
-    out
+        .collect()
 }

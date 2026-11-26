@@ -29,17 +29,11 @@ pub struct UseNode {
     /// leaf (`use pkg::A;`) and for the incomplete shape (`use pkg::`
     /// at the typing edge: the group is being typed)
     pub group: Option<Span>,
-    /// the glob leaf — the `*`'s own span when the use spells `pkg::*`
-    /// (flat) or its brace list carries a star (`{ A, * }`). `None` for
-    /// ordinary uses. A glob binds the walked path's pub surface (the
-    /// expansion lives in the compile/editor lanes, not the tree); a
-    /// glob leaf is a COMPLETE leaf.
-    pub glob: Option<Span>,
     /// did the brace leaf eat its own `}`? `false` when the group is
     /// being typed and the parse closed it at EOF — the use is still
     /// open (the edit lane's survivor rule asks exactly this); `true`
-    /// whenever no brace leaf was opened, the flat and glob leaves
-    /// having nothing to close
+    /// whenever no brace leaf was opened — the flat leaf has nothing
+    /// to close
     pub closed: bool,
     pub doc: DocData,
 }

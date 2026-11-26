@@ -8,7 +8,7 @@ use rut_ast::{
 };
 
 use crate::doc::Document;
-use crate::world::views::{FnView, GlobUse, LetView, ModView, TyView, UseView};
+use crate::world::views::{FnView, LetView, ModView, TyView, UseView};
 use crate::world::File;
 
 /// one file's decl inventory: the node ADDRESSES in source order, the
@@ -106,8 +106,7 @@ impl File {
     }
 
     /// use views — one per imported name (a brace list fans out, the
-    /// names in order; a glob leaf fans out none — the star is never
-    /// offered)
+    /// names in order)
     pub(crate) fn uses(&self) -> Vec<UseView<'_>> {
         let mut out = Vec::new();
         for &h in &self.decls.uses {
@@ -117,35 +116,6 @@ impl File {
             for i in 0..u.get(self.doc.ast()).names.len() {
                 out.push(UseView { file: self, h, i });
             }
-        }
-        out
-    }
-
-    /// the glob leaves — the `use pkg::*` edges, in source order (they
-    /// fan out no name rows above, so the glob lanes read the nodes
-    /// directly)
-    pub(crate) fn glob_uses(&self) -> Vec<GlobUse<'_>> {
-        let ast = self.doc.ast();
-        let mut out = Vec::new();
-        for &h in &self.decls.uses {
-            let Some(u) = h.downcast::<UseNode>() else {
-                continue;
-            };
-            let d = u.get(ast);
-            if d.glob.is_none() {
-                continue;
-            }
-            let Some(head) = d.path.first() else {
-                continue;
-            };
-            out.push(GlobUse {
-                pkg: ast.name(head.ident),
-                interior: d.path[1..]
-                    .iter()
-                    .map(|n| ast.name(n.ident).to_string())
-                    .collect(),
-                vis: d.vis(),
-            });
         }
         out
     }

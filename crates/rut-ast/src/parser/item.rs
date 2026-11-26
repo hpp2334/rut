@@ -300,7 +300,6 @@ impl UseFrame {
                 name_span,
                 names: std::mem::take(&mut self.names),
                 group: self.group.take(),
-                glob: None,
                 closed: !self.brace_open,
                 doc: DocData::default(),
             }
@@ -325,7 +324,6 @@ impl UseFrame {
                 name_span,
                 names: std::mem::take(&mut self.names),
                 group: None,
-                glob: None,
                 closed: !self.brace_open,
                 doc: DocData::default(),
             }

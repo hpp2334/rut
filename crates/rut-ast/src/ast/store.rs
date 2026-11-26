@@ -241,7 +241,7 @@ arenas! {
     modules: crate::ast::item::ModuleNode => Module, "Module",
     mod_decls: crate::ast::item::ModDeclNode => ModDecl, "ModDecl",
     uses: crate::ast::item::UseNode => Use, "Use" (
-        |n: &Self| !n.closed || (n.names.is_empty() && n.group.is_none() && n.glob.is_none())
+        |n: &Self| !n.closed || (n.names.is_empty() && n.group.is_none())
     ),
     aliases: crate::ast::item::AliasNode => Alias, "Alias",
     module_lets: crate::ast::item::ModuleLetNode => ModuleLet, "ModuleLet",

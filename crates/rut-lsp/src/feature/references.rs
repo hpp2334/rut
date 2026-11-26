@@ -17,8 +17,8 @@
 //!   through the same walk IN THAT FILE'S OWN CONTEXT (its own stamp —
 //!   the own-package lanes key on it, so a sibling's `use m::{ x }` and
 //!   its `app::x` both resolve), and counts iff the answer contains a
-//!   target. No import-map pre-filter: a qualified spelling, a glob
-//!   binding, and a pkg-rooted dep path all name no leaf the pre-filter
+//!   target. No import-map pre-filter: a qualified spelling and a
+//!   pkg-rooted dep path both name no leaf the pre-filter
 //!   could see;
 //! * the one-name silence rides at the same cursor kinds it has for
 //!   definition ([`crate::feature::definition::definition_silent`]) — on
@@ -69,9 +69,9 @@ pub fn references(w: &World, file: FileId, pos: u32, include_decl: bool) -> Vec<
     // 2. the files worth scanning — the asking document first, each
     //    target's own file; a module-level name (a fn, a type, a
     //    module let) reaches every world file (a sibling's bare use
-    //    binding, its qualified spelling, a glob, a pkg-rooted dep
-    //    path — all are references, none spells a leaf an import map
-    //    could pre-filter on); locals stay in the doc and members add
+    //    binding, its qualified spelling, a pkg-rooted dep path —
+    //    all are references, none spells a leaf an import map could
+    //    pre-filter on); locals stay in the doc and members add
     //    only their declaring file. One entry per file (the store's
     //    own law — one entry per origin, nothing to dedupe beyond the
     //    id set).

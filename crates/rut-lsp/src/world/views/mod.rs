@@ -18,7 +18,7 @@ pub(crate) use let_view::LetView;
 pub(crate) use member_view::MemberView;
 pub(crate) use mod_view::ModView;
 pub(crate) use ty_view::TyView;
-pub(crate) use use_view::{GlobUse, UseView};
+pub(crate) use use_view::UseView;
 
 use rut_ast::{Ast, DocData, Handle, ParamRef};
 

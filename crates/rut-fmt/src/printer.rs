@@ -691,10 +691,7 @@ impl<'a> P<'a> {
                 let d = h.get(self.a);
                 // the full path — package, modules, in order — then the
                 // leaf names in braces; `pub use` re-exports print their
-                // prefix; the glob leaf prints its star (the flat `::*`
-                // when no group was spelled, one more brace member
-                // otherwise — the tree records the star's span, not its
-                // spelled slot, so the canonical order prints it last)
+                // prefix
                 if let Some(v) = vis_opt(d.vis()) {
                     self.text(v);
                     self.sp();
@@ -706,21 +703,16 @@ impl<'a> P<'a> {
                     }
                     self.text(self.a.name(seg.ident));
                 }
-                if d.glob.is_none() && d.names.is_empty() && d.group.is_none() {
+                if d.names.is_empty() && d.group.is_none() {
                     self.text(";");
-                } else if d.glob.is_some() && d.group.is_none() {
-                    self.text("::*;");
                 } else {
                     self.text("::{");
                     self.sp();
-                    let mut nm: Vec<String> = d
+                    let nm: Vec<String> = d
                         .names
                         .iter()
                         .map(|n| self.a.name(n.ident).to_string())
                         .collect();
-                    if d.glob.is_some() {
-                        nm.push("*".to_string());
-                    }
                     let dummies: Vec<Span> = std::iter::repeat_n(span, nm.len()).collect();
                     self.ident_list(&nm, &dummies, span);
                     self.sp();
