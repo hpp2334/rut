@@ -348,6 +348,16 @@ fn blank_dangling_heads(
     String::from_utf8(bytes).expect("blanking writes ASCII spaces only — the copy stays UTF-8")
 }
 
+/// The mounted child's display record: its [`FileSrc::uri`] — the
+/// world's own origin for the file — minus the package root file's
+/// directory (the display law's fact, one derivation with
+/// [`crate::resolve::mods::root_relative`]). An origin that carries no
+/// relative path answers the law's bare form, never a stale literal.
+fn child_file(root_uri: &str, path: &str, uri: &str) -> String {
+    crate::resolve::mods::root_relative(root_uri, uri)
+        .unwrap_or_else(|| rut_lir::check::display(path, None))
+}
+
 /// The world's pkgs: a lib body mounts as `Mounted::source` + its mod tree;
 /// a host surface lowers into real host rows (`lower_decl_module` — the
 /// loader's own move, so `use ink_host::{ .. }` binds and type-checks).
@@ -383,7 +393,7 @@ fn build_world(groups: &[PkgFiles]) -> Vec<Mounted> {
                         path: path.clone(),
                         vis: f.vis,
                         text: f.text.clone(),
-                        file: "mod.rut".to_string(),
+                        file: child_file(&root.uri, path, &f.uri),
                     },
                 );
             }
@@ -403,7 +413,7 @@ fn build_world(groups: &[PkgFiles]) -> Vec<Mounted> {
                         path: path.clone(),
                         vis: f.vis,
                         text: f.text.clone(),
-                        file: "mod.rut".to_string(),
+                        file: child_file(&root.uri, path, &f.uri),
                     },
                 );
             }

@@ -214,6 +214,83 @@ fn the_pair_keys_and_the_single_file_display() {
 }
 }
 
+// ---- the display-path law: the editor's facts ride rut-lir's one law ----
+
+#[test]
+fn the_editors_squiggle_names_the_file_the_compiler_names() {
+    // the project of ground truth 1 through `analyze`: `src/mod.rut`
+    // imports the private `Task` of its single-file child
+    // `src/imp.rut` — the squiggle names the file the user opens,
+    // exactly as the compiler's own message does (`in imp.rut`),
+    // never the directory-form stamp or a bare `mod.rut`
+    let mut s = S::boot();
+    let root = "file:///ws/imp_app/src/mod.rut";
+    let child = "file:///ws/imp_app/src/imp.rut";
+    s.index_mod_at(child, "app", "imp", "struct Task {\n    id: u32;\n}\n");
+    let doc = "use imp::{ Task };\nmod imp;\nentry fn main() -> nil {\n}\n";
+    s.index_mod_at(root, "app", "", doc);
+    let a = s.analyze(root, doc);
+    let msgs: Vec<&str> = a["diags"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .filter_map(|d| d["message"].as_str())
+        .collect();
+    assert!(
+        msgs.iter()
+            .any(|m| m.contains("mark it `pub` (or `pub(pkg)`) in `imp.rut`")),
+        "the squiggle names the file the compiler names: {msgs:?}"
+    );
+}
+
+#[test]
+fn hover_names_a_nested_single_file_child_by_its_path() {
+    // the nested single-file chain `src/m.rut` -> `src/m/a.rut` ->
+    // `src/m/a/b.rut`: the module hover's line, the use segment's code
+    // block and the path completion's detail all spell the
+    // root-relative path (`m/a/b.rut`), never the bare basename
+    let mut s = S::boot();
+    s.index_mod_at(
+        "file:///ws/app/src/mod.rut",
+        "app",
+        "",
+        "mod m;\nentry fn main() -> nil {\n}\n",
+    );
+    s.index_mod_at("file:///ws/app/src/m.rut", "app", "m", "mod a;\n");
+    let doc = "mod b;\nentry fn main() -> nil {\n}\n";
+    s.index_mod_at("file:///ws/app/src/m/a.rut", "app", "m/a", doc);
+    s.index_mod_at(
+        "file:///ws/app/src/m/a/b.rut",
+        "app",
+        "m/a/b",
+        "pub struct Task {\n    id: u32;\n}\n",
+    );
+    // the `mod b;` hover's mounted-file line
+    let md = markdown(s.hover_at("file:///ws/app/src/m/a.rut", doc, "b;", 1));
+    assert!(md.contains("file module — `m/a/b.rut`"), "{md}");
+    // a use segment that names the module renders its file in the
+    // hover's code block
+    let use_doc = "mod m;\nuse app::m::a::b::{ Task };\nentry fn main() -> nil {\n}\n";
+    let md = markdown(s.hover_in("file:///ws/app/src/mod.rut", use_doc, "b::{ Task }", 1, 0));
+    assert!(
+        md.lines().any(|l| l.trim() == "m/a/b.rut"),
+        "the segment's code block: {md}"
+    );
+    // the path completion's detail spells the same path
+    let items = s.complete_pos(
+        "file:///ws/app/src/mod.rut",
+        "mod m;\nuse app::m::a::",
+        1,
+        15,
+    );
+    assert_eq!(
+        item(&items, "b")["detail"],
+        "file module — m/a/b.rut",
+        "the completion detail: {:?}",
+        labels(&items)
+    );
+}
+
 // ---- the mod-name slot: the disk probe beside the open document ----
 // Nothing is indexed in these tests — the slot never consults the
 // chain; the disk beside the document is the whole answer.

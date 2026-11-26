@@ -131,6 +131,9 @@ fn mod_edges(f: &File, path: &str) -> std::collections::BTreeMap<String, (String
 pub(crate) fn mod_tree(w: &World, pkg: Option<&str>, prefer: FileId) -> ModInputs {
     let mut tree = ModInputs::default();
     let mine = |f: &File| f.stamp.module.as_deref() == pkg;
+    // the package root — the display carrier's base: every record is a
+    // mounted file's origin minus this file's directory
+    let root = root_file(w, pkg);
     // the stamped rows: every file stamped at a child path speaks for
     // that module; the first in store order supplies the scope (the
     // `prefer` overwrite below re-answers for the document's own)
@@ -149,7 +152,7 @@ pub(crate) fn mod_tree(w: &World, pkg: Option<&str>, prefer: FileId) -> ModInput
         stamped.push(p);
         tree.mod_files
             .entry(p.to_string())
-            .or_insert_with(|| record_of(f));
+            .or_insert_with(|| record_of(root, f));
         tree.scopes
             .entry(p.to_string())
             .or_insert_with(|| ModScope {
@@ -184,21 +187,10 @@ pub(crate) fn mod_tree(w: &World, pkg: Option<&str>, prefer: FileId) -> ModInput
     // stamped `""` file in store order, a flat named file only where
     // no stamped root stands ([`matches_mod`]'s law) — fills it with
     // its edges; a childless root contributes no row (the flat law)
-    let root = w
-        .files()
-        .map(|id| w.file(id))
-        .find(|f| mine(f) && f.stamp.mod_path.as_deref() == Some(""))
-        .or_else(|| {
-            pkg.and_then(|_| {
-                w.files()
-                    .map(|id| w.file(id))
-                    .find(|f| mine(f) && f.stamp.mod_path.is_none())
-            })
-        });
     if let Some(f) = root {
         tree.mod_files
             .entry(String::new())
-            .or_insert_with(|| record_of(f));
+            .or_insert_with(|| record_of(root, f));
         let children = mod_edges(f, "");
         if !children.is_empty() {
             let row = tree.scopes.entry(String::new()).or_default();
@@ -219,7 +211,7 @@ pub(crate) fn mod_tree(w: &World, pkg: Option<&str>, prefer: FileId) -> ModInput
                 row.parent = parent_of(p).to_string();
                 row.children = children;
             }
-            tree.mod_files.insert(p.to_string(), record_of(doc));
+            tree.mod_files.insert(p.to_string(), record_of(root, doc));
         }
     }
     tree
@@ -266,58 +258,69 @@ pub(crate) fn use_walk(w: &World, pkg: &str, file: FileId, segs: &[String]) -> O
     rut_lir::check::mod_walk_pub(&mod_tree(w, Some(pkg), file), "", &segs).ok()
 }
 
-/// the world file's display path — `""` is `mod.rut`, a child
-/// `<parent>/mod.rut` (the loader's spelling; hover and completion
-/// details show it)
-pub fn display(path: &str) -> String {
-    if path.is_empty() {
-        "mod.rut".to_string()
-    } else {
-        format!("{path}/mod.rut")
-    }
+/// The file that speaks for `pkg`'s ROOT module: the first stamped
+/// `""` file in store order, a flat named file only where no stamped
+/// root stands ([`matches_mod`]'s law — the same root [`mod_tree`]
+/// fills its `""` row from). The display carrier's base: every record
+/// is a mounted file's origin minus this file's directory.
+fn root_file<'a>(w: &'a World, pkg: Option<&str>) -> Option<&'a File> {
+    w.files()
+        .map(|id| w.file(id))
+        .find(|f| matches_mod(f, pkg, "") && f.stamp.mod_path.is_some())
+        .or_else(|| {
+            pkg.and_then(|_| {
+                w.files()
+                    .map(|id| w.file(id))
+                    .find(|f| matches_mod(f, pkg, "") && f.stamp.mod_path.is_none())
+            })
+        })
 }
 
-/// [`display`] with the REAL file name when the child is mounted as a
-/// single-file module: its file's origin basename (`imp.rut`), never
-/// the directory-form guess. The loader's dir-form spelling stays the
-/// fallback — the child not indexed, or mounted directory-form (whose
-/// origin basename is the flavor's `mod.rut`/`mod.d.rut`).
+/// The carrier fact both display lanes read: `origin`'s path RELATIVE
+/// TO the package root file's DIRECTORY — `file:///ws/app/src/mod.rut`
+/// plus `file:///ws/app/src/imp.rut` answers `imp.rut`, the dep walk's
+/// rooted plain paths the same. A non-path origin (the prelude's
+/// `core`, a store key) names no directory, so no relative path
+/// exists: `None`, and the display law answers its bare form.
+pub(crate) fn root_relative(root_origin: &str, origin: &str) -> Option<String> {
+    fn path(origin: &str) -> &str {
+        origin.strip_prefix("file://").unwrap_or(origin)
+    }
+    let (root, origin) = (path(root_origin), path(origin));
+    let dir = root.rfind('/').map(|i| &root[..=i])?;
+    let rel = origin.strip_prefix(dir)?;
+    (!rel.is_empty()).then(|| rel.to_string())
+}
+
+/// [`display_of`]'s answer for ONE mounted file — the resolved
+/// module's own path relative to its package root's directory, the
+/// display law's fact. No root row or no path fact carries none, and
+/// the bare law stands in.
 pub fn display_of(w: &World, pkg: Option<&str>, child: &str) -> String {
     let mounted = w.files().find(|id| {
         mod_path_of(w.file(*id)) == child
             && pkg.is_none_or(|p| w.file(*id).stamp.module.as_deref() == Some(p))
     });
-    match mounted
+    let file = mounted
         .map(|id| w.file(id))
-        .and_then(|f| origin_file_name(&f.stamp.origin))
-    {
-        Some(name) if name != "mod.rut" && name != rut_driver::decl::DECL_CHILD_FILE => name,
-        _ => display(child),
-    }
+        .and_then(|f| record_of(root_file(w, pkg.or(f.stamp.module.as_deref())), f));
+    rut_lir::check::display(child, file.as_deref())
 }
 
 /// [`display_of`] over ONE resolved file — the render's shape (the
-/// resolved module's own real name; the dir-form fallback)
-pub(crate) fn display_of_single(f: &File, child: &str) -> String {
-    match origin_file_name(&f.stamp.origin) {
-        Some(name) if name != "mod.rut" && name != rut_driver::decl::DECL_CHILD_FILE => name,
-        _ => display(child),
-    }
+/// resolved module's own real path; the law's bare form when the file
+/// carries no path fact).
+pub(crate) fn display_of_single(w: &World, f: &File, child: &str) -> String {
+    let file = record_of(root_file(w, f.stamp.module.as_deref()), f);
+    rut_lir::check::display(child, file.as_deref())
 }
 
-/// The display record a world file carries: its origin's real `.rut`
-/// file name when it is a single-file module — the fact [`display_of`]
-/// already derives. A directory-form origin (`mod.rut`/`mod.d.rut`) and
-/// a source-less origin carry none, so the bare law stands in.
-fn record_of(f: &File) -> Option<String> {
-    origin_file_name(&f.stamp.origin)
-        .filter(|name| name != "mod.rut" && name != rut_driver::decl::DECL_CHILD_FILE)
-}
-
-/// the origin's `.rut` file name (its last path segment when it spells
-/// one) — `file:///…/imp.rut`, `rut/pouch/src/mod.rut`, a bundle key;
-/// `core` (and any non-file origin) answers `None`.
-fn origin_file_name(origin: &str) -> Option<String> {
-    let name = origin.rsplit('/').next()?;
-    (name.ends_with(".rut")).then(|| name.to_string())
+/// The display record a mounted file carries: its origin's path
+/// relative to the package root file's directory — the fact
+/// [`display_of`] answers, derived ONCE for both consumers (the
+/// world's own `mod_files` record and the render). A directory-form
+/// origin, `core` and a store key contribute none, so the bare law
+/// stands in.
+fn record_of(root: Option<&File>, f: &File) -> Option<String> {
+    root.and_then(|root| root_relative(&root.stamp.origin, &f.stamp.origin))
 }

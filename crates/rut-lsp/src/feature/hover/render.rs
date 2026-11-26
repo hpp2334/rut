@@ -309,11 +309,11 @@ pub(crate) fn render_let(w: &World, l: &LetView) -> String {
 }
 
 /// the resolved file-module render — a use-path segment's target (or
-/// any resolved module): the mounted file as the subject (the REAL
-/// name for a single-file module — the origin's basename), the child
-/// count, provenance
-pub(crate) fn render_module_target(f: &File, path: &str) -> String {
-    let file = crate::resolve::mods::display_of_single(f, path);
+/// any resolved module): the mounted file as the subject (its
+/// root-relative path — the display law's fact), the child count,
+/// provenance
+pub(crate) fn render_module_target(w: &World, f: &File, path: &str) -> String {
+    let file = crate::resolve::mods::display_of_single(w, f, path);
     let mut out = code_block(&file);
     out.push_str("\nfile module");
     match f.mods().len() {
@@ -487,22 +487,24 @@ fn render_use(w: &World, file: FileId, pos: u32, c: &Cursor, defs: &[Def]) -> Op
             }
             match defs {
                 [Def::Module { file: m }] => Some(render_module_target(
+                    w,
                     w.file(*m),
                     crate::resolve::mods::mod_path_of(w.file(*m)),
                 )),
                 [Def::Node { file: pf, node }] => module_of_edge(w, file, *pf, *node)
-                    .map(|(target, path)| render_module_target(w.file(target), &path)),
+                    .map(|(target, path)| render_module_target(w, w.file(target), &path)),
                 // a use the chain cannot walk: no hover, never wrong text
                 _ => None,
             }
         }
         UseAt::Segment(_) => match defs {
             [Def::Module { file: m }] => Some(render_module_target(
+                w,
                 w.file(*m),
                 crate::resolve::mods::mod_path_of(w.file(*m)),
             )),
             [Def::Node { file: pf, node }] => module_of_edge(w, file, *pf, *node)
-                .map(|(target, path)| render_module_target(w.file(target), &path)),
+                .map(|(target, path)| render_module_target(w, w.file(target), &path)),
             _ => None,
         },
         UseAt::Leaf(i) => {
@@ -514,6 +516,7 @@ fn render_use(w: &World, file: FileId, pos: u32, c: &Cursor, defs: &[Def]) -> Op
             let id = n.ident;
             if let [Def::Module { file: m }] = defs {
                 return Some(render_module_target(
+                    w,
                     w.file(*m),
                     crate::resolve::mods::mod_path_of(w.file(*m)),
                 ));
@@ -585,6 +588,7 @@ fn render_path(w: &World, file: FileId, pos: u32, c: &Cursor, defs: &[Def]) -> O
         // a mid-segment cursor — the module the walk lands at
         if let [Def::Module { file: m }] = defs {
             return Some(render_module_target(
+                w,
                 w.file(*m),
                 crate::resolve::mods::mod_path_of(w.file(*m)),
             ));
@@ -593,7 +597,7 @@ fn render_path(w: &World, file: FileId, pos: u32, c: &Cursor, defs: &[Def]) -> O
             // the mounting edge renders through the module it mounts
             // (the pinned "file module" block)
             return module_of_edge(w, file, *pf, *node)
-                .map(|(target, path)| render_module_target(w.file(target), &path));
+                .map(|(target, path)| render_module_target(w, w.file(target), &path));
         }
         // the walk failed: the bare lanes' answer renders like a name
         // position (today's fall-through)

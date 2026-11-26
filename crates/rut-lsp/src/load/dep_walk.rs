@@ -343,7 +343,18 @@ fn mount_mod_tree(
     } else {
         "mod.rut"
     };
-    let dirs = RefCell::new(BTreeMap::from([(String::new(), root_dir)]));
+    let dirs = RefCell::new(BTreeMap::from([(String::new(), root_dir.clone())]));
+    // the child's display record: its found file's path relative to
+    // the PACKAGE ROOT FILE's directory (`imp.rut`, `m/a/b.rut`,
+    // `imp/mod.rut`) — the display law's fact, never the flavor guess
+    // (`mod.rut`) or the bare name at a deeper path
+    let root_prefix = format!("{root_dir}/");
+    let record = |canon: &str| -> String {
+        canon
+            .strip_prefix(&root_prefix)
+            .unwrap_or(canon)
+            .to_string()
+    };
     let io = ctx.io; // the env — a shared handle, copied out of the ctx
     let mut read = |parent: &str, name: &str| -> Result<ChildLookup, String> {
         let dir = dirs
@@ -365,14 +376,17 @@ fn mount_mod_tree(
             (Some(_), Some(_)) => ChildLookup::Ambiguous,
             (Some(b), None) => ChildLookup::Found {
                 text: String::from_utf8_lossy(&b).into_owned(),
+                file: record(&dir_form),
                 canon: dir_form,
-                file: child_file.to_string(),
             },
-            (None, Some(b)) => ChildLookup::Found {
-                text: String::from_utf8_lossy(&b).into_owned(),
-                canon: file_form.clone(),
-                file: format!("{name}.rut"),
-            },
+            (None, Some(b)) => {
+                let file = record(&file_form);
+                ChildLookup::Found {
+                    text: String::from_utf8_lossy(&b).into_owned(),
+                    canon: file_form,
+                    file,
+                }
+            }
             (None, None) => ChildLookup::Missing,
         })
     };
@@ -383,7 +397,7 @@ fn mount_mod_tree(
                 vis: _,
                 text,
                 canon,
-                file: _,
+                file,
                 depth: edge_depth,
             } => {
                 // the caps truncate: a spent depth or a dead budget
@@ -404,9 +418,12 @@ fn mount_mod_tree(
                 if !clean {
                     return (Child::Childless, true);
                 }
-                // a file-form child's children mount BESIDE it, not
-                // under `NAME/`
-                let (parent, name) = match path.rsplit_once('/') {
+                // the child's declaring directory is the record's own
+                // parent — a directory-form child mounts under `NAME/`,
+                // a single-file child beside its declaring file (the
+                // `child_dir` rule, read off the record the lookup
+                // carried)
+                let (parent, _) = match path.rsplit_once('/') {
                     Some((p, n)) => (p, n),
                     None => ("", path),
                 };
@@ -415,10 +432,9 @@ fn mount_mod_tree(
                     .get(parent)
                     .expect("the declaring directory is mapped")
                     .clone();
-                let child_dir = if canon == format!("{parent_dir}/{name}/{child_file}") {
-                    format!("{parent_dir}/{name}")
-                } else {
-                    parent_dir
+                let child_dir = match file.rsplit_once('/') {
+                    Some((dir, _)) => format!("{root_dir}/{dir}"),
+                    None => parent_dir,
                 };
                 dirs.borrow_mut().insert(mod_path, child_dir);
                 (Child::Declares(mod_edges(decls)), true)
