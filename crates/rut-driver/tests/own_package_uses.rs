@@ -651,3 +651,74 @@ fn a_host_dep_keeps_the_d_rut_spelling() {
         g.diags[0].msg
     );
 }
+
+#[test]
+fn a_qualified_fn_value_resolves() {
+    // THE WALKED MODULE RESOLVES THE VALUE: a `mod..::fn` path in value
+    // position is the fn the path walked to — the binding, the
+    // higher-order argument, and the nested module's fn all resolve
+    // (the private fn and the type keep their refusals)
+    let m_src = r#"pub struct Color { r: i32; }
+
+pub fn f(x: i32) -> i32 { return x + 1; }
+
+fn secret() -> i32 { return 0; }
+
+pub mod deep;
+"#;
+    let deep_src = "pub fn twice(x: i32) -> i32 { return x * 2; }\n";
+    let mut app = rut_driver::Mounted::source(
+        "app",
+        r#"mod m;
+
+fn apply(g: fn(i32) -> i32, v: i32) -> i32 { return g(v); }
+
+entry fn main() -> i64 {
+    let g = m::f;
+    let h = m::deep::twice;
+    return (g(1) + apply(m::f, 2) + h(5)) as i64;
+}
+"#,
+    );
+    app.mods
+        .insert("m".to_string(), mod_source("m", Vis::Self_, m_src));
+    app.mods.insert(
+        "m/deep".to_string(),
+        mod_source("m/deep", Vis::Self_, deep_src),
+    );
+    let g = graph_of(vec![app], "app");
+    run_main(g, 15); // f(1)=2, f(2)=3, twice(5)=10
+
+    // the controls, over the same module source: the private fn and the
+    // type are refused with today's messages
+    let mut app = rut_driver::Mounted::source(
+        "app",
+        r#"mod m;
+
+entry fn main() -> i64 {
+    let g = m::secret;
+    let c = m::Color;
+    return 0;
+}
+"#,
+    );
+    app.mods
+        .insert("m".to_string(), mod_source("m", Vis::Self_, m_src));
+    app.mods.insert(
+        "m/deep".to_string(),
+        mod_source("m/deep", Vis::Self_, deep_src),
+    );
+    let g = graph_of(vec![app], "app");
+    assert_eq!(
+        msgs(&g),
+        vec![
+            "m.secret — `secret` is private to module `m` — visible only inside it and its \
+             submodules; declare it `pub` (or `pub(pkg)`) to widen"
+                .to_string(),
+            "`Color` is a type — construct it (a literal, a class method, a newtype call), \
+             never name it bare"
+                .to_string(),
+        ],
+        "the private fn and the type keep their refusals"
+    );
+}

@@ -1187,12 +1187,7 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                     );
                     return Some(Err(()));
                 }
-                // names are package-unique: the fn-value lane resolves
-                // the same fn the bare spelling would in its own module
-                return Some(
-                    self.compile_fn_path_value(name, sp)
-                        .expect("the module's fn resolves in the fn-value lane"),
-                );
+                return Some(self.fn_value_of_node(name, fnode, sp));
             }
             if let Some((_, ty_node, init, lvis)) = self.ctx.let_in(&m, name) {
                 if !self.ctx.vis_crosses(&from, &m, lvis) {
