@@ -1044,14 +1044,19 @@ both_uri_shapes! {
             1,
             "the ancestor itself",
         );
-        // refused leaves jump nowhere
-        for (src, needle) in [
-            ("fn k() -> i32 { return m::secret(); }\n", "m::secret"),
-            ("fn k() -> i32 { return m::G; }\n", "m::G"),
-        ] {
-            let hits = s.def_in(&uri, src, needle, 1, 3);
-            assert!(hits.is_empty(), "[{needle:?}]: {hits:?}");
-        }
+        // a private leaf jumps nowhere; the `pub use` row (`m::G`) is a
+        // reached DECLARATION now — law 5's walk lands it in grid
+        let hits = s.def_in(&uri, "fn k() -> i32 { return m::secret(); }\n", "m::secret", 1, 3);
+        assert!(hits.is_empty(), "[m::secret]: {hits:?}");
+        let hits = s.def_in(&uri, "fn k() -> i32 { return m::G; }\n", "m::G", 1, 3);
+        assert_jump(
+            &hits,
+            &rut_new::at("src/m/grid/mod.rut"),
+            rut_new::GRID,
+            "pub let G",
+            1,
+            "the re-export row's target",
+        );
     }
 }
 
@@ -1107,15 +1112,14 @@ both_uri_shapes! {
     #[test]
     fn a_use_leaf_the_compiler_refuses_jumps_nowhere() {
         // each a use line the compiler refuses — a private of the
-        // module, its own private import, a `pub use` row (the
-        // binding refuses it), a dep's private fn: no jump at the call
-        // site and none on the leaf (import is no visibility bypass)
+        // module, its own private import, a dep's private fn: no jump
+        // at the call site and none on the leaf (import is no
+        // visibility bypass)
         let (mut s, _io) = rut_new::boot();
         let uri = rut_new::at("src/child/mod.rut");
         for (src, needles) in [
             ("use m::{ secret };\nfn k() -> i32 { return secret(); }\n", vec![("secret()", 0), ("{ secret }", 2)]),
             ("use m::{ cell };\nfn k() -> i32 { return cell(); }\n", vec![("cell()", 0), ("{ cell }", 2)]),
-            ("use m::{ G };\nfn k() -> i32 { return G; }\n", vec![("return G", 7), ("{ G }", 2)]),
             ("use m::*;\nfn k() -> i32 { return mk(41); }\n", vec![("mk(41)", 0)]),
             ("use calc::math::{ hidden };\nfn k() -> i32 { return 0; }\n", vec![("{ hidden }", 2)]),
             ("use calc::math::{ cell };\nfn k() -> i32 { return 0; }\n", vec![("{ cell }", 2)]),
@@ -1125,6 +1129,45 @@ both_uri_shapes! {
                 assert!(hits.is_empty(), "[{src:?} @ {needle:?}] a refused leaf: {hits:?}");
             }
         }
+    }
+}
+
+both_uri_shapes! {
+    #[test]
+    fn a_re_exported_leaf_and_its_qualified_spelling_jump_to_the_declaration() {
+        // the own lane's `pub use` row NAMES its target: `m` re-exports
+        // `grid::G`, so the leaf (`use m::{ G }`), its spelling on the
+        // use line, and the qualified spelling (`m::G`) all jump to
+        // the DECLARATION in grid — one walk, one answer.
+        let (mut s, _io) = rut_new::boot();
+        let uri = rut_new::at("src/child/mod.rut");
+        let grid = rut_new::at("src/m/grid/mod.rut");
+        let leaf = "use m::{ G };\nfn k() -> i32 { return G; }\n";
+        assert_jump(
+            &s.def_in(&uri, leaf, "return G", 1, 7),
+            &grid,
+            rut_new::GRID,
+            "pub let G",
+            1,
+            "the re-exported leaf's use site",
+        );
+        assert_jump(
+            &s.def_in(&uri, leaf, "{ G }", 1, 2),
+            &grid,
+            rut_new::GRID,
+            "pub let G",
+            1,
+            "the leaf's spelling",
+        );
+        let qualified = "fn k() -> i32 { return m::G; }\n";
+        assert_jump(
+            &s.def_in(&uri, qualified, "m::G", 1, 3),
+            &grid,
+            rut_new::GRID,
+            "pub let G",
+            1,
+            "the qualified spelling",
+        );
     }
 }
 

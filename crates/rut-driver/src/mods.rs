@@ -399,8 +399,11 @@ fn file_display(parent: &str, file: &str) -> String {
 // ---------------------------------------------------------------------
 
 /// One collected declaration: the name, the visibility it was declared
-/// with, the kind, and the fn async marker — the flat per-module decl
-/// rows phase 3 keys resolution and visibility on.
+/// with, the kind, the fn async marker, and — for a `pub use`
+/// re-export row — the full path it re-exports (`use a::b::{ c }` →
+/// `[a, b, c]`). The path is what makes the row an EDGE: law 5's walk
+/// follows it to the declaring module (a row that is not a re-export
+/// carries none).
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct DeclRow {
     pub name: String,
@@ -411,6 +414,9 @@ pub struct DeclRow {
     /// fn` crosses through its start wrapper now, so what still binds
     /// nothing is the generic shape
     pub is_async: bool,
+    /// the re-exported path ([`DeclKind::Use`] only): the use's spelled
+    /// head and interior segments, then the imported name
+    pub path: Option<Vec<String>>,
 }
 
 /// The declaration kinds the collection records.
@@ -426,10 +432,10 @@ pub enum DeclKind {
     /// a `mod NAME;` declaration (the mounted child's edge)
     Mod,
     /// a `pub use` re-export edge — the imported name joins the
-    /// module's surface as a row carrying the use's declared vis (a
-    /// private `use` imports only: no row, unchanged). The leaf gates
-    /// read it like any decl: `pub` crosses packages, the scoped
-    /// spellings cross per the crossing predicate
+    /// module's surface as a row carrying the use's declared vis AND
+    /// the full path it re-exports (a private `use` imports only: no
+    /// row, unchanged). The leaf gates read it like any decl; law 5's
+    /// walk follows its [`DeclRow::path`] to the DECLARING module
     Use,
     /// a `host fn` surface row (a `type = "host"` pkg's `.d.rut`
     /// files) — the leaf a qualified use validates against
@@ -547,6 +553,7 @@ pub fn collect_module_set(spec: &str, pkg: &Mounted) -> (ModuleSet, Vec<String>)
                                 vis: Vis::Pub,
                                 kind: DeclKind::ModuleLet,
                                 is_async: false,
+                                path: None,
                             });
                         }
                     }
@@ -653,8 +660,10 @@ pub fn collect_module_set(spec: &str, pkg: &Mounted) -> (ModuleSet, Vec<String>)
 /// The declaration rows off one parsed file. `pub(crate)`: the graph
 /// compiler's dep tables run it per module — a module's rows are the
 /// qualified-use leaf gate's reads. A `pub use`'s imported names ride
-/// as [`DeclKind::Use`] re-export rows (the use's declared vis on
-/// each); a private `use` contributes nothing.
+/// as [`DeclKind::Use`] re-export rows — the use's declared vis and
+/// the full re-exported path on each, so the row is an EDGE and law
+/// 5's walk can land it on the declaring module; a private `use`
+/// contributes nothing.
 pub(crate) fn decl_rows(ast: &Ast) -> Vec<DeclRow> {
     let mut out = Vec::new();
     for it in ast.root().items(ast) {
@@ -665,12 +674,23 @@ pub(crate) fn decl_rows(ast: &Ast) -> Vec<DeclRow> {
         if let ItemRef::Use(h) = it {
             let d = h.get(ast);
             if d.vis() != Vis::Self_ {
+                // the row NAMES its target: the use's spelled path
+                // (head + interior) then the imported name
+                let path: Vec<String> = d
+                    .path
+                    .iter()
+                    .map(|n| ast.name(n.ident).to_string())
+                    .collect();
                 for n in &d.names {
+                    let name = ast.name(n.ident).to_string();
+                    let mut row_path = path.clone();
+                    row_path.push(name.clone());
                     out.push(DeclRow {
-                        name: ast.name(n.ident).to_string(),
+                        name,
                         vis: d.vis(),
                         kind: DeclKind::Use,
                         is_async: false,
+                        path: Some(row_path),
                     });
                 }
             }
@@ -723,6 +743,7 @@ pub(crate) fn decl_rows(ast: &Ast) -> Vec<DeclRow> {
             vis,
             kind,
             is_async,
+            path: None,
         });
     }
     out

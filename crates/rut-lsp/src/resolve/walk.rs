@@ -416,14 +416,25 @@ fn target_defs(w: &World, target: &MemberTarget) -> Vec<Def> {
 /// declaring type / module-let / free-fn defs — each row VISIBLE from
 /// the importing file (`rut_lir::check::vis_crosses`: "import is no
 /// visibility bypass" — a leaf the use line refuses jumps nowhere),
-/// the module's `pub use` rows never followed (the compiler's binding
-/// refuses a re-export import)
+/// a `pub use` row followed to its DECLARING module (law 5's one
+/// walk — the compiler's own-use binding follows the same row)
 fn own_leaf_defs(w: &World, file: FileId, walked: &str, name: &str) -> Vec<Def> {
-    let Some(f) = own_scope(w, file, walked) else {
+    // a re-export row NAMES its target: an own-package leaf resolves
+    // through law 5's one walk (the scope doors' `reexport_declaring`)
+    // to the DECLARING module; a direct leaf stays where it is
+    let walked = super::scope::reexport_declaring(
+        w,
+        w.file(file).stamp.module.as_deref(),
+        file,
+        walked,
+        name,
+    )
+    .unwrap_or_else(|| walked.to_string());
+    let Some(f) = own_scope(w, file, &walked) else {
         return Vec::new();
     };
     let from = w.file(file).stamp.mod_path.as_deref().unwrap_or("");
-    let allows = |vis: Vis| rut_lir::check::vis_crosses(from, walked, vis);
+    let allows = |vis: Vis| rut_lir::check::vis_crosses(from, &walked, vis);
     let scope = w.file(f);
     let mut defs: Vec<Def> = Vec::new();
     if let Some(t) = scope.ty(name).filter(|t| allows(t.vis())) {

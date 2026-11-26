@@ -927,6 +927,9 @@ impl GraphCompiler<'_> {
         let dep_heads = dep_use_heads(self.session, spec, &self.root, layout, ast);
         let mut ok = true;
         let mut own_uses: Vec<(String, String, String)> = Vec::new();
+        // a cycle is one fact of the re-export graph, not one per use
+        // line that walks into it — the first use line reports it
+        let mut cycle_reported = false;
         let session = self.session;
         for it in ast.root().items(ast).to_vec() {
             let ItemRef::Use(uh) = it else {
@@ -1077,6 +1080,55 @@ impl GraphCompiler<'_> {
                                         file_display(module, &at),
                                     ),
                                 ));
+                            }
+                            // a re-export row NAMES its target: follow
+                            // the edge (law 5's one walk) to the
+                            // DECLARING module — the six binding
+                            // consumers then resolve it exactly as a
+                            // direct leaf. A cycle refuses, and a path
+                            // that leaves the package refuses until the
+                            // surface owns it.
+                            Some(d) if d.kind == crate::mods::DeclKind::Use => {
+                                let row = |m: &str, n: &str| -> Option<Vec<String>> {
+                                    table
+                                        .get(m)?
+                                        .iter()
+                                        .find(|r| {
+                                            r.name == n && r.kind == crate::mods::DeclKind::Use
+                                        })
+                                        .and_then(|r| r.path.clone())
+                                };
+                                match rut_lir::check::reexport_edge(layout, spec, row, &at, text) {
+                                    rut_lir::check::ReexportEdge::Declaring(target) => {
+                                        own_uses.push((from.clone(), text.to_string(), target));
+                                    }
+                                    rut_lir::check::ReexportEdge::Foreign(head) => {
+                                        bad.push(Diag::new(
+                                            span,
+                                            format!(
+                                                "`{text}` is re-exported from `{head}` — a \
+                                                 cross-package re-export does not bind yet"
+                                            ),
+                                        ));
+                                    }
+                                    rut_lir::check::ReexportEdge::Cycle(chain) => {
+                                        if !cycle_reported {
+                                            cycle_reported = true;
+                                            let through = chain
+                                                .iter()
+                                                .map(|m| format!("`{m}`"))
+                                                .collect::<Vec<_>>()
+                                                .join(" -> ");
+                                            bad.push(Diag::new(
+                                                span,
+                                                format!(
+                                                    "cyclic `pub use` — `{text}` re-exports \
+                                                     itself through {through}"
+                                                ),
+                                            ));
+                                        }
+                                    }
+                                }
                             }
                             Some(_) => {
                                 own_uses.push((from.clone(), text.to_string(), at.clone()));

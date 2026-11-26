@@ -231,18 +231,74 @@ fn own_module(w: &World, file: FileId, start: &str, interior: &[String]) -> Opti
     module_at(w, file, pkg, &path)
 }
 
+/// A `pub use` row's full path in `module` — the world's rows (the
+/// use's declared vis, its spelled path, and the imported name).
+/// `None` = the module has no re-export row for `name`.
+fn reexport_row(
+    w: &World,
+    pkg: Option<&str>,
+    prefer: FileId,
+    module: &str,
+    name: &str,
+) -> Option<Vec<String>> {
+    let f = module_at(w, prefer, pkg, module)?;
+    let u = w
+        .file(f)
+        .uses()
+        .into_iter()
+        .find(|u| u.vis() != Vis::Self_ && u.name() == name)?;
+    let mut path = u.path();
+    path.push(u.name().to_string());
+    Some(path)
+}
+
+/// The DECLARING module when `module` re-exports `name` — law 5's one
+/// walk (`rut_lir::check::reexport_edge`), the world's rows carried
+/// in. `None` = no row (the name is the module's own business) or the
+/// edge cycles / leaves the package (cross-package edges are the
+/// surface's business, never a path chase).
+pub(crate) fn reexport_declaring(
+    w: &World,
+    pkg: Option<&str>,
+    prefer: FileId,
+    module: &str,
+    name: &str,
+) -> Option<String> {
+    reexport_row(w, pkg, prefer, module, name)?;
+    let tree = crate::resolve::mods::mod_tree(w, pkg, prefer);
+    match rut_lir::check::reexport_edge(
+        &tree,
+        pkg.unwrap_or(""),
+        |m, n| reexport_row(w, pkg, prefer, m, n),
+        module,
+        name,
+    ) {
+        rut_lir::check::ReexportEdge::Declaring(d) if d != module => Some(d),
+        _ => None,
+    }
+}
+
+/// The file a name's re-export edge lands on: `cur` when the name is a
+/// declaration there, the DECLARING module's file when it is one of
+/// `cur`'s re-export rows (the chain walked to its end).
+fn declaring_file(w: &World, pkg: Option<&str>, prefer: FileId, cur: FileId, name: &str) -> FileId {
+    let module = crate::resolve::mods::mod_path_of(w.file(cur)).to_string();
+    reexport_declaring(w, pkg, prefer, &module, name)
+        .and_then(|d| module_at(w, prefer, pkg, &d))
+        .unwrap_or(cur)
+}
+
 /// one EXPLICIT use leaf's resolve: an own-package head lands on
-/// the walked module and binds its OWN declaration of the name —
-/// a fn, a type, or a module let, visible from the importing file
-/// ([`rut_lir::check::vis_crosses`] — `import is no visibility bypass`; the
-/// compiler's own-use binding reads the TARGET module's decl
-/// tables: `fn_in`/`let_in`/`resolve_qualified_leaf_ty`). A `pub
-/// use` row of that module is NOT followed (the compiler's binding
-/// refuses a re-export import today — its use-LINE gate admits the
-/// row, the binding answers "`G` is declared in module `m/grid`";
-/// mirrored AS THE COMPILER IS), and a module name is no import
-/// (no module rows here). A foreign head rides the cross-package
-/// lane.
+/// the walked module and binds the name's DECLARATION — its own decl
+/// there, or the one its `pub use` re-export row names (law 5's walk:
+/// the row carries its target, so the chain resolves to the declaring
+/// module; a cycle or a cross-package edge binds nothing) — visible
+/// from the importing file ([`rut_lir::check::vis_crosses`] —
+/// `import is no visibility bypass`; the compiler's own-use binding
+/// reads the same walk and then the TARGET module's decl tables:
+/// `fn_in`/`let_in`/`resolve_qualified_leaf_ty`). A module name is no
+/// import (no module rows here). A foreign head rides the
+/// cross-package lane.
 fn leaf_scope<'a>(
     w: &'a World,
     file: FileId,
@@ -259,6 +315,8 @@ fn leaf_scope<'a>(
     let Some(cur) = own_module(w, file, &start, interior) else {
         return;
     };
+    let pkg = w.file(file).stamp.module.as_deref();
+    let cur = declaring_file(w, pkg, file, cur, name);
     let from = w.file(file).stamp.mod_path.as_deref().unwrap_or("");
     let def_mod = crate::resolve::mods::mod_path_of(w.file(cur));
     out.extend(decl_rows_visible(w.file(cur), name, |vis| {
@@ -477,14 +535,15 @@ pub(crate) fn type_via_imports<'a>(w: &'a World, file: FileId, name: &str) -> Op
 /// cross-package heads. The interior segments walk the mounted
 /// mod tree edge by edge (any declared edge intra-package,
 /// `pub`-gated cross-package); the TAIL resolves against the
-/// target module's OWN DECLARATIONS ([`own_scope_of`] — the
-/// compiler's qualified leaf is decls-only:
-/// `fn_in`/`data_in`/`enum_in`/`let_in` read the module's own
-/// tables, so a use row never joins, `pub use` included) with the
-/// leaves tier-gated by visibility: [`rut_lir::check::vis_crosses`] against the
-/// reading file intra-package, `pub`-only cross-package, ambient
-/// rows passing. A head the file does not bind answers NONE —
-/// never the flat sweep.
+/// target module's DECLARATIONS ([`decl_rows_visible`] — the
+/// compiler's qualified leaf is decls-plus-rows: an own-package
+/// `pub use` row NAMES its target, so the tail follows law 5's walk
+/// to the DECLARING module exactly as the compiler's `*_in` lookups
+/// do; a cross-package path stays decls-only — its edge is the
+/// surface's, Phase 2) with the leaves tier-gated by visibility:
+/// [`rut_lir::check::vis_crosses`] against the reading file
+/// intra-package, `pub`-only cross-package, ambient rows passing. A
+/// head the file does not bind answers NONE — never the flat sweep.
 pub(crate) fn qualified_scope<'a>(
     w: &'a World,
     file: FileId,
@@ -502,6 +561,14 @@ pub(crate) fn qualified_scope<'a>(
     }
     (cur, _) = module_walk(w, file, cur, src, middles)?;
     let cross = src != HeadSrc::Own;
+    // an own-package leaf that names a re-export row resolves to the
+    // DECLARING module (law 5's one walk, the world's rows carried
+    // in); a cross-package leaf stays decls-only — the surface owns
+    // that edge, never a path chase
+    if !cross {
+        let pkg = w.file(file).stamp.module.as_deref();
+        cur = declaring_file(w, pkg, file, cur, tail);
+    }
     let mut scope = decl_rows_visible(w.file(cur), tail, |_| true);
     // the leaf's fns are the module's own FREE fns — impl methods
     // are type-scoped, never module rows (`fn_in`'s shape)
@@ -716,13 +783,8 @@ pub(crate) fn bound_has(bound: &FileScope<'_>, f: &File, name: &str) -> bool {
 /// doors call: `f`'s DeclMap decls named `name`, source order.
 /// [`file_scope`] layers the use-bound + ambient rows on top
 /// (the BARE name's scope); the qualified leaf answers from this
-/// alone — the compiler's qualified leaf is DECLS-ONLY
-/// (`fn_in`/`data_in`/`enum_in`/`let_in` read the module's own
-/// tables, `lir/call` + `check/resolve`; a use row never joins,
-/// `pub use` included — mirrored AS THE COMPILER IS TODAY; the book's
-/// "imported names join the module's public surface as if declared
-/// there" disagrees on qualified access — a compiler/doc follow-up,
-/// not this lane's)
+/// alone plus law 5's re-export walk (`decl_rows_visible` on the
+/// DECLARING module when the target re-exports the name).
 pub(crate) fn own_scope_of<'a>(f: &'a File, name: &str) -> FileScope<'a> {
     let mut out = FileScope::default();
     if let Some(t) = f.ty(name) {

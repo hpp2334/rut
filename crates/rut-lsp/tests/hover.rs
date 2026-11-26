@@ -1393,13 +1393,15 @@ fn pkg_rooted_dep_name_answers_through_the_lane() {
 both_uri_shapes! {
 #[test]
 fn qualified_leaves_are_the_module_own_decls_only() {
-    // HIGH 2: the qualified leaf is DECLS-ONLY — the target's use
-    // edges never open its qualified surface (the compiler: "`two` is
-    // not declared in module `layout` — it lives in module
-    // `helper`"). A PRIVATE use, a `pub use` re-export (mirrored as
-    // the compiler is today), and an ambient/prelude name all answer
-    // NOTHING; a non-pub leaf is silent from outside the declaring
-    // subtree.
+    // HIGH 2: a CROSS-package qualified leaf is DECLS-ONLY — the
+    // target's use edges never open its qualified surface (the
+    // compiler: "`two` is not declared in module `layout` — it lives
+    // in module `helper`"). A PRIVATE use, a `pub use` of a
+    // DEPENDENCY name (the surface owns a cross-package edge — Phase
+    // 2; an own-package re-export row resolves now, see
+    // `a_re_exported_leaf_and_its_qualified_spelling_hover_the_declaration`),
+    // and an ambient/prelude name all answer NOTHING; a non-pub leaf
+    // is silent from outside the declaring subtree.
     let mut s = S::boot();
     s.index_mod_at(
         "file:///deps/helper/src/mod.rut",
@@ -1876,12 +1878,12 @@ both_uri_shapes! {
         assert!(md.contains("file module"), "the mid segment is grid: {md}");
         assert!(md.contains(&format!("— {}:1", rut_new::at("src/m/grid/mod.rut"))), "{md}");
         // the leaf kinds the compiler refuses through a qualified
-        // position: a private of m from a sibling subtree, m's use
-        // rows (its private import, its `pub use`), an ambient name
+        // position: a private of m from a sibling subtree, m's private
+        // use rows, an ambient name (m's `pub use` row answers — the
+        // re-export pins below)
         for (src, needle) in [
             ("fn k() -> i32 { return m::secret(); }\n", "m::secret"),
             ("fn k() -> i32 { return m::cell(); }\n", "m::cell"),
-            ("fn k() -> i32 { return m::G; }\n", "m::G"),
             ("fn k() -> i32 { return m::GK; }\n", "m::GK"),
             ("fn k() -> nil { m::panic(\"x\"); }\n", "m::panic"),
         ] {
@@ -2062,16 +2064,14 @@ both_uri_shapes! {
     fn a_use_leaf_the_compiler_refuses_hovers_nothing() {
         // the negatives, each a use line the compiler refuses: a
         // private of the module (import is no visibility bypass), the
-        // module's own private import, a `pub use` re-export row (the
-        // compiler's binding refuses it today); cross-package: a dep's
-        // private fn and its private import. Silent at the call site
-        // AND on the leaf.
+        // module's own private import; cross-package: a dep's private
+        // fn and its private import. Silent at the call site AND on
+        // the leaf.
         let (mut s, _io) = rut_new::boot();
         let uri = rut_new::at("src/child/mod.rut");
         for (src, needles) in [
             ("use m::{ secret };\nfn k() -> i32 { return secret(); }\n", vec![("secret()", 0), ("{ secret }", 2)]),
             ("use m::{ cell };\nfn k() -> i32 { return cell(); }\n", vec![("cell()", 0), ("{ cell }", 2)]),
-            ("use m::{ G };\nfn k() -> i32 { return G; }\n", vec![("return G", 7), ("{ G }", 2)]),
             ("use m::*;\nfn k() -> i32 { return mk(41); }\n", vec![("mk(41)", 0)]),
             ("use calc::math::{ hidden };\nfn k() -> i32 { return 0; }\n", vec![("{ hidden }", 2)]),
             ("use calc::math::{ cell };\nfn k() -> i32 { return 0; }\n", vec![("{ cell }", 2)]),
@@ -2081,6 +2081,32 @@ both_uri_shapes! {
                 assert!(no_hover(&h), "[{src:?} @ {needle:?}] a refused leaf: {h:?}");
             }
         }
+    }
+}
+
+both_uri_shapes! {
+    #[test]
+    fn a_re_exported_leaf_and_its_qualified_spelling_hover_the_declaration() {
+        // the own lane's `pub use` row NAMES its target: `m` re-exports
+        // `grid::G`, so the leaf (`use m::{ G }`), its use-line
+        // spelling, and the qualified spelling (`m::G`) all answer the
+        // DECLARATION in grid — one walk, one answer.
+        let (mut s, _io) = rut_new::boot();
+        let uri = rut_new::at("src/child/mod.rut");
+        let grid = rut_new::at("src/m/grid/mod.rut");
+        let leaf = "use m::{ G };\nfn k() -> i32 { return G; }\n";
+        for (needle, off, what) in [
+            ("return G", 7, "the re-exported leaf's use site"),
+            ("{ G }", 2, "the leaf's spelling"),
+        ] {
+            let md = markdown(s.hover_in(&uri, leaf, needle, 1, off));
+            assert!(md.contains("pub let G: i32 = 1"), "[{what}] {md}");
+            assert!(md.contains(&format!("— {grid}:2")), "[{what}] {md}");
+        }
+        let qualified = "fn k() -> i32 { return m::G; }\n";
+        let md = markdown(s.hover_in(&uri, qualified, "m::G", 1, 3));
+        assert!(md.contains("pub let G: i32 = 1"), "the qualified spelling: {md}");
+        assert!(md.contains(&format!("— {grid}:2")), "the qualified spelling: {md}");
     }
 }
 

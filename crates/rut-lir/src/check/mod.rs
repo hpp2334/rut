@@ -491,6 +491,71 @@ pub fn mod_walk_pub(
     Ok(cur)
 }
 
+/// Where a re-export walk landed.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum ReexportEdge {
+    /// the name is a declaration of this module — no further edge
+    Declaring(String),
+    /// the path leaves the package at this head (a dependency's name):
+    /// nothing follows a path across a package boundary
+    Foreign(String),
+    /// the walk revisited a `(module, name)` — the module chain it
+    /// walked, start through the revisited module
+    Cycle(Vec<String>),
+}
+
+/// The edge walk (law 5): from the walked module `from`, follow
+/// `name`'s re-export rows to the DECLARING module — transitively,
+/// with a seen-set — or stop at a cycle. `row(module, name)` answers
+/// the full re-exported path a `pub use` row spells (`use a::b::{ c }`
+/// → `[a, b, c]`); `None` means the name is not a re-export of that
+/// module, so it is a declaration there. The one home: the compiler's
+/// own lane and the LSP's scope doors carry their rows into THIS walk
+/// (never a second spelling). Paths resolve through the same
+/// [`mod_head`]/[`mod_walk`] laws every qualified path reads.
+pub fn reexport_edge(
+    tree: &ModInputs,
+    own_pkg: &str,
+    row: impl Fn(&str, &str) -> Option<Vec<String>>,
+    from: &str,
+    name: &str,
+) -> ReexportEdge {
+    let mut cur_mod = from.to_string();
+    let mut cur_name = name.to_string();
+    let mut seen: Vec<(String, String)> = Vec::new();
+    let mut chain: Vec<String> = Vec::new();
+    loop {
+        if seen.iter().any(|(m, n)| *m == cur_mod && *n == cur_name) {
+            chain.push(cur_mod);
+            return ReexportEdge::Cycle(chain);
+        }
+        seen.push((cur_mod.clone(), cur_name.clone()));
+        let Some(path) = row(&cur_mod, &cur_name) else {
+            return ReexportEdge::Declaring(cur_mod);
+        };
+        let Some((head, rest)) = path.split_first() else {
+            return ReexportEdge::Declaring(cur_mod);
+        };
+        let Some(mut at) = mod_head(tree, own_pkg, &cur_mod, head) else {
+            return ReexportEdge::Foreign(head.clone());
+        };
+        let Some((leaf, interior)) = rest.split_last() else {
+            // a path that names only a module: the module itself
+            return ReexportEdge::Declaring(at);
+        };
+        let segs: Vec<&str> = interior.iter().map(String::as_str).collect();
+        let Ok(target) = mod_walk(tree, &at, &segs) else {
+            // the row's interior does not walk (the spelling's own use
+            // line owns that refusal) — the walked module is the answer
+            return ReexportEdge::Declaring(cur_mod);
+        };
+        at = target;
+        chain.push(cur_mod);
+        cur_mod = at;
+        cur_name = leaf.clone();
+    }
+}
+
 /// The binder kinds the one-name registry distinguishes — the
 /// duplicate diagnostic's citation word (`the <word> already declares
 /// it in this file`).
@@ -1218,10 +1283,13 @@ impl<'a> Ctx<'a> {
     /// resolution ladders read — `m` is the module a qualified path
     /// resolved to, or the current module for single-seg names).
     pub(crate) fn enum_in(&self, m: &str, name: IdentId) -> Option<EnumDecl> {
-        self.enums
-            .iter()
-            .find(|(n, d)| *n == name && self.mod_of(d.node.span(self.ast)) == m)
-            .map(|(_, d)| d.clone())
+        let find = |m: &str| {
+            self.enums
+                .iter()
+                .find(|(n, d)| *n == name && self.mod_of(d.node.span(self.ast)) == m)
+                .map(|(_, d)| d.clone())
+        };
+        find(m).or_else(|| find(&self.reexport_declaring(m, name)?))
     }
 
     /// The current module's enum (single-seg resolution).
@@ -1311,44 +1379,103 @@ impl<'a> Ctx<'a> {
         })
     }
 
+    /// A `pub use` row's full path in module `m` — the AST is the
+    /// compiler's row source (the driver's `DeclRow` table is the
+    /// graph's copy of the same rows). `None` = `m` has no re-export
+    /// row for `name`.
+    fn reexport_row(&self, m: &str, name: &str) -> Option<Vec<String>> {
+        for it in self.ast.root().items(self.ast) {
+            let ItemRef::Use(h) = it else { continue };
+            let d = h.get(self.ast);
+            if d.vis() == Vis::Self_ || self.mod_of(it.span(self.ast)) != m {
+                continue;
+            }
+            if !d.names.iter().any(|n| self.name(n.ident) == name) {
+                continue;
+            }
+            let mut path: Vec<String> = d
+                .path
+                .iter()
+                .map(|n| self.name(n.ident).to_string())
+                .collect();
+            path.push(name.to_string());
+            return Some(path);
+        }
+        None
+    }
+
+    /// The DECLARING module when `m` re-exports `name` — law 5's one
+    /// walk, the rows read off the AST. `None` = `m` has no row for the
+    /// name (it is the module's own business) or the edge cycles /
+    /// leaves the package.
+    fn reexport_declaring(&self, m: &str, name: IdentId) -> Option<String> {
+        let n = self.name(name);
+        self.reexport_row(m, n)?;
+        match reexport_edge(
+            &self.mods,
+            &self.own_spec,
+            |m, n| self.reexport_row(m, n),
+            m,
+            n,
+        ) {
+            ReexportEdge::Declaring(d) if d != m => Some(d),
+            _ => None,
+        }
+    }
+
     /// A struct/class declared in module `m`.
     pub(crate) fn data_in(&self, m: &str, name: IdentId) -> Option<DataDecl> {
-        self.datas
-            .iter()
-            .find(|(n, d)| *n == name && self.mod_of(d.node.span(self.ast)) == m)
-            .map(|(_, d)| d.clone())
+        let find = |m: &str| {
+            self.datas
+                .iter()
+                .find(|(n, d)| *n == name && self.mod_of(d.node.span(self.ast)) == m)
+                .map(|(_, d)| d.clone())
+        };
+        find(m).or_else(|| find(&self.reexport_declaring(m, name)?))
     }
 
     /// An interface declared in module `m`.
     pub(crate) fn iface_in(&self, m: &str, name: IdentId) -> Option<IfaceDeclInfo> {
-        self.iface_decls
-            .iter()
-            .find(|(n, d)| *n == name && self.mod_of(d.node.span(self.ast)) == m)
-            .map(|(_, d)| d.clone())
+        let find = |m: &str| {
+            self.iface_decls
+                .iter()
+                .find(|(n, d)| *n == name && self.mod_of(d.node.span(self.ast)) == m)
+                .map(|(_, d)| d.clone())
+        };
+        find(m).or_else(|| find(&self.reexport_declaring(m, name)?))
     }
 
     /// A type alias declared in module `m`.
     pub(crate) fn alias_in(&self, m: &str, name: IdentId) -> Option<AliasDecl> {
-        self.aliases
-            .iter()
-            .find(|a| a.name == name && self.mod_of(a.node.span(self.ast)) == m)
-            .cloned()
+        let find = |m: &str| {
+            self.aliases
+                .iter()
+                .find(|a| a.name == name && self.mod_of(a.node.span(self.ast)) == m)
+                .cloned()
+        };
+        find(m).or_else(|| find(&self.reexport_declaring(m, name)?))
     }
 
-    /// A free fn declared in module `m` — its AST node.
+    /// A free fn declared in module `m`.
     pub(crate) fn fn_in(&self, m: &str, name: IdentId) -> Option<Handle<FnNode>> {
-        self.fn_nodes
-            .iter()
-            .find(|(n, node)| *n == name && self.mod_of(node.span(self.ast)) == m)
-            .map(|(_, node)| *node)
+        let find = |m: &str| {
+            self.fn_nodes
+                .iter()
+                .find(|(n, node)| *n == name && self.mod_of(node.span(self.ast)) == m)
+                .map(|(_, node)| *node)
+        };
+        find(m).or_else(|| find(&self.reexport_declaring(m, name)?))
     }
 
     /// A module `let` declared in module `m`.
     pub(crate) fn let_in(&self, m: &str, name: IdentId) -> Option<LetRow> {
-        self.lets
-            .iter()
-            .find(|(n, _, init, _)| *n == name && self.mod_of(init.span(self.ast)) == m)
-            .cloned()
+        let find = |m: &str| {
+            self.lets
+                .iter()
+                .find(|(n, _, init, _)| *n == name && self.mod_of(init.span(self.ast)) == m)
+                .cloned()
+        };
+        find(m).or_else(|| find(&self.reexport_declaring(m, name)?))
     }
 
     /// Where does `name` live, if anywhere? The "declared elsewhere"

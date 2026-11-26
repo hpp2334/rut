@@ -342,6 +342,221 @@ fn a_qualified_leaf_reads_the_re_exported_row_of_the_walked_module() {
     );
 }
 
+// ---- the own lane: a `pub use` row names its target ----
+
+/// One own-package program: the root consumer plus its mounted module
+/// files (`a` the declarations, `b`/`c` the re-export hops). Every
+/// module is a `pub mod` child, single-file form.
+fn own_graph_of(root_src: &str, modules: &[(&str, String)]) -> rut_driver::GraphOutput {
+    let mut pkg = rut_driver::Mounted::source("app", root_src);
+    for (path, text) in modules {
+        pkg.mods.insert(
+            (*path).to_string(),
+            rut_driver::ModSource {
+                path: (*path).to_string(),
+                vis: Vis::Pub,
+                text: text.clone(),
+                file: "mod.rut".to_string(),
+            },
+        );
+    }
+    match rut_driver::RutRun::new()
+        .mount(pkg)
+        .entrypoint("app")
+        .compile()
+    {
+        Ok(c) => c.graph,
+        Err(e) => rut_driver::GraphOutput {
+            diags: vec![rut_lexer::diag::Diag::new(
+                rut_lexer::span::Span::new(0, 0),
+                e.msg,
+            )],
+            program: None,
+        },
+    }
+}
+
+/// Run a compiled own-package program's `main` and answer its `i32`.
+fn run_main_i32(g: &rut_driver::GraphOutput) -> i32 {
+    let flat = rut_core::link::flatten(g.program.clone().expect("linked program"));
+    rut_vm::verify::verify(&flat).expect("verify");
+    let limits = rut_vm::interp::Limits {
+        fuel: Some(2_000_000),
+        heap_limit_bytes: Some(16 * 1024 * 1024),
+        interrupt_every: 1024,
+    };
+    let mut vm = rut_vm::interp::Vm::builder()
+        .program(std::rc::Rc::new(flat))
+        .limits(limits)
+        .hosts(rut_vm::interp::HostRegistry::new())
+        .build()
+        .expect("vm");
+    vm.call::<_, i32>("main", ()).expect("run")
+}
+
+/// The root that declares `a`, `b`, and (for two hops) `c`, then the
+/// consumer.
+fn own_root(consumer: &str, hops: usize) -> String {
+    let mut root = String::from("mod a;\nmod b;\n");
+    if hops == 2 {
+        root.push_str("mod c;\n");
+    }
+    root.push('\n');
+    root.push_str(consumer);
+    root
+}
+
+#[test]
+fn a_re_exported_name_binds_inside_the_package() {
+    // THE table: {fn, type, module let, enum} × {a leaf `use b::{x}`,
+    // a qualified `b::x`} × {one hop, two hops}. A re-export row NAMES
+    // its target, so the consumer's leaf import and its qualified
+    // spelling both reach the DECLARING module and the program runs.
+    struct Shape {
+        decls: &'static str,
+        name: &'static str,
+        leaf: &'static str,
+        qualified: &'static str,
+        want: i32,
+    }
+    let shapes = [
+        Shape {
+            decls: "pub fn f() -> i32 { return 7; }\n",
+            name: "f",
+            leaf: "use HEAD::{ f };\nentry fn main() -> i32 { return f(); }\n",
+            qualified: "entry fn main() -> i32 { return HEAD::f(); }\n",
+            want: 7,
+        },
+        Shape {
+            decls: "pub struct S { v: i32 }\npub fn make() -> S { return S { v: 7 }; }\n",
+            name: "S",
+            leaf: "use HEAD::{ S };\nentry fn main() -> i32 { let s: S = a::make(); return s.v; }\n",
+            qualified: "entry fn main() -> i32 { let s: HEAD::S = a::make(); return s.v; }\n",
+            want: 7,
+        },
+        Shape {
+            decls: "pub let MAX: i32 = 7;\n",
+            name: "MAX",
+            leaf: "use HEAD::{ MAX };\nentry fn main() -> i32 { return MAX; }\n",
+            qualified: "entry fn main() -> i32 { return HEAD::MAX; }\n",
+            want: 7,
+        },
+        Shape {
+            decls: "pub enum E { A, B }\n",
+            name: "E",
+            leaf: "use HEAD::{ E };\nentry fn main() -> i32 { let e = E::A; if (e == E::A) { return 1; } return 0; }\n",
+            qualified: "entry fn main() -> i32 { let e: HEAD::E = a::E::A; if (e == a::E::A) { return 1; } return 0; }\n",
+            want: 1,
+        },
+    ];
+    for shape in shapes {
+        for hops in [1usize, 2] {
+            let head = if hops == 1 { "b" } else { "c" };
+            let mut modules = vec![
+                ("a", shape.decls.to_string()),
+                ("b", format!("pub use a::{{ {} }};\n", shape.name)),
+            ];
+            if hops == 2 {
+                modules.push(("c", format!("pub use b::{{ {} }};\n", shape.name)));
+            }
+            for (column, body) in [
+                ("leaf", shape.leaf.replace("HEAD", head)),
+                ("qualified", shape.qualified.replace("HEAD", head)),
+            ] {
+                let root = own_root(&body, hops);
+                let g = own_graph_of(&root, &modules);
+                assert!(
+                    g.diags.is_empty(),
+                    "[{} / {hops} hop(s) / {column}] zero diagnostics: {:?}",
+                    shape.name,
+                    msgs(&g)
+                );
+                assert_eq!(
+                    run_main_i32(&g),
+                    shape.want,
+                    "[{} / {hops} hop(s) / {column}] the program runs",
+                    shape.name
+                );
+            }
+        }
+    }
+}
+
+#[test]
+fn a_cyclic_re_export_refuses() {
+    // `a` and `b` re-export each other's `f`; the consumer's `use
+    // a::{ f }` walks a -> b -> a and REFUSES at the use line — one
+    // diagnostic, naming the cycle.
+    let root = own_root("use a::{ f };\n\nentry fn main() { }\n", 1);
+    let g = own_graph_of(
+        &root,
+        &[
+            ("a", "pub use b::{ f };\n".to_string()),
+            ("b", "pub use a::{ f };\n".to_string()),
+        ],
+    );
+    assert_eq!(g.diags.len(), 1, "exactly one diagnostic: {:?}", msgs(&g));
+    assert_eq!(
+        g.diags[0].msg,
+        "cyclic `pub use` — `f` re-exports itself through `a` -> `b` -> `a`"
+    );
+    assert_eq!(g.diags[0].file.as_deref(), Some("app"));
+    assert!(
+        rendered(&root, &g).contains("--> app:4:1"),
+        "the arrow names the use line:\n{}",
+        rendered(&root, &g)
+    );
+}
+
+#[test]
+fn a_pub_use_of_a_dependency_name_inside_the_own_lane_refuses() {
+    // `b` re-exports a DEPENDENCY's `f` (`pub use somepkg::{ f }`) and
+    // the root imports it through the own lane — a cross-package
+    // re-export does not bind until the surface owns the edge, so the
+    // use line refuses and says why.
+    let root = "mod b;\n\nuse b::{ f };\n\nentry fn main() { }\n";
+    let mut app = rut_driver::Mounted::source("app", root)
+        .manifest(rut_driver::Manifest::lib("app", &["somepkg"]));
+    app.mods.insert(
+        "b".to_string(),
+        rut_driver::ModSource {
+            path: "b".to_string(),
+            vis: Vis::Pub,
+            text: "pub use somepkg::{ f };\n".to_string(),
+            file: "mod.rut".to_string(),
+        },
+    );
+    let g = match rut_driver::RutRun::new()
+        .mount(rut_driver::Mounted::source(
+            "somepkg",
+            "pub fn f() -> i32 { return 3; }\n",
+        ))
+        .mount(app)
+        .entrypoint("app")
+        .compile()
+    {
+        Ok(c) => c.graph,
+        Err(e) => rut_driver::GraphOutput {
+            diags: vec![rut_lexer::diag::Diag::new(
+                rut_lexer::span::Span::new(0, 0),
+                e.msg,
+            )],
+            program: None,
+        },
+    };
+    assert_eq!(g.diags.len(), 1, "exactly one diagnostic: {:?}", msgs(&g));
+    assert_eq!(
+        g.diags[0].msg,
+        "`f` is re-exported from `somepkg` — a cross-package re-export does not bind yet"
+    );
+    assert_eq!(g.diags[0].file.as_deref(), Some("app"));
+    assert!(
+        rendered(root, &g).contains("--> app:3:1"),
+        "the arrow names the use line:\n{}",
+        rendered(root, &g)
+    );
+}
+
 // ---- the std lane: same gate, the toolchain tree's ink pkg ----
 
 /// The toolchain tree's ink walk (`rut/ink`): the pkg plus its
