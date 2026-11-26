@@ -265,59 +265,52 @@ pub fn mirror_run() -> Result<RutRun, String> {
     Ok(run.pkg(rut_std::nmap::pkg()))
 }
 
-/// dist/std-v19 plays the wire: the pinned source zips prime ONE
-/// cache-only cache per process (`DepRemote::write` is the stand-in
-/// for the GET — the ONCE-gated priming is the 03-plugin precedent),
-/// and every manifest-lane walk rides an `HttpRemote::at` over it — a
-/// miss NEVER touches the network, so the gate cannot network by
-/// construction. The pin's bytes are the committed bytes
-/// (`pack-std --check` green); the CDN is only the human lane. The
-/// cache root lives in the tmp dir: a throwaway per process — no
-/// project-dir write (the `.rut/cache` lane is retired; embedders
-/// name explicit roots) and no touch of the global store under
-/// `$RUT_HOME`.
+/// dist/std-v19 plays the wire: the pinned source zips prime a
+/// cache-only cache (`DepRemote::write` is the stand-in for the GET —
+/// the ONCE-gated priming is the 03-plugin precedent), and every
+/// manifest-lane walk rides an `HttpRemote::at` over it — a miss NEVER
+/// touches the network, so the gate cannot network by construction.
+/// The pin's bytes are the committed bytes (`pack-std --check` green);
+/// the CDN is only the human lane. The cache root lives in the tmp
+/// dir: a throwaway owned by the walk's `rut_testkit::Scratch` — it
+/// dies when the walk returns, with no project-dir write (the
+/// `.rut/cache` lane is retired; embedders name explicit roots) and no
+/// touch of the global store under `$RUT_HOME`.
 #[cfg(not(target_arch = "wasm32"))]
-fn std_remote() -> rut_native::HttpRemote {
-    static ROOT: std::sync::OnceLock<std::path::PathBuf> = std::sync::OnceLock::new();
-    rut_native::HttpRemote::at(ROOT.get_or_init(|| {
-        let root =
-            std::env::temp_dir().join(format!("rut-05-todolist-web-cache-{}", std::process::id()));
-        let _ = std::fs::remove_dir_all(&root);
-        // every manifest this example loads with deps — the app's two
-        // packages and the two probes that name the std closure
-        // (harness/softfail are dep-free) — walked for url rows exactly
-        // like the loader's own prefetch walks
-        let base = std::path::Path::new(env!("CARGO_MANIFEST_DIR"));
-        let dist = base.join("../../dist/std-v19");
-        let mut urls = std::collections::BTreeSet::new();
-        for rel in [
-            "rut/biz/rut.jsonc",
-            "rut/ui/rut.jsonc",
-            "tests/store_probe/rut.jsonc",
-            "tests/t1_harness/rut.jsonc",
-        ] {
-            let Ok(text) = std::fs::read_to_string(base.join(rel)) else {
-                continue;
-            };
-            let Ok(manifest) = rut_driver::bundle::parse_manifest(&text) else {
-                continue;
-            };
-            for desc in manifest.deps.values() {
-                if let Some(url) = desc.get("url") {
-                    urls.insert(url.clone());
-                }
+fn std_remote(cache: &std::path::Path) -> rut_native::HttpRemote {
+    // every manifest this example loads with deps — the app's two
+    // packages and the two probes that name the std closure
+    // (harness/softfail are dep-free) — walked for url rows exactly
+    // like the loader's own prefetch walks
+    let base = std::path::Path::new(env!("CARGO_MANIFEST_DIR"));
+    let dist = base.join("../../dist/std-v19");
+    let mut urls = std::collections::BTreeSet::new();
+    for rel in [
+        "rut/biz/rut.jsonc",
+        "rut/ui/rut.jsonc",
+        "tests/store_probe/rut.jsonc",
+        "tests/t1_harness/rut.jsonc",
+    ] {
+        let Ok(text) = std::fs::read_to_string(base.join(rel)) else {
+            continue;
+        };
+        let Ok(manifest) = rut_driver::bundle::parse_manifest(&text) else {
+            continue;
+        };
+        for desc in manifest.deps.values() {
+            if let Some(url) = desc.get("url") {
+                urls.insert(url.clone());
             }
         }
-        let warmer = rut_native::HttpRemote::at(&root);
-        for url in &urls {
-            let artifact = url.rsplit('/').next().unwrap_or_default();
-            let bytes = std::fs::read(dist.join(artifact)).unwrap_or_else(|e| {
-                panic!("the committed artifact is the cache — {artifact}: {e}")
-            });
-            rut_native::DepRemote::write(&warmer, url, &bytes).expect("prime the cache");
-        }
-        root
-    }))
+    }
+    let warmer = rut_native::HttpRemote::at(cache);
+    for url in &urls {
+        let artifact = url.rsplit('/').next().unwrap_or_default();
+        let bytes = std::fs::read(dist.join(artifact))
+            .unwrap_or_else(|e| panic!("the committed artifact is the cache — {artifact}: {e}"));
+        rut_native::DepRemote::write(&warmer, url, &bytes).expect("prime the cache");
+    }
+    warmer
 }
 
 /// The manifest lane's directory walk: [`rut_native::load_dir_with`]
@@ -332,7 +325,8 @@ fn std_remote() -> rut_native::HttpRemote {
 #[cfg(not(target_arch = "wasm32"))]
 pub fn walk_dir(dir: &std::path::Path) -> Result<Walk, String> {
     use std::future::Future as _;
-    let remote = std_remote();
+    let cache = rut_testkit::Scratch::new("05-todolist-web-cache");
+    let remote = std_remote(&cache);
     let fut = rut_native::load_dir_with(dir, &remote);
     let mut fut = std::pin::pin!(fut);
     let mut cx = std::task::Context::from_waker(std::task::Waker::noop());

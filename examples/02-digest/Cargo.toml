@@ -21,6 +21,10 @@ serde_json = "1"
 name = "digests"
 path = "src/main.rs"
 
+[dev-dependencies]
+# a test's scratch directory — it dies with the test
+rut-testkit = { workspace = true }
+
 # opt into the workspace lint gate (warnings = deny)
 [lints]
 workspace = true

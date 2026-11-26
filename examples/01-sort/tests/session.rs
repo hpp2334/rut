@@ -12,14 +12,11 @@ use std::task::{Context, Poll};
 /// std-v19 bytes the manifest rows name) prime an OFFLINE
 /// remote (`DepRemote::write` is the stand-in for the GET), so this
 /// gate cannot network by construction — no env, no set_var races.
-fn warm(base: &Path) -> rut_native::HttpRemote {
-    // a unique root per call: the tests run in parallel threads, and a
-    // shared root would race the prime (remove/write/rename)
-    static N: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
-    let n = N.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
-    let root = std::env::temp_dir().join(format!("rut-01-sort-cache-{}-{n}", std::process::id()));
-    let _ = std::fs::remove_dir_all(&root);
-    let remote = rut_native::HttpRemote::at(&root);
+fn warm(base: &Path, cache: &Path) -> rut_native::HttpRemote {
+    // the cache root is the caller's `rut_testkit::Scratch`: the tests
+    // run in parallel threads and each call gets its own directory, so
+    // the prime never races a sibling
+    let remote = rut_native::HttpRemote::at(cache);
     let manifest_text = std::fs::read_to_string(base.join("rut.jsonc")).expect("rut.jsonc");
     let manifest = rut_driver::bundle::parse_manifest(&manifest_text).expect("parse rut.jsonc");
     let dist = base.join("../../dist/std-v19");
@@ -46,7 +43,8 @@ fn block_on<F: Future>(fut: F) -> F::Output {
 
 fn load() -> rut_driver::Walk {
     let base = Path::new(env!("CARGO_MANIFEST_DIR"));
-    let remote = warm(base);
+    let cache = rut_testkit::Scratch::new("01-sort-cache");
+    let remote = warm(base, &cache);
     block_on(rut_native::load_path_session_with(base, &remote)).expect("load the module dir")
 }
 

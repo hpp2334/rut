@@ -16,14 +16,11 @@ use plugin::Plugin;
 /// pouch group inside the output.
 fn pack_seeded() -> Result<Vec<u8>, String> {
     let d = dir();
-    // a unique root per call: the tests run in parallel threads, and a
-    // shared root would race the prime (remove/write/rename)
-    static N: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
-    let n = N.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
-    let cache =
-        std::env::temp_dir().join(format!("rut-03-plugin-cache-{}-{n}", std::process::id()));
-    let _ = std::fs::remove_dir_all(&cache);
-    let remote = rut_native::HttpRemote::at(&cache);
+    // the cache root is a `Scratch`: each call gets its own directory
+    // (the tests run in parallel threads, so the prime never races a
+    // sibling) and it dies when this function returns
+    let cache = rut_testkit::Scratch::new("03-plugin-cache");
+    let remote = rut_native::HttpRemote::at(&*cache);
     let manifest_text =
         std::fs::read_to_string(d.join("rut.jsonc")).map_err(|e| format!("rut.jsonc: {e}"))?;
     let manifest = rut_driver::bundle::parse_manifest(&manifest_text).map_err(|e| e.to_string())?;
@@ -143,17 +140,14 @@ fn moderated_session_transcript() {
 fn bundle_form_matches_the_directory() {
     // pack the same directory, load the bundle, run the same session
     let bytes = pack_seeded().unwrap();
-    let path = std::env::temp_dir().join(format!(
-        "rut-03-plugin-test-{}.rutbundle",
-        std::process::id()
-    ));
+    let dir = rut_testkit::Scratch::new("03-plugin-test");
+    let path = dir.join("plugin.rutbundle");
     std::fs::write(&path, &bytes).unwrap();
     let mut p = Plugin::load(&path, &limits()).unwrap();
     let (lines, total) = session(&mut p);
     assert_eq!(lines, want_transcript());
     assert_eq!(total, 3);
     assert_eq!(p.stats(), (10, 10));
-    let _ = std::fs::remove_file(&path);
 }
 
 #[test]
@@ -165,8 +159,7 @@ fn packing_is_deterministic() {
 
 #[test]
 fn bad_bundles_are_refused_at_load() {
-    let base = std::env::temp_dir().join(format!("rut-03-plugin-ref-{}", std::process::id()));
-    std::fs::create_dir_all(&base).unwrap();
+    let base = rut_testkit::Scratch::new("03-plugin-ref");
 
     // unknown format_version — refused before anything else is read
     let manifest = r#"{"format": "rutbundle", "format_version": 99, "name": "plugin"}"#;
@@ -194,8 +187,6 @@ fn bad_bundles_are_refused_at_load() {
         Ok(_) => panic!("a corrupted bundle must refuse"),
     };
     assert!(err.msg.contains("CRC"), "{}", err.msg);
-
-    std::fs::remove_dir_all(&base).unwrap();
 }
 
 #[test]

@@ -311,6 +311,7 @@ dependencies = [
  "rut-driver",
  "rut-native",
  "rut-std",
+ "rut-testkit",
  "rut-vm",
  "serde_json",
  "sha1",
@@ -887,6 +888,7 @@ version = "0.1.0"
 dependencies = [
  "rut-driver",
  "rut-native",
+ "rut-testkit",
  "rut-vm",
 ]
 
@@ -1449,6 +1451,7 @@ dependencies = [
  "rut-driver",
  "rut-native",
  "rut-std",
+ "rut-testkit",
  "rut-vm",
 ]
 
@@ -1543,6 +1546,7 @@ version = "0.1.0"
 dependencies = [
  "rut-driver",
  "rut-native",
+ "rut-testkit",
  "rut-vm",
 ]
 
@@ -1556,6 +1560,7 @@ dependencies = [
  "rut-driver",
  "rut-native",
  "rut-std",
+ "rut-testkit",
  "rut-vm",
  "wasm-bindgen",
  "web-sys",
