@@ -291,6 +291,10 @@ use imp::{ TodoList, Task };   // beside `mod imp;` — imp's pub names
 mod imp;
 ```
 
+In a package with no child module the own name is no use head: the
+compiler refuses the line — name the declaration's module, or declare
+the dependency.
+
 The leaves obey the same laws every crossing does. Each must be a
 declaration of the walked module, **visible from the importing file**:
 a bare, private member of `imp` is not importable — `pub` or `pub(pkg)`

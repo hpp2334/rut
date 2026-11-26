@@ -237,6 +237,16 @@ pub(crate) fn use_exports<'a>(
                 .collect(),
         ));
     };
+    // the walk's refusal decides: a head naming the asking file's
+    // own package in a flat package is refused by the compiler, so
+    // the tier offers nothing — never the package's surface
+    if crate::resolve::walk::head_refused(w, file, pkg) {
+        return Some(UseExports::Exports {
+            pkg: pkg.clone(),
+            path: String::new(),
+            rows: Vec::new(),
+        });
+    }
     let (path, rows) = walked_surface(w, file, pkg, &before[1..]);
     Some(UseExports::Exports {
         pkg: pkg.clone(),

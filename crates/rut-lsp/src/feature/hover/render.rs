@@ -471,33 +471,14 @@ fn render_decl(w: &World, file: FileId, d: &Def) -> Option<String> {
 /// the world like any use site), except a leaf that names a MODULE —
 /// that renders the module like a path segment does.
 fn render_use(w: &World, file: FileId, pos: u32, c: &Cursor, defs: &[Def]) -> Option<String> {
-    let Cursor::Use { node, segs, at } = c else {
+    let Cursor::Use { node, at, .. } = c else {
         return None;
     };
     let ast = w.file(file).doc.ast();
     match at {
-        UseAt::Head => {
-            // a head that speaks for the doc's OWN package but rides
-            // no own lane (the flat law refuses it) answers nothing —
-            // hover's half of the delta-7 asymmetry (definition keeps
-            // the generic root lane)
-            let own = crate::resolve::mods::position_head(w, file, &segs[0]).is_some();
-            if !own && w.file(file).stamp.module.as_deref() == Some(segs[0].as_str()) {
-                return None;
-            }
-            match defs {
-                [Def::Module { file: m }] => Some(render_module_target(
-                    w,
-                    w.file(*m),
-                    crate::resolve::mods::mod_path_of(w.file(*m)),
-                )),
-                [Def::Node { file: pf, node }] => module_of_edge(w, file, *pf, *node)
-                    .map(|(target, path)| render_module_target(w, w.file(target), &path)),
-                // a use the chain cannot walk: no hover, never wrong text
-                _ => None,
-            }
-        }
-        UseAt::Segment(_) => match defs {
+        // the head and an interior segment render the module they walk
+        // to — the head's answer is the walk's, never a private gate
+        UseAt::Head | UseAt::Segment(_) => match defs {
             [Def::Module { file: m }] => Some(render_module_target(
                 w,
                 w.file(*m),
@@ -505,6 +486,7 @@ fn render_use(w: &World, file: FileId, pos: u32, c: &Cursor, defs: &[Def]) -> Op
             )),
             [Def::Node { file: pf, node }] => module_of_edge(w, file, *pf, *node)
                 .map(|(target, path)| render_module_target(w, w.file(target), &path)),
+            // a use the chain cannot walk: no hover, never wrong text
             _ => None,
         },
         UseAt::Leaf(i) => {

@@ -134,6 +134,13 @@ fn use_targets(w: &World, file: FileId, c: &Cursor) -> Vec<Def> {
                     None => Vec::new(),
                 };
             }
+            // the own lane missed: a head naming the asking file's own
+            // package in a flat package is refused outright (the
+            // compiler refuses the whole use line) — the walk answers
+            // nothing, never the generic root lane
+            if head_refused(w, file, pkg) {
+                return Vec::new();
+            }
             // the pkg's ROOT file, picked once for every consumer
             pkg_root_index(w, file, pkg)
                 .map(|f| vec![Def::Module { file: f }])
@@ -514,6 +521,17 @@ fn own_scope(w: &World, file: FileId, walked: &str) -> Option<FileId> {
         return Some(file);
     }
     crate::resolve::mods::find_mod(w, w.file(file).stamp.module.as_deref(), walked)
+}
+
+/// does the walk REFUSE this use head? The compiler's flat law: the
+/// head names the asking file's own package, but the package has no
+/// child module (`mod_head`'s own-spec arm refuses a flat tree), so
+/// the whole use line is refused and nothing may answer for it. The
+/// ONE predicate — the Head arm answers through it and the
+/// completion tier reads it to stay silent.
+pub(crate) fn head_refused(w: &World, file: FileId, pkg: &str) -> bool {
+    crate::resolve::mods::position_head(w, file, pkg).is_none()
+        && w.file(file).stamp.module.as_deref() == Some(pkg)
 }
 
 /// the pkg's ROOT file — where a pkg-head click lands. Among the

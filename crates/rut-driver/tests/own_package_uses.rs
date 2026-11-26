@@ -241,6 +241,32 @@ entry fn main() -> i64 { return go(); }
 }
 
 #[test]
+fn a_flat_packages_own_name_is_refused() {
+    // a package with NO child module has no tree: the own name is no
+    // use head at all (mod_head's flat law), so the compiler refuses
+    // the whole use line with the mounted-but-undeclared message —
+    // the refusal the LSP walk mirrors (a refused head answers
+    // nothing)
+    let flat = rut_driver::Mounted::source(
+        "flat",
+        r#"use flat::{ x };
+
+pub fn x() -> i32 { return 1; }
+
+entry fn main() -> i32 { return x(); }
+"#,
+    );
+    let g = graph_of(vec![flat], "flat");
+    assert_eq!(g.diags.len(), 1, "exactly one diagnostic: {:?}", msgs(&g));
+    assert_eq!(
+        g.diags[0].msg,
+        "cannot resolve `flat` — `flat` is mounted in this program (offered by the host) \
+         but `flat` does not declare it; declare it in the pkg's manifest — \
+         `Manifest::lib(\"flat\", &[\"flat\"])` or a `\"deps\"` row through `parse_manifest(..)`"
+    );
+}
+
+#[test]
 fn a_private_leaf_is_not_importable() {
     // import is no visibility bypass: a bare (private) member of imp
     // is refused at the use line — the text names the importing file

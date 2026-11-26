@@ -248,33 +248,25 @@ fn a_flat_packages_own_name_is_not_a_head() {
     assert!(leaf.is_empty(), "{leaf:?}");
     let typing = "pub fn x() -> i32 { return 1; }\nuse flat::\nentry fn main() -> nil {\n}\n";
     let items = s.complete_at(uri, typing, "use flat::", 1);
-    // delta 7: the head no longer resolves, so the visible-members tier
-    // never opens — the cross use tier answers, exactly `x` (pinned
-    // EXACT: at base the position tier answered ["entry", "main", "x"])
-    assert_eq!(labels(&items), ["x"], "{:?}", labels(&items));
+    // the head the compiler refuses offers nothing — completion's
+    // cross use tier included (the one-file mirror of the two-file
+    // pin's flip; the same law)
+    assert!(labels(&items).is_empty(), "{:?}", labels(&items));
 }
 }
 
 both_uri_shapes! {
 #[test]
 fn a_two_file_flat_packages_leaf_still_resolves() {
-    // delta 7's two-file face (the review round's pin): a flat package
+    // the flat law reaches EVERY file of the package: a flat package
     // may carry a SECOND file — a `.d.rut`-style sibling beside the
     // body, both stamped (pkg, ""). The own lane refuses the package's
-    // own name for the in-package asker (mod_head's flat law — the
-    // same flip the sibling pin above carries one-file), and the
-    // CROSS-package lanes take over: the leaf `x` resolves from the
+    // own name for the in-package asker (mod_head's flat law), and the
+    // walk answers nothing for that head: the compiler refuses the
+    // whole use line, so hover, definition, references and completion
+    // are silent on it. The LEAF rides on: `x` resolves from the
     // sibling (the asking document is dropped from use_graph_targets'
-    // sweep by identity — d9cd1f00 — so the sibling answers), and the
-    // head's definition lands on the sibling's file top through the
-    // generic package-root lane.
-    // The asymmetry, stated plainly: the head's HOVER is null but its
-    // DEFINITION still answers — the generic root lane works as it
-    // does for any package name (in the one-file scenario its only
-    // candidate is the asking document, which the identity exclusion
-    // drops); the plan's "hover and definition on `me` stop resolving"
-    // was written from the one-file observation. These are HEAD's
-    // actual answers, pinned exactly.
+    // sweep by identity — d9cd1f00 — so the sibling answers).
     let sibling_uri = "file:///deps/pkg/extra.d.rut";
     let body_uri = "file:///deps/pkg/mod.rut";
     let sibling = "pub fn x() -> i32;\n";
@@ -282,13 +274,14 @@ fn a_two_file_flat_packages_leaf_still_resolves() {
     let mut s = S::boot();
     s.index_mod_at(sibling_uri, "pkg", "", sibling);
     s.index_mod_at(body_uri, "pkg", "", body);
-    // the head: the own lane refuses (hover null), the generic root
-    // lane still answers — at the sibling
+    // the head: refused by the compiler, answered by nothing — the
+    // walk's one decision reaches every feature (hover, definition,
+    // references)
     assert!(no_hover(&s.hover_in(body_uri, body, "use pkg::", 1, 4)));
     let head = s.def_in(body_uri, body, "use pkg::", 1, 4);
-    assert_eq!(head.len(), 1, "{head:?}");
-    assert_eq!(head[0]["uri"], sibling_uri, "{head:?}");
-    assert_eq!(pos_pair(&head[0]["range"]["start"]), (0, 0), "{head:?}");
+    assert!(head.is_empty(), "{head:?}");
+    let head_refs = s.refs_in(body_uri, body, "use pkg::", 1, 4, false);
+    assert!(head_refs.is_empty(), "{head_refs:?}");
     // the leaf: the sibling's row answers through the cross lane
     let leaf = s.def_in(body_uri, body, "{ x }", 1, 2);
     assert_eq!(leaf.len(), 1, "{leaf:?}");
@@ -296,11 +289,11 @@ fn a_two_file_flat_packages_leaf_still_resolves() {
     assert_eq!(pos_pair(&leaf[0]["range"]["start"]), (0, 7), "{leaf:?}");
     let md = markdown(s.hover_in(body_uri, body, "{ x }", 1, 2));
     assert!(md.contains("pub fn x() -> i32") && md.contains("extra.d.rut:1"), "{md}");
-    // completion after the head: the cross use tier, exactly `x` (at
-    // base the position tier answered for the whole set)
+    // completion after the head: the cross use tier too — a head the
+    // compiler refuses offers nothing
     let typing = "use pkg::\nentry fn main() -> nil {\n}\n";
     let items = s.complete_at(body_uri, typing, "use pkg::", 1);
-    assert_eq!(labels(&items), ["x"], "{:?}", labels(&items));
+    assert!(labels(&items).is_empty(), "{:?}", labels(&items));
 }
 }
 
