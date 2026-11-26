@@ -215,8 +215,7 @@ fn the_six_pin_set_loads_and_duplicates_first_mount_wins() {
         rows.push_str(&format!("\"{key}\": {{\"url\": \"{url}\"}},\n"));
         table.insert(url, bytes);
     }
-    let base = std::env::temp_dir().join(format!("rut-std-cdn-six-{}", std::process::id()));
-    let _ = std::fs::remove_dir_all(&base);
+    let base = rut_testkit::Scratch::new("std-cdn-six");
     let diags = load_and_compile(
         &base,
         &rows,
@@ -228,7 +227,6 @@ fn the_six_pin_set_loads_and_duplicates_first_mount_wins() {
     )
     .expect("the six-pin world loads");
     assert!(diags.is_empty(), "{}", diags.join("; "));
-    let _ = std::fs::remove_dir_all(&base);
 }
 
 #[test]
@@ -261,8 +259,7 @@ fn a_generic_owning_bundle_without_template_bodies_refuses_at_mount() {
         })
         .collect();
     let torn_bytes = rut_driver::bundle::write_bundle(&torn).expect("re-write the torn archive");
-    let base = std::env::temp_dir().join(format!("rut-std-cdn-wall-{}", std::process::id()));
-    let _ = std::fs::remove_dir_all(&base);
+    let base = rut_testkit::Scratch::new("std-cdn-wall");
     let mut table = BTreeMap::new();
     table.insert(url.clone(), torn_bytes.clone());
     let err = load_and_compile(
@@ -278,7 +275,6 @@ fn a_generic_owning_bundle_without_template_bodies_refuses_at_mount() {
     );
     assert!(err.contains("no template bodies"), "{err}");
     assert!(err.contains("re-pack the directory"), "{err}");
-    let _ = std::fs::remove_dir_all(&base);
 }
 
 #[test]
@@ -316,8 +312,7 @@ fn a_doctored_bundle_missing_one_template_row_refuses_loudly() {
         .collect();
     let torn_bytes =
         rut_driver::bundle::write_bundle(&torn).expect("re-write the doctored archive");
-    let base = std::env::temp_dir().join(format!("rut-std-cdn-row-{}", std::process::id()));
-    let _ = std::fs::remove_dir_all(&base);
+    let base = rut_testkit::Scratch::new("std-cdn-row");
     let mut table = BTreeMap::new();
     table.insert(url.clone(), torn_bytes.clone());
     let diags = load_and_compile(
@@ -331,7 +326,6 @@ fn a_doctored_bundle_missing_one_template_row_refuses_loudly() {
     assert!(err.contains("served by neither"), "{err}");
     assert!(err.contains("push"), "{err}");
     assert!(err.contains("re-pack the directory"), "{err}");
-    let _ = std::fs::remove_dir_all(&base);
 }
 
 /// One consumer world over the fresh-packed CDN stand-ins: rows +
@@ -384,8 +378,7 @@ fn a_consumer_spelled_shape_compiles_from_a_bundle_mounted_pouch() {
     // from the template with owner = the pkg's spec, and the linked
     // program runs. Nothing persists: the `.rutc` bytes stay pack-time.
     let (url, bytes) = artifact("pouch");
-    let base = std::env::temp_dir().join(format!("rut-std-cdn-vec-{}", std::process::id()));
-    let _ = std::fs::remove_dir_all(&base);
+    let base = rut_testkit::Scratch::new("std-cdn-vec");
     let mut table = BTreeMap::new();
     table.insert(url.clone(), bytes.clone());
     let (diags, program, _session) = load_compile_run(
@@ -411,7 +404,6 @@ fn a_consumer_spelled_shape_compiles_from_a_bundle_mounted_pouch() {
         .expect("vm");
     let out: i32 = vm.call("main", ()).expect("run");
     assert_eq!(out, 2, "the load-time-compiled body runs");
-    let _ = std::fs::remove_dir_all(&base);
 }
 
 #[test]
@@ -434,8 +426,7 @@ fn mixed_dir_and_archive_of_one_pkg_bind_per_row() {
         "\"strbuild\": {{\"path\": \"{}\"}},\n",
         tree.display()
     ));
-    let base = std::env::temp_dir().join(format!("rut-std-cdn-mixed-{}", std::process::id()));
-    let _ = std::fs::remove_dir_all(&base);
+    let base = rut_testkit::Scratch::new("std-cdn-mixed");
     let (diags, program, session) = load_compile_run(
         &base,
         &rows,
@@ -466,7 +457,6 @@ fn mixed_dir_and_archive_of_one_pkg_bind_per_row() {
     );
     let prog = rut_core::link::flatten(program.expect("linked"));
     rut_vm::verify::verify(&prog).expect("verify");
-    let _ = std::fs::remove_dir_all(&base);
 }
 
 #[test]
@@ -478,9 +468,7 @@ fn the_load_time_compile_is_deterministic() {
     let src = "use pouch::{ Vec };\n\nentry fn main() -> i32 {\n    let items: Vec<i64> = Vec<i64>::new();\n    items.push(7);\n    return items.len() as i32;\n}\n";
     let mut outs: Vec<Vec<u8>> = Vec::new();
     for run in 0..2 {
-        let base =
-            std::env::temp_dir().join(format!("rut-std-cdn-det-{}-{run}", std::process::id()));
-        let _ = std::fs::remove_dir_all(&base);
+        let base = rut_testkit::Scratch::new(&format!("std-cdn-det-{run}"));
         let mut table = BTreeMap::new();
         table.insert(url.clone(), bytes.clone());
         let (diags, program, _session) = load_compile_run(
@@ -493,7 +481,6 @@ fn the_load_time_compile_is_deterministic() {
         assert!(diags.is_empty(), "{}", diags.join("; "));
         let prog = program.expect("linked");
         outs.push(rut_core::binary::encode(&prog));
-        let _ = std::fs::remove_dir_all(&base);
     }
     assert_eq!(outs[0], outs[1], "same bundle + same consumer ⇒ same bytes");
 }
@@ -505,8 +492,7 @@ fn a_concrete_class_lib_serves_from_the_bundle() {
     // bodies ride the host pkg's rows (bound by the embedder below) —
     // the exact shape the CDN lane delivers for lib pkgs
     let (url, bytes) = artifact("strbuild");
-    let base = std::env::temp_dir().join(format!("rut-std-cdn-sb-{}", std::process::id()));
-    let _ = std::fs::remove_dir_all(&base);
+    let base = rut_testkit::Scratch::new("std-cdn-sb");
     let mut table = BTreeMap::new();
     table.insert(url.clone(), bytes);
     let app = base.join("app");
@@ -578,7 +564,6 @@ fn a_concrete_class_lib_serves_from_the_bundle() {
         sbh.spec
     );
     assert!(matches!(&sbh.body, rut_driver::MountedBody::Host { .. }));
-    let _ = std::fs::remove_dir_all(&base);
 }
 
 #[test]
@@ -590,8 +575,7 @@ fn ambient_std_and_a_url_std_bundle_coexist() {
     // the same law as any duplicate) and custom hosts that offer none
     // of the std get the rows from the bundle
     let (url, bytes) = artifact("core");
-    let base = std::env::temp_dir().join(format!("rut-std-cdn-core-{}", std::process::id()));
-    let _ = std::fs::remove_dir_all(&base);
+    let base = rut_testkit::Scratch::new("std-cdn-core");
     let mut table = BTreeMap::new();
     table.insert(url.clone(), bytes.clone());
     let diags = load_and_compile(
@@ -602,5 +586,4 @@ fn ambient_std_and_a_url_std_bundle_coexist() {
     )
     .expect("core loads");
     assert!(diags.is_empty(), "{}", diags.join("; "));
-    let _ = std::fs::remove_dir_all(&base);
 }

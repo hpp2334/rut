@@ -12,11 +12,8 @@ use std::path::Path;
 use rut_driver::Mounted;
 use rut_native::pack_dir;
 
-fn scratch(tag: &str) -> std::path::PathBuf {
-    let d = std::env::temp_dir().join(format!("rut-intent-{tag}-{}", std::process::id()));
-    let _ = std::fs::remove_dir_all(&d);
-    std::fs::create_dir_all(&d).unwrap();
-    d
+fn scratch(tag: &str) -> rut_testkit::Scratch {
+    rut_testkit::Scratch::new(&format!("intent-{tag}"))
 }
 
 fn write(dir: &Path, rel: &str, text: &str) {
@@ -29,7 +26,7 @@ fn write(dir: &Path, rel: &str, text: &str) {
 
 /// `util` — a linkable leaf pkg — plus an `app` that uses it: the
 /// smallest compiled archive with a dep group.
-fn util_world(tag: &str) -> std::path::PathBuf {
+fn util_world(tag: &str) -> rut_testkit::Scratch {
     let root = scratch(tag);
     let app = root.join("app");
     write(
@@ -99,7 +96,6 @@ fn bundle_parse_once_offers_many_across_runs() {
         run_entry(linked_binary(&dir_run)),
         "archive == dir, run for run"
     );
-    let _ = std::fs::remove_dir_all(&root);
 }
 
 /// Boot a linked binary and call its entry — the run-behavior probe.
@@ -238,5 +234,4 @@ fn a_mount_refusal_surfaces_at_compile_not_at_offer() {
         .compile()
         .expect_err("the doctored ledger refuses at the mount");
     assert!(err.msg.contains("ledger"), "{err}");
-    let _ = std::fs::remove_dir_all(&root);
 }

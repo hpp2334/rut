@@ -65,11 +65,8 @@ fn graph_of(c: Result<rut_driver::Compiled, rut_driver::RunError>) -> rut_driver
     }
 }
 
-fn scratch(tag: &str) -> PathBuf {
-    let d = std::env::temp_dir().join(format!("rut-decl-bundles-{tag}-{}", std::process::id()));
-    let _ = std::fs::remove_dir_all(&d);
-    std::fs::create_dir_all(&d).unwrap();
-    d
+fn scratch(tag: &str) -> rut_testkit::Scratch {
+    rut_testkit::Scratch::new(&format!("decl-bundles-{tag}"))
 }
 
 fn write(dir: &Path, rel: &str, text: &str) {
@@ -86,12 +83,17 @@ fn host_manifest(name: &str, surface: &str) -> String {
 }
 
 /// A host pkg world: one `.d.rut`, one manifest. Returns the pkg dir.
-fn host_world(tag: &str, name: &str, surface: &str, decls: &str) -> PathBuf {
+fn host_world(
+    tag: &str,
+    name: &str,
+    surface: &str,
+    decls: &str,
+) -> (rut_testkit::Scratch, PathBuf) {
     let root = scratch(tag);
     let dir = root.join(name);
     write(&dir, "rut.jsonc", &host_manifest(name, surface));
     write(&dir, &format!("src/{surface}"), decls);
-    dir
+    (root, dir)
 }
 
 /// Rewrite one archive entry and re-seal the container — the
@@ -131,7 +133,7 @@ fn entry_names(bytes: &[u8]) -> Vec<String> {
 
 #[test]
 fn host_root_packs_and_loads_back() {
-    let dir = host_world(
+    let (_base, dir) = host_world(
         "roundtrip",
         "logger_host",
         "logger_host.d.rut",
@@ -183,7 +185,7 @@ fn consumer_compiles_against_a_decl_bundle_url_dep() {
     // the url lane: pin law at the door, the root mounting as host
     // rows, and a consumer program compiling `use` against them —
     // the CDN-consumer shape end to end
-    let dir = host_world(
+    let (_base, dir) = host_world(
         "urllane",
         "logger_host",
         "logger_host.d.rut",
@@ -192,7 +194,8 @@ fn consumer_compiles_against_a_decl_bundle_url_dep() {
     let bytes = pack_dir(&dir).expect("pack");
     let url = "https://cdn.test/std-v2/dist/std/logger_host.rutbundle";
 
-    let app = scratch("urllane-app").join("app");
+    let app_base = scratch("urllane-app");
+    let app = app_base.join("app");
     write(
         &app,
         "rut.jsonc",
@@ -240,9 +243,10 @@ fn consumer_compiles_against_a_decl_bundle_url_dep() {
 /// (including `nmap_host`, whose surface is named `nmap.d.rut` — NOT
 /// `<name>.d.rut` — and `async_host`, `engine.d.rut`: the entry's
 /// own rel path keys the archive).
-fn shim_tree_host(tag: &str, name: &str, surface: &str) -> PathBuf {
+fn shim_tree_host(tag: &str, name: &str, surface: &str) -> (rut_testkit::Scratch, PathBuf) {
     let tree = PathBuf::from(concat!(env!("CARGO_MANIFEST_DIR"), "/../../rut")).join(name);
-    let dir = scratch(tag).join(name);
+    let root = scratch(tag);
+    let dir = root.join(name);
     let toml = std::fs::read_to_string(tree.join("rut.jsonc")).unwrap();
     write(&dir, "rut.jsonc", &toml);
     write(
@@ -250,7 +254,7 @@ fn shim_tree_host(tag: &str, name: &str, surface: &str) -> PathBuf {
         &format!("src/{surface}"),
         &std::fs::read_to_string(tree.join("src").join(surface)).unwrap(),
     );
-    dir
+    (root, dir)
 }
 
 #[test]
@@ -261,7 +265,7 @@ fn the_real_tree_host_pkgs_pack_and_load() {
         ("async_host", "engine.d.rut"),
         ("core", "core.d.rut"),
     ] {
-        let dir = shim_tree_host("tree", name, surface);
+        let (_base, dir) = shim_tree_host("tree", name, surface);
         let bytes = pack_dir(&dir).unwrap_or_else(|e| panic!("pack rut/{name}: {e}"));
         let names = entry_names(&bytes);
         assert_eq!(
@@ -282,7 +286,7 @@ fn the_real_tree_host_pkgs_pack_and_load() {
 
 #[test]
 fn host_pack_is_deterministic() {
-    let dir = host_world(
+    let (_base, dir) = host_world(
         "determinism",
         "h",
         "h.d.rut",
@@ -329,7 +333,7 @@ fn a_lib_root_packs_the_one_wire_number_too() {
 
 #[test]
 fn strip_refuses_on_a_host_root() {
-    let dir = host_world("strip", "h", "h.d.rut", "pub host fn f(x: i32) -> i32;\n");
+    let (_base, dir) = host_world("strip", "h", "h.d.rut", "pub host fn f(x: i32) -> i32;\n");
     let err = pack_dir_opts(&dir, &PackOpts { strip: true })
         .unwrap_err()
         .to_string();
@@ -341,7 +345,7 @@ fn any_other_version_refuses_with_the_one_recipe() {
     // ONE wire number: a v9 manifest — host flavor — refuses with the
     // same uniform re-pack recipe; and 11 refuses TOO — the old lane
     // is gone, stale bytes re-pack, nothing is grandfathered
-    let dir = host_world("pairing", "h", "h.d.rut", "pub host fn f(x: i32) -> i32;\n");
+    let (_base, dir) = host_world("pairing", "h", "h.d.rut", "pub host fn f(x: i32) -> i32;\n");
     let bytes = pack_dir(&dir).expect("pack");
     let v9_host = r#"{"format": "rutbundle", "format_version": 9, "name": "h", "type": "host", "entry": {"type": "./h.d.rut"}}"#.to_string();
     let err = rut_driver::Bundle::parse(&resealed(&bytes, "rut.jsonc", &v9_host))
@@ -374,7 +378,7 @@ fn any_other_version_refuses_with_the_one_recipe() {
 
 #[test]
 fn a_decl_root_refuses_compiled_shaped_entries() {
-    let dir = host_world("shapes", "h", "h.d.rut", "pub host fn f(x: i32) -> i32;\n");
+    let (_base, dir) = host_world("shapes", "h", "h.d.rut", "pub host fn f(x: i32) -> i32;\n");
     let bytes = pack_dir(&dir).expect("pack");
 
     // a root `.rutc` in a host bundle: the contradiction refusal —
@@ -431,7 +435,7 @@ fn a_decl_root_refuses_compiled_shaped_entries() {
 
 #[test]
 fn the_retired_manifest_pin_refuses_and_the_name_key_holds_for_host_bundles() {
-    let dir = host_world(
+    let (_base, dir) = host_world(
         "pins",
         "logger_host",
         "logger_host.d.rut",
@@ -443,7 +447,8 @@ fn the_retired_manifest_pin_refuses_and_the_name_key_holds_for_host_bundles() {
     // the retired manifest pin refuses at parse (pins live in
     // rut.lock) — even value-shaped right, even with a fetcher in hand
     let wrong = "1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef";
-    let app = scratch("pins-app").join("app");
+    let pins_base = scratch("pins-app");
+    let app = pins_base.join("app");
     write(
         &app,
         "rut.jsonc",
@@ -461,7 +466,8 @@ fn the_retired_manifest_pin_refuses_and_the_name_key_holds_for_host_bundles() {
     assert!(err.contains("rut.lock"), "{err}");
 
     // name-vs-key: the key spells the mounted name
-    let app2 = scratch("pins-app2").join("app2");
+    let pins_base2 = scratch("pins-app2");
+    let app2 = pins_base2.join("app2");
     write(
         &app2,
         "rut.jsonc",
@@ -484,7 +490,7 @@ fn url_host_bundle_is_a_leaf_no_fetch_walk() {
     // nothing else — there is no closure to walk (and a bundle-internal
     // url row would be inert metadata anyway; a host manifest cannot
     // even carry one)
-    let dir = host_world(
+    let (_base, dir) = host_world(
         "leaf",
         "logger_host",
         "logger_host.d.rut",
@@ -545,7 +551,7 @@ fn std_then_a_decl_bundle_consumer_runs_the_pattern() {
     // the embedder story end to end: the std mount (core auto-rides,
     // calc offered), then a consumer that names BOTH the ambient core
     // rows and a CDN-fetched host surface compiles + links
-    let dir = host_world(
+    let (_base, dir) = host_world(
         "embed",
         "logger_host",
         "logger_host.d.rut",
@@ -553,7 +559,8 @@ fn std_then_a_decl_bundle_consumer_runs_the_pattern() {
     );
     let bytes = pack_dir(&dir).expect("pack");
     let url = "https://cdn.test/std-v2/dist/std/logger_host.rutbundle";
-    let app = scratch("embed").join("app");
+    let embed_base = scratch("embed");
+    let app = embed_base.join("app");
     write(
         &app,
         "rut.jsonc",

@@ -34,11 +34,8 @@ use rut_driver::{MountedBody, Walk};
 mod common;
 use common::{dep_dir, pkg_named};
 
-fn scratch(tag: &str) -> PathBuf {
-    let d = std::env::temp_dir().join(format!("rut-mods-{tag}-{}", std::process::id()));
-    let _ = std::fs::remove_dir_all(&d);
-    std::fs::create_dir_all(&d).unwrap();
-    d
+fn scratch(tag: &str) -> rut_testkit::Scratch {
+    rut_testkit::Scratch::new(&format!("mods-{tag}"))
 }
 
 fn write(dir: &Path, rel: &str, text: &str) {
@@ -54,7 +51,7 @@ fn write(dir: &Path, rel: &str, text: &str) {
 /// for the pack lanes' call sites — the bundle wire pair retired from
 /// the directory grammar (the pack door stamps it), so both spellings
 /// write the same plain manifest now.
-fn world(tag: &str, _bundle: bool) -> PathBuf {
+fn world(tag: &str, _bundle: bool) -> rut_testkit::Scratch {
     let root = scratch(tag);
     let pkg = root.join("pkg");
     write(&pkg, "rut.jsonc", "{\"name\": \"pkg\"}");

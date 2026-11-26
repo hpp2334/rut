@@ -58,6 +58,10 @@ futures = { version = "0.3", default-features = false, features = [
 [target.'cfg(not(target_family = "wasm"))'.dependencies]
 futures = { version = "0.3", features = ["executor"] }
 
+[dev-dependencies]
+# a test's scratch directory dies with the test
+rut-testkit = { workspace = true }
+
 # opt into the workspace lint gate (warnings = deny)
 [lints]
 workspace = true

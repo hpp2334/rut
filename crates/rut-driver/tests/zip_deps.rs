@@ -6,7 +6,7 @@
 //! law and the pack-time tree gates hold at every door.
 
 use std::collections::BTreeMap;
-use std::path::{Path, PathBuf};
+use std::path::Path;
 
 use rut_driver::sha256_hex;
 use rut_native::{load_dir_fetched, pack_dir, pack_dir_zip};
@@ -14,11 +14,8 @@ use rut_native::{load_dir_fetched, pack_dir, pack_dir_zip};
 // ------------------------------------------------------------------
 // the fixture world
 
-fn scratch(tag: &str) -> PathBuf {
-    let d = std::env::temp_dir().join(format!("rut-zip-deps-{tag}-{}", std::process::id()));
-    let _ = std::fs::remove_dir_all(&d);
-    std::fs::create_dir_all(&d).unwrap();
-    d
+fn scratch(tag: &str) -> rut_testkit::Scratch {
+    rut_testkit::Scratch::new(&format!("zip-deps-{tag}"))
 }
 
 fn write(dir: &Path, rel: &str, text: &str) {

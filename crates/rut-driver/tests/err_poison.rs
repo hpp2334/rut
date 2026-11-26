@@ -530,8 +530,7 @@ fn unknown_container_head_cascades_nowhere() {
 /// is emitted.
 #[test]
 fn pack_refuses_a_diag_carrying_unit() {
-    let d = std::env::temp_dir().join(format!("rut-err-poison-pack-{}", std::process::id()));
-    let _ = std::fs::remove_dir_all(&d);
+    let d = rut_testkit::Scratch::new("err-poison-pack");
     std::fs::create_dir_all(d.join("src")).unwrap();
     std::fs::write(d.join("rut.jsonc"), r#"{"name": "poison"}"#).unwrap();
     std::fs::write(

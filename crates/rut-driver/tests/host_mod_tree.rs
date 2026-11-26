@@ -46,17 +46,14 @@ fn host_manifest(name: &str, surface: &str) -> String {
     format!(r#"{{"name": "{name}", "type": "host", "entry": {{"type": "./{surface}"}}}}"#)
 }
 
-fn scratch(tag: &str) -> std::path::PathBuf {
-    let d = std::env::temp_dir().join(format!("rut-host-mod-tree-{tag}-{}", std::process::id()));
-    let _ = std::fs::remove_dir_all(&d);
-    std::fs::create_dir_all(&d).unwrap();
-    d
+fn scratch(tag: &str) -> rut_testkit::Scratch {
+    rut_testkit::Scratch::new(&format!("host-mod-tree-{tag}"))
 }
 
 /// The plan's target shape, in a temp dir: root + net + net/tls.
-fn tree_world(tag: &str) -> std::path::PathBuf {
+fn tree_world(base: &Path) -> std::path::PathBuf {
     make_pkg(
-        &scratch(tag),
+        base,
         &[
             ("rut.jsonc", &host_manifest("myhost", "myhost.d.rut")),
             (
@@ -134,8 +131,9 @@ fn a_declared_child_without_its_file_is_the_loud_error() {
     // the latent silent drop is fixed: `mod net;` with no
     // `net/mod.d.rut` beside it refuses at load, naming the declaring
     // file and the expected spelling (the FS mount's loud half)
+    let missing_base = scratch("missing");
     let dir = make_pkg(
-        &scratch("missing"),
+        &missing_base,
         &[
             ("rut.jsonc", &host_manifest("myhost", "myhost.d.rut")),
             (
@@ -150,8 +148,9 @@ fn a_declared_child_without_its_file_is_the_loud_error() {
 
     // the same law one level down: `net/mod.d.rut` declaring `mod
     // tls;` with no `net/tls/` names the DECLARING child file
+    let missing_nested_base = scratch("missing-nested");
     let dir = make_pkg(
-        &scratch("missing-nested"),
+        &missing_nested_base,
         &[
             ("rut.jsonc", &host_manifest("myhost", "myhost.d.rut")),
             (
@@ -183,8 +182,9 @@ fn a_child_that_does_not_parse_is_loud_too() {
     // the mount stays silent (the same law the lib tree has), but the
     // LOWERING parses every mounted child in Decl mode — a broken
     // surface file refuses with its syntax, never silently drops rows
+    let broken_child_base = scratch("broken-child");
     let dir = make_pkg(
-        &scratch("broken-child"),
+        &broken_child_base,
         &[
             ("rut.jsonc", &host_manifest("myhost", "myhost.d.rut")),
             (
@@ -203,8 +203,9 @@ fn a_child_that_does_not_parse_is_loud_too() {
 fn first_mount_wins_and_flat_rows_stay_in_declaration_order() {
     // a repeated `mod net;` mounts once (the mount core's law); the
     // root rows keep their flat path
+    let repeated_base = scratch("repeated");
     let dir = make_pkg(
-        &scratch("repeated"),
+        &repeated_base,
         &[
             ("rut.jsonc", &host_manifest("myhost", "myhost.d.rut")),
             (
@@ -235,8 +236,9 @@ fn first_mount_wins_and_flat_rows_stay_in_declaration_order() {
 fn an_async_row_family_expands_path_qualified() {
     // `host async fn` under a mod: the ctx declares the family on the
     // QUALIFIED name, and the flatten spells `pkg::path::name<suffix>`
+    let async_base = scratch("async");
     let dir = make_pkg(
-        &scratch("async"),
+        &async_base,
         &[
             ("rut.jsonc", &host_manifest("fixture", "fixture.d.rut")),
             (
@@ -279,8 +281,9 @@ fn the_registration_contract_speaks_the_path_spelling() {
     // consumer's FLAT use of a root row still binds (flat compatibility)
     use rut_vm::interp::Vm;
     use rut_vm::HostPkg;
+    let register_base = scratch("register");
     let dir = make_pkg(
-        &scratch("register"),
+        &register_base,
         &[
             ("rut.jsonc", &host_manifest("myhost", "myhost.d.rut")),
             (
@@ -330,8 +333,9 @@ fn flat_host_pkgs_pack_byte_identically() {
     // the writer's shape law: a flat host pkg (no mod children) writes
     // NO rows entry — the bundle stays the two-entry shape,
     // byte-deterministic (same input ⇒ same bytes)
+    let flat_base = scratch("flat");
     let dir = make_pkg(
-        &scratch("flat"),
+        &flat_base,
         &[
             ("rut.jsonc", &host_manifest("flat_host", "flat_host.d.rut")),
             ("src/flat_host.d.rut", "pub host fn ping() -> bool;\n"),
@@ -372,7 +376,8 @@ fn a_host_tree_packs_into_the_rows_envelope_and_loads_back() {
     // envelope — structure lives in the rows, never in the grammar —
     // and the archive reader mounts the envelope, the rows coming
     // back path-qualified exactly as the file tree's
-    let dir = tree_world("pack");
+    let pack_base = scratch("pack");
+    let dir = tree_world(&pack_base);
     let bytes = pack_dir(&dir).expect("pack");
     let bundle = rut_driver::bundle::Bundle::parse(&bytes).unwrap();
     let names: Vec<&str> = bundle.entries().iter().map(|(n, _)| n.as_str()).collect();
@@ -421,8 +426,9 @@ fn the_same_leaf_name_in_two_mods_is_legal() {
     // the mod path is the namespace: two mods may each declare a leaf
     // of the same NAME — the rows differ by their paths, both register
     // (`pkg::a::probe` vs `pkg::b::probe`), neither collides
+    let same_leaf_base = scratch("same-leaf");
     let dir = make_pkg(
-        &scratch("same-leaf"),
+        &same_leaf_base,
         &[
             ("rut.jsonc", &host_manifest("duo", "duo.d.rut")),
             ("src/duo.d.rut", "pub mod a;\npub mod b;\n"),
@@ -475,7 +481,8 @@ fn ensure_host_synthesizes_the_path_qualified_surface() {
     // `host` (`myhost::net::connect`); a flat root row stays bare on
     // both. Read off the linked program's bodyless host funcs — the
     // keys the boot join resolves.
-    let dir = tree_world("surface");
+    let surface_base = scratch("surface");
+    let dir = tree_world(&surface_base);
     let loaded = load_path_session(Path::new(&dir)).expect("loads");
     let compiled = loaded
         .pkgs
@@ -534,8 +541,9 @@ fn a_stray_body_beside_a_host_manifest_is_inert() {
     // `mod.rut` beside a host manifest is an inert unread file — the
     // spelled surface wins and the tree mounts exactly as if the
     // stray were not there
+    let body_base = scratch("body");
     let dir = make_pkg(
-        &scratch("body"),
+        &body_base,
         &[
             ("rut.jsonc", &host_manifest("myhost", "myhost.d.rut")),
             (
@@ -566,8 +574,9 @@ fn the_lib_surface_law_still_refuses_root_host_rows() {
     // the lib-surface law rides unchanged: host fn text outside a
     // `type = "host"` pkg refuses (root-level probe — the leaf half is
     // phase 2)
+    let lib_law_base = scratch("lib-law");
     let dir = make_pkg(
-        &scratch("lib-law"),
+        &lib_law_base,
         &[
             (
                 "rut.jsonc",

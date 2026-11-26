@@ -93,7 +93,7 @@ fn linked_binary(loaded: &rut_driver::Walk) -> Vec<u8> {
 
 #[test]
 fn bundle_round_trip_matches_the_directory() {
-    let base = std::env::temp_dir().join(format!("rut-bundle-test-{}", std::process::id()));
+    let base = rut_testkit::Scratch::new("bundle-test");
     let dir = make_dir(&base);
 
     // the directory form
@@ -113,13 +113,11 @@ fn bundle_round_trip_matches_the_directory() {
     let s2 = load_path_session(&bundle_path).unwrap();
     assert_eq!(linked_binary(&s1), from_dir);
     assert_eq!(linked_binary(&s2), from_dir);
-
-    let _ = std::fs::remove_dir_all(&base);
 }
 
 #[test]
 fn in_memory_bytes_load_without_a_file() {
-    let base = std::env::temp_dir().join(format!("rut-bundle-mem-{}", std::process::id()));
+    let base = rut_testkit::Scratch::new("bundle-mem");
     let dir = make_dir(&base);
     let bytes = pack_dir(&dir).unwrap();
     let loaded = rut_driver::Bundle::parse(&bytes)
@@ -141,13 +139,11 @@ fn in_memory_bytes_load_without_a_file() {
         .graph
         .program
         .is_some());
-    let _ = std::fs::remove_dir_all(&base);
 }
 
 #[test]
 fn refusals() {
-    let base = std::env::temp_dir().join(format!("rut-bundle-ref-{}", std::process::id()));
-    std::fs::create_dir_all(&base).unwrap();
+    let base = rut_testkit::Scratch::new("bundle-ref");
     let src = "entry fn main() -> i32 { return 7; }\n".as_bytes();
 
     // no rut.jsonc entry at all
@@ -266,8 +262,6 @@ fn refusals() {
     let loose = base.join("loose.rut");
     std::fs::write(&loose, src).unwrap();
     assert!(load_path_session(&loose).is_err());
-
-    let _ = std::fs::remove_dir_all(&base);
 }
 
 #[test]
@@ -276,8 +270,7 @@ fn the_declared_kind_dispatches_in_bundle_groups_too() {
     // a lib group whose surface declares host fns refuses at load
     // (the lib-surface law), and a surface-only lib group mounts as a
     // decl unit
-    let base = std::env::temp_dir().join(format!("rut-bundle-kind-{}", std::process::id()));
-    let _ = std::fs::remove_dir_all(&base);
+    let base = rut_testkit::Scratch::new("bundle-kind");
 
     // the dep `s`: a HOST pkg (declared), packable as a source group
     let s = base.join("s");
@@ -405,8 +398,6 @@ fn the_declared_kind_dispatches_in_bundle_groups_too() {
         pkg_named(&session, "s").body,
         rut_driver::MountedBody::Host { .. }
     ));
-
-    let _ = std::fs::remove_dir_all(&base);
 }
 
 #[test]
@@ -415,8 +406,7 @@ fn packs_the_dep_graph_and_loads_it_by_name() {
     // compiled groups, host pkgs as source groups — and the loader
     // resolves groups by NAME (the deps' `path` keys are directory-time
     // only)
-    let base = std::env::temp_dir().join(format!("rut-bundle-deps-{}", std::process::id()));
-    let _ = std::fs::remove_dir_all(&base);
+    let base = rut_testkit::Scratch::new("bundle-deps");
 
     // the dep: a linkable source pkg → a compiled group
     let m = base.join("m");
@@ -551,8 +541,6 @@ fn packs_the_dep_graph_and_loads_it_by_name() {
         .unwrap_err()
         .to_string();
     assert!(err.contains("missing its `m` dependency group"), "{err}");
-
-    let _ = std::fs::remove_dir_all(&base);
 }
 
 #[test]
@@ -585,7 +573,7 @@ fn the_directory_manifest_speaks_jsonc() {
     // the JSONC leniency through the LOADER lane: `//` and `/* */`
     // comments and trailing commas in a directory's `rut.jsonc` — the
     // same value laws underneath
-    let base = std::env::temp_dir().join(format!("rut-jsonc-dir-{}", std::process::id()));
+    let base = rut_testkit::Scratch::new("jsonc-dir");
     let dir = base.join("jsonc");
     let _ = std::fs::remove_dir_all(&dir);
     std::fs::create_dir_all(&dir).unwrap();
@@ -610,14 +598,13 @@ fn the_directory_manifest_speaks_jsonc() {
     let loaded = rut_native::load_dir(&dir).unwrap();
     let root = loaded.root;
     assert_eq!(root, "mod");
-    let _ = std::fs::remove_dir_all(&base);
 }
 
 #[test]
 fn a_directory_still_holding_rut_json_gets_the_pointed_refusal() {
     // the retired name: no fallback lane reads it — the refusal names
     // the file and the cutover recipe
-    let base = std::env::temp_dir().join(format!("rut-old-name-{}", std::process::id()));
+    let base = rut_testkit::Scratch::new("old-name");
     let dir = base.join("old");
     let _ = std::fs::remove_dir_all(&dir);
     std::fs::create_dir_all(&dir).unwrap();
@@ -636,5 +623,4 @@ fn a_directory_still_holding_rut_json_gets_the_pointed_refusal() {
         err.contains("re-name the file or re-pack the directory"),
         "{err}"
     );
-    let _ = std::fs::remove_dir_all(&base);
 }

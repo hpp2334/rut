@@ -8,13 +8,10 @@
 //! templates even when the pack root never called it (the pack-time
 //! ledger lane has nothing to answer).
 
-use std::path::{Path, PathBuf};
+use std::path::Path;
 
-fn scratch(tag: &str) -> PathBuf {
-    let d = std::env::temp_dir().join(format!("rut-modgen-{tag}-{}", std::process::id()));
-    let _ = std::fs::remove_dir_all(&d);
-    std::fs::create_dir_all(&d).unwrap();
-    d
+fn scratch(tag: &str) -> rut_testkit::Scratch {
+    rut_testkit::Scratch::new(&format!("modgen-{tag}"))
 }
 
 fn write(dir: &Path, rel: &str, text: &str) {
@@ -99,7 +96,6 @@ fn packed_module_generic_serves_consumer_typed_instantiation() {
     );
 
     let bytes = rut_native::pack_dir(&world.join("root")).expect("pack");
-    let _ = std::fs::remove_dir_all(&world);
 
     // The consumer EXPLICITLY instantiates the module-resident generic.
     let bundle = rut_driver::Bundle::parse(&bytes).expect("load");

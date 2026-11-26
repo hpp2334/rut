@@ -10,8 +10,7 @@ use std::rc::Rc;
 
 /// A tiny linkable world (root + one compiled dep), packed.
 fn pack_world() -> Vec<u8> {
-    let base = std::env::temp_dir().join(format!("rut-wasm-bundle-{}", std::process::id()));
-    let _ = std::fs::remove_dir_all(&base);
+    let base = rut_testkit::Scratch::new("wasm-bundle");
     let lib = base.join("lib");
     std::fs::create_dir_all(lib.join("src")).unwrap();
     std::fs::write(lib.join("rut.jsonc"), r#"{"name": "lib"}"#).unwrap();
@@ -32,9 +31,7 @@ fn pack_world() -> Vec<u8> {
         "use lib::{ four };\nentry fn main() -> i64 { return four(); }\n",
     )
     .unwrap();
-    let bytes = rut_native::pack_dir(&app).expect("pack");
-    let _ = std::fs::remove_dir_all(&base);
-    bytes
+    rut_native::pack_dir(&app).expect("pack")
 }
 
 #[test]

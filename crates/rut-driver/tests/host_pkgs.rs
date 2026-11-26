@@ -167,8 +167,7 @@ fn a_lib_surfaces_host_fns_are_refused_with_the_fix() {
     // the lib-surface law: `host fn` text lives only in
     // `type = "host"` pkgs. A surface that PARSES and declares host
     // fns is the loud error, naming the row and the fix.
-    let base = std::env::temp_dir().join(format!("rut-lib-surface-{}", std::process::id()));
-    std::fs::create_dir_all(&base).unwrap();
+    let base = rut_testkit::Scratch::new("lib-surface");
     let dir = make_pkg(
         &base,
         &[
@@ -202,8 +201,6 @@ fn a_lib_surfaces_host_fns_are_refused_with_the_fix() {
         loaded.pkg("s").unwrap().body,
         rut_driver::MountedBody::Source { is_decl: true, .. }
     ));
-
-    let _ = std::fs::remove_dir_all(&base);
 }
 
 #[test]
@@ -211,8 +208,7 @@ fn the_surface_only_dev_state_mounts_as_a_decl_unit() {
     // a `type = "lib"` pkg with a surface and no body is the dev
     // state: a decl unit — no host rows, nothing exported (use sites
     // resolve-miss, correctly)
-    let base = std::env::temp_dir().join(format!("rut-dev-state-{}", std::process::id()));
-    std::fs::create_dir_all(&base).unwrap();
+    let base = rut_testkit::Scratch::new("dev-state");
     let dir = make_pkg(
         &base,
         &[
@@ -259,8 +255,6 @@ fn the_surface_only_dev_state_mounts_as_a_decl_unit() {
         "the use site must resolve-miss: {:?}",
         out.graph.diags
     );
-
-    let _ = std::fs::remove_dir_all(&base);
 }
 
 #[test]

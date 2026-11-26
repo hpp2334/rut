@@ -6,7 +6,7 @@
 //! a packaged generic's binary carries the ledger its consumers'
 //! requests resolve against.
 
-use std::path::{Path, PathBuf};
+use std::path::Path;
 
 use rut_native::pack_dir;
 
@@ -57,11 +57,8 @@ fn graph_of(c: Result<rut_driver::Compiled, rut_driver::RunError>) -> rut_driver
     }
 }
 
-fn scratch(tag: &str) -> PathBuf {
-    let d = std::env::temp_dir().join(format!("rut-owner-{tag}-{}", std::process::id()));
-    let _ = std::fs::remove_dir_all(&d);
-    std::fs::create_dir_all(&d).unwrap();
-    d
+fn scratch(tag: &str) -> rut_testkit::Scratch {
+    rut_testkit::Scratch::new(&format!("owner-{tag}"))
 }
 
 fn write(dir: &Path, rel: &str, text: &str) {
@@ -489,7 +486,6 @@ fn packaged_generic_owner_serves_consumer_requests() {
         "the consumer-spelled shape compiles from the ridden source: {:?}",
         g.diags
     );
-    let _ = std::fs::remove_dir_all(&root);
 }
 
 /// The pack walk seeds a generic dep from its consumers: the same
@@ -534,7 +530,6 @@ fn request_order_is_canonical_and_the_pack_is_byte_deterministic() {
         a, b,
         "same dir => byte-identical bundle (canonical request order)"
     );
-    let _ = std::fs::remove_dir_all(&root);
 }
 
 /// The directory world and the packaged world still link identically —
@@ -603,5 +598,4 @@ fn compiled_bundle_matches_the_directory_with_a_generic_lib() {
     assert!(g.diags.is_empty(), "{:?}", g.diags);
     let from_bundle = rut_core::binary::encode(&g.program.expect("linked"));
     assert_eq!(from_dir, from_bundle, "dir and bundle compile identically");
-    let _ = std::fs::remove_dir_all(&root);
 }

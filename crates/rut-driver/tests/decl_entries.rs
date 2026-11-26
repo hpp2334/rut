@@ -15,11 +15,8 @@ use rut_native::{pack_dir, pack_dir_opts};
 // bytes half.
 use rut_native::pack_dir_opts_fetched as pack_fetched;
 
-fn scratch(tag: &str) -> std::path::PathBuf {
-    let d = std::env::temp_dir().join(format!("rut-decl-entry-{tag}-{}", std::process::id()));
-    let _ = std::fs::remove_dir_all(&d);
-    std::fs::create_dir_all(&d).unwrap();
-    d
+fn scratch(tag: &str) -> rut_testkit::Scratch {
+    rut_testkit::Scratch::new(&format!("decl-entry-{tag}"))
 }
 
 fn write(dir: &Path, rel: &str, text: &str) {
@@ -141,7 +138,6 @@ fn a_compiled_group_carries_one_generated_entry() {
         pack_dir(&app).unwrap(),
         "deterministic incl. the entry text"
     );
-    let _ = std::fs::remove_dir_all(&root);
 }
 
 #[test]
@@ -180,7 +176,6 @@ fn the_loader_never_reads_a_compiled_groups_entry() {
         .compile()
         .expect("the run compiles from the binary");
     assert!(g.graph.diags.is_empty(), "{:?}", g.graph.diags);
-    let _ = std::fs::remove_dir_all(&root);
 }
 
 #[test]
@@ -209,7 +204,6 @@ fn strip_omits_the_declaration_entry() {
     // and an unstripped pack of the same dir differs (the entry moved
     // the identity basis, as intended)
     assert_ne!(bytes, pack_dir(&app).unwrap());
-    let _ = std::fs::remove_dir_all(&root);
 }
 
 #[test]
@@ -376,5 +370,4 @@ fn a_v11_url_pin_refuses_at_the_mount_door() {
         .to_string();
     assert!(err.contains("reads bundle format_version 13 only"), "{err}");
     assert!(err.contains("found 11"), "{err}");
-    let _ = std::fs::remove_dir_all(&root);
 }

@@ -9,7 +9,7 @@
 //! lazy, per-index, against the loaded program's interner + `pos`
 //! table, and degrades to pc-only text when the positions are gone.
 
-use std::path::{Path, PathBuf};
+use std::path::Path;
 
 use rut_driver::PackOpts;
 use rut_native::pack_dir_opts;
@@ -58,11 +58,8 @@ fn graph_of(c: Result<rut_driver::Compiled, rut_driver::RunError>) -> rut_driver
     }
 }
 
-fn scratch(tag: &str) -> PathBuf {
-    let d = std::env::temp_dir().join(format!("rut-strip-{tag}-{}", std::process::id()));
-    let _ = std::fs::remove_dir_all(&d);
-    std::fs::create_dir_all(&d).unwrap();
-    d
+fn scratch(tag: &str) -> rut_testkit::Scratch {
+    rut_testkit::Scratch::new(&format!("strip-{tag}"))
 }
 
 fn write(dir: &Path, rel: &str, text: &str) {
@@ -84,7 +81,7 @@ fn bundle_manifest(name: &str, _entry: &str, extra: &str) -> String {
 
 /// The fully-compiled closure: `app` (linkable root) uses `util`
 /// (linkable) — no source group anywhere, so `--strip` is legal.
-fn fc_world(tag: &str) -> PathBuf {
+fn fc_world(tag: &str) -> rut_testkit::Scratch {
     let root = scratch(tag);
     let app = root.join("app");
     write(
@@ -124,7 +121,7 @@ fn pad(n: usize) -> String {
 
 /// The stack-trace world: a single linkable root whose padded chain
 /// captures and renders a trace.
-fn trace_world(tag: &str) -> PathBuf {
+fn trace_world(tag: &str) -> rut_testkit::Scratch {
     let root = scratch(tag);
     let app = root.join("app");
     write(&app, "rut.jsonc", r#"{"name": "app"}"#);
@@ -145,7 +142,7 @@ fn trace_world(tag: &str) -> PathBuf {
 /// The mixed closure: `app` uses `util` (both ride compiled); `boxy`
 /// (inline, unused by the linkable tree) rides as a SOURCE group whose
 /// source `use`s util — exactly the shape strip must refuse.
-fn mixed_world(tag: &str) -> PathBuf {
+fn mixed_world(tag: &str) -> rut_testkit::Scratch {
     let root = scratch(tag);
     let app = root.join("app");
     write(
@@ -259,7 +256,6 @@ fn stripped_bundle_loads_verifies_and_runs_like_the_plain_pack() {
     // never behavior
     let got: i64 = load_and_run(&stripped, "go", None);
     assert_eq!(got, 42);
-    let _ = std::fs::remove_dir_all(&root);
 }
 
 #[test]
@@ -305,7 +301,6 @@ fn sidecar_restores_names_and_positions_for_the_trace() {
         .compile()
         .expect("compile the walk");
     assert!(g.graph.diags.is_empty(), "{:?}", g.graph.diags);
-    let _ = std::fs::remove_dir_all(&root);
 }
 
 #[test]
@@ -321,7 +316,6 @@ fn mixed_closure_with_a_source_group_refuses_strip() {
     assert!(err.contains("util"), "names the compiled dep: {err}");
     assert!(err.contains("fully-compiled"), "says why: {err}");
     assert!(err.contains("--strip"), "names the escape hatch: {err}");
-    let _ = std::fs::remove_dir_all(&root);
 }
 
 #[test]
@@ -414,7 +408,6 @@ fn strip_serves_a_generic_owning_closure() {
     );
     let flat = rut_core::link::flatten(c.graph.program.expect("linked"));
     rut_vm::verify::verify(&flat).expect("verify");
-    let _ = std::fs::remove_dir_all(&root);
 }
 
 #[test]
@@ -425,5 +418,4 @@ fn strip_packing_is_deterministic() {
     let (b2, s2) = pack_dir_opts(&dir, &PackOpts { strip: true }).expect("pack 2");
     assert_eq!(b1, b2, "same dir => byte-identical bundle");
     assert_eq!(s1, s2, "same dir => byte-identical sidecar");
-    let _ = std::fs::remove_dir_all(&root);
 }

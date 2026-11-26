@@ -89,11 +89,8 @@ impl Io for FsIo {
 
 /// one test's scratch tree (the house pattern: temp_dir + pid —
 /// nextest gives every test its own process)
-fn scratch(tag: &str) -> PathBuf {
-    let d = std::env::temp_dir().join(format!("rut-lsp-walk-{tag}-{}", std::process::id()));
-    let _ = std::fs::remove_dir_all(&d);
-    std::fs::create_dir_all(&d).expect("the scratch tree creates");
-    d
+fn scratch(tag: &str) -> rut_testkit::Scratch {
+    rut_testkit::Scratch::new(&format!("lsp-walk-{tag}"))
 }
 
 /// write one file under `dir` at `rel` (created with parents)

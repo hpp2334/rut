@@ -348,10 +348,9 @@ fn pouch_module_source_compiles() {
 
 #[test]
 fn loads_a_directory_graph() {
-    let base = std::env::temp_dir().join(format!("rut-load-test-{}", std::process::id()));
+    let base = rut_testkit::Scratch::new("load-test");
     let app = base.join("app");
     let lib = base.join("lib");
-    let _ = std::fs::remove_dir_all(&base);
     std::fs::create_dir_all(&app).unwrap();
     std::fs::create_dir_all(&lib).unwrap();
     std::fs::write(
@@ -394,7 +393,6 @@ fn loads_a_directory_graph() {
             _ => None,
         });
     assert!(call.is_some(), "cross-module call present");
-    let _ = std::fs::remove_dir_all(&base);
 }
 
 #[test]

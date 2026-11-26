@@ -59,11 +59,8 @@ fn graph_of(c: Result<rut_driver::Compiled, rut_driver::RunError>) -> rut_driver
     }
 }
 
-fn scratch(tag: &str) -> PathBuf {
-    let d = std::env::temp_dir().join(format!("rut-bundle-{tag}-{}", std::process::id()));
-    let _ = std::fs::remove_dir_all(&d);
-    std::fs::create_dir_all(&d).unwrap();
-    d
+fn scratch(tag: &str) -> rut_testkit::Scratch {
+    rut_testkit::Scratch::new(&format!("bundle-{tag}"))
 }
 
 fn write(dir: &Path, rel: &str, text: &str) {
@@ -93,7 +90,7 @@ fn bundle_manifest(name: &str, _entry: &str, extra: &str) -> String {
 /// iff the graph linked it, so `boxy`'s class methods trigger nothing:
 /// the unused declaration still rides (declared deps publish
 /// completely) as a source group a consumer can splice.
-fn mixed_world(tag: &str) -> PathBuf {
+fn mixed_world(tag: &str) -> rut_testkit::Scratch {
     let root = scratch(tag);
     let app = root.join("app");
     write(
@@ -346,7 +343,6 @@ fn generic_and_iface_param_roots_publish_compiled() {
     };
     let got: i64 = run(&bytes);
     assert_eq!(got, 3);
-    let _ = std::fs::remove_dir_all(&root);
 
     // an interface-typed parameter: the fn crosses and dispatches through
     // the per-type itable fill (the boxing site is here in the same
@@ -373,7 +369,6 @@ fn generic_and_iface_param_roots_publish_compiled() {
         .expect("load");
     let got: i32 = run_entry(loaded, "go");
     assert_eq!(got, 36);
-    let _ = std::fs::remove_dir_all(&root);
 }
 
 #[test]
@@ -1037,7 +1032,6 @@ fn staged_and_reference_lanes_agree_across_the_substitution_matrix() {
         write(&dir, "rut.jsonc", &bundle_manifest("lib", "mod.rut", ""));
         write(&dir, "src/mod.rut", &lib_text);
         let bytes = pack_dir(&dir).unwrap_or_else(|e| panic!("{}: pack: {e:?}", cell.tag));
-        let _ = std::fs::remove_dir_all(&dir);
         let archive = rut_driver::Bundle::parse(&bytes)
             .and_then(|b| b.walk())
             .unwrap_or_else(|e| panic!("{}: load: {e:?}", cell.tag));
@@ -1295,7 +1289,6 @@ fn staged_and_reference_lanes_agree_across_the_interface_dispatch_matrix() {
         write(&dir, "rut.jsonc", &bundle_manifest("lib", "mod.rut", ""));
         write(&dir, "src/mod.rut", &lib_text);
         let bytes = pack_dir(&dir).unwrap_or_else(|e| panic!("{}: pack: {e:?}", cell.tag));
-        let _ = std::fs::remove_dir_all(&dir);
         let archive = rut_driver::Bundle::parse(&bytes)
             .and_then(|b| b.walk())
             .unwrap_or_else(|e| panic!("{}: load: {e:?}", cell.tag));
@@ -1359,8 +1352,6 @@ entry fn main() -> i32 {
     write(&dir, "rut.jsonc", &bundle_manifest("lib", "mod.rut", ""));
     write(&dir, "src/mod.rut", &lib_text);
     let bytes = pack_dir(&dir).expect("pack");
-    let _ = std::fs::remove_dir_all(&dir);
-
     let mut encodings: Vec<Vec<u8>> = Vec::new();
     for _ in 0..2 {
         let archive = rut_driver::Bundle::parse(&bytes)

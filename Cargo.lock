@@ -1202,6 +1202,7 @@ dependencies = [
  "rut-lir",
  "rut-native",
  "rut-std",
+ "rut-testkit",
  "rut-vm",
  "serde_json",
  "sha2",
@@ -1247,6 +1248,7 @@ dependencies = [
  "rut-driver",
  "rut-lexer",
  "rut-lir",
+ "rut-testkit",
  "serde",
  "serde_json",
  "sha2",
@@ -1318,6 +1320,7 @@ dependencies = [
  "rut-lexer",
  "rut-native",
  "rut-std",
+ "rut-testkit",
  "rut-vm",
  "wasm-bindgen",
 ]

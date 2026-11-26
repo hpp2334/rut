@@ -40,14 +40,8 @@ fn make_pkg(base: &Path, files: &[(&str, &str)]) -> std::path::PathBuf {
     dir
 }
 
-fn scratch(tag: &str) -> std::path::PathBuf {
-    let d = std::env::temp_dir().join(format!(
-        "rut-host-default-root-{tag}-{}",
-        std::process::id()
-    ));
-    let _ = std::fs::remove_dir_all(&d);
-    std::fs::create_dir_all(&d).unwrap();
-    d
+fn scratch(tag: &str) -> rut_testkit::Scratch {
+    rut_testkit::Scratch::new(&format!("host-default-root-{tag}"))
 }
 
 fn rows_of(pkg: &rut_driver::Mounted) -> Vec<HostRow> {
@@ -61,8 +55,9 @@ fn rows_of(pkg: &rut_driver::Mounted) -> Vec<HostRow> {
 fn the_default_root_is_discovered_without_an_entry_type() {
     // the lib-parity law: `src/mod.d.rut` in the shell is the root
     // surface — flat first
+    let flat_base = scratch("flat");
     let dir = make_pkg(
-        &scratch("flat"),
+        &flat_base,
         &[
             ("rut.jsonc", r#"{"name": "flat_host", "type": "host"}"#),
             ("src/mod.d.rut", "pub host fn ping() -> bool;\n"),
@@ -78,8 +73,9 @@ fn the_default_root_is_discovered_without_an_entry_type() {
 
     // then the tree: the root declares children, the rows ride
     // path-qualified — indistinguishable from a spelled entry's mount
+    let tree_base = scratch("tree");
     let dir = make_pkg(
-        &scratch("tree"),
+        &tree_base,
         &[
             ("rut.jsonc", r#"{"name": "myhost", "type": "host"}"#),
             (
@@ -109,8 +105,9 @@ fn a_spelled_entry_type_wins_over_the_default_root() {
     // both doors present: the spelled `entry.type` is the root — the
     // precedence law keeps every existing flat pkg (calc, engine,
     // nmap, …) loading byte-identically
+    let precedence_base = scratch("precedence");
     let dir = make_pkg(
-        &scratch("precedence"),
+        &precedence_base,
         &[
             (
                 "rut.jsonc",
@@ -132,8 +129,9 @@ fn a_spelled_entry_type_wins_over_the_default_root() {
 fn neither_door_is_the_loud_no_entry_error() {
     // the both-missing refusal names BOTH spellings (the lib arm's
     // ambiguity refusal, d-flavored)
+    let neither_base = scratch("neither");
     let dir = make_pkg(
-        &scratch("neither"),
+        &neither_base,
         &[("rut.jsonc", r#"{"name": "h", "type": "host"}"#)],
     );
     let err = load_path_session(&dir).unwrap_err().to_string();
@@ -143,8 +141,9 @@ fn neither_door_is_the_loud_no_entry_error() {
     // the pack lane mirrors the discovery and refuses the same dir —
     // the pack verifies the exact layout the reader mounts back (the
     // pack lane gates on the bundle keys first, so spell them)
+    let neither_pack_base = scratch("neither-pack");
     let dir = make_pkg(
-        &scratch("neither-pack"),
+        &neither_pack_base,
         &[("rut.jsonc", r#"{"name": "h", "type": "host"}"#)],
     );
     let err = pack_dir(&dir).unwrap_err().to_string();
@@ -165,8 +164,9 @@ fn a_stray_body_beside_a_host_manifest_is_inert() {
         ),
         (r#"{"name": "h", "type": "host"}"#, vec!["h::root_row"]),
     ] {
+        let body_base = scratch("body");
         let dir = make_pkg(
-            &scratch("body"),
+            &body_base,
             &[
                 ("rut.jsonc", manifest),
                 ("src/h.d.rut", "pub host fn ping() -> bool;\n"),
@@ -187,8 +187,9 @@ fn a_stray_body_beside_a_host_manifest_is_inert() {
 fn the_default_root_packs_and_loads_back() {
     // flat: the bundle stays the two-entry shape (manifest + the
     // `mod.d.rut` root key) — no rows entry, no version bump
+    let pack_flat_base = scratch("pack-flat");
     let dir = make_pkg(
-        &scratch("pack-flat"),
+        &pack_flat_base,
         &[
             ("rut.jsonc", r#"{"name": "flat_host", "type": "host"}"#),
             ("src/mod.d.rut", "pub host fn ping() -> bool;\n"),
@@ -216,8 +217,9 @@ fn the_default_root_packs_and_loads_back() {
     // envelope (wire 13 — structure lives in the rows, never in the
     // grammar); the round trip re-lowers path-qualified through the
     // envelope mount
+    let pack_tree_base = scratch("pack-tree");
     let dir = make_pkg(
-        &scratch("pack-tree"),
+        &pack_tree_base,
         &[
             ("rut.jsonc", r#"{"name": "myhost", "type": "host"}"#),
             (
@@ -275,8 +277,9 @@ fn a_host_bundle_packs_its_surface_at_the_canonical_name() {
     // spelled, the tree beside it in the rows envelope. The reader
     // mounts `mod.d.rut`
     // at both levels.
+    let old_shape_base = scratch("old-shape");
     let dir = make_pkg(
-        &scratch("old-shape"),
+        &old_shape_base,
         &[
             (
                 "rut.jsonc",

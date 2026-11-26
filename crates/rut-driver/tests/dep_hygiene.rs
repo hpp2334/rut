@@ -18,13 +18,10 @@
 //!   mechanism — `Manifest::lib(..)` / `parse_manifest(..)`; a missing
 //!   row renders D5's host clause).
 
-use std::path::{Path, PathBuf};
+use std::path::Path;
 
-fn scratch(tag: &str) -> PathBuf {
-    let d = std::env::temp_dir().join(format!("rut-dep-hygiene-{tag}-{}", std::process::id()));
-    let _ = std::fs::remove_dir_all(&d);
-    std::fs::create_dir_all(&d).unwrap();
-    d
+fn scratch(tag: &str) -> rut_testkit::Scratch {
+    rut_testkit::Scratch::new(&format!("dep-hygiene-{tag}"))
 }
 
 fn write(dir: &Path, rel: &str, text: &str) {
@@ -58,7 +55,7 @@ fn world(
     app_deps: &[(&str, &str)],
     a_deps: &[(&str, &str)],
     dev: &[(&str, &str)],
-) -> PathBuf {
+) -> rut_testkit::Scratch {
     let root = scratch(tag);
     let app = root.join("app");
     let mut m = manifest("app", app_deps);
@@ -258,7 +255,7 @@ fn the_same_dev_name_used_by_a_non_root_is_d5() {
 /// A packable world: `app` deps {u, g}; `g` deps {u} and USES it; `u`
 /// a leaf. Packed, `u` and `g` ride as source groups under the
 /// compiled root.
-fn bundle_world(tag: &str) -> (PathBuf, Vec<u8>) {
+fn bundle_world(tag: &str) -> (rut_testkit::Scratch, Vec<u8>) {
     let root = scratch(tag);
     let app = root.join("app");
     write(

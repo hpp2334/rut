@@ -66,9 +66,7 @@ fn pkg_world_from_bundles(names: &[&str]) -> Vec<rut_driver::Mounted> {
             .unwrap_or_else(|e| panic!("dist/std/{b}.zip: {e}"));
         let entries =
             rut_driver::bundle::read_srczip(&bytes).unwrap_or_else(|e| panic!("read {b}.zip: {e}"));
-        let dir =
-            std::env::temp_dir().join(format!("rut-generic-templates-{}-{b}", std::process::id()));
-        let _ = std::fs::remove_dir_all(&dir);
+        let dir = rut_testkit::Scratch::new(&format!("generic-templates-{b}"));
         for (path, data) in &entries {
             let p = dir.join(path);
             if let Some(parent) = p.parent() {

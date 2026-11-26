@@ -12,7 +12,7 @@
 //! loader refuses rather than fetches.
 
 use std::collections::BTreeMap;
-use std::path::{Path, PathBuf};
+use std::path::Path;
 
 mod common;
 use common::{block_on, dep_dir, write_lock, Table};
@@ -67,11 +67,8 @@ fn graph_of(c: Result<rut_driver::Compiled, rut_driver::RunError>) -> rut_driver
     }
 }
 
-fn scratch(tag: &str) -> PathBuf {
-    let d = std::env::temp_dir().join(format!("rut-url-deps-{tag}-{}", std::process::id()));
-    let _ = std::fs::remove_dir_all(&d);
-    std::fs::create_dir_all(&d).unwrap();
-    d
+fn scratch(tag: &str) -> rut_testkit::Scratch {
+    rut_testkit::Scratch::new(&format!("url-deps-{tag}"))
 }
 
 fn write(dir: &Path, rel: &str, text: &str) {
@@ -86,11 +83,11 @@ fn write(dir: &Path, rel: &str, text: &str) {
 /// touch the real `~/.rut`. Mutating the process env here is safe
 /// under nextest's one-process-per-test model (the suite's runner),
 /// which is the only runner this repo uses.
-struct Home(PathBuf);
+struct Home(rut_testkit::Scratch);
 impl Home {
     fn new(tag: &str) -> Home {
         let d = scratch(&format!("{tag}-home"));
-        std::env::set_var("RUT_HOME", &d);
+        std::env::set_var("RUT_HOME", &*d);
         Home(d)
     }
 
@@ -101,7 +98,6 @@ impl Home {
 impl Drop for Home {
     fn drop(&mut self) {
         std::env::remove_var("RUT_HOME");
-        let _ = std::fs::remove_dir_all(&self.0);
     }
 }
 
@@ -114,7 +110,7 @@ fn manifest(name: &str, _entry: &str, extra: &str) -> String {
 }
 
 /// A plain linkable leaf pkg — packs to a one-group compiled bundle.
-fn leaf_world(tag: &str, name: &str, body: &str) -> PathBuf {
+fn leaf_world(tag: &str, name: &str, body: &str) -> rut_testkit::Scratch {
     let root = scratch(tag);
     let dir = root.join(name);
     write(&dir, "rut.jsonc", &manifest(name, "mod.rut", ""));
@@ -566,7 +562,7 @@ fn the_temp_fallback_unpacks_when_the_store_tree_is_absent() {
         !app.join(".rut").exists(),
         "the fallback never writes the project"
     );
-    let leftovers: Vec<String> = std::fs::read_dir(std::env::temp_dir())
+    let leftovers: Vec<String> = std::fs::read_dir(rut_testkit::temp_root())
         .unwrap()
         .flatten()
         .map(|e| e.file_name().to_string_lossy().into_owned())
@@ -794,7 +790,7 @@ fn a_gutted_mod_child_falls_back_to_the_temp_unpack() {
         "the walk never repairs the store tree"
     );
     // and the run-scoped temp dir died with the walk (zero traces)
-    let leftovers: Vec<String> = std::fs::read_dir(std::env::temp_dir())
+    let leftovers: Vec<String> = std::fs::read_dir(rut_testkit::temp_root())
         .unwrap()
         .flatten()
         .map(|e| e.file_name().to_string_lossy().into_owned())
@@ -884,7 +880,7 @@ fn a_whole_deep_store_tree_mounts_from_the_store() {
         grid.text
     );
     // no temp fallback ran — the store tree probed complete
-    let leftovers: Vec<String> = std::fs::read_dir(std::env::temp_dir())
+    let leftovers: Vec<String> = std::fs::read_dir(rut_testkit::temp_root())
         .unwrap()
         .flatten()
         .map(|e| e.file_name().to_string_lossy().into_owned())
@@ -910,7 +906,7 @@ fn a_whole_deep_store_tree_mounts_from_the_store() {
 /// dev-deps for its own build) packed INSIDE `zeta` as a declared-but-
 /// unused dep, so it rides the archive as a SOURCE group — the consumer
 /// sees codec as an ARCHIVE SOURCE GROUP.
-fn codec_world(tag: &str) -> (PathBuf, Vec<u8>, String) {
+fn codec_world(tag: &str) -> (rut_testkit::Scratch, Vec<u8>, String) {
     let root = scratch(tag);
     write(
         &root.join("pouch"),

@@ -134,9 +134,7 @@ fn same_name_two_identities_one_program() {
     // content identity), each consumer binds its own, and one program
     // runs over both. The diamond dissolves: first-mount-wins was
     // per-name; it is per-identity now.
-    let root = std::env::temp_dir().join(format!("rut-coexist-{}", std::process::id()));
-    let _ = std::fs::remove_dir_all(&root);
-    std::fs::create_dir_all(&root).unwrap();
+    let root = rut_testkit::Scratch::new("coexist");
 
     write_util(&root, "util_7", 7, "the v1 build");
     write_util(&root, "util_9", 9, "the v2 build");
@@ -234,7 +232,6 @@ fn same_name_two_identities_one_program() {
         79,
         "v1's 7 and v2's 9 both bind"
     );
-    let _ = std::fs::remove_dir_all(&root);
 }
 
 #[test]
@@ -242,9 +239,7 @@ fn same_identity_via_two_routes_mounts_once() {
     // THE EXACT-DEDUP LAW: two routes carry the SAME group (same name,
     // same bytes ⇒ same identity) — it mounts ONCE, and both consumers
     // bind the one body.
-    let root = std::env::temp_dir().join(format!("rut-exact-dedup-{}", std::process::id()));
-    let _ = std::fs::remove_dir_all(&root);
-    std::fs::create_dir_all(&root).unwrap();
+    let root = rut_testkit::Scratch::new("exact-dedup");
 
     write_util(&root, "util_7", 7, "one build");
     write_util(&root, "util_7b", 7, "one build");
@@ -344,7 +339,6 @@ fn same_identity_via_two_routes_mounts_once() {
         14,
         "both consumers bind the one body"
     );
-    let _ = std::fs::remove_dir_all(&root);
 }
 
 /// Compile, flatten, verify, and run `main` — the i64 result.
