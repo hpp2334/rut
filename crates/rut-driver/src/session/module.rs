@@ -295,11 +295,17 @@ fn zip_text(entries: &[(String, Vec<u8>)], rel: &str) -> Option<String> {
 
 /// The declaration-driven mod tree over the archive: every
 /// `mod NAME;` in `root_text` resolves against the zip's two child
-/// spellings (`<stem>/<child_file>` and `<stem>.rut`) — both present
-/// is the loader's loud ambiguity, either alone mounts, neither the
-/// loud miss. [`crate::mods::mount_mod_children`] with the archive
-/// lookup; `root_rel` (prefix-joined) is the root's file identity
-/// for the cycle guard.
+/// spellings BESIDE THE DECLARING FILE — `<parent dir>/NAME/<child_file>`
+/// and `<parent dir>/NAME.rut` — both present is the loader's loud
+/// ambiguity, either alone mounts, neither the loud miss. The parent
+/// file's directory has one home, [`crate::mods::child_dir`] (the
+/// parent's root-relative record), so a single-file parent
+/// `src/m/a.rut` probes `src/m/b/…`, never `src/m/a/b/…`. The read
+/// closure remembers each mounted child's record by mod path (the root
+/// seeded with its own `src/`-relative name) — the record is also what
+/// it lays down for the display law. [`crate::mods::mount_mod_children`]
+/// with the archive lookup; `root_rel` (prefix-joined) is the root's
+/// file identity for the cycle guard.
 fn srczip_mods(
     entries: &[(String, Vec<u8>)],
     prefix: &str,
@@ -309,28 +315,44 @@ fn srczip_mods(
     child_file: &str,
 ) -> Result<BTreeMap<String, crate::mods::ModSource>, String> {
     let base = format!("{prefix}src/");
+    // the parents' records by mod path — the root's `src/`-relative
+    // name, each child's entry key stripped of `{prefix}src/`
+    let root_record = root_rel
+        .strip_prefix("src/")
+        .unwrap_or(root_rel)
+        .to_string();
+    let mut records: BTreeMap<String, String> =
+        BTreeMap::from([(String::new(), root_record.clone())]);
     let mut read = |parent: &str, child: &str| -> Result<crate::mods::ChildLookup, String> {
-        let stem = if parent.is_empty() {
-            format!("{base}{child}")
+        let parent_file = records
+            .get(parent)
+            .map_or(root_record.as_str(), String::as_str);
+        let (dir_rel, file_rel) = crate::mods::child_probes(parent_file, child, child_file);
+        let dir_form = format!("{base}{dir_rel}");
+        let file_form = format!("{base}{file_rel}");
+        let child_path = if parent.is_empty() {
+            child.to_string()
         } else {
-            format!("{base}{parent}/{child}")
+            format!("{parent}/{child}")
         };
-        let dir_form = format!("{stem}/{child_file}");
-        let file_form = format!("{stem}.rut");
         match (zip_text(entries, &dir_form), zip_text(entries, &file_form)) {
             (Some(_), Some(_)) => Ok(crate::mods::ChildLookup::Ambiguous),
-            (Some(text), None) => Ok(crate::mods::ChildLookup::Found {
-                text,
-                canon: dir_form,
-                // the record: the entry key stripped of `{prefix}src/`
-                // — the child's root-relative directory-form path
-                file: format!("{child}/{child_file}"),
-            }),
-            (None, Some(text)) => Ok(crate::mods::ChildLookup::Found {
-                text,
-                canon: file_form,
-                file: format!("{child}.rut"),
-            }),
+            (Some(text), None) => {
+                records.insert(child_path, dir_rel.clone());
+                Ok(crate::mods::ChildLookup::Found {
+                    text,
+                    canon: dir_form,
+                    file: dir_rel,
+                })
+            }
+            (None, Some(text)) => {
+                records.insert(child_path, file_rel.clone());
+                Ok(crate::mods::ChildLookup::Found {
+                    text,
+                    canon: file_form,
+                    file: file_rel,
+                })
+            }
             (None, None) => Ok(crate::mods::ChildLookup::Missing),
         }
     };

@@ -24,7 +24,7 @@ use std::path::{Path, PathBuf};
 use rut_core::id::ScopeId;
 
 use rut_driver::bundle::{parse_manifest, read_entry, Manifest, PkgType, MANIFEST_NAME};
-use rut_driver::mods::{mount_mod_children, ChildLookup, ModSource};
+use rut_driver::mods::{child_dir, mount_mod_children, ChildLookup, ModSource};
 use rut_driver::{Mode, Mounted, MountedBody, RunError, Walk};
 
 use crate::error::LoadError;
@@ -543,11 +543,36 @@ pub(crate) fn dir_child_lookup(
     name: &str,
     child_file: &str,
 ) -> Result<ChildLookup, String> {
+    // the probe base IS the parent FILE's directory — the one home of
+    // the rule (`rut_driver::mods::child_dir`) read over the parent's
+    // root-relative record (its physical path under the root file's
+    // directory); a parent outside that directory falls back to its own
+    // physical parent
+    let root_dir = files
+        .get("")
+        .and_then(|f| f.parent())
+        .map(Path::to_path_buf);
     let base = match files.get(parent) {
-        Some(f) => f
-            .parent()
-            .map(Path::to_path_buf)
-            .unwrap_or_else(|| dir.to_path_buf()),
+        Some(f) => {
+            let rel = root_dir
+                .as_deref()
+                .and_then(|d| f.strip_prefix(d).ok())
+                .map(|rel| rel.to_string_lossy().replace('\\', "/"));
+            match (root_dir.as_deref(), rel) {
+                (Some(root), Some(rel)) => {
+                    let child = child_dir(&rel);
+                    if child.is_empty() {
+                        root.to_path_buf()
+                    } else {
+                        root.join(child)
+                    }
+                }
+                _ => f
+                    .parent()
+                    .map(Path::to_path_buf)
+                    .unwrap_or_else(|| dir.to_path_buf()),
+            }
+        }
         None if parent.is_empty() => dir.to_path_buf(),
         None => dir.join(parent),
     };
@@ -581,10 +606,6 @@ pub(crate) fn dir_child_lookup(
             // the display record: the found file relative to the root
             // file's directory (the canonical form answers when the
             // probe path's shape left the root's directory)
-            let root_dir = files
-                .get("")
-                .and_then(|f| f.parent())
-                .map(Path::to_path_buf);
             let file = root_dir
                 .as_deref()
                 .and_then(|d| probe.0.strip_prefix(d).ok())

@@ -453,7 +453,11 @@ fn validate_tree(
         }
     }
     // gate B — every `src/**.rut` is mounted: the root file, the
-    // spelled surface, or a declared child's file
+    // spelled surface, or a declared child's file. The child's answer
+    // is the RECORD the mount laid down beside its declaring file
+    // (`rut_driver::mods::child_dir`) — never a mod path re-derived
+    // from the file's shape, which reads `m/b.rut` as `m/b` and refuses
+    // a single-file parent's child mounted at `m/a/b`
     let surface_rel = manifest
         .entry
         .type_path
@@ -467,7 +471,7 @@ fn validate_tree(
         let declared = src_rel == "mod.rut"
             || src_rel == "mod.d.rut"
             || surface_rel.as_deref() == Some(format!("src/{src_rel}").as_str())
-            || mounted.mods.contains_key(derive_mod_path(src_rel));
+            || mounted.mods.values().any(|m| m.file.as_str() == src_rel);
         if !declared {
             return Err(PackError::law(format!(
                 "{}: nothing declares this module — `mod …;` it from its parent or delete it",
@@ -476,17 +480,6 @@ fn validate_tree(
         }
     }
     Ok(())
-}
-
-/// The mod path a `src/`-relative module file mounts as:
-/// `mod.rut`/`mod.d.rut` is the root, `a/mod.rut` (or `a/mod.d.rut`)
-/// the `a` module, `a.rut` the single-file `a`.
-fn derive_mod_path(src_rel: &str) -> &str {
-    src_rel
-        .strip_suffix("/mod.rut")
-        .or_else(|| src_rel.strip_suffix("/mod.d.rut"))
-        .or_else(|| src_rel.strip_suffix(".rut"))
-        .unwrap_or(src_rel)
 }
 
 /// The pack lane's fetched core: read the root's `rut.lock` from disk

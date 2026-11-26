@@ -102,6 +102,39 @@ pub enum ChildLookup {
     Missing,
 }
 
+/// The directory a `mod NAME;` declaration mounts its child in — the
+/// parent FILE's directory, never a directory named after the parent's
+/// mod path. `mod b;` in `m/a.rut` probes beside `a.rut` (`m/`), so the
+/// child is `m/b.rut` / `m/b/mod.rut`; the root file (`mod.rut`,
+/// `mod.d.rut`, a spelled surface) mounts at the package root (`""`).
+///
+/// THE ONE HOME of the rule: every lane that holds a parent's
+/// root-relative record derives its probe base here — the source-zip
+/// read and the FS walk alike — and the pack gate reads the record the
+/// mount laid down. A lane that joins the parent's MOD PATH as a
+/// directory is the mirror this law deleted.
+pub fn child_dir(parent_file: &str) -> &str {
+    parent_file
+        .rsplit_once('/')
+        .map(|(dir, _)| dir)
+        .unwrap_or("")
+}
+
+/// The two root-relative spellings a `mod NAME;` in `parent_file`
+/// probes: the directory form beside the declaring file
+/// (`<dir>/NAME/<child_file>`) and the single-file form
+/// (`<dir>/NAME.rut`). `child_file` is the caller's flavor (`mod.rut`
+/// for a lib body tree, `mod.d.rut` for a host surface tree).
+pub fn child_probes(parent_file: &str, name: &str, child_file: &str) -> (String, String) {
+    let dir = child_dir(parent_file);
+    let stem = if dir.is_empty() {
+        name.to_string()
+    } else {
+        format!("{dir}/{name}")
+    };
+    (format!("{stem}/{child_file}"), format!("{stem}.rut"))
+}
+
 // ---------------------------------------------------------------------
 // the mount core (pure) — and the compile's strict door over it
 // ---------------------------------------------------------------------
