@@ -87,11 +87,8 @@ impl TestServer {
     }
 }
 
-fn scratch(tag: &str) -> PathBuf {
-    let d = std::env::temp_dir().join(format!("rut-cli-locklane-{tag}-{}", std::process::id()));
-    let _ = std::fs::remove_dir_all(&d);
-    std::fs::create_dir_all(&d).unwrap();
-    d
+fn scratch(tag: &str) -> rut_testkit::Scratch {
+    rut_testkit::Scratch::new(&format!("cli-locklane-{tag}"))
 }
 
 fn write(dir: &Path, rel: &str, text: &str) {

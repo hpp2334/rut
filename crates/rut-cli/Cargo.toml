@@ -36,6 +36,10 @@ rut-ast = { path = "../rut-ast" }
 # (`RUT_HOME`, default `~/.rut` — rut-driver's derivation core) and
 # block_on's the READY fetch futures with a noop waker.
 
+[dev-dependencies]
+# a test's scratch directory — it dies with the test
+rut-testkit = { workspace = true }
+
 # opt into the workspace lint gate (warnings = deny)
 [lints]
 workspace = true

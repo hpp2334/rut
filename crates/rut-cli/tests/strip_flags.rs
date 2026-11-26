@@ -5,14 +5,11 @@
 //! The heavy lanes (determinism, refusal matrix, exact restoration)
 //! are pinned driver-side; this file is the CLI face.
 
-use std::path::{Path, PathBuf};
+use std::path::Path;
 use std::process::Command;
 
-fn scratch(tag: &str) -> PathBuf {
-    let d = std::env::temp_dir().join(format!("rut-cli-strip-{tag}-{}", std::process::id()));
-    let _ = std::fs::remove_dir_all(&d);
-    std::fs::create_dir_all(&d).unwrap();
-    d
+fn scratch(tag: &str) -> rut_testkit::Scratch {
+    rut_testkit::Scratch::new(&format!("cli-strip-{tag}"))
 }
 
 fn write(dir: &Path, rel: &str, text: &str) {
@@ -23,46 +20,19 @@ fn write(dir: &Path, rel: &str, text: &str) {
     std::fs::write(p, text).unwrap();
 }
 
-/// `rut` as a pre-configured Command: $RUT_HOME pinned to a scratch
-/// dir created once per test process (nextest runs one test per
-/// process), so every spawn — the run-key cache and the dep store
-/// included — stays off the real `~/.rut` — and removed again at
-/// process exit (an atexit hook, below).
-fn rut_cmd() -> Command {
-    static HOME: std::sync::OnceLock<PathBuf> = std::sync::OnceLock::new();
-    let home = HOME.get_or_init(|| {
-        let h = scratch("rut-home");
-        remove_at_exit(&h);
-        h
-    });
+/// `rut` as a pre-configured Command: $RUT_HOME pinned to the test's
+/// scratch home, so every spawn — the run-key cache and the dep store
+/// included — stays off the real `~/.rut`.
+fn rut_cmd(home: &Path) -> Command {
     let mut cmd = Command::new(env!("CARGO_BIN_EXE_rut"));
     cmd.env("RUT_HOME", home);
     cmd
 }
 
-/// Remove `dir` when the process exits — the scratch rut home is
-/// litter, never a keeper.
-fn remove_at_exit(dir: &Path) {
-    extern "C" {
-        fn atexit(cb: extern "C" fn()) -> i32;
-    }
-    static PENDING: std::sync::Mutex<Option<PathBuf>> = std::sync::Mutex::new(None);
-    extern "C" fn clean() {
-        let dir = PENDING.lock().unwrap_or_else(|e| e.into_inner()).take();
-        if let Some(dir) = dir {
-            let _ = std::fs::remove_dir_all(dir);
-        }
-    }
-    *PENDING.lock().unwrap_or_else(|e| e.into_inner()) = Some(dir.to_path_buf());
-    // registered once per process (the OnceLock above); a refused
-    // registration only leaves the litter
-    let _ = unsafe { atexit(clean) };
-}
-
 /// A single-group world whose `main` panics with a stack-trace render —
 /// the trap message carries the render to stderr, so name restoration
 /// is observable without any package mounts.
-fn panic_world(tag: &str) -> PathBuf {
+fn panic_world(tag: &str) -> rut_testkit::Scratch {
     let root = scratch(tag);
     let app = root.join("app");
     write(&app, "rut.jsonc", r#"{"name": "app"}"#);
@@ -82,8 +52,9 @@ fn panic_world(tag: &str) -> PathBuf {
 
 #[test]
 fn pack_strip_writes_and_prints_the_sidecar() {
+    let home = rut_testkit::Scratch::new("cli-strip-home");
     let root = panic_world("packflag");
-    let out = rut_cmd()
+    let out = rut_cmd(&home)
         .args([
             "pack",
             root.join("app").to_str().unwrap(),
@@ -116,17 +87,17 @@ fn pack_strip_writes_and_prints_the_sidecar() {
         !bytes.windows(5).any(|w| w == b"RUTS\0"),
         "no RUTS magic inside the archive"
     );
-    let _ = std::fs::remove_dir_all(&root);
 }
 
 #[test]
 fn run_symbols_on_a_non_bundle_input_is_a_usage_error() {
+    let home = rut_testkit::Scratch::new("cli-strip-home");
     let root = scratch("usage");
     let src = root.join("main.rut");
     write(&root, "main.rut", "entry fn main() -> i32 { return 4; }\n");
     // a directory input reaches the pairing check: `--symbols` is a
     // compiled-bundle-only restore
-    let out = rut_cmd()
+    let out = rut_cmd(&home)
         .args(["run", root.to_str().unwrap(), "--symbols", "x.rutsym"])
         .output()
         .expect("run rut");
@@ -136,7 +107,7 @@ fn run_symbols_on_a_non_bundle_input_is_a_usage_error() {
     assert!(stderr.contains(".rutbundle"), "{stderr}");
     // a loose file never reaches the pairing check — the run lane's
     // allowlist door refuses it first (`run_lane.rs` pins that message)
-    let out = rut_cmd()
+    let out = rut_cmd(&home)
         .args(["run", src.to_str().unwrap(), "--symbols", "x.rutsym"])
         .output()
         .expect("run rut");
@@ -144,18 +115,18 @@ fn run_symbols_on_a_non_bundle_input_is_a_usage_error() {
     let stderr = String::from_utf8_lossy(&out.stderr);
     assert!(stderr.contains("not a runnable unit"), "{stderr}");
     // a dangling flag value is the same loud lane
-    let out = rut_cmd()
+    let out = rut_cmd(&home)
         .args(["run", src.to_str().unwrap(), "--symbols"])
         .output()
         .expect("run rut");
     assert_eq!(out.status.code(), Some(2));
-    let _ = std::fs::remove_dir_all(&root);
 }
 
 #[test]
 fn run_on_a_stripped_bundle_restores_with_symbols_and_degrades_without() {
+    let home = rut_testkit::Scratch::new("cli-strip-home");
     let root = panic_world("e2e");
-    let out = rut_cmd()
+    let out = rut_cmd(&home)
         .args([
             "pack",
             root.join("app").to_str().unwrap(),
@@ -168,7 +139,7 @@ fn run_on_a_stripped_bundle_restores_with_symbols_and_degrades_without() {
     assert!(out.status.success());
 
     // without the sidecar: mangled names, pc-only degradation
-    let out = rut_cmd()
+    let out = rut_cmd(&home)
         .args(["run", root.join("app.rutbundle").to_str().unwrap()])
         .output()
         .expect("run rut");
@@ -182,7 +153,7 @@ fn run_on_a_stripped_bundle_restores_with_symbols_and_degrades_without() {
     assert!(stderr.contains("@ pc"), "pc-only degradation: {stderr}");
 
     // with the sidecar: the real fn name and a line/col position
-    let out = rut_cmd()
+    let out = rut_cmd(&home)
         .args([
             "run",
             root.join("app.rutbundle").to_str().unwrap(),
@@ -199,5 +170,4 @@ fn run_on_a_stripped_bundle_restores_with_symbols_and_degrades_without() {
     let stderr = String::from_utf8_lossy(&out.stderr);
     assert!(stderr.contains("at boom ("), "restored name: {stderr}");
     assert!(!stderr.contains("@ pc"), "positions restored: {stderr}");
-    let _ = std::fs::remove_dir_all(&root);
 }

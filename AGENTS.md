@@ -455,7 +455,9 @@ order:
   into the rendered book (mdbook 0.5 dropped
   `output.html.additional-resources`, so the lane does the copy).
 - Tests run through `cargo nextest run` (cargo-nextest is installed),
-  not `cargo test` — keep this for every test invocation.
+  not `cargo test` — keep this for every test invocation. A test's
+  scratch directory is a `rut_testkit::Scratch`; it dies with the test,
+  and no test builds a temp path itself.
 - Anti-rot gate for book code: `cargo nextest run -p rut-cli --test
   book_blocks` compiles + runs every runnable ```rut block in
   docs/src natively and must pass whenever book code blocks change.

@@ -205,20 +205,12 @@ mod tests {
     /// never touch the real `~/.rut`. Mutating the process env here is
     /// safe under nextest's one-process-per-test model (the suite's
     /// runner), which is the only runner this repo uses.
-    struct Home(PathBuf);
+    struct Home(rut_testkit::Scratch);
 
     impl Home {
         fn new(tag: &str) -> Home {
-            let d = std::env::temp_dir().join(format!(
-                "rut-cli-lock-{tag}-{}",
-                std::time::SystemTime::now()
-                    .duration_since(std::time::UNIX_EPOCH)
-                    .unwrap()
-                    .as_nanos()
-            ));
-            let _ = std::fs::remove_dir_all(&d);
-            std::fs::create_dir_all(&d).unwrap();
-            std::env::set_var("RUT_HOME", &d);
+            let d = rut_testkit::Scratch::new(&format!("cli-lock-{tag}"));
+            std::env::set_var("RUT_HOME", &*d);
             Home(d)
         }
     }
@@ -226,17 +218,12 @@ mod tests {
     impl Drop for Home {
         fn drop(&mut self) {
             std::env::remove_var("RUT_HOME");
-            let _ = std::fs::remove_dir_all(&self.0);
         }
     }
 
     /// A scratch project dir (canonicalize needs it to exist).
-    fn project(tag: &str) -> PathBuf {
-        let d =
-            std::env::temp_dir().join(format!("rut-cli-lock-proj-{tag}-{}", std::process::id()));
-        let _ = std::fs::remove_dir_all(&d);
-        std::fs::create_dir_all(&d).unwrap();
-        d
+    fn project(tag: &str) -> rut_testkit::Scratch {
+        rut_testkit::Scratch::new(&format!("cli-lock-proj-{tag}"))
     }
 
     /// The lockfile a project's install lock rides.
@@ -340,9 +327,9 @@ mod tests {
     fn symlinked_spellings_share_one_lock() {
         let _home = Home::new("symlink");
         let dir = project("symlink");
-        let alias = dir.parent().unwrap().join("alias-of-symlink");
+        let alias = dir.join("alias-of-symlink");
         let _ = std::fs::remove_file(&alias);
-        std::os::unix::fs::symlink(&dir, &alias).unwrap();
+        std::os::unix::fs::symlink(&*dir, &alias).unwrap();
 
         // the canonicalization law: the alias resolves to the same
         // project, so it CONTENDS on the same lockfile

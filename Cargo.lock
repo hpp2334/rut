@@ -1184,6 +1184,7 @@ dependencies = [
  "rut-lexer",
  "rut-native",
  "rut-std",
+ "rut-testkit",
  "rut-vm",
 ]
 
@@ -1287,6 +1288,10 @@ dependencies = [
  "wasm-bindgen-futures",
  "web-sys",
 ]
+
+[[package]]
+name = "rut-testkit"
+version = "0.2.0"
 
 [[package]]
 name = "rut-vm"

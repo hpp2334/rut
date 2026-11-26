@@ -15,6 +15,7 @@ members = [
     "crates/rut-lsp",
     "crates/rut-lsp-wasm",
     "crates/rut-cli",
+    "crates/rut-testkit",
     "examples/00-todolist",
     "examples/01-sort",
     "examples/02-digest",
@@ -41,6 +42,8 @@ zip = { version = "8", default-features = false, features = ["deflate"] }
 # the error idiom crate-wide (build-time proc-macro, zero runtime
 # footprint — wasm unaffected); the driver's errors derive it
 thiserror = "2"
+# dev-only test support: a scratch directory that dies with the test
+rut-testkit = { path = "crates/rut-testkit" }
 
 [profile.release]
 opt-level = 3

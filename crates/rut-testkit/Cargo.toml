@@ -1,0 +1,10 @@
+[package]
+name = "rut-testkit"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+description = "dev-only test support: a scratch directory dies with the test"
+
+# opt into the workspace lint gate (warnings = deny)
+[lints]
+workspace = true

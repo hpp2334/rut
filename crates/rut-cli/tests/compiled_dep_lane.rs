@@ -10,14 +10,11 @@
 //! `launch_future(async { .. })` shape), grown to the package's full
 //! launcher surface.
 
-use std::path::{Path, PathBuf};
+use std::path::Path;
 use std::process::Command;
 
-fn scratch(tag: &str) -> PathBuf {
-    let d = std::env::temp_dir().join(format!("rut-cli-compileddep-{tag}-{}", std::process::id()));
-    let _ = std::fs::remove_dir_all(&d);
-    std::fs::create_dir_all(&d).unwrap();
-    d
+fn scratch(tag: &str) -> rut_testkit::Scratch {
+    rut_testkit::Scratch::new(&format!("cli-compileddep-{tag}"))
 }
 
 fn write(dir: &Path, rel: &str, text: &str) {
@@ -77,9 +74,7 @@ fn dep_lane_run(tag: &str, deps: &[&str], src: &str) -> (i32, String, String) {
     let home = root.join("home");
     let (code, _out, err) = rut_run(&home, &["install", dir.to_str().unwrap()]);
     assert_eq!(code, 0, "install: {err}");
-    let res = rut_run(&home, &["run", "--no-cache", dir.to_str().unwrap()]);
-    let _ = std::fs::remove_dir_all(&root);
-    res
+    rut_run(&home, &["run", "--no-cache", dir.to_str().unwrap()])
 }
 
 /// The consumer's stdout equals these lines, exit 0 — the logger

@@ -96,11 +96,8 @@ impl TestServer {
     }
 }
 
-fn scratch(tag: &str) -> PathBuf {
-    let d = std::env::temp_dir().join(format!("rut-cli-store-{tag}-{}", std::process::id()));
-    let _ = std::fs::remove_dir_all(&d);
-    std::fs::create_dir_all(&d).unwrap();
-    d
+fn scratch(tag: &str) -> rut_testkit::Scratch {
+    rut_testkit::Scratch::new(&format!("cli-store-{tag}"))
 }
 
 fn write(dir: &Path, rel: &str, text: &str) {
@@ -147,7 +144,7 @@ fn leaf_bundle(tag: &str, name: &str, body: &str) -> Vec<u8> {
     rut_native::pack_dir(&dir).expect("pack the leaf")
 }
 
-fn consumer_world(tag: &str, deps: &str, body: &str) -> (PathBuf, PathBuf) {
+fn consumer_world(tag: &str, deps: &str, body: &str) -> (rut_testkit::Scratch, PathBuf) {
     let root = scratch(tag);
     let app = root.join("app");
     write(&app, "rut.jsonc", &manifest("app", deps));
@@ -432,18 +429,18 @@ fn cold_run_names_every_missing_dep_at_once() {
 /// uses; this binary's other tests pass `RUT_HOME` to their spawned
 /// `rut` children explicitly, so the process env never crosses with
 /// them.
-struct Home(PathBuf);
+#[allow(dead_code)] // the FIELD is never read — holding it is the point
+struct Home(rut_testkit::Scratch);
 impl Home {
     fn new(tag: &str) -> Home {
         let d = scratch(&format!("{tag} home"));
-        std::env::set_var("RUT_HOME", &d);
+        std::env::set_var("RUT_HOME", &*d);
         Home(d)
     }
 }
 impl Drop for Home {
     fn drop(&mut self) {
         std::env::remove_var("RUT_HOME");
-        let _ = std::fs::remove_dir_all(&self.0);
     }
 }
 

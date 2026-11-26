@@ -569,36 +569,26 @@ pub(crate) fn store_run_cache(entry: &std::path::Path, bytes: &[u8]) {
 mod tests {
     use super::*;
 
-    fn scratch(tag: &str) -> PathBuf {
-        let d = std::env::temp_dir().join(format!(
-            "rut-cli-cache-{tag}-{}-{}",
-            std::process::id(),
-            std::time::SystemTime::now()
-                .duration_since(std::time::UNIX_EPOCH)
-                .unwrap()
-                .as_nanos()
-        ));
-        let _ = std::fs::remove_dir_all(&d);
-        std::fs::create_dir_all(&d).unwrap();
-        d
+    fn scratch(tag: &str) -> rut_testkit::Scratch {
+        rut_testkit::Scratch::new(&format!("cli-cache-{tag}"))
     }
 
     /// A temp `$RUT_HOME` for the test's lifetime — the store lanes
     /// never touch the real `~/.rut`. Mutating the process env here is
     /// safe under nextest's one-process-per-test model (the suite's
     /// runner), which is the only runner this repo uses.
-    struct Home(PathBuf);
+    #[allow(dead_code)] // the FIELD is never read — holding it is the point
+    struct Home(rut_testkit::Scratch);
     impl Home {
         fn new(tag: &str) -> Home {
             let d = scratch(tag);
-            std::env::set_var("RUT_HOME", &d);
+            std::env::set_var("RUT_HOME", &*d);
             Home(d)
         }
     }
     impl Drop for Home {
         fn drop(&mut self) {
             std::env::remove_var("RUT_HOME");
-            let _ = std::fs::remove_dir_all(&self.0);
         }
     }
 
@@ -610,9 +600,8 @@ mod tests {
         std::fs::write(p, text).unwrap();
     }
 
-    fn hello_world(tag: &str) -> PathBuf {
-        let root = scratch(tag);
-        let dir = root.join("hello");
+    fn hello_world(tag: &str) -> rut_testkit::Scratch {
+        let dir = scratch(tag);
         write(
             &dir,
             "rut.jsonc",

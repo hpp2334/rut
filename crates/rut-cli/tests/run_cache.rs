@@ -12,11 +12,8 @@ use std::net::TcpListener;
 use std::path::{Path, PathBuf};
 use std::process::Command;
 
-fn scratch(tag: &str) -> PathBuf {
-    let d = std::env::temp_dir().join(format!("rut-cli-runcache-{tag}-{}", std::process::id()));
-    let _ = std::fs::remove_dir_all(&d);
-    std::fs::create_dir_all(&d).unwrap();
-    d
+fn scratch(tag: &str) -> rut_testkit::Scratch {
+    rut_testkit::Scratch::new(&format!("cli-runcache-{tag}"))
 }
 
 fn write(dir: &Path, rel: &str, text: &str) {
@@ -46,7 +43,7 @@ fn rut_run(home: &Path, args: &[&str]) -> (i32, String) {
 }
 
 /// The smallest runnable world: one manifest, one source, no deps.
-fn hello_world(tag: &str) -> PathBuf {
+fn hello_world(tag: &str) -> rut_testkit::Scratch {
     let root = scratch(tag);
     let dir = root.join("hello");
     write(&dir, "rut.jsonc", r#"{"name": "hello"}"#);
@@ -103,7 +100,6 @@ fn run_dir_writes_the_cache_and_the_second_run_hits_it() {
         "a hit never rewrites the entry"
     );
     assert_eq!(std::fs::read(&entries[0]).unwrap(), before);
-    let _ = std::fs::remove_dir_all(&root);
 }
 
 #[test]
@@ -126,7 +122,6 @@ fn an_edited_closure_keys_a_fresh_entry() {
     let (code, err) = rut_run(&home, &["run", dir.to_str().unwrap()]);
     assert_eq!(code, 0, "edited run: {err}");
     assert_eq!(cache_entries(&home).len(), 2, "one entry per closure");
-    let _ = std::fs::remove_dir_all(&root);
 }
 
 #[test]
@@ -164,7 +159,6 @@ fn no_cache_forces_the_miss_but_refreshes_the_entry() {
     // the visible alias spells the same door
     let (code, err) = rut_run(&home, &["run", dir.to_str().unwrap(), "--repack"]);
     assert_eq!(code, 0, "--repack run: {err}");
-    let _ = std::fs::remove_dir_all(&root);
 }
 
 #[test]
@@ -203,7 +197,6 @@ fn a_stale_version_entry_repacks_instead_of_failing() {
         aged,
         "the stale entry repacked"
     );
-    let _ = std::fs::remove_dir_all(&root);
 }
 
 #[test]
@@ -259,7 +252,6 @@ fn a_walk_refused_entry_repacks_instead_of_failing() {
         doctored,
         "the walk-refused entry repacked"
     );
-    let _ = std::fs::remove_dir_all(&root);
 }
 
 #[test]
@@ -300,7 +292,6 @@ fn a_dir_with_a_path_dep_caches_one_closed_entry() {
         stamp,
         "a hit never rewrites the entry"
     );
-    let _ = std::fs::remove_dir_all(&root);
 }
 
 #[test]
@@ -330,7 +321,7 @@ fn the_run_help_names_the_cache_law_and_the_debug_door() {
 /// A generic dep world: `gen` owns a generic class, `app` instantiates
 /// it across the package line. The manifests ride multi-line — the
 /// source-zip rewrite drops wire rows line-wise.
-fn generic_dep_world(tag: &str, gen_manifest: &str) -> (PathBuf, PathBuf) {
+fn generic_dep_world(tag: &str, gen_manifest: &str) -> (PathBuf, rut_testkit::Scratch) {
     let root = scratch(tag);
     let gen = root.join("gen");
     write(&gen, "rut.jsonc", gen_manifest);
@@ -417,7 +408,6 @@ fn a_generic_path_dep_runs_identically_on_the_miss_and_the_hit() {
     );
     let home = root.join("home");
     assert_miss_then_hit(&home, &app);
-    let _ = std::fs::remove_dir_all(&root);
 }
 
 #[test]
@@ -460,7 +450,6 @@ fn a_generic_url_dep_runs_identically_on_the_miss_and_the_hit() {
         zip,
         "a hit never rewrites the store artifact"
     );
-    let _ = std::fs::remove_dir_all(&root);
 }
 
 // ── the url-dep closure: the key rides the RESOLVED bytes ─────────────
@@ -573,6 +562,4 @@ fn a_url_dep_closure_writes_only_the_resolved_key_and_the_second_run_hits_it() {
         url_stamp,
         "a hit never rewrites the store artifact"
     );
-    let _ = std::fs::remove_dir_all(&util_root);
-    let _ = std::fs::remove_dir_all(&root);
 }

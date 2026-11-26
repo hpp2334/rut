@@ -4,14 +4,11 @@
 //! `pack --strip` refuses on a host root (no programs, no sidecar).
 //! The mechanism tests are pinned driver-side (`decl_bundles.rs`).
 
-use std::path::{Path, PathBuf};
+use std::path::Path;
 use std::process::Command;
 
-fn scratch(tag: &str) -> PathBuf {
-    let d = std::env::temp_dir().join(format!("rut-cli-decl-{tag}-{}", std::process::id()));
-    let _ = std::fs::remove_dir_all(&d);
-    std::fs::create_dir_all(&d).unwrap();
-    d
+fn scratch(tag: &str) -> rut_testkit::Scratch {
+    rut_testkit::Scratch::new(&format!("cli-decl-{tag}"))
 }
 
 fn write(dir: &Path, rel: &str, text: &str) {
@@ -22,43 +19,16 @@ fn write(dir: &Path, rel: &str, text: &str) {
     std::fs::write(p, text).unwrap();
 }
 
-/// `rut` as a pre-configured Command: $RUT_HOME pinned to a scratch
-/// dir created once per test process (nextest runs one test per
-/// process), so every spawn — the run-key cache and the dep store
-/// included — stays off the real `~/.rut` — and removed again at
-/// process exit (an atexit hook, below).
-fn rut_cmd() -> Command {
-    static HOME: std::sync::OnceLock<PathBuf> = std::sync::OnceLock::new();
-    let home = HOME.get_or_init(|| {
-        let h = scratch("rut-home");
-        remove_at_exit(&h);
-        h
-    });
+/// `rut` as a pre-configured Command: $RUT_HOME pinned to the test's
+/// scratch home, so every spawn — the run-key cache and the dep store
+/// included — stays off the real `~/.rut`.
+fn rut_cmd(home: &Path) -> Command {
     let mut cmd = Command::new(env!("CARGO_BIN_EXE_rut"));
     cmd.env("RUT_HOME", home);
     cmd
 }
 
-/// Remove `dir` when the process exits — the scratch rut home is
-/// litter, never a keeper.
-fn remove_at_exit(dir: &Path) {
-    extern "C" {
-        fn atexit(cb: extern "C" fn()) -> i32;
-    }
-    static PENDING: std::sync::Mutex<Option<PathBuf>> = std::sync::Mutex::new(None);
-    extern "C" fn clean() {
-        let dir = PENDING.lock().unwrap_or_else(|e| e.into_inner()).take();
-        if let Some(dir) = dir {
-            let _ = std::fs::remove_dir_all(dir);
-        }
-    }
-    *PENDING.lock().unwrap_or_else(|e| e.into_inner()) = Some(dir.to_path_buf());
-    // registered once per process (the OnceLock above); a refused
-    // registration only leaves the litter
-    let _ = unsafe { atexit(clean) };
-}
-
-fn host_world(tag: &str) -> PathBuf {
+fn host_world(tag: &str) -> rut_testkit::Scratch {
     let root = scratch(tag);
     let dir = root.join("logger_host");
     write(
@@ -76,11 +46,12 @@ fn host_world(tag: &str) -> PathBuf {
 
 #[test]
 fn pack_a_host_dir_and_run_refuses_it() {
+    let home = rut_testkit::Scratch::new("cli-decl-home");
     let root = host_world("cliface");
     let dir = root.join("logger_host");
 
     // pack works, prints the output path
-    let out = rut_cmd()
+    let out = rut_cmd(&home)
         .args(["pack", dir.to_str().unwrap(), "--mode", "bin"])
         .output()
         .expect("run rut pack");
@@ -95,7 +66,7 @@ fn pack_a_host_dir_and_run_refuses_it() {
     assert!(String::from_utf8_lossy(&out.stdout).contains("logger_host.rutbundle"));
 
     // `rut run` refuses with intent — nothing to run, bind the rows
-    let out = rut_cmd()
+    let out = rut_cmd(&home)
         .args(["run", bundle.to_str().unwrap()])
         .output()
         .expect("run rut run");
@@ -108,8 +79,9 @@ fn pack_a_host_dir_and_run_refuses_it() {
 
 #[test]
 fn pack_strip_refuses_on_a_host_root() {
+    let home = rut_testkit::Scratch::new("cli-decl-home");
     let root = host_world("clistrip");
-    let out = rut_cmd()
+    let out = rut_cmd(&home)
         .args([
             "pack",
             root.join("logger_host").to_str().unwrap(),

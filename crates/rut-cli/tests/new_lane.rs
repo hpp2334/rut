@@ -28,11 +28,8 @@ const STD_PKGS: [&str; 9] = [
     "ink", "pouch", "flow", "nmapset", "json", "strbuild", "calc", "futures", "http",
 ];
 
-fn scratch(tag: &str) -> PathBuf {
-    let d = std::env::temp_dir().join(format!("rut-cli-newlane-{tag}-{}", std::process::id()));
-    let _ = std::fs::remove_dir_all(&d);
-    std::fs::create_dir_all(&d).unwrap();
-    d
+fn scratch(tag: &str) -> rut_testkit::Scratch {
+    rut_testkit::Scratch::new(&format!("cli-newlane-{tag}"))
 }
 
 fn rut() -> &'static str {
@@ -52,7 +49,7 @@ fn rut_cmd(home: &Path, args: &[&str]) -> Output {
 
 /// Scaffold `<root>/<name>` and assert the creation succeeded; the
 /// rut home rides under the scratch root.
-fn scaffold(tag: &str, name: &str) -> (PathBuf, PathBuf) {
+fn scaffold(tag: &str, name: &str) -> (rut_testkit::Scratch, PathBuf) {
     let root = scratch(tag);
     let dir = root.join(name);
     let out = rut_cmd(&root.join("home"), &["new", dir.to_str().unwrap()]);
@@ -153,7 +150,7 @@ fn the_template_files_are_the_carrier() {
 #[test]
 fn scaffold_refuses_to_clobber() {
     for seeded in ["rut.jsonc", "src/mod.rut", "rut.lock"] {
-        let root = scratch(&format!("clobber-{seeded}"));
+        let root = scratch(&format!("clobber-{}", seeded.replace('/', "-")));
         let dir = root.join("hello");
         let seeded_path = dir.join(seeded);
         std::fs::create_dir_all(seeded_path.parent().unwrap()).unwrap();

@@ -4,14 +4,11 @@
 //! directory form (`imp/mod.rut`) and the single-file form (`imp.rut`);
 //! `pub` members only (import is no visibility bypass).
 
-use std::path::{Path, PathBuf};
+use std::path::Path;
 use std::process::Command;
 
-fn scratch(tag: &str) -> PathBuf {
-    let d = std::env::temp_dir().join(format!("rut-cli-own-uses-{tag}-{}", std::process::id()));
-    let _ = std::fs::remove_dir_all(&d);
-    std::fs::create_dir_all(&d).unwrap();
-    d
+fn scratch(tag: &str) -> rut_testkit::Scratch {
+    rut_testkit::Scratch::new(&format!("cli-own-uses-{tag}"))
 }
 
 fn write(dir: &Path, rel: &str, text: &str) {
@@ -22,45 +19,18 @@ fn write(dir: &Path, rel: &str, text: &str) {
     std::fs::write(p, text).unwrap();
 }
 
-/// `rut` as a pre-configured Command: $RUT_HOME pinned to a scratch
-/// dir created once per test process (nextest runs one test per
-/// process), so every spawn — the run-key cache and the dep store
-/// included — stays off the real `~/.rut` — and removed again at
-/// process exit (an atexit hook, below).
-fn rut_cmd() -> Command {
-    static HOME: std::sync::OnceLock<PathBuf> = std::sync::OnceLock::new();
-    let home = HOME.get_or_init(|| {
-        let h = scratch("rut-home");
-        remove_at_exit(&h);
-        h
-    });
+/// `rut` as a pre-configured Command: $RUT_HOME pinned to the test's
+/// scratch home, so every spawn — the run-key cache and the dep store
+/// included — stays off the real `~/.rut`.
+fn rut_cmd(home: &Path) -> Command {
     let mut cmd = Command::new(env!("CARGO_BIN_EXE_rut"));
     cmd.env("RUT_HOME", home);
     cmd
 }
 
-/// Remove `dir` when the process exits — the scratch rut home is
-/// litter, never a keeper.
-fn remove_at_exit(dir: &Path) {
-    extern "C" {
-        fn atexit(cb: extern "C" fn()) -> i32;
-    }
-    static PENDING: std::sync::Mutex<Option<PathBuf>> = std::sync::Mutex::new(None);
-    extern "C" fn clean() {
-        let dir = PENDING.lock().unwrap_or_else(|e| e.into_inner()).take();
-        if let Some(dir) = dir {
-            let _ = std::fs::remove_dir_all(dir);
-        }
-    }
-    *PENDING.lock().unwrap_or_else(|e| e.into_inner()) = Some(dir.to_path_buf());
-    // registered once per process (the OnceLock above); a refused
-    // registration only leaves the litter
-    let _ = unsafe { atexit(clean) };
-}
-
 /// The todolist shape: a root module importing its own `imp` child's
 /// pub class + struct through `use imp::{ .. };`.
-fn todolist(tag: &str) -> PathBuf {
+fn todolist(tag: &str) -> rut_testkit::Scratch {
     let root = scratch(tag);
     let dir = root.join("todolist");
     write(&dir, "rut.jsonc", r#"{"name": "todolist"}"#);
@@ -112,10 +82,11 @@ impl TodoList {
 
 #[test]
 fn the_todolist_shape_runs_and_packs() {
+    let home = rut_testkit::Scratch::new("cli-own-uses-home");
     let root = todolist("positive");
     let dir = root.join("todolist");
 
-    let out = rut_cmd()
+    let out = rut_cmd(&home)
         .args(["run", dir.to_str().unwrap()])
         .output()
         .expect("run rut run <dir>");
@@ -125,7 +96,7 @@ fn the_todolist_shape_runs_and_packs() {
         String::from_utf8_lossy(&out.stderr)
     );
 
-    let out = rut_cmd()
+    let out = rut_cmd(&home)
         .args(["pack", dir.to_str().unwrap(), "--mode", "bin"])
         .output()
         .expect("run rut pack");
@@ -138,7 +109,7 @@ fn the_todolist_shape_runs_and_packs() {
     assert!(bundle.is_file(), "the bundle lands beside the dir");
 
     // and the packed bundle runs too
-    let out = rut_cmd()
+    let out = rut_cmd(&home)
         .args(["run", bundle.to_str().unwrap()])
         .output()
         .expect("run rut run <bundle>");
@@ -147,13 +118,13 @@ fn the_todolist_shape_runs_and_packs() {
         "stderr: {}",
         String::from_utf8_lossy(&out.stderr)
     );
-    let _ = std::fs::remove_dir_all(&root);
 }
 
 #[test]
 fn a_private_own_member_refuses_at_the_use_line() {
     // import is no visibility bypass: a bare member of imp is refused
     // where the import is written
+    let home = rut_testkit::Scratch::new("cli-own-uses-home");
     let root = todolist("private");
     let dir = root.join("todolist");
     write(
@@ -164,7 +135,7 @@ fn a_private_own_member_refuses_at_the_use_line() {
          entry fn main() {}\n",
     );
     write(&dir, "src/imp/mod.rut", "struct Task { id: i64; }\n");
-    let out = rut_cmd()
+    let out = rut_cmd(&home)
         .args(["run", dir.to_str().unwrap()])
         .output()
         .expect("run rut run <dir>");
@@ -177,7 +148,6 @@ fn a_private_own_member_refuses_at_the_use_line() {
         "{stderr}"
     );
     assert!(stderr.contains("--> todolist:1:1"), "{stderr}");
-    let _ = std::fs::remove_dir_all(&root);
 }
 
 /// The same refusal, single-file flavor: the declaring file is spelled
@@ -185,6 +155,7 @@ fn a_private_own_member_refuses_at_the_use_line() {
 /// directory-form guess.
 #[test]
 fn the_single_file_private_refusal_spells_the_file() {
+    let home = rut_testkit::Scratch::new("cli-own-uses-home");
     let root = scratch("file-form-private");
     let dir = root.join("todolist");
     write(&dir, "rut.jsonc", r#"{"name": "todolist"}"#);
@@ -196,7 +167,7 @@ fn the_single_file_private_refusal_spells_the_file() {
          entry fn main() {}\n",
     );
     write(&dir, "src/imp.rut", "struct Task { id: i64; }\n");
-    let out = rut_cmd()
+    let out = rut_cmd(&home)
         .args(["run", dir.to_str().unwrap()])
         .output()
         .expect("run rut run <dir>");
@@ -208,7 +179,6 @@ fn the_single_file_private_refusal_spells_the_file() {
         ),
         "{stderr}"
     );
-    let _ = std::fs::remove_dir_all(&root);
 }
 
 /// The same shape, single-file flavor: `imp.rut` beside the declaring
@@ -216,6 +186,7 @@ fn the_single_file_private_refusal_spells_the_file() {
 /// law's second spelling, end to end through the binary.
 #[test]
 fn the_single_file_module_shape_runs() {
+    let home = rut_testkit::Scratch::new("cli-own-uses-home");
     let root = scratch("file-form");
     let dir = root.join("todolist");
     write(&dir, "rut.jsonc", r#"{"name": "todolist"}"#);
@@ -242,7 +213,7 @@ entry fn main() {
 }
 "#,
     );
-    let out = rut_cmd()
+    let out = rut_cmd(&home)
         .args(["run", dir.to_str().unwrap()])
         .output()
         .expect("run rut run <dir>");
@@ -251,12 +222,12 @@ entry fn main() {
         "stderr: {}",
         String::from_utf8_lossy(&out.stderr)
     );
-    let _ = std::fs::remove_dir_all(&root);
 }
 
 #[test]
 fn both_child_spellings_are_the_loud_ambiguity() {
     // `imp/mod.rut` AND `imp.rut` — the loader refuses, naming both
+    let home = rut_testkit::Scratch::new("cli-own-uses-home");
     let root = scratch("ambiguous");
     let dir = root.join("todolist");
     write(&dir, "rut.jsonc", r#"{"name": "todolist"}"#);
@@ -267,7 +238,7 @@ fn both_child_spellings_are_the_loud_ambiguity() {
         "pub fn one() -> i64 { return 1; }\n",
     );
     write(&dir, "src/imp.rut", "pub fn two() -> i64 { return 2; }\n");
-    let out = rut_cmd()
+    let out = rut_cmd(&home)
         .args(["run", dir.to_str().unwrap()])
         .output()
         .expect("run rut run <dir>");
@@ -277,5 +248,4 @@ fn both_child_spellings_are_the_loud_ambiguity() {
         stderr.contains("both `imp/mod.rut` and `imp.rut` exist"),
         "{stderr}"
     );
-    let _ = std::fs::remove_dir_all(&root);
 }

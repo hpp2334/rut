@@ -4,14 +4,11 @@
 //! identical sibling sites all report (the first failure used to starve
 //! every body behind it — one site stood in for three).
 
-use std::path::{Path, PathBuf};
+use std::path::Path;
 use std::process::Command;
 
-fn scratch(tag: &str) -> PathBuf {
-    let d = std::env::temp_dir().join(format!("rut-cli-diags-{tag}-{}", std::process::id()));
-    let _ = std::fs::remove_dir_all(&d);
-    std::fs::create_dir_all(&d).unwrap();
-    d
+fn scratch(tag: &str) -> rut_testkit::Scratch {
+    rut_testkit::Scratch::new(&format!("cli-diags-{tag}"))
 }
 
 fn write(dir: &Path, rel: &str, text: &str) {
@@ -22,44 +19,18 @@ fn write(dir: &Path, rel: &str, text: &str) {
     std::fs::write(p, text).unwrap();
 }
 
-/// `rut` as a pre-configured Command: $RUT_HOME pinned to a scratch
-/// dir created once per test process (nextest runs one test per
-/// process), so every spawn — the run-key cache and the dep store
-/// included — stays off the real `~/.rut` — and removed again at
-/// process exit (an atexit hook, below).
-fn rut_cmd() -> Command {
-    static HOME: std::sync::OnceLock<PathBuf> = std::sync::OnceLock::new();
-    let home = HOME.get_or_init(|| {
-        let h = scratch("rut-home");
-        remove_at_exit(&h);
-        h
-    });
+/// `rut` as a pre-configured Command: $RUT_HOME pinned to the test's
+/// scratch home, so every spawn — the run-key cache and the dep store
+/// included — stays off the real `~/.rut`.
+fn rut_cmd(home: &Path) -> Command {
     let mut cmd = Command::new(env!("CARGO_BIN_EXE_rut"));
     cmd.env("RUT_HOME", home);
     cmd
 }
 
-/// Remove `dir` when the process exits — the scratch rut home is
-/// litter, never a keeper.
-fn remove_at_exit(dir: &Path) {
-    extern "C" {
-        fn atexit(cb: extern "C" fn()) -> i32;
-    }
-    static PENDING: std::sync::Mutex<Option<PathBuf>> = std::sync::Mutex::new(None);
-    extern "C" fn clean() {
-        let dir = PENDING.lock().unwrap_or_else(|e| e.into_inner()).take();
-        if let Some(dir) = dir {
-            let _ = std::fs::remove_dir_all(dir);
-        }
-    }
-    *PENDING.lock().unwrap_or_else(|e| e.into_inner()) = Some(dir.to_path_buf());
-    // registered once per process (the OnceLock above); a refused
-    // registration only leaves the litter
-    let _ = unsafe { atexit(clean) };
-}
-
 fn run(dir: &Path) -> (i32, String) {
-    let out = rut_cmd()
+    let home = rut_testkit::Scratch::new("cli-diags-home");
+    let out = rut_cmd(&home)
         .args(["run", dir.to_str().unwrap()])
         .output()
         .expect("run rut run");
@@ -74,9 +45,8 @@ fn count(needle: &str, hay: &str) -> usize {
 }
 
 /// The smallest runnable world: one manifest, one source, no deps.
-fn pkg(tag: &str, src: &str) -> PathBuf {
-    let root = scratch(tag);
-    let dir = root.join("hello");
+fn pkg(tag: &str, src: &str) -> rut_testkit::Scratch {
+    let dir = scratch(tag);
     write(&dir, "rut.jsonc", r#"{"name": "hello"}"#);
     write(&dir, "src/mod.rut", src);
     dir

@@ -111,11 +111,8 @@ impl TestServer {
     }
 }
 
-fn scratch(tag: &str) -> PathBuf {
-    let d = std::env::temp_dir().join(format!("rut-cli-install-{tag}-{}", std::process::id()));
-    let _ = std::fs::remove_dir_all(&d);
-    std::fs::create_dir_all(&d).unwrap();
-    d
+fn scratch(tag: &str) -> rut_testkit::Scratch {
+    rut_testkit::Scratch::new(&format!("cli-install-{tag}"))
 }
 
 fn write(dir: &Path, rel: &str, text: &str) {
@@ -177,7 +174,7 @@ fn leaf_bundle(tag: &str, name: &str, body: &str) -> Vec<u8> {
 /// The consumer world: `app` with UNPINNED url rows (the manifest
 /// grammar carries no pins — the lock is install's output) and a root
 /// module using `util`. `deps` is the manifest's raw deps fragment.
-fn consumer_world(tag: &str, deps: &str) -> PathBuf {
+fn consumer_world(tag: &str, deps: &str) -> rut_testkit::Scratch {
     let root = scratch(tag);
     let app = root.join("app");
     write(&app, "rut.jsonc", &manifest("app", deps));

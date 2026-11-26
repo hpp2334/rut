@@ -35,13 +35,7 @@ fn unpacked_flow() -> Vec<rut_driver::Mounted> {
         .unwrap_or_else(|e| panic!("dist/std/flow.zip: {e}"));
     let entries =
         rut_driver::bundle::read_srczip(&bytes).unwrap_or_else(|e| panic!("read flow.zip: {e}"));
-    static UNPACK_SEQ: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
-    let dir = std::env::temp_dir().join(format!(
-        "rut-flow-e2e-{}-{}",
-        std::process::id(),
-        UNPACK_SEQ.fetch_add(1, std::sync::atomic::Ordering::Relaxed)
-    ));
-    let _ = std::fs::remove_dir_all(&dir);
+    let dir = rut_testkit::Scratch::new("flow-e2e");
     for (path, data) in &entries {
         let p = dir.join(path);
         if let Some(parent) = p.parent() {

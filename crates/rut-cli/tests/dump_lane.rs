@@ -8,11 +8,8 @@
 use std::path::{Path, PathBuf};
 use std::process::{Command, Output};
 
-fn scratch(tag: &str) -> PathBuf {
-    let d = std::env::temp_dir().join(format!("rut-cli-dump-{tag}-{}", std::process::id()));
-    let _ = std::fs::remove_dir_all(&d);
-    std::fs::create_dir_all(&d).unwrap();
-    d
+fn scratch(tag: &str) -> rut_testkit::Scratch {
+    rut_testkit::Scratch::new(&format!("cli-dump-{tag}"))
 }
 
 fn write(dir: &Path, name: &str, text: &str) -> PathBuf {

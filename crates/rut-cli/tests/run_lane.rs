@@ -6,14 +6,11 @@
 //! never gets past the door. The positive side: the same dir and its
 //! packed bundle both run end to end.
 
-use std::path::{Path, PathBuf};
+use std::path::Path;
 use std::process::Command;
 
-fn scratch(tag: &str) -> PathBuf {
-    let d = std::env::temp_dir().join(format!("rut-cli-runlane-{tag}-{}", std::process::id()));
-    let _ = std::fs::remove_dir_all(&d);
-    std::fs::create_dir_all(&d).unwrap();
-    d
+fn scratch(tag: &str) -> rut_testkit::Scratch {
+    rut_testkit::Scratch::new(&format!("cli-runlane-{tag}"))
 }
 
 fn write(dir: &Path, rel: &str, text: &str) {
@@ -24,44 +21,17 @@ fn write(dir: &Path, rel: &str, text: &str) {
     std::fs::write(p, text).unwrap();
 }
 
-/// `rut` as a pre-configured Command: $RUT_HOME pinned to a scratch
-/// dir created once per test process (nextest runs one test per
-/// process), so every spawn — the run-key cache and the dep store
-/// included — stays off the real `~/.rut` — and removed again at
-/// process exit (an atexit hook, below).
-fn rut_cmd() -> Command {
-    static HOME: std::sync::OnceLock<PathBuf> = std::sync::OnceLock::new();
-    let home = HOME.get_or_init(|| {
-        let h = scratch("rut-home");
-        remove_at_exit(&h);
-        h
-    });
+/// `rut` as a pre-configured Command: $RUT_HOME pinned to the test's
+/// scratch home, so every spawn — the run-key cache and the dep store
+/// included — stays off the real `~/.rut`.
+fn rut_cmd(home: &Path) -> Command {
     let mut cmd = Command::new(env!("CARGO_BIN_EXE_rut"));
     cmd.env("RUT_HOME", home);
     cmd
 }
 
-/// Remove `dir` when the process exits — the scratch rut home is
-/// litter, never a keeper.
-fn remove_at_exit(dir: &Path) {
-    extern "C" {
-        fn atexit(cb: extern "C" fn()) -> i32;
-    }
-    static PENDING: std::sync::Mutex<Option<PathBuf>> = std::sync::Mutex::new(None);
-    extern "C" fn clean() {
-        let dir = PENDING.lock().unwrap_or_else(|e| e.into_inner()).take();
-        if let Some(dir) = dir {
-            let _ = std::fs::remove_dir_all(dir);
-        }
-    }
-    *PENDING.lock().unwrap_or_else(|e| e.into_inner()) = Some(dir.to_path_buf());
-    // registered once per process (the OnceLock above); a refused
-    // registration only leaves the litter
-    let _ = unsafe { atexit(clean) };
-}
-
 /// The smallest runnable world: one manifest, one source, no deps.
-fn hello_world(tag: &str) -> PathBuf {
+fn hello_world(tag: &str) -> rut_testkit::Scratch {
     let root = scratch(tag);
     let dir = root.join("hello");
     write(&dir, "rut.jsonc", r#"{"name": "hello"}"#);
@@ -71,10 +41,11 @@ fn hello_world(tag: &str) -> PathBuf {
 
 #[test]
 fn run_accepts_a_module_dir_and_its_packed_bundle() {
+    let home = rut_testkit::Scratch::new("cli-runlane-home");
     let root = hello_world("positive");
     let dir = root.join("hello");
 
-    let out = rut_cmd()
+    let out = rut_cmd(&home)
         .args(["run", dir.to_str().unwrap()])
         .output()
         .expect("run rut run <dir>");
@@ -84,7 +55,7 @@ fn run_accepts_a_module_dir_and_its_packed_bundle() {
         String::from_utf8_lossy(&out.stderr)
     );
 
-    let out = rut_cmd()
+    let out = rut_cmd(&home)
         .args(["pack", dir.to_str().unwrap(), "--mode", "bin"])
         .output()
         .expect("run rut pack");
@@ -96,7 +67,7 @@ fn run_accepts_a_module_dir_and_its_packed_bundle() {
     let bundle = root.join("hello.rutbundle");
     assert!(bundle.is_file(), "the bundle lands beside the dir");
 
-    let out = rut_cmd()
+    let out = rut_cmd(&home)
         .args(["run", bundle.to_str().unwrap()])
         .output()
         .expect("run rut run <bundle>");
@@ -105,15 +76,15 @@ fn run_accepts_a_module_dir_and_its_packed_bundle() {
         "stderr: {}",
         String::from_utf8_lossy(&out.stderr)
     );
-    let _ = std::fs::remove_dir_all(&root);
 }
 
 #[test]
 fn run_defaults_to_the_working_directory() {
+    let home = rut_testkit::Scratch::new("cli-runlane-home");
     let root = hello_world("default-dir");
     let dir = root.join("hello");
 
-    let out = rut_cmd()
+    let out = rut_cmd(&home)
         .current_dir(&dir)
         .args(["run"])
         .output()
@@ -123,28 +94,28 @@ fn run_defaults_to_the_working_directory() {
         "stderr: {}",
         String::from_utf8_lossy(&out.stderr)
     );
-    let _ = std::fs::remove_dir_all(&root);
 }
 
 #[test]
 fn run_in_a_dir_without_a_manifest_refuses_naming_the_cwd_lock() {
+    let home = rut_testkit::Scratch::new("cli-runlane-home");
     let root = scratch("default-bare");
-    let out = rut_cmd()
-        .current_dir(&root)
+    let out = rut_cmd(&home)
+        .current_dir(&*root)
         .args(["run"])
         .output()
         .expect("run rut run (bare cwd)");
     assert_eq!(out.status.code(), Some(2));
     let stderr = String::from_utf8_lossy(&out.stderr);
     assert!(stderr.contains("./rut.jsonc"), "{stderr}");
-    let _ = std::fs::remove_dir_all(&root);
 }
 
 #[test]
 fn a_loose_file_is_not_a_runnable_unit() {
+    let home = rut_testkit::Scratch::new("cli-runlane-home");
     let root = scratch("loose");
     write(&root, "main.rut", "entry fn main() -> nil { return; }\n");
-    let out = rut_cmd()
+    let out = rut_cmd(&home)
         .args(["run", root.join("main.rut").to_str().unwrap()])
         .output()
         .expect("run rut run <loose file>");
@@ -153,14 +124,14 @@ fn a_loose_file_is_not_a_runnable_unit() {
     assert!(stderr.contains("not a runnable unit"), "{stderr}");
     assert!(stderr.contains("rut.jsonc"), "{stderr}");
     assert!(stderr.contains(".rutbundle"), "{stderr}");
-    let _ = std::fs::remove_dir_all(&root);
 }
 
 #[test]
 fn a_declaration_surface_is_refused_with_its_own_message() {
+    let home = rut_testkit::Scratch::new("cli-runlane-home");
     let root = scratch("decl");
     write(&root, "src/surf.d.rut", "pub host fn log(line: str);\n");
-    let out = rut_cmd()
+    let out = rut_cmd(&home)
         .args(["run", root.join("src/surf.d.rut").to_str().unwrap()])
         .output()
         .expect("run rut run <file.d.rut>");
@@ -168,14 +139,14 @@ fn a_declaration_surface_is_refused_with_its_own_message() {
     let stderr = String::from_utf8_lossy(&out.stderr);
     assert!(stderr.contains("declaration file"), "{stderr}");
     assert!(stderr.contains("nothing to run"), "{stderr}");
-    let _ = std::fs::remove_dir_all(&root);
 }
 
 #[test]
 fn a_typo_path_never_gets_past_the_door() {
+    let home = rut_testkit::Scratch::new("cli-runlane-home");
     let root = scratch("typo");
     for probe in ["nope", "missing.rut", "notes.txt"] {
-        let out = rut_cmd()
+        let out = rut_cmd(&home)
             .args(["run", root.join(probe).to_str().unwrap()])
             .output()
             .expect("run rut run <typo path>");
@@ -186,12 +157,11 @@ fn a_typo_path_never_gets_past_the_door() {
             "probe {probe}: {stderr}"
         );
     }
-    let _ = std::fs::remove_dir_all(&root);
 }
 
 /// A world with several `entry fn`s in the root module (the 02-digest
 /// shape) — `rut run` refuses to guess; `--entry <name>` designates.
-fn two_entries(tag: &str) -> PathBuf {
+fn two_entries(tag: &str) -> rut_testkit::Scratch {
     let root = scratch(tag);
     let dir = root.join("hello");
     write(&dir, "rut.jsonc", r#"{"name": "hello"}"#);
@@ -205,11 +175,12 @@ fn two_entries(tag: &str) -> PathBuf {
 
 #[test]
 fn several_entry_fns_refuse_to_guess_and_entry_designates() {
+    let home = rut_testkit::Scratch::new("cli-runlane-home");
     let root = two_entries("designation");
     let dir = root.join("hello");
 
     // no --entry: ambiguous, loud, nothing runs
-    let out = rut_cmd()
+    let out = rut_cmd(&home)
         .args(["run", dir.to_str().unwrap()])
         .output()
         .expect("run rut run <dir>");
@@ -223,7 +194,7 @@ fn several_entry_fns_refuse_to_guess_and_entry_designates() {
     assert!(stderr.contains("--entry"), "{stderr}");
 
     // --entry <name>: the designated entry runs
-    let out = rut_cmd()
+    let out = rut_cmd(&home)
         .args(["run", dir.to_str().unwrap(), "--entry", "other"])
         .output()
         .expect("run rut run --entry other");
@@ -232,11 +203,11 @@ fn several_entry_fns_refuse_to_guess_and_entry_designates() {
         "stderr: {}",
         String::from_utf8_lossy(&out.stderr)
     );
-    let _ = std::fs::remove_dir_all(&root);
 }
 
 #[test]
 fn entry_naming_a_non_entry_fn_is_loud() {
+    let home = rut_testkit::Scratch::new("cli-runlane-home");
     let root = two_entries("misdesignated");
     let dir = root.join("hello");
     write(
@@ -244,7 +215,7 @@ fn entry_naming_a_non_entry_fn_is_loud() {
         "src/mod.rut",
         "fn plain() -> nil { return; }\nentry fn main() -> nil { return; }\n",
     );
-    let out = rut_cmd()
+    let out = rut_cmd(&home)
         .args(["run", dir.to_str().unwrap(), "--entry", "plain"])
         .output()
         .expect("run rut run --entry plain");
@@ -252,11 +223,11 @@ fn entry_naming_a_non_entry_fn_is_loud() {
     let stderr = String::from_utf8_lossy(&out.stderr);
     assert!(stderr.contains("no `entry fn plain`"), "{stderr}");
     assert!(stderr.contains("main"), "{stderr}");
-    let _ = std::fs::remove_dir_all(&root);
 }
 
 #[test]
 fn no_entry_fn_is_nothing_to_run_not_a_source_error() {
+    let home = rut_testkit::Scratch::new("cli-runlane-home");
     let root = scratch("entryless");
     let dir = root.join("hello");
     write(&dir, "rut.jsonc", r#"{"name": "hello"}"#);
@@ -267,7 +238,7 @@ fn no_entry_fn_is_nothing_to_run_not_a_source_error() {
         "src/mod.rut",
         "pub fn helper() -> i32 { return 7; }\n",
     );
-    let out = rut_cmd()
+    let out = rut_cmd(&home)
         .args(["run", dir.to_str().unwrap()])
         .output()
         .expect("run rut run <dir>");
@@ -275,21 +246,20 @@ fn no_entry_fn_is_nothing_to_run_not_a_source_error() {
     let stderr = String::from_utf8_lossy(&out.stderr);
     assert!(stderr.contains("no `entry fn`"), "{stderr}");
     assert!(stderr.contains("nothing to run"), "{stderr}");
-    let _ = std::fs::remove_dir_all(&root);
 }
 
 #[test]
 fn a_dangling_entry_value_is_a_usage_error() {
+    let home = rut_testkit::Scratch::new("cli-runlane-home");
     let root = hello_world("dangling-entry");
     let dir = root.join("hello");
-    let out = rut_cmd()
+    let out = rut_cmd(&home)
         .args(["run", dir.to_str().unwrap(), "--entry"])
         .output()
         .expect("run rut run --entry");
     assert_eq!(out.status.code(), Some(2));
     let stderr = String::from_utf8_lossy(&out.stderr);
     assert!(stderr.contains("--entry"), "{stderr}");
-    let _ = std::fs::remove_dir_all(&root);
 }
 
 // ---- diagnostics name file, line, and column ----
@@ -299,6 +269,7 @@ fn a_dangling_entry_value_is_a_usage_error() {
 /// column, with the caret line under the offending text.
 #[test]
 fn a_root_parse_error_names_the_file_line_and_column() {
+    let home = rut_testkit::Scratch::new("cli-runlane-home");
     let root = scratch("diag-root");
     let dir = root.join("hello");
     write(&dir, "rut.jsonc", r#"{"name": "hello"}"#);
@@ -307,7 +278,7 @@ fn a_root_parse_error_names_the_file_line_and_column() {
         "src/mod.rut",
         "entry fn main() -> nil {\n    let x = @@;\n    return;\n}\n",
     );
-    let out = rut_cmd()
+    let out = rut_cmd(&home)
         .args(["run", dir.to_str().unwrap()])
         .output()
         .expect("run rut run <broken root>");
@@ -319,7 +290,6 @@ fn a_root_parse_error_names_the_file_line_and_column() {
         stderr.lines().any(|l| l.contains('|') && l.contains('^')),
         "expected a caret line, got: {stderr}"
     );
-    let _ = std::fs::remove_dir_all(&root);
 }
 
 /// A parse error inside a mounted `mod` child is labeled with the
@@ -327,6 +297,7 @@ fn a_root_parse_error_names_the_file_line_and_column() {
 /// CHILD's own line numbering.
 #[test]
 fn an_error_in_a_mod_child_names_the_spec_path_label() {
+    let home = rut_testkit::Scratch::new("cli-runlane-home");
     let root = scratch("diag-child");
     let dir = root.join("hello");
     write(&dir, "rut.jsonc", r#"{"name": "hello"}"#);
@@ -340,14 +311,13 @@ fn an_error_in_a_mod_child_names_the_spec_path_label() {
         "src/layout/mod.rut",
         "pub fn cell() -> i32 {\n    let = 7;\n}\n",
     );
-    let out = rut_cmd()
+    let out = rut_cmd(&home)
         .args(["run", dir.to_str().unwrap()])
         .output()
         .expect("run rut run <broken mod child>");
     assert_eq!(out.status.code(), Some(1));
     let stderr = String::from_utf8_lossy(&out.stderr);
     assert!(stderr.contains("--> hello/layout:2:"), "{stderr}");
-    let _ = std::fs::remove_dir_all(&root);
 }
 
 /// A parse error in a DEP is labeled with the dep's own spec — the
@@ -355,6 +325,7 @@ fn an_error_in_a_mod_child_names_the_spec_path_label() {
 /// the consumer that pulled it in.
 #[test]
 fn an_error_in_a_dep_names_the_dep_spec_label() {
+    let home = rut_testkit::Scratch::new("cli-runlane-home");
     let root = scratch("diag-dep");
     let hello = root.join("hello");
     write(
@@ -374,14 +345,13 @@ fn an_error_in_a_dep_names_the_dep_spec_label() {
         "src/mod.rut",
         "pub fn pi() -> f64 {\n    let = 7;\n}\n",
     );
-    let out = rut_cmd()
+    let out = rut_cmd(&home)
         .args(["run", hello.to_str().unwrap()])
         .output()
         .expect("run rut run <broken dep>");
     assert_eq!(out.status.code(), Some(1));
     let stderr = String::from_utf8_lossy(&out.stderr);
     assert!(stderr.contains("--> calc:2:"), "{stderr}");
-    let _ = std::fs::remove_dir_all(&root);
 }
 
 /// A non-nil fn that falls off the end of its body: the compile
@@ -391,6 +361,7 @@ fn an_error_in_a_dep_names_the_dep_spec_label() {
 /// The renderer spells the rustc-style `-->` position line.
 #[test]
 fn a_missing_return_diagnoses_with_a_position_not_a_crash() {
+    let home = rut_testkit::Scratch::new("cli-runlane-home");
     let root = scratch("missing-return");
     let dir = root.join("hello");
     write(&dir, "rut.jsonc", r#"{"name": "hello"}"#);
@@ -399,7 +370,7 @@ fn a_missing_return_diagnoses_with_a_position_not_a_crash() {
         "src/mod.rut",
         "fn f() -> str {\n    let x = 1;\n}\nentry fn main() -> str {\n    return f();\n}\n",
     );
-    let out = rut_cmd()
+    let out = rut_cmd(&home)
         .args(["run", dir.to_str().unwrap()])
         .output()
         .expect("run rut run <missing return>");
@@ -412,5 +383,4 @@ fn a_missing_return_diagnoses_with_a_position_not_a_crash() {
         stderr.lines().any(|l| l.contains('|') && l.contains('^')),
         "expected a caret line, got: {stderr}"
     );
-    let _ = std::fs::remove_dir_all(&root);
 }
