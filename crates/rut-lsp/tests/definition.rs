@@ -1231,6 +1231,30 @@ both_uri_shapes! {
 
 both_uri_shapes! {
     #[test]
+    fn members_are_silent_when_the_annotations_candidates_differ() {
+        // an own `class Counter` beside a `use m::{ Counter }` leaf:
+        // the file binds the name twice by DISTINCT declarations, so
+        // the annotation's candidates differ — the asking file's own
+        // declaration is a candidate like any other, and no member
+        // picks between them (hover, definition, completion alike)
+        let (mut s, _io) = rut_new::boot();
+        let uri = rut_new::at("src/child/mod.rut");
+        let src = "class Counter {\n    n: i32,\n}\nuse m::{ Counter };\nfn k(c: Counter) -> i32 { return c.bump(); }\n";
+        let hits = s.def_in(&uri, src, "c.bump", 1, 2);
+        assert!(hits.is_empty(), "no pick between the candidates: {hits:?}");
+        let h = s.hover_in(&uri, src, "c.bump", 1, 2);
+        assert!(no_hover(&h), "no member hover: {h}");
+        let items = s.complete_at(&uri, src, "c.", 1);
+        assert!(
+            !offers(&items, "bump"),
+            "no member row: {:?}",
+            labels(&items)
+        );
+    }
+}
+
+both_uri_shapes! {
+    #[test]
     fn the_receiver_family_behind_a_root_declared_edge_jumps() {
         // the annotated, the inferred, the chained, and the field-typed
         // receiver — the member's decl, through the lane

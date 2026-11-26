@@ -554,11 +554,15 @@ fn ambient_layers<'a>(w: &'a World, file: FileId, name: &str, out: &mut FileScop
 /// the computed-head lane — a type name REACHED THROUGH A VALUE
 /// (the receiver's inferred `RequestBuilder`, a binding's type
 /// head) is not a spelling the file binds, so the file-scope law
-/// does not gate it: the pkgs the document's use edges NAME are
-/// the first candidate set (the import machinery's own shape),
-/// the world's flat mounted-over-embed sweep the fallback. A
-/// spelled type token never rides this door — the spelling lanes
-/// answer through [`file_scope`].
+/// does not gate it: the candidate set is the asking file's own
+/// declaration plus the pkgs the document's use edges NAME (the
+/// import machinery's own shape), the world's flat
+/// mounted-over-embed sweep the fallback. The lane answers a type
+/// only when that set is ONE declaration — every hit the same node
+/// after the body/mount staging; distinct candidates are the
+/// one-name law's refusal and the lane is silent (never a pick
+/// between the bindings). A spelled type token never rides this
+/// door — the spelling lanes answer through [`file_scope`].
 pub(crate) fn type_via_imports<'a>(w: &'a World, file: FileId, name: &str) -> Option<TyView<'a>> {
     let doc = w.file(file);
     // the heads resolve to PACKAGES: a foreign head is its pkg, an
@@ -576,6 +580,13 @@ pub(crate) fn type_via_imports<'a>(w: &'a World, file: FileId, name: &str) -> Op
         }
     }
     let mut hits: Vec<(&File, TyView<'a>)> = Vec::new();
+    // the asking file's own declaration is a candidate like any
+    // other: [`type_decl`]'s own lane answers a name the file binds
+    // once, so it rides here exactly where the one-name law refused
+    // the name there — and then it decides with the rest
+    if let Some(t) = doc.ty(name) {
+        hits.push((doc, t));
+    }
     for pkg in &pkgs {
         for id in w
             .chain(file)
@@ -591,8 +602,15 @@ pub(crate) fn type_via_imports<'a>(w: &'a World, file: FileId, name: &str) -> Op
         }
     }
     let hits = prefer_bodies(&hits);
-    if let [(_, t), ..] = hits.as_slice() {
-        return Some(*t);
+    // one DECLARATION answers — every hit the same node; a distinct
+    // candidate is silence, never the old first-take. The staging
+    // above is the preference (mounted over embeds, bodies over
+    // surfaces), NOT a pick: what survives it must still be one
+    // declaration
+    let mut one = hits.iter().map(|&(_, t)| t);
+    if let Some(first) = one.next() {
+        let same = one.all(|t| std::ptr::eq(t.file, first.file) && t.h == first.h);
+        return same.then_some(first);
     }
     // the flat fallback — the old `type_decl` law, kept for the
     // computed heads ONLY: a type the doc neither declares nor

@@ -2176,6 +2176,65 @@ both_uri_shapes! {
 
 both_uri_shapes! {
     #[test]
+    fn a_local_from_a_twice_bound_callee_types_iff_the_world_holds_one_decl() {
+        // the callee is twice-bound (two leaves of `mk` — the file the
+        // compiler refuses): the local's type answers only when every
+        // leaf reaches ONE declaration. Both leaves reach m's `mk` and
+        // the world holds one: `Counter` (the hover and the hint ride
+        // the same binding pass). A second `mk` decl in the world
+        // (calc's math) is no pick's: no type, no inlay.
+        let (mut s, _io) = rut_new::boot();
+        let uri = rut_new::at("src/child/mod.rut");
+        let one = "use m::{ mk };\nuse app::m::{ mk };\nfn k() -> i32 { let c = mk(41); return c.bump(); }\n";
+        let md = markdown(s.hover_in(&uri, one, "let c = mk", 1, 4));
+        assert!(md.contains("let c: Counter"), "the one-decl world types: {md}");
+        let hs = s.inlay_all(&uri, one);
+        assert!(
+            hs.iter().any(|h| h["label"] == ": Counter"),
+            "the hint rides the same type: {hs:?}"
+        );
+        // a second declaration of `mk` in the world: the twice-bound
+        // callee never picks one
+        let math = format!(
+            "{}pub fn mk(n: i32) -> Calc {{ return Calc {{ d: n }}; }}\n",
+            rut_new::CALC_MATH
+        );
+        s.index_mod_at(&rut_new::calc("src/math/mod.rut"), "calc", "math", &math);
+        let two = "use m::{ mk };\nuse calc::math::{ mk };\nfn k() -> i32 { let c = mk(41); return c.bump(); }\n";
+        let md = markdown(s.hover_in(&uri, two, "let c = mk", 1, 4));
+        assert!(!md.contains("let c:"), "two decls type nothing: {md}");
+        let hs = s.inlay_all(&uri, two);
+        assert!(hs.is_empty(), "and no hint: {hs:?}");
+    }
+}
+
+both_uri_shapes! {
+    #[test]
+    fn members_answer_behind_a_twice_bound_annotation() {
+        // the coinciding cell: the file binds `Counter` twice, both
+        // leaves reach m's ONE struct — the annotation's candidates
+        // are one declaration, so the member answers (hover, exactly
+        // one definition hit, the completion row)
+        let (mut s, _io) = rut_new::boot();
+        let uri = rut_new::at("src/child/mod.rut");
+        let m = rut_new::at("src/m/mod.rut");
+        let src = "use m::{ Counter };\nuse app::m::{ Counter };\nfn k(c: Counter) -> i32 { return c.bump(); }\n";
+        let md = markdown(s.hover_in(&uri, src, "c.bump", 1, 2));
+        assert!(md.contains("pub fn bump(self) -> i32"), "the member: {md}");
+        let hits = s.def_in(&uri, src, "c.bump", 1, 2);
+        assert_eq!(hits.len(), 1, "one target: {hits:?}");
+        assert_eq!(hits[0]["uri"], m, "the declaring file: {hits:?}");
+        let items = s.complete_at(&uri, src, "c.", 1);
+        assert!(
+            offers(&items, "bump"),
+            "the completion row: {:?}",
+            labels(&items)
+        );
+    }
+}
+
+both_uri_shapes! {
+    #[test]
     fn two_own_decls_of_a_name_hover_both() {
         // decl + decl — "duplicate name `mk` — the fn already declares
         // it in this file": both decls are the candidates, each at its
