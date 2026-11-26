@@ -81,7 +81,7 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                 Some(tn) if self.free_generics(tn, &decl_generics, &subst).is_empty() => {
                     let saved = self.ctx.cur_mod.clone();
                     self.ctx.cur_mod = callee_mod.clone();
-                    let t = self.ctx.resolve_type(tn, &subst);
+                    let t = self.ctx.resolve_sig_ty(tn, &subst, None);
                     self.ctx.cur_mod = saved;
                     Some(t)
                 }
@@ -145,7 +145,7 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
         let ptys: Vec<TypeId> = params
             .iter()
             .map(|p| match self.ctx.param_ty(*p) {
-                Some(t) => self.ctx.resolve_type(t, &subst),
+                Some(t) => self.ctx.resolve_sig_ty(t, &subst, None),
                 None => TY_I32,
             })
             .collect();
@@ -197,7 +197,7 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
             }
         }
         let ret_ty = ret
-            .map(|r| self.ctx.resolve_type(r, &subst))
+            .map(|r| self.ctx.resolve_sig_ty(r, &subst, None))
             .unwrap_or(TY_NIL);
         // a small, non-recursive body inlines at the call site (P1.3):
         // `mix64`-shaped helpers flatten into the caller, every hash pays

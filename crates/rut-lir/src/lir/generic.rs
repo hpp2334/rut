@@ -159,7 +159,7 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                 }
                 // non-generic: resolve and compare — a registered impl
                 // (nominal widening) counts as a match
-                let want = self.ctx.resolve_type(param_node, subst);
+                let want = self.ctx.resolve_sig_ty(param_node, subst, None);
                 let ok = match arg_node {
                     Some(n) => self.widens_val(n, arg_ty, want),
                     None => self.widens(arg_ty, want),
@@ -340,7 +340,7 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                 // core names, gated on the use statement like everywhere
                 // else (an unused name falls through to `resolve_type`,
                 // which reports it as not in scope)
-                let want = self.ctx.resolve_type(param_node, subst);
+                let want = self.ctx.resolve_sig_ty(param_node, subst, None);
                 if !self.widens(arg_ty, want) {
                     self.ctx.err(
                         sp,
@@ -392,7 +392,7 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                 }
             }
             _ => {
-                let want = self.ctx.resolve_type(param_node, subst);
+                let want = self.ctx.resolve_sig_ty(param_node, subst, None);
                 // the quiet-audit law: a poison argument skips the
                 // equality verdict
                 if want != arg_ty && !self.ctx.ty_is_err(arg_ty) && !self.ctx.ty_is_err(want) {

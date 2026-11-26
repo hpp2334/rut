@@ -711,9 +711,10 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
     pub(crate) fn resolve_type_now(&mut self, node: TyRef) -> TypeId {
         // `Self` (bare or under `?`, at any structural depth — the
         // rut-json batch phase 1) binds to the enclosing type inside
-        // method bodies
-        self.ctx
-            .resolve_sig_ty_deep(node, &self.subst, self.self_ty)
+        // method bodies. The signature door remembers (the
+        // one-resolution law) — a body reads what the box question or
+        // a call site already resolved.
+        self.ctx.resolve_sig_ty(node, &self.subst, self.self_ty)
     }
 
     pub(crate) fn lookup(&self, name: IdentId) -> Option<&Local> {

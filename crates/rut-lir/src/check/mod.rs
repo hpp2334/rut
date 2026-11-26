@@ -37,6 +37,15 @@ pub type SeedImplRow = (String, TypeId, Vec<(String, u32)>, Vec<(String, u32)>);
 pub type AliasTargetRow = (TypeId, Option<(IdentId, Vec<IdentId>)>, IdentId);
 /// An inherent-method lookup hit: `(fn row, param list offset, params)`.
 pub type InherentRow = (usize, usize, Vec<(IdentId, TypeId)>);
+/// A signature-resolution memo key: the annotation node, its
+/// substitution env, the `Self` binding, and the module it resolves
+/// in. See [`Ctx::resolve_sig_ty`].
+pub type SigKey = (
+    rut_ast::AnyHandle,
+    Vec<(IdentId, TypeId)>,
+    Option<TypeId>,
+    String,
+);
 
 // ---- the per-file binding law ----
 
@@ -811,6 +820,14 @@ pub struct Ctx<'a> {
     // instantiation queue
     pub inst_map: std::collections::HashMap<Inst, u32>,
     queue: Vec<Inst>,
+    /// The one-resolution law's memo: a signature annotation resolves
+    /// once per fn (per context — node × substitution × `Self` ×
+    /// module) and every consumer reads the remembered answer — the
+    /// dead-roots trait-object question, the body compile, and a call
+    /// site's expected-type read. A failed resolution therefore
+    /// diagnoses once, at its declaration, however many lanes consult
+    /// the signature.
+    sig_memo: std::collections::HashMap<SigKey, TypeId>,
     /// the pkg whose source declared each record/enum: spliced decls
     /// carry their splice origin, linked generics their exporter, own
     /// decls this unit — the instantiation ledger's owner anchor
@@ -1080,6 +1097,7 @@ impl<'a> Ctx<'a> {
             dep_exports: std::collections::HashSet::new(),
             inst_map: std::collections::HashMap::new(),
             queue: Vec::new(),
+            sig_memo: std::collections::HashMap::new(),
             decl_owner: std::collections::HashMap::new(),
             extern_generics: std::collections::HashMap::new(),
             inst_requests: Vec::new(),
@@ -2295,13 +2313,26 @@ impl<'a> Ctx<'a> {
     /// `Self` outside an impl is the caller's diagnostic. The driver's
     /// surface build resolves exported methods' template signatures
     /// through this (the `#<param>` placeholder env).
+    ///
+    /// A signature resolves once per fn: the same annotation node under
+    /// the same substitution, `Self`, and module is the same question,
+    /// so the answer is remembered and every consumer (the dead-roots
+    /// box question, the body compile, a call site's expected types)
+    /// reads it. A failed spelling then diagnoses once at its
+    /// declaration, never once per lane.
     pub fn resolve_sig_ty(
         &mut self,
         node: TyRef,
         env: &[(IdentId, TypeId)],
         self_ty: Option<TypeId>,
     ) -> TypeId {
-        self.resolve_sig_ty_deep(node, env, self_ty)
+        let key = (node.any(), env.to_vec(), self_ty, self.cur_mod.clone());
+        if let Some(&t) = self.sig_memo.get(&key) {
+            return t;
+        }
+        let t = self.resolve_sig_ty_deep(node, env, self_ty);
+        self.sig_memo.insert(key, t);
+        t
     }
 
     /// Signature resolution with `Self` handled at ANY structural depth —
