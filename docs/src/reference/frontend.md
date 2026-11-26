@@ -269,8 +269,8 @@ from the AST:
   spans, so the formatter recovers every `//` and block comment with zero
   lexer/parser changes: trailing runs go on their element's line, own-line
   runs at the enclosing indent.
-- **Literals print verbatim** — the printer re-parens only where flat
-  precedence would invert the tree; literals (numbers, strings, raw
+- **Literals print verbatim** — a paren is kept exactly where the bare
+  spelling would not re-parse to the same node; literals (numbers, strings, raw
   strings, f-string template text) reprint VERBATIM from their source
   spans: `0xF8FAFCFFu64`, `1_000_000`, `2.50`, `"\u{41}"`, and raw hash
   levels survive exactly. Only f-string hole expressions are

@@ -1333,7 +1333,7 @@ msgstr "类型"
 
 
 #: src/tutorial/values-and-variables.md:13 src/reference/primitive-types.md:7
-#: src/reference/native-containers.md:115 src/reference/cli.md:400
+#: src/reference/native-containers.md:115 src/reference/cli.md:404
 msgid "Notes"
 msgstr "说明"
 
@@ -21299,7 +21299,7 @@ msgstr ""
 
 
 #: src/reference/host-fns.md:146 src/reference/frontend.md:168
-#: src/reference/cli.md:379
+#: src/reference/cli.md:383
 msgid "Declaration mode"
 msgstr "声明模式"
 
@@ -21584,7 +21584,7 @@ msgstr "生成行"
 #: src/reference/host-fns.md:305 src/reference/stdlib.md:36
 #: src/reference/stdlib.md:174 src/reference/stdlib.md:225
 #: src/reference/stdlib.md:406 src/reference/typed-bytecode.md:101
-#: src/reference/project-structure.md:59 src/reference/cli.md:390
+#: src/reference/project-structure.md:59 src/reference/cli.md:394
 #: src/reference/glossary.md:9
 msgid "meaning"
 msgstr "含义"
@@ -24535,9 +24535,9 @@ msgstr ""
 
 #: src/reference/frontend.md:272
 msgid ""
-"**Literals print verbatim** — the printer re-parens only where flat precedence would invert the tree; literals (numbers, strings, raw strings, f-string template text) reprint VERBATIM from their source spans: `0xF8FAFCFFu64`, `1_000_000`, `2.50`, `\"\\u{41}\"`, and raw hash levels survive exactly. Only f-string hole expressions are re-formatted — the formatter re-derives nothing else."
+"**Literals print verbatim** — a paren is kept exactly where the bare spelling would not re-parse to the same node; literals (numbers, strings, raw strings, f-string template text) reprint VERBATIM from their source spans: `0xF8FAFCFFu64`, `1_000_000`, `2.50`, `\"\\u{41}\"`, and raw hash levels survive exactly. Only f-string hole expressions are re-formatted — the formatter re-derives nothing else."
 msgstr ""
-"**字面量逐字节原样打印**——打印器只在扁平优先级会颠倒树的地方重新加括号；字面量（数字、字符串、原始字符串、f-string 模板文本）从其源码 span 逐字节原样重排：`0xF8FAFCFFu64`、`1_000_000`、`2.50`、`\"\\u{41}\"` 与原始字符串的哈希级别都原样保留。只有 f-string 的插值洞表达式会被重新格式化——除此之外格式化器不重新推导任何东西。"
+"**字面量逐字节原样打印**——括号恰好保留在裸拼写无法重新解析出同一节点的地方；字面量（数字、字符串、原始字符串、f-string 模板文本）从其源码 span 逐字节原样重排：`0xF8FAFCFFu64`、`1_000_000`、`2.50`、`\"\\u{41}\"` 与原始字符串的哈希级别都原样保留。只有 f-string 的插值洞表达式会被重新格式化——除此之外格式化器不重新推导任何东西。"
 
 
 #: src/reference/frontend.md:278
@@ -26246,7 +26246,7 @@ msgid "Two files leave the build:"
 msgstr "构建产出两个文件："
 
 
-#: src/reference/symbol-stripping.md:26 src/reference/cli.md:383
+#: src/reference/symbol-stripping.md:26 src/reference/cli.md:387
 msgid "file"
 msgstr "文件"
 
@@ -28923,7 +28923,7 @@ msgstr ""
 "参数面由 clap 提供：`rut --help` 打印各命令，`rut <command> --help` 打印各标志。`run` 与`install` 的 `<dir>` 可省略 —— 省略时两者都作用于工作目录（`.`）：在模块目录内，`rut run` 运行它，`rutinstall` 把它的依赖固定进 `rut.lock`。不带子命令运行 `rut` 会把帮助打印到 stderr 并以退出码 2 结束；解析错误—— 未知标志、悬空的标志值、无法解析的 `--fuel` —— 同样以退出码 2 结束，并附带 clap 的消息。上面的用法速览仍是快速索引。"
 
 
-#: src/reference/cli.md:36 src/reference/cli.md:383
+#: src/reference/cli.md:36 src/reference/cli.md:387
 msgid "`run`"
 msgstr "`run`"
 
@@ -29494,7 +29494,7 @@ msgstr ""
 "网络是 `rut-native` 的 `http` feature（默认开）—— `default-features = false` 的构建（wasm 图）没有任何传输：下载车道上的存储未命中会大声报错而不是联网"
 
 
-#: src/reference/cli.md:283 src/reference/cli.md:383
+#: src/reference/cli.md:283 src/reference/cli.md:387
 msgid "`fmt`"
 msgstr "`fmt`"
 
@@ -29529,254 +29529,260 @@ msgstr "解析不干净的文件会被**拒绝**（列出诊断，非零退出�
 
 #: src/reference/cli.md:299
 msgid ""
+"the formatted text is **re-parsed before it is written**: an output that does not parse clean refuses the write (`fmt: <file>: the formatted text does not parse clean`, nonzero exit) and the file is left untouched — fmt never writes what it cannot read back;"
+msgstr "格式化后的文本在写入前会**重新解析**：解析不干净的输出会拒绝写入（`fmt: <file>: the formatted text does not parse clean`，非零退出），文件保持原样——fmt 绝不写出它读不回来的内容；"
+
+
+#: src/reference/cli.md:303
+msgid ""
 "default mode rewrites in place and prints `formatted: <path>` per changed file;"
 msgstr "默认模式就地重写，并对每个变更文件打印 `formatted: <path>`；"
 
 
-#: src/reference/cli.md:301
+#: src/reference/cli.md:305
 msgid ""
 "`--check` writes nothing: it prints `unformatted: <path>` for each would-change file and exits nonzero, or `fmt: N file(s) formatted` when everything is clean."
 msgstr ""
 "`--check` 不写任何东西：它为每个将要变更的文件打印 `unformatted: <path>` 并以非零码退出；当一切干净时打印 `fmt: N file(s) formatted`。"
 
 
-#: src/reference/cli.md:305
+#: src/reference/cli.md:309
 msgid "`pack`"
 msgstr "`pack`"
 
 
-#: src/reference/cli.md:308
+#: src/reference/cli.md:312
 msgid ""
 "# --mode source is the default: the .zip\n"
 msgstr ""
 
 
-#: src/reference/cli.md:310
+#: src/reference/cli.md:314
 msgid ""
 "# packed plugins/server -> plugins/server.rutbundle (18304 bytes)\n"
 msgstr ""
 
 
-#: src/reference/cli.md:312
+#: src/reference/cli.md:316
 msgid ""
 "# packed plugins/server -> plugins/server.rutbundle (...) + symbol table\n"
 msgstr ""
 "# packed plugins/server -> plugins/server.rutbundle (...) + symbol table\n"
 
 
-#: src/reference/cli.md:317
+#: src/reference/cli.md:321
 msgid ""
 "Packs a module directory into **one deterministic artifact** — same input, same bytes — in one of two modes:"
 msgstr "把模块目录打包成**一个确定性的工件**——相同输入，相同字节——两种模式之一："
 
 
-#: src/reference/cli.md:320 src/reference/cli.md:383
+#: src/reference/cli.md:324 src/reference/cli.md:387
 msgid "mode"
 msgstr "模式"
 
 
-#: src/reference/cli.md:320
+#: src/reference/cli.md:324
 msgid "default out"
 msgstr "默认输出"
 
 
-#: src/reference/cli.md:320
+#: src/reference/cli.md:324
 msgid "what rides"
 msgstr "承载什么"
 
 
-#: src/reference/cli.md:322
+#: src/reference/cli.md:326
 msgid "`--mode source` (the default)"
 msgstr "`--mode source`（默认）"
 
 
-#: src/reference/cli.md:322
+#: src/reference/cli.md:326
 msgid "`<dir>.zip`"
 msgstr ""
 
 
-#: src/reference/cli.md:322
+#: src/reference/cli.md:326
 msgid ""
 "the **source zip** — the directory packed for travel: `rut.jsonc` at the archive root, the module tree under `src/`, and every dep embedded under `deps/<name>@<fp16>/` — a source dep as its own tree, a compiled dep (a `.rutbundle` url dep) as its `.rutbundle` file verbatim ([the source zip](bundles.md#the-source-zip--the-source-transport))"
 msgstr ""
 "**源码压缩包**——为旅行打包的目录：档案根的 `rut.jsonc`、`src/` 之下的模块树、以及每个依赖都内嵌于 `deps/<name>@<fp16>/` 之下——源码 dep 以自己的树，编译 dep（`.rutbundle` url dep）以其 `.rutbundle` 文件原样（[源码压缩包](bundles.md#the-source-zip--the-source-transport)）"
 
 
-#: src/reference/cli.md:323
+#: src/reference/cli.md:327
 msgid "`--mode bin`"
 msgstr ""
 
 
-#: src/reference/cli.md:323
+#: src/reference/cli.md:327
 msgid "`<dir>.rutbundle`"
 msgstr ""
 
 
-#: src/reference/cli.md:323
+#: src/reference/cli.md:327
 msgid ""
 "the **compiled wire** ([module bundles](bundles.md)): a **lib** pkg packs **compiled** (format_version 13) — the root and every source dep ride as `mod.rutc` binaries (bodies + surface — the linking truth) under `deps/<name>@<fp16>/` identity directories, host pkgs (and declared deps whose unit did not link) ride as declaration file sets, and the scope ledger's rows spell the identities so any loader can rebase the binaries onto its own numbering"
 msgstr ""
 "**编译线**（[模块捆绑包](bundles.md)）：**lib** 包**编译**打包（format_version 13）——根与每个源码 dep 都以 `mod.rutc` 二进制承载（函数体 + 表面——链接的真相），落在 `deps/<name>@<fp16>/` 标识目录下；宿主包（以及其单元未链接的声明 dep）以声明文件集承载；作用域台账的行拼写标识，任何加载器都能把二进制重定基到自己的编号上"
 
 
-#: src/reference/cli.md:325
+#: src/reference/cli.md:329
 msgid ""
 "`-o` overrides the default sibling output in both modes. A root that produces no compiled program — a `type = \"host\"` pkg — is refused in bin mode: `pack a source pkg instead`; source mode packs it fine (the surface rides as source). In bin mode a host pkg packs as a **decl root** (its `.d.rut` surface riding as source at the canonical `mod.d.rut` name, single-package) and refuses `--strip` there (`no symbols to strip`); `run` accepts either bundle directly — though running a host bundle refuses with intent: bind its rows from the embedder ([module bundles](bundles.md)). The bin-mode pack door STAMPS the `format`/`format_version` rows into the packed manifest — the directory grammar retired the pair (writing it in `rut.jsonc` refuses loudly), and the packer is its one writer, so the same project publishes both ways without hand-editing (a source zip's manifest does not claim the compiled wire; the rows drop there)."
 msgstr ""
 "`-o` 在两种模式下都覆盖默认的旁边输出。产不出编译程序的根——`type = \\\"host\\\"` 包——在 bin 模式被拒绝：`pack a source pkg instead`；source 模式打包它毫无问题（表面以源码搭乘）。bin 模式下宿主包按**声明根**打包（其 `.d.rut` 表面以规范的 `mod.d.rut` 名以源码承载，单包），并在那里拒绝 `--strip`（`no symbols to strip`）；`run` 直接接受两种捆绑包——不过运行宿主捆绑包会带着意图拒绝：从嵌入方绑定它的行（[模块捆绑包](bundles.md)）。bin 模式的打包门把 `format`/`format_version` 行_盖_进打包后的清单——目录文法已淘汰这对键（在 `rut.jsonc` 里写它会大声拒绝），打包器是其唯一写者，因此同一项目无需手改即可两种方式发布（源码压缩包的清单不认领编译线；行在那里丢弃）。"
 
 
-#: src/reference/cli.md:340
+#: src/reference/cli.md:344
 msgid ""
 "**The source zip's manifest is rewritten at pack.** Every `[deps]` descriptor becomes `{ \"path\": \"deps/<name>@<fp16>\" }` — `url` fields and external `path` values drop (everything embeds), the row keys stay, and comments outside the replaced descriptor blocks ride. The dep dirname is the **tree identity**: the first 16 lowercase hex of sha256 over the package's own rewritten manifest and its `src/**.rut` sources — the tree flavor of the content identity, as against the wire flavor's four canonical ride files (the two never cross-compare); two identities of one name coexist side by side."
 msgstr ""
 "**源码压缩包的清单在打包时被改写。**每条 `[deps]` 描述符变成 `{ \"path\": \"deps/<name>@<fp16>\" }`——`url` 字段与外部 `path` 值丢弃（一切皆内嵌），行键保留，被替换描述符块之外的注释随行。dep 目录名是**树标识**：对该包自己被改写的清单与其 `src/**.rut` 源码取 sha256 的前 16 位小写十六进制——内容标识的树风味（tree flavor），对照线风味（wire flavor）的四个规范搭乘文件（两种绝不互比）；同一名字的两个标识并肩共存。"
 
 
-#: src/reference/cli.md:350
+#: src/reference/cli.md:354
 msgid ""
 "Pack-time tree gates: a `.rut` outside a `src/` shell refuses — ``rut code rides only under a `src/` shell — declare it (`mod …;`) and move it under `src/`, or delete it`` — and an undeclared `.rut` under `src/` refuses — ``nothing declares this module — `mod …;` it from its parent or delete it``."
 msgstr ""
 "打包期的树门：`src/` 壳之外的 `.rut` 拒绝——``rut code rides only under a `src/` shell — declare it (`mod …;`) and move it under `src/`, or delete it``——而 `src/` 之下未被声明的 `.rut` 拒绝——``nothing declares this module — `mod …;` it from its parent or delete it``。"
 
 
-#: src/reference/cli.md:356
+#: src/reference/cli.md:360
 msgid ""
 "`--strip` is a bin-mode lane: `rut pack <dir> --strip` without `--mode bin` refuses at the door — `pack: --strip is a --mode bin lane — a source zip carries source, not symbols; drop the flag or pass --mode bin`. In bin mode it mangles every renameable name and strips the symbolication tables from the emitted binaries, writing the private symbol table at the sibling path `<out-without-ext>.rutsym` — the sidecar is never an entry inside the bundle. It needs a fully-compiled closure: a source group that could bind a compiled group's surface is a pointed refusal. See [Symbol stripping and `.rutsym` sidecars](symbol-stripping.md)."
 msgstr ""
 "`--strip` 是 bin 模式的车道：不带 `--mode bin` 的 `rut pack <dir> --strip` 在门口拒绝——``pack: --strip is a --mode bin lane — a source zip carries source, not symbols; drop the flag or pass --mode bin``。bin 模式下它把每个可改名的名字改名，并从产出的二进制里剥离符号化表，把私有符号表写在旁边的路径 `<out-without-ext>.rutsym`——旁车绝不是捆绑包里的一个条目。它需要一个全编译的闭包：可能绑定某编译组表面的源码组会被明确拒绝。见[符号剥离与 `.rutsym` 旁车](symbol-stripping.md)。"
 
 
-#: src/reference/cli.md:367 src/reference/cli.md:383
+#: src/reference/cli.md:371 src/reference/cli.md:387
 msgid "`dump`"
 msgstr "`dump`"
 
 
-#: src/reference/cli.md:373
+#: src/reference/cli.md:377
 msgid ""
 "Prints the compiler's view of one file: the `== AST ==` section followed by `== IR ==` (per-function typed register tables and op listings). Compilation is the same offered-world pipeline `run` uses, minus execution and verification. `.d.rut` inputs dump in declaration mode — useful for inspecting a host surface's slots."
 msgstr ""
 "打印编译器对单个文件的视图：`== AST ==` 段后跟 `== IR ==`（逐函数的类型化寄存器表与 op 列表）。编译与 `run` 用的同一套 offer 世界流水线相同，只省去执行与校验。`.d.rut` 输入以声明模式转储 —— 适合查看宿主表面的槽位。"
 
 
-#: src/reference/cli.md:381
+#: src/reference/cli.md:385
 msgid "The file extension selects the parser mode:"
 msgstr "文件扩展名选择解析器模式："
 
 
-#: src/reference/cli.md:385
+#: src/reference/cli.md:389
 msgid "`*.rut`"
 msgstr "`*.rut`"
 
 
-#: src/reference/cli.md:385
+#: src/reference/cli.md:389
 msgid "implementation"
 msgstr "实现"
 
 
-#: src/reference/cli.md:385
+#: src/reference/cli.md:389
 msgid "the package's designated `entry fn` (a loose file is refused)"
 msgstr "运行包内被指定的 `entry fn`（松散文件会被拒绝）"
 
 
-#: src/reference/cli.md:385
+#: src/reference/cli.md:389
 msgid "formats impls"
 msgstr "格式化 impl"
 
 
-#: src/reference/cli.md:385
+#: src/reference/cli.md:389
 msgid "AST + IR of the module"
 msgstr "模块的 AST + IR"
 
 
-#: src/reference/cli.md:386
+#: src/reference/cli.md:390
 msgid "`*.d.rut`"
 msgstr "`*.d.rut`"
 
 
-#: src/reference/cli.md:386
+#: src/reference/cli.md:390
 msgid "declaration"
 msgstr "声明"
 
 
-#: src/reference/cli.md:386
+#: src/reference/cli.md:390
 msgid "refused (exit 2)"
 msgstr "拒绝（退出码 2）"
 
 
-#: src/reference/cli.md:386
+#: src/reference/cli.md:390
 msgid "formats the surface"
 msgstr "格式化表面"
 
 
-#: src/reference/cli.md:386
+#: src/reference/cli.md:390
 msgid "the surface's AST + IR"
 msgstr "表面的 AST + IR"
 
 
-#: src/reference/cli.md:388
+#: src/reference/cli.md:392
 msgid "Exit codes"
 msgstr "退出码"
 
 
-#: src/reference/cli.md:390
+#: src/reference/cli.md:394
 msgid "code"
 msgstr "码"
 
 
-#: src/reference/cli.md:392
+#: src/reference/cli.md:396
 msgid "`0`"
 msgstr "`0`"
 
 
-#: src/reference/cli.md:392
+#: src/reference/cli.md:396
 msgid "success"
 msgstr "成功"
 
 
-#: src/reference/cli.md:393
+#: src/reference/cli.md:397
 msgid "`1`"
 msgstr "`1`"
 
 
-#: src/reference/cli.md:393
+#: src/reference/cli.md:397
 msgid ""
 "compile diagnostics; no binary emitted; binary decode or verify failure; VM boot failure; a trap at run; `fmt` refuses a file that does not parse; `fmt --check` found drift; a `pack` output-write failure"
 msgstr ""
 "编译诊断；未发出二进制；二进制解码或校验失败；VM 启动失败；运行中的陷阱；`fmt` 拒绝解析不了的文件；`fmt --check` 发现漂移；一次 `pack` 输出写入失败"
 
 
-#: src/reference/cli.md:394
+#: src/reference/cli.md:398
 msgid "`2`"
 msgstr "`2`"
 
 
-#: src/reference/cli.md:394
+#: src/reference/cli.md:398
 msgid ""
 "usage errors (missing arguments); unreadable input file; `run` on a `.d.rut`; `run` on an input that is neither a module directory nor a `.rutbundle`; a url dep missing from the global dep store (the install-first refusal — `run`/`pack` never download); `fmt` finds no `.rut` files under a directory; a url dep the root's `rut.lock` does not pin, or whose fetched bytes break the lock's pin (the poisoned store entry is evicted); `install` on a `.rutbundle`; `install --locked` drift, including the missing-lock refusal; `install` on a directory whose graph fails to mount against the computed pins; `new` onto an existing `rut.jsonc`/`src/mod.rut`/`rut.lock`, or an illegal package name; a `pack` refusal — `--strip` without `--mode bin`, a `.rut` outside the `src/` shell, an undeclared `.rut` under `src/`, a host root in bin mode, a url dep the lock does not pin"
 msgstr ""
 "用法错误（缺参数）；输入文件不可读；对 `.d.rut` 运行 `run`；对既非模块目录也非 `.rutbundle` 的输入运行 `run`；某条 url 依赖不在全局依赖存储里（先安装法则的拒绝——`run`/`pack` 绝不下载）；`fmt` 在目录下找不到 `.rut` 文件；某条 url 依赖遍历根的 `rut.lock` 未固定、或其取回字节打破锁的固定值（被污染的存储条目被驱逐）；对 `.rutbundle` 运行 `install`；`install --locked` 漂移，包括缺锁拒绝；`install` 的目录整图未能按算出的固定值挂载；`new` 落在已有的 `rut.jsonc`/`src/mod.rut`/`rut.lock` 上，或非法的包名；一次 `pack` 拒绝——不带 `--mode bin` 的 `--strip`、`src/` 壳之外的 `.rut`、`src/` 之下未被声明的 `.rut`、bin 模式下的宿主根、锁未固定的 url 依赖"
 
 
-#: src/reference/cli.md:396
+#: src/reference/cli.md:400
 msgid ""
 "Diagnostics go to stderr; the success summaries (`pack`'s packed line, `install`'s resolved/verified lines and lock reports) go to stdout."
 msgstr "诊断走 stderr；成功汇总（`pack` 的打包行、`install` 的解析/校验行与锁报告）走 stdout。"
 
 
-#: src/reference/cli.md:402
+#: src/reference/cli.md:406
 msgid ""
 "The CLI offers and binds on behalf of the program, but it never injects names the program did not declare: a program that never spells `use ink::` gets no logger; one that never offers the async packages has no launcher and `await` stays cold-poll inline ([core and the swappable packages](stdlib.md))."
 msgstr ""
 "CLI 替程序 offer 并绑定，但从不注入程序未声明的名字：从不拼 `use ink::` 的程序得不到 logger；从不 offer 异步包的程序没有启动器，`await` 保持内联冷轮询（[core 与可换包](stdlib.md)）。"
 
 
-#: src/reference/cli.md:407
+#: src/reference/cli.md:411
 msgid "The HTTP lane is native-only: the CLI build carries it, wasm builds do not."
 msgstr "HTTP 链路仅限原生：CLI 构建携带它，wasm 构建不携带。"
 
 
-#: src/reference/cli.md:409
+#: src/reference/cli.md:413
 msgid ""
 "`run` on a module directory is the deployment path for development; `pack` + `run <bundle>` is the shipping path — both run the identical contract ([loading and the embed loop](loading.md))."
 msgstr ""

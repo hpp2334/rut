@@ -1226,7 +1226,7 @@ msgid "Types"
 msgstr ""
 
 #: src/tutorial/values-and-variables.md:13 src/reference/primitive-types.md:7
-#: src/reference/native-containers.md:115 src/reference/cli.md:400
+#: src/reference/native-containers.md:115 src/reference/cli.md:404
 msgid "Notes"
 msgstr ""
 
@@ -20902,7 +20902,7 @@ msgid ""
 msgstr ""
 
 #: src/reference/host-fns.md:146 src/reference/frontend.md:168
-#: src/reference/cli.md:379
+#: src/reference/cli.md:383
 msgid "Declaration mode"
 msgstr ""
 
@@ -21169,7 +21169,7 @@ msgstr ""
 #: src/reference/host-fns.md:305 src/reference/stdlib.md:36
 #: src/reference/stdlib.md:174 src/reference/stdlib.md:225
 #: src/reference/stdlib.md:406 src/reference/typed-bytecode.md:101
-#: src/reference/project-structure.md:59 src/reference/cli.md:390
+#: src/reference/project-structure.md:59 src/reference/cli.md:394
 #: src/reference/glossary.md:9
 msgid "meaning"
 msgstr ""
@@ -23926,12 +23926,12 @@ msgstr ""
 
 #: src/reference/frontend.md:272
 msgid ""
-"**Literals print verbatim** — the printer re-parens only where flat "
-"precedence would invert the tree; literals (numbers, strings, raw strings, "
-"f-string template text) reprint VERBATIM from their source spans: "
-"`0xF8FAFCFFu64`, `1_000_000`, `2.50`, `\"\\u{41}\"`, and raw hash levels "
-"survive exactly. Only f-string hole expressions are re-formatted — the "
-"formatter re-derives nothing else."
+"**Literals print verbatim** — a paren is kept exactly where the bare "
+"spelling would not re-parse to the same node; literals (numbers, strings, "
+"raw strings, f-string template text) reprint VERBATIM from their source "
+"spans: `0xF8FAFCFFu64`, `1_000_000`, `2.50`, `\"\\u{41}\"`, and raw hash "
+"levels survive exactly. Only f-string hole expressions are re-formatted — "
+"the formatter re-derives nothing else."
 msgstr ""
 
 #: src/reference/frontend.md:278
@@ -25545,7 +25545,7 @@ msgstr ""
 msgid "Two files leave the build:"
 msgstr ""
 
-#: src/reference/symbol-stripping.md:26 src/reference/cli.md:383
+#: src/reference/symbol-stripping.md:26 src/reference/cli.md:387
 msgid "file"
 msgstr ""
 
@@ -28590,7 +28590,7 @@ msgid ""
 "with clap's message. The usage sketch above stays the quick map."
 msgstr ""
 
-#: src/reference/cli.md:36 src/reference/cli.md:383
+#: src/reference/cli.md:36 src/reference/cli.md:387
 msgid "`run`"
 msgstr ""
 
@@ -29195,7 +29195,7 @@ msgid ""
 "store miss on the download lane errors loudly instead of networking."
 msgstr ""
 
-#: src/reference/cli.md:283 src/reference/cli.md:383
+#: src/reference/cli.md:283 src/reference/cli.md:387
 msgid "`fmt`"
 msgstr ""
 
@@ -29227,61 +29227,69 @@ msgstr ""
 
 #: src/reference/cli.md:299
 msgid ""
+"the formatted text is **re-parsed before it is written**: an output that "
+"does not parse clean refuses the write (`fmt: <file>: the formatted text "
+"does not parse clean`, nonzero exit) and the file is left untouched — fmt "
+"never writes what it cannot read back;"
+msgstr ""
+
+#: src/reference/cli.md:303
+msgid ""
 "default mode rewrites in place and prints `formatted: <path>` per changed "
 "file;"
 msgstr ""
 
-#: src/reference/cli.md:301
+#: src/reference/cli.md:305
 msgid ""
 "`--check` writes nothing: it prints `unformatted: <path>` for each "
 "would-change file and exits nonzero, or `fmt: N file(s) formatted` when "
 "everything is clean."
 msgstr ""
 
-#: src/reference/cli.md:305
+#: src/reference/cli.md:309
 msgid "`pack`"
 msgstr ""
 
-#: src/reference/cli.md:308
+#: src/reference/cli.md:312
 msgid "# --mode source is the default: the .zip\n"
 msgstr ""
 
-#: src/reference/cli.md:310
+#: src/reference/cli.md:314
 msgid "# packed plugins/server -> plugins/server.rutbundle (18304 bytes)\n"
 msgstr ""
 
-#: src/reference/cli.md:312
+#: src/reference/cli.md:316
 msgid ""
 "# packed plugins/server -> plugins/server.rutbundle (...) + symbol table\n"
 msgstr ""
 
-#: src/reference/cli.md:317
+#: src/reference/cli.md:321
 msgid ""
 "Packs a module directory into **one deterministic artifact** — same input, "
 "same bytes — in one of two modes:"
 msgstr ""
 
-#: src/reference/cli.md:320 src/reference/cli.md:383
+#: src/reference/cli.md:324 src/reference/cli.md:387
 msgid "mode"
 msgstr ""
 
-#: src/reference/cli.md:320
+#: src/reference/cli.md:324
 msgid "default out"
 msgstr ""
 
-#: src/reference/cli.md:320
+#: src/reference/cli.md:324
 msgid "what rides"
 msgstr ""
 
-#: src/reference/cli.md:322
+#: src/reference/cli.md:326
 msgid "`--mode source` (the default)"
 msgstr ""
 
-#: src/reference/cli.md:322
+#: src/reference/cli.md:326
 msgid "`<dir>.zip`"
 msgstr ""
 
-#: src/reference/cli.md:322
+#: src/reference/cli.md:326
 msgid ""
 "the **source zip** — the directory packed for travel: `rut.jsonc` at the "
 "archive root, the module tree under `src/`, and every dep embedded under "
@@ -29290,15 +29298,15 @@ msgid ""
 "zip](bundles.md#the-source-zip--the-source-transport))"
 msgstr ""
 
-#: src/reference/cli.md:323
+#: src/reference/cli.md:327
 msgid "`--mode bin`"
 msgstr ""
 
-#: src/reference/cli.md:323
+#: src/reference/cli.md:327
 msgid "`<dir>.rutbundle`"
 msgstr ""
 
-#: src/reference/cli.md:323
+#: src/reference/cli.md:327
 msgid ""
 "the **compiled wire** ([module bundles](bundles.md)): a **lib** pkg packs "
 "**compiled** (format_version 13) — the root and every source dep ride as "
@@ -29309,7 +29317,7 @@ msgid ""
 "onto its own numbering"
 msgstr ""
 
-#: src/reference/cli.md:325
+#: src/reference/cli.md:329
 msgid ""
 "`-o` overrides the default sibling output in both modes. A root that "
 "produces no compiled program — a `type = \"host\"` pkg — is refused in bin "
@@ -29326,7 +29334,7 @@ msgid ""
 "claim the compiled wire; the rows drop there)."
 msgstr ""
 
-#: src/reference/cli.md:340
+#: src/reference/cli.md:344
 msgid ""
 "**The source zip's manifest is rewritten at pack.** Every `[deps]` "
 "descriptor becomes `{ \"path\": \"deps/<name>@<fp16>\" }` — `url` fields and "
@@ -29339,7 +29347,7 @@ msgid ""
 "side."
 msgstr ""
 
-#: src/reference/cli.md:350
+#: src/reference/cli.md:354
 msgid ""
 "Pack-time tree gates: a `.rut` outside a `src/` shell refuses — ``rut code "
 "rides only under a `src/` shell — declare it (`mod …;`) and move it under "
@@ -29347,7 +29355,7 @@ msgid ""
 "``nothing declares this module — `mod …;` it from its parent or delete it``."
 msgstr ""
 
-#: src/reference/cli.md:356
+#: src/reference/cli.md:360
 msgid ""
 "`--strip` is a bin-mode lane: `rut pack <dir> --strip` without `--mode bin` "
 "refuses at the door — `pack: --strip is a --mode bin lane — a source zip "
@@ -29360,11 +29368,11 @@ msgid ""
 "`.rutsym` sidecars](symbol-stripping.md)."
 msgstr ""
 
-#: src/reference/cli.md:367 src/reference/cli.md:383
+#: src/reference/cli.md:371 src/reference/cli.md:387
 msgid "`dump`"
 msgstr ""
 
-#: src/reference/cli.md:373
+#: src/reference/cli.md:377
 msgid ""
 "Prints the compiler's view of one file: the `== AST ==` section followed by "
 "`== IR ==` (per-function typed register tables and op listings). Compilation "
@@ -29373,82 +29381,82 @@ msgid ""
 "inspecting a host surface's slots."
 msgstr ""
 
-#: src/reference/cli.md:381
+#: src/reference/cli.md:385
 msgid "The file extension selects the parser mode:"
 msgstr ""
 
-#: src/reference/cli.md:385
+#: src/reference/cli.md:389
 msgid "`*.rut`"
 msgstr ""
 
-#: src/reference/cli.md:385
+#: src/reference/cli.md:389
 msgid "implementation"
 msgstr ""
 
-#: src/reference/cli.md:385
+#: src/reference/cli.md:389
 msgid "the package's designated `entry fn` (a loose file is refused)"
 msgstr ""
 
-#: src/reference/cli.md:385
+#: src/reference/cli.md:389
 msgid "formats impls"
 msgstr ""
 
-#: src/reference/cli.md:385
+#: src/reference/cli.md:389
 msgid "AST + IR of the module"
 msgstr ""
 
-#: src/reference/cli.md:386
+#: src/reference/cli.md:390
 msgid "`*.d.rut`"
 msgstr ""
 
-#: src/reference/cli.md:386
+#: src/reference/cli.md:390
 msgid "declaration"
 msgstr ""
 
-#: src/reference/cli.md:386
+#: src/reference/cli.md:390
 msgid "refused (exit 2)"
 msgstr ""
 
-#: src/reference/cli.md:386
+#: src/reference/cli.md:390
 msgid "formats the surface"
 msgstr ""
 
-#: src/reference/cli.md:386
+#: src/reference/cli.md:390
 msgid "the surface's AST + IR"
 msgstr ""
 
-#: src/reference/cli.md:388
+#: src/reference/cli.md:392
 msgid "Exit codes"
 msgstr ""
 
-#: src/reference/cli.md:390
+#: src/reference/cli.md:394
 msgid "code"
 msgstr ""
 
-#: src/reference/cli.md:392
+#: src/reference/cli.md:396
 msgid "`0`"
 msgstr ""
 
-#: src/reference/cli.md:392
+#: src/reference/cli.md:396
 msgid "success"
 msgstr ""
 
-#: src/reference/cli.md:393
+#: src/reference/cli.md:397
 msgid "`1`"
 msgstr ""
 
-#: src/reference/cli.md:393
+#: src/reference/cli.md:397
 msgid ""
 "compile diagnostics; no binary emitted; binary decode or verify failure; VM "
 "boot failure; a trap at run; `fmt` refuses a file that does not parse; `fmt "
 "--check` found drift; a `pack` output-write failure"
 msgstr ""
 
-#: src/reference/cli.md:394
+#: src/reference/cli.md:398
 msgid "`2`"
 msgstr ""
 
-#: src/reference/cli.md:394
+#: src/reference/cli.md:398
 msgid ""
 "usage errors (missing arguments); unreadable input file; `run` on a "
 "`.d.rut`; `run` on an input that is neither a module directory nor a "
@@ -29464,13 +29472,13 @@ msgid ""
 "a host root in bin mode, a url dep the lock does not pin"
 msgstr ""
 
-#: src/reference/cli.md:396
+#: src/reference/cli.md:400
 msgid ""
 "Diagnostics go to stderr; the success summaries (`pack`'s packed line, "
 "`install`'s resolved/verified lines and lock reports) go to stdout."
 msgstr ""
 
-#: src/reference/cli.md:402
+#: src/reference/cli.md:406
 msgid ""
 "The CLI offers and binds on behalf of the program, but it never injects "
 "names the program did not declare: a program that never spells `use ink::` "
@@ -29479,12 +29487,12 @@ msgid ""
 "packages](stdlib.md))."
 msgstr ""
 
-#: src/reference/cli.md:407
+#: src/reference/cli.md:411
 msgid ""
 "The HTTP lane is native-only: the CLI build carries it, wasm builds do not."
 msgstr ""
 
-#: src/reference/cli.md:409
+#: src/reference/cli.md:413
 msgid ""
 "`run` on a module directory is the deployment path for development; `pack` + "
 "`run <bundle>` is the shipping path — both run the identical contract "

@@ -69,6 +69,10 @@ pub(crate) fn fmt(args: &FmtArgs) {
                 if out != src {
                     changed.push(f.display().to_string());
                     if !check {
+                        if let Err(msg) = readback(&out, mode) {
+                            eprintln!("fmt: {}: {msg}", f.display());
+                            std::process::exit(1);
+                        }
                         if let Err(e) = std::fs::write(f, &out) {
                             eprintln!("fmt: cannot write {}: {e}", f.display());
                             std::process::exit(2);
@@ -110,6 +114,20 @@ pub(crate) fn fmt(args: &FmtArgs) {
     }
 }
 
+/// The write door: rut fmt never writes what it cannot read back —
+/// the formatted text is re-parsed and must come back clean before
+/// anything lands on disk. `Err` is the refusal line's tail; the
+/// caller prints it labeled `fmt: <file>: ` and exits non-zero, so
+/// the file stays untouched.
+fn readback(out: &str, mode: rut_ast::parser::Mode) -> Result<(), &'static str> {
+    let doc = rut_ast::parser::parse_with_recover(out.to_string(), mode);
+    if doc.ast().is_clean() {
+        Ok(())
+    } else {
+        Err("the formatted text does not parse clean")
+    }
+}
+
 /// the style for a file: the nearest ancestor `rut.jsonc`'s `[style]`
 /// block, parsed and validated by the fmt crate; no manifest → defaults
 fn style_for(f: &std::path::Path) -> Result<rut_fmt::Style, String> {
@@ -124,5 +142,25 @@ fn style_for(f: &std::path::Path) -> Result<rut_fmt::Style, String> {
         if !dir.pop() {
             return Ok(rut_fmt::Style::default());
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::readback;
+    use rut_ast::parser::Mode;
+
+    /// law 5 at the door: a printer output that does not parse clean
+    /// is refused — the caller exits non-zero before any write, so the
+    /// file stays untouched. The bad shape is the plan's own founding
+    /// bug: the bare struct-literal field access the paren lane must
+    /// never emit again.
+    #[test]
+    fn the_write_door_refuses_what_does_not_read_back() {
+        assert_eq!(
+            readback("fn f() {\n    let x = P { a: 1 }.a;\n}\n", Mode::Impl),
+            Err("the formatted text does not parse clean")
+        );
+        assert_eq!(readback("fn f() {}\n", Mode::Impl), Ok(()));
     }
 }

@@ -296,6 +296,10 @@ The canonical formatter. Behavior:
 - `.d.rut` files are formatted in declaration mode;
 - a file that does not parse clean is **refused** (diagnostics listed,
   nonzero exit) — fmt never reformats on a parse error;
+- the formatted text is **re-parsed before it is written**: an output
+  that does not parse clean refuses the write (`fmt: <file>: the
+  formatted text does not parse clean`, nonzero exit) and the file is
+  left untouched — fmt never writes what it cannot read back;
 - default mode rewrites in place and prints `formatted: <path>` per
   changed file;
 - `--check` writes nothing: it prints `unformatted: <path>` for each
