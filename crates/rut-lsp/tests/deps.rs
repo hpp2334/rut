@@ -328,6 +328,73 @@ fn a_host_surface_mount_indexes_the_lets_and_fns() {
 }
 
 #[test]
+fn a_host_trees_single_file_child_mounts() {
+    // ground truth 14: a host surface's `pub mod tool;` declares the
+    // SINGLE-FILE child `tool.rut` beside it. The compiler probes both
+    // child spellings for every flavor (`rut-native`'s `dir_child_lookup`),
+    // so the walk must too — before this pin the Decl flavor probed only
+    // `tool/mod.d.rut`: the edge answered empty and the leaf's hover was
+    // null (the app's check lane, a separate lane, still misses it —
+    // the child's filename-derived mode).
+    let mut io = MemIo::default();
+    io.put(
+        "/ws/hh/rut.jsonc",
+        "{\n  \"name\": \"hh\",\n  \"type\": \"host\",\n  \"entry\": { \"type\": \"./mod.d.rut\" }\n}\n",
+    );
+    io.put("/ws/hh/src/mod.d.rut", "pub mod tool;\n");
+    io.put("/ws/hh/src/tool.rut", "pub host fn helper() -> i32;\n");
+    io.put(
+        "/ws/app/rut.jsonc",
+        "{\n  \"name\": \"app\",\n  \"deps\": {\"hh\": {\"path\": \"../hh\"}}\n}\n",
+    );
+    let app = "use hh::tool::{ helper };\nentry fn main() {\n    let n = helper();\n}\n";
+    io.put("/ws/app/src/mod.rut", app);
+    let io = Rc::new(io);
+    let mut s = S::with_io(&io);
+    let out = s.resolve(&["/ws/app"]);
+    assert_eq!(
+        out["missing"].as_array().unwrap().len(),
+        0,
+        "a clean mount: {out}"
+    );
+
+    // the mod-edge ident (char 8 in `pub mod tool;`) on the surface doc
+    // lands on the child file's top — the single-file twin the Decl
+    // flavor used to skip
+    let surface_uri = "file:///ws/hh/src/mod.d.rut";
+    let surface = "pub mod tool;\n";
+    s.analyze(surface_uri, surface);
+    let hits = s.def_pos(surface_uri, 0, 8);
+    // the leaf's hover at its use site in the app
+    let app_uri = "file:///ws/app/src/mod.rut";
+    let hover = s.hover_in(app_uri, app, "{ helper }", 1, 2);
+    // the pin's ONE red names both answers — before the fix the edge was
+    // `[]` and the hover `null`
+    assert!(
+        hits.len() == 1 && !no_hover(&hover),
+        "the walk's two answers — edge: {hits:?}; hover: {hover}"
+    );
+    // the walk joins path rows with `/` — the host env resolves the
+    // `..` (dep_walk's path law), so the origin spells `app/../hh`
+    assert_eq!(
+        hits[0]["uri"], "file:///ws/app/../hh/src/tool.rut",
+        "the child file: {hits:?}"
+    );
+    assert_eq!(
+        hits[0]["range"],
+        serde_json::json!({"start": {"line": 0, "character": 0}, "end": {"line": 0, "character": 0}}),
+        "the child file top: {hits:?}"
+    );
+
+    // the leaf's hover answers the child's row
+    let md = markdown(hover);
+    assert!(
+        md.contains("pub host fn helper() -> i32"),
+        "the leaf's hover answers the child's row: {md}"
+    );
+}
+
+#[test]
 fn dep_impl_methods_ride_the_dep_index() {
     // THE member law: a dep source's inherent impl methods ride the
     // dep index, so a consumer's `log.info(…)` click resolves through

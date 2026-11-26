@@ -24,8 +24,9 @@
 //!   resolves in hover/completion/definition exactly like a
 //!   host-indexed one (one store, replace-by-origin, no drift). The
 //!   mod-tree recursion follows the wasm-parsed decls (the
-//!   `index_mod_at` reply), `NAME/mod.rut` then `NAME.rut`
-//!   spellings, beside the declaring file.
+//!   `index_mod_at` reply), `NAME/mod.rut` (or `NAME/mod.d.rut` in a
+//!   host surface) then `NAME.rut` spellings, beside the declaring
+//!   file.
 //! - **url rows mount from the GLOBAL DEP STORE** — the address is
 //!   DERIVED through rut-driver's helpers (`<name>@<sha256[:16]>`
 //!   under `$RUT_HOME/deps` — the same address `rut install`
@@ -222,11 +223,13 @@ fn walk_manifest(ctx: &mut WalkCtx, state: &mut Session, dir: &str, depth: usize
     // mod path `""` (the entries loop's flat stamp for the same file
     // REPLACES with it — same origin), then each `mod NAME;` edge
     // mounts beside the root file, recursively, depth- and
-    // file-budget-capped. The flavor follows the pkg: a lib's root is
-    // its first Impl entry (`src/mod.rut`, `NAME/mod.rut`/`NAME.rut`
-    // children), a host pkg's root is its DECL entry (the `.d.rut`
-    // surface, `NAME/mod.d.rut` children — the loader's own flavor
-    // law), and an entry-less dev state probes the lib convention.
+    // file-budget-capped. The flavor names the child file: a lib's
+    // root is its first Impl entry (`src/mod.rut`, children probe
+    // `NAME/mod.rut` then `NAME.rut`), a host pkg's root is its DECL
+    // entry (the `.d.rut` surface, children probe `NAME/mod.d.rut`
+    // then `NAME.rut`) — both spellings for every flavor, the
+    // compiler's own probe. An entry-less dev state probes the lib
+    // convention.
     let entry_rows: Vec<(&str, crate::doc::Mode)> = table
         .entries
         .iter()
@@ -275,12 +278,11 @@ fn mount_row(ctx: &mut WalkCtx, state: &mut Session, dir: &str, row: &DepRow, de
 /// ([`mount_edges`]): the root module stamps at mod path `""` (the
 /// entries loop's flat stamp for the same file REPLACES with it —
 /// same origin), then every `mod NAME;` edge resolves through `read`
-/// — the lib flavor probes `NAME/mod.rut` beside the declaring file
-/// first, then the single-file spelling `NAME.rut`; BOTH present is
-/// the loader's loud ambiguity (hinted once, neither mounts); the
-/// Decl flavor (a host pkg's surface tree) probes the loader's own
-/// spelling only — `NAME/mod.d.rut`, directory form, no single-file
-/// twin. `visit` charges the file budget, indexes the read file at
+/// — EVERY flavor probes the directory form `NAME/<child file>`
+/// (`mod.rut` for a lib tree, `mod.d.rut` for a host surface) beside
+/// the declaring file first, then the single-file spelling
+/// `NAME.rut`; BOTH present is the loader's loud ambiguity (hinted
+/// once, neither mounts). `visit` charges the file budget, indexes the read file at
 /// the canon origin, and answers with the file's own `mod` edges —
 /// a file that fails to parse mounts CHILDLESS (the driver's law),
 /// and a file-form child's children mount beside it, not under
@@ -365,13 +367,12 @@ fn mount_mod_tree(
         let dir_form = format!("{dir}/{name}/{child_file}");
         let file_form = format!("{dir}/{name}.rut");
         let dir_bytes = io.read(&dir_form);
-        // the Decl flavor never probes the single-file twin — a stray
-        // `NAME.rut` beside a host tree is nobody's module
-        let file_bytes = if decl_flavor {
-            None
-        } else {
-            io.read(&file_form)
-        };
+        // BOTH child spellings, EVERY flavor — the compiler's own probe
+        // (`rut_native::walk::dir_child_lookup`): a host tree's
+        // `NAME.rut` beside the declaring surface is the child the book
+        // spells, exactly as a lib tree's is. Both present is the loud
+        // ambiguity below (the compiler's answer too).
+        let file_bytes = io.read(&file_form);
         Ok(match (dir_bytes, file_bytes) {
             (Some(_), Some(_)) => ChildLookup::Ambiguous,
             (Some(b), None) => ChildLookup::Found {
