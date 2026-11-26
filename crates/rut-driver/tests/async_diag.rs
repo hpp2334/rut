@@ -49,7 +49,7 @@ fn graph_of(c: Result<rut_driver::Compiled, rut_driver::RunError>) -> rut_driver
     }
 }
 
-fn diags_of(src: &str) -> Vec<String> {
+fn graph_diags(src: &str) -> Vec<rut_lexer::diag::Diag> {
     let async_pkgs = rut_native::dir_pkgs(
         &std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../rut/futures"),
     )
@@ -69,7 +69,11 @@ fn diags_of(src: &str) -> Vec<String> {
     .entrypoint("app")
     .compile()
     .unwrap();
-    compiled.graph.diags.iter().map(|d| d.msg.clone()).collect()
+    compiled.graph.diags
+}
+
+fn diags_of(src: &str) -> Vec<String> {
+    graph_diags(src).iter().map(|d| d.msg.clone()).collect()
 }
 
 fn one_diag(src: &str) -> String {
@@ -186,20 +190,35 @@ entry fn main() -> nil {
 #[test]
 fn an_async_fn_never_spells_the_cx_parameter() {
     // the resume context is INJECTED as `cx` — a spelled parameter of
-    // that name diagnoses (the parameter list carries ordinary values)
-    let msg = one_diag(
-        r#"
+    // that name diagnoses (the parameter list carries ordinary values);
+    // the refusal is a declaration-level law, so it sits at the
+    // declaration's span, never at the call that reached it
+    let src = r#"
 async fn work(cx: i32) -> nil { }
 
 entry fn main() -> nil {
     work(7);
 }
-"#,
-    );
+"#;
+    let ds = graph_diags(src);
+    assert_eq!(ds.len(), 1, "expected exactly one diagnostic, got {ds:?}");
     assert!(
-        msg.contains("an async fn's parameters are ordinary values")
-            && msg.contains("the resume context is injected as `cx`, never spelled"),
-        "got: {msg}"
+        ds[0]
+            .msg
+            .contains("an async fn's parameters are ordinary values")
+            && ds[0]
+                .msg
+                .contains("the resume context is injected as `cx`, never spelled"),
+        "got: {ds:?}"
+    );
+    // at the declaration's span — the parameter rides the decl
+    let needle = "async fn work(cx: i32) -> nil { }";
+    let lo = src.find(needle).expect("the declaration") as u32;
+    let hi = lo + needle.len() as u32;
+    assert!(
+        ds[0].span.lo >= lo && ds[0].span.hi <= hi,
+        "the refusal must sit at the declaration: {:?} vs {lo}..{hi}",
+        ds[0].span
     );
 }
 
@@ -221,6 +240,124 @@ entry fn main() -> nil {
     assert!(
         msg.contains("`RunContext` has no member `bogus`"),
         "got: {msg}"
+    );
+}
+
+// ---- law 2: a declaration-level refusal fires at the declaration,
+// call or no call. The two weave refusals sit at fn registration now,
+// and an async METHOD is refused dead like a called one.
+
+#[test]
+fn a_generic_async_fn_refuses_at_its_declaration() {
+    // the weave's generic refusal lives at registration now: a generic
+    // async fn refuses whether or not anything ever calls it
+    let src = "async fn g<T>(x: T) -> T { return x; }\n\
+               entry fn main() -> nil { }\n";
+    let ds = graph_diags(src);
+    assert_eq!(ds.len(), 1, "expected exactly one diagnostic, got {ds:?}");
+    assert!(
+        ds[0]
+            .msg
+            .contains("generic async fns are not woven in this build"),
+        "got: {ds:?}"
+    );
+    // at the declaration's span
+    let needle = "async fn g<T>(x: T) -> T { return x; }";
+    let lo = src.find(needle).expect("the declaration") as u32;
+    let hi = lo + needle.len() as u32;
+    assert!(
+        ds[0].span.lo >= lo && ds[0].span.hi <= hi,
+        "the refusal must sit at the declaration: {:?} vs {lo}..{hi}",
+        ds[0].span
+    );
+}
+
+#[test]
+fn a_spelled_cx_parameter_refuses_at_its_declaration() {
+    // the spelled-`cx` law needs no call site: the fn below is
+    // call-site-shaped (a trait-object parameter — no root reaches it
+    // uncalled) and refused all the same, at registration
+    let src = "interface Num { fn m(self) -> i32; }\n\
+               class WI(i32);\n\
+               impl WI { pub fn m(self) -> i32 { return self.inner; } }\n\
+               async fn work(cx: Num) -> nil { }\n\
+               entry fn main() { }\n";
+    let ds = graph_diags(src);
+    assert_eq!(ds.len(), 1, "expected exactly one diagnostic, got {ds:?}");
+    assert!(
+        ds[0]
+            .msg
+            .contains("an async fn's parameters are ordinary values")
+            && ds[0]
+                .msg
+                .contains("the resume context is injected as `cx`, never spelled"),
+        "got: {ds:?}"
+    );
+    // at the declaration's span — the parameter rides the decl
+    let needle = "async fn work(cx: Num) -> nil { }";
+    let lo = src.find(needle).expect("the declaration") as u32;
+    let hi = lo + needle.len() as u32;
+    assert!(
+        ds[0].span.lo >= lo && ds[0].span.hi <= hi,
+        "the refusal must sit at the declaration: {:?} vs {lo}..{hi}",
+        ds[0].span
+    );
+}
+
+#[test]
+fn a_dead_async_method_refuses_at_its_declaration() {
+    // law 3: an async METHOD is refused, dead or called — the private
+    // method below is no root-skipped body anymore, so the compile
+    // lane's own refusal fires without a call site
+    let src = "class Wob { n: i32 }\n\
+               impl Wob {\n\
+               \x20   async fn tick(self) -> nil { }\n\
+               }\n\
+               entry fn main() -> nil { }\n";
+    let ds = graph_diags(src);
+    assert_eq!(ds.len(), 1, "expected exactly one diagnostic, got {ds:?}");
+    assert!(
+        ds[0]
+            .msg
+            .contains("async methods are not woven in this build"),
+        "got: {ds:?}"
+    );
+    // at the declaration's span
+    let needle = "async fn tick(self) -> nil { }";
+    let lo = src.find(needle).expect("the declaration") as u32;
+    let hi = lo + needle.len() as u32;
+    assert!(
+        ds[0].span.lo >= lo && ds[0].span.hi <= hi,
+        "the refusal must sit at the declaration: {:?} vs {lo}..{hi}",
+        ds[0].span
+    );
+}
+
+#[test]
+fn a_dead_pub_async_method_refuses_at_its_declaration() {
+    // the pub half: an exported async method roots eagerly — for the
+    // refusal only (the surface rows still carry no async method)
+    let src = "class Wob { n: i32 }\n\
+               impl Wob {\n\
+               \x20   pub async fn tick(self) -> nil { }\n\
+               }\n\
+               entry fn main() -> nil { }\n";
+    let ds = graph_diags(src);
+    assert_eq!(ds.len(), 1, "expected exactly one diagnostic, got {ds:?}");
+    assert!(
+        ds[0]
+            .msg
+            .contains("async methods are not woven in this build"),
+        "got: {ds:?}"
+    );
+    // at the declaration's span
+    let needle = "pub async fn tick(self) -> nil { }";
+    let lo = src.find(needle).expect("the declaration") as u32;
+    let hi = lo + needle.len() as u32;
+    assert!(
+        ds[0].span.lo >= lo && ds[0].span.hi <= hi,
+        "the refusal must sit at the declaration: {:?} vs {lo}..{hi}",
+        ds[0].span
     );
 }
 

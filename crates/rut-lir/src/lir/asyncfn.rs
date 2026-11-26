@@ -173,38 +173,6 @@ pub(crate) fn compile_async_fn(ctx: &mut Ctx, inst: &Inst, fid: u32) -> TcResult
         return Ok(()); // unknown fn — already diagnosed
     };
     let f = node.get(ctx.ast).clone();
-    let sp = node.span(ctx.ast);
-    if !f.generics.is_empty() {
-        ctx.err(
-            sp,
-            "generic async fns are not woven in this build (v1: monomorphic async fns)",
-        );
-        return Err(());
-    }
-    // the cx is INJECTED, never spelled: an async fn's parameters are
-    // ordinary values (a spelled `cx` would collide with the injection)
-    for p in &f.params {
-        let ParamRef::Param(ph) = *p else {
-            continue;
-        };
-        let (name, t) = {
-            let n = ph.get(ctx.ast);
-            (n.name.ident, n.ty)
-        };
-        if let Some(t) = t {
-            let spells_cx = name == sym::CX
-                || matches!(t, TyRef::Path(ref th)
-                    if th.get(ctx.ast).segs.len() == 1
-                        && th.get(ctx.ast).segs[0].name.ident == sym::RUN_CONTEXT);
-            if spells_cx {
-                ctx.err(p.span(ctx.ast), format!(
-                    "`{}`: an async fn's parameters are ordinary values — the resume context is injected as `cx`, never spelled",
-                    ctx.name(name)
-                ));
-                return Err(());
-            }
-        }
-    }
     let ret_ty = f.ret.map(|r| ctx.resolve_type(r, &[])).unwrap_or(TY_NIL);
     // the fn's parameters become the frame's first cell fields; the
     // yield's argv carries only (frame, cx) — the call site writes the

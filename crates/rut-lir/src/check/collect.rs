@@ -187,6 +187,43 @@ impl<'a> Ctx<'a> {
                 ItemRef::Fn(fh) => {
                     let f = fh.get(self.ast).clone();
                     let is_pub = f.vis() == Vis::Pub;
+                    // THE DECLARATION-LEVEL REFUSALS (the weave carried
+                    // them; a dead fn never reached it): an async fn's
+                    // two legality laws fire at the declaration, call or
+                    // no call — the marker refusal's shape. The weave's
+                    // one-refusal-per-fn order is kept: generics first,
+                    // then the first spelled-`cx` parameter.
+                    if f.is_async() {
+                        if !f.generics.is_empty() {
+                            self.err(
+                                fh.span(self.ast),
+                                "generic async fns are not woven in this build (v1: monomorphic async fns)",
+                            );
+                        } else {
+                            for p in &f.params {
+                                let ParamRef::Param(ph) = *p else {
+                                    continue;
+                                };
+                                let (name, t) = {
+                                    let n = ph.get(self.ast);
+                                    (n.name.ident, n.ty)
+                                };
+                                if let Some(t) = t {
+                                    let spells_cx = name == sym::CX
+                                        || matches!(t, TyRef::Path(ref th)
+                                            if th.get(self.ast).segs.len() == 1
+                                                && th.get(self.ast).segs[0].name.ident == sym::RUN_CONTEXT);
+                                    if spells_cx {
+                                        self.err(p.span(self.ast), format!(
+                                            "`{}`: an async fn's parameters are ordinary values — the resume context is injected as `cx`, never spelled",
+                                            self.name(name)
+                                        ));
+                                        break;
+                                    }
+                                }
+                            }
+                        }
+                    }
                     // THE ONE-NAME LAW, same file: the fn claims its
                     // file-scope name (the flat fn↔fn duplicate law's
                     // same-file half is the registry now).

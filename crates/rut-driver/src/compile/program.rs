@@ -1445,9 +1445,11 @@ fn compile_program_inner(
     // consumer, so their bodies compile even when nothing local calls
     // them — the inherent surface rows carry the fn ids. Generic
     // classes monomorphize per instantiation (the owner-side request
-    // machinery seeds their bodies); async and generic METHODS stay
-    // call-site shapes and cross no surface. Private methods join at
-    // the tail (the dead-code-checking block).
+    // machinery seeds their bodies). An async METHOD roots for the
+    // refusal only — an async method is refused in this build, dead or
+    // called, and the surface rows still carry none; generic METHODS
+    // stay call-site shapes and cross no surface. Private methods join
+    // at the tail (the dead-code-checking block).
     for (dname, d) in ctx.datas.clone() {
         if !d.generics.is_empty() {
             continue;
@@ -1455,7 +1457,7 @@ fn compile_program_inner(
         for (mname, mnode) in &d.methods {
             let md = mnode.get(ctx.ast);
             let exported = md.vis() == Some(rut_ast::Vis::Pub);
-            if !exported || md.is_async() || !md.generics.is_empty() {
+            if !exported || !md.generics.is_empty() {
                 continue;
             }
             roots.push(Inst {
@@ -1474,7 +1476,7 @@ fn compile_program_inner(
     for (ename, e) in ctx.enums.clone() {
         for (mname, mnode) in &e.methods {
             let md = mnode.get(ctx.ast);
-            if md.vis() != Some(rut_ast::Vis::Pub) || md.is_async() || !md.generics.is_empty() {
+            if md.vis() != Some(rut_ast::Vis::Pub) || !md.generics.is_empty() {
                 continue;
             }
             roots.push(Inst {
@@ -2424,7 +2426,9 @@ fn compile_program_inner(
     // call-site-shaped everywhere (no substitution roots it). `async`
     // is neither a substitution nor an origin: a non-generic free fn is
     // a compile root whatever its modifiers, so a dead async body
-    // checks right here, exactly like a sync one.
+    // checks right here, exactly like a sync one. An async METHOD
+    // roots the same way — for the refusal only: its compile refuses
+    // at the landing (`async methods are not woven in this build`).
     {
         let mut late_roots: Vec<Inst> = Vec::new();
         for (name, node) in ctx.fn_nodes.clone() {
@@ -2466,7 +2470,7 @@ fn compile_program_inner(
             for (mname, mnode) in &d.methods {
                 let md = mnode.get(ctx.ast);
                 let exported = md.vis() == Some(rut_ast::Vis::Pub);
-                if exported || md.is_async() || !md.generics.is_empty() {
+                if exported || !md.generics.is_empty() {
                     continue;
                 }
                 late_roots.push(Inst {
@@ -2482,7 +2486,7 @@ fn compile_program_inner(
         for (ename, e) in ctx.enums.clone() {
             for (mname, mnode) in &e.methods {
                 let md = mnode.get(ctx.ast);
-                if md.vis() == Some(rut_ast::Vis::Pub) || md.is_async() || !md.generics.is_empty() {
+                if md.vis() == Some(rut_ast::Vis::Pub) || !md.generics.is_empty() {
                     continue;
                 }
                 late_roots.push(Inst {

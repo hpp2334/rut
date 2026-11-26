@@ -2596,9 +2596,11 @@ fn async_use_errors_at_use_line() {
     // the phase-3 flip: a plain `pub async fn` CROSSES now (the surface
     // row carries the real `is_async`, the exporter's start wrapper
     // rides `local`), so `fetch` binds and the world compiles beside
-    // the ordinary `pub fn`; what still binds nothing is the GENERIC
-    // async fn (the weave refuses generics — no row materializes) and
-    // the use line says so, in the retuned gap's one spelling
+    // the ordinary `pub fn`. The GENERIC async fn refuses at the
+    // EXPORTER'S DECLARATION now (the declaration-level refusal fires
+    // call or no call — the old law kept the exporter silent and
+    // apologized at the use line), so the world fails there and the
+    // use line is never reached
     let ok = vec![
         modpkg(
             "pkga",
@@ -2612,8 +2614,8 @@ fn async_use_errors_at_use_line() {
         ),
     ];
     assert_eq!(run_main_pkgs(&ok, "app"), 42);
-    // the generic shape: `grab<T>` crosses nowhere — the leaf binds
-    // nothing and the use line names the generic refusal
+    // the generic shape: `grab<T>` refuses in the exporter's own unit —
+    // the declaration-level refusal, at the declaration
     let gap = vec![
         modpkg(
             "pkga",
@@ -2628,10 +2630,10 @@ fn async_use_errors_at_use_line() {
     ];
     let diags = compile_with_diags(&gap, "app");
     assert!(
-        diags
-            .iter()
-            .any(|d| d.contains("`grab` is a generic `pub async fn`")
-                && d.contains("generic async fns do not cross package surfaces yet")),
+        diags.iter().any(|d| {
+            d.contains("generic async fns are not woven in this build")
+                && d.contains("(v1: monomorphic async fns)")
+        }),
         "{diags:?}"
     );
     // and a `pub` fn the dep does carry imports and runs beside it
