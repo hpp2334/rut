@@ -243,7 +243,7 @@ fn a_pub_use_re_exported_name_is_the_pkgs_own_surface() {
     // module's decl rows, so `use mid::{ helper }` names a row mid
     // DID declare — the `unknown import` refusal is gone. The
     // compiled-surface binding does not chase the edge yet (the
-    // must-bind law still speaks, phase 4 threads the const lane) —
+    // must-bind law still speaks, Phase 2 threads the const lane) —
     // but the surface question this gate owns answers "declared".
     let src = "use mid::{ helper };\n\
                entry fn main() -> i32 { return 0; }\n";
