@@ -147,6 +147,9 @@ pub(crate) fn mod_tree(w: &World, pkg: Option<&str>, prefer: FileId) -> ModInput
             continue; // the root pass below owns the `""` row
         }
         stamped.push(p);
+        tree.mod_files
+            .entry(p.to_string())
+            .or_insert_with(|| record_of(f));
         tree.scopes
             .entry(p.to_string())
             .or_insert_with(|| ModScope {
@@ -193,6 +196,9 @@ pub(crate) fn mod_tree(w: &World, pkg: Option<&str>, prefer: FileId) -> ModInput
             })
         });
     if let Some(f) = root {
+        tree.mod_files
+            .entry(String::new())
+            .or_insert_with(|| record_of(f));
         let children = mod_edges(f, "");
         if !children.is_empty() {
             let row = tree.scopes.entry(String::new()).or_default();
@@ -213,6 +219,7 @@ pub(crate) fn mod_tree(w: &World, pkg: Option<&str>, prefer: FileId) -> ModInput
                 row.parent = parent_of(p).to_string();
                 row.children = children;
             }
+            tree.mod_files.insert(p.to_string(), record_of(doc));
         }
     }
     tree
@@ -296,6 +303,15 @@ pub(crate) fn display_of_single(f: &File, child: &str) -> String {
         Some(name) if name != "mod.rut" && name != rut_driver::decl::DECL_CHILD_FILE => name,
         _ => display(child),
     }
+}
+
+/// The display record a world file carries: its origin's real `.rut`
+/// file name when it is a single-file module — the fact [`display_of`]
+/// already derives. A directory-form origin (`mod.rut`/`mod.d.rut`) and
+/// a source-less origin carry none, so the bare law stands in.
+fn record_of(f: &File) -> Option<String> {
+    origin_file_name(&f.stamp.origin)
+        .filter(|name| name != "mod.rut" && name != rut_driver::decl::DECL_CHILD_FILE)
 }
 
 /// the origin's `.rut` file name (its last path segment when it spells

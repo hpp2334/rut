@@ -201,7 +201,9 @@ pipeline lives in the `Doc`.
   mutates in place per mount/sync/close — rebuilt never.
 - **No mirrors**: the language laws rut-lsp lives by have ONE home,
   in the compiler's crates — `rut_lir::check::{vis_crosses, mod_head,
-  mod_walk, mod_walk_pub}` (visibility, the mod-tree mount laws) and
+  mod_walk, mod_walk_pub, display}` (visibility, the mod-tree mount
+  laws, the display-path law: a diagnostic names a module's file by its
+  root-relative path) and
   `rut_driver::mods::mount_edges` (the mount core). An LSP copy of
   any of them is forbidden: the adapters in `resolve::mods` carry the
   world's stamped files INTO the pure walks; they never re-spell a

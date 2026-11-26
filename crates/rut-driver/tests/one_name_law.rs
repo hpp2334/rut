@@ -96,7 +96,7 @@ fn modpkg(spec: &str, root: &str, mods: Vec<(&str, Vis, &str)>) -> Mounted {
                         path: p.to_string(),
                         vis: v,
                         text: t.to_string(),
-                        file: "mod.rut".to_string(),
+                        file: format!("{p}/mod.rut"),
                     },
                 )
             })

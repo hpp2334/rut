@@ -461,10 +461,10 @@ fn mount_memory(root: &str, children: &[(&str, &str)]) -> BTreeMap<String, rut_d
         match map.get(&path) {
             Some(text) => Ok(rut_driver::ChildLookup::Found {
                 text: text.clone(),
-                canon: path,
-                // the map is keyed by LOGICAL mod path — the physical
-                // name is the flavor's directory-form spelling
-                file: "mod.d.rut".to_string(),
+                canon: path.clone(),
+                // the map is keyed by LOGICAL mod path — the record is
+                // the flavor's directory-form spelling
+                file: format!("{path}/mod.d.rut"),
             }),
             None => Ok(rut_driver::ChildLookup::Missing),
         }

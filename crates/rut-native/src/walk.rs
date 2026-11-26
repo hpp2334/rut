@@ -516,7 +516,7 @@ fn read_decl_root_module(dir: &str) -> Result<Option<(String, PathBuf)>, LoadErr
 /// without its module file, or nothing there at all, are the loud
 /// misses. The found answer carries the file's canonical identity
 /// (the cycle guard's key, so a symlinked alias repeats it) and its
-/// physical name (the diagnostics spell the real shape). The child
+/// root-relative display record (the diagnostics spell the real path). The child
 /// file's spelling is the caller's flavor: `mod.rut` for a lib body
 /// tree, `mod.d.rut` for a host surface tree.
 ///
@@ -527,9 +527,18 @@ fn read_decl_root_module(dir: &str) -> Result<Option<(String, PathBuf)>, LoadErr
 /// with the root's physical file at mod path `""`, so the root's
 /// children probe beside the root file — inside the package's `src/`
 /// shell.
+///
+/// The found child's RECORD — what [`rut_lir::check::display`] answers
+/// for its mod path — is the found file's path relative to the root
+/// file's directory: `imp.rut`, `m/a/b.rut`, `imp/mod.rut`, the exact
+/// file the user opens (a symlinked alias keeps its own name; the
+/// canonical identity stays the cycle guard's key, never the display).
+/// `root_canon` answers the record when the probe path's shape left the
+/// root's directory (a symlinked package root).
 pub(crate) fn dir_child_lookup(
     dir: &Path,
     files: &mut BTreeMap<String, PathBuf>,
+    root_canon: &Path,
     parent: &str,
     name: &str,
     child_file: &str,
@@ -569,12 +578,27 @@ pub(crate) fn dir_child_lookup(
             } else {
                 format!("{parent}/{name}")
             };
+            // the display record: the found file relative to the root
+            // file's directory (the canonical form answers when the
+            // probe path's shape left the root's directory)
+            let root_dir = files
+                .get("")
+                .and_then(|f| f.parent())
+                .map(Path::to_path_buf);
+            let file = root_dir
+                .as_deref()
+                .and_then(|d| probe.0.strip_prefix(d).ok())
+                .map(|rel| rel.to_string_lossy().replace('\\', "/"))
+                .or_else(|| {
+                    let root_dir = root_canon.parent().unwrap_or(root_canon);
+                    Path::new(&canon)
+                        .strip_prefix(root_dir)
+                        .ok()
+                        .map(|rel| rel.to_string_lossy().replace('\\', "/"))
+                })
+                .unwrap_or_else(|| probe.1.clone());
             files.insert(child_path, probe.0.clone());
-            Ok(ChildLookup::Found {
-                text,
-                canon,
-                file: probe.1,
-            })
+            Ok(ChildLookup::Found { text, canon, file })
         }
         // a file that exists but cannot be read is the loud read
         // error, never a silent fallback
@@ -601,7 +625,14 @@ fn lib_pkg(
     let mut files = BTreeMap::new();
     files.insert(String::new(), root_file.to_path_buf());
     let mut lookup = |parent: &str, name: &str| {
-        dir_child_lookup(Path::new(dir), &mut files, parent, name, "mod.rut")
+        dir_child_lookup(
+            Path::new(dir),
+            &mut files,
+            Path::new(&root_canon),
+            parent,
+            name,
+            "mod.rut",
+        )
     };
     let mods: BTreeMap<String, ModSource> =
         mount_mod_children(&root_text, &root_canon, Mode::Impl, "mod.rut", &mut lookup)
@@ -686,7 +717,14 @@ fn load_entry_module(
             let mut files = BTreeMap::new();
             files.insert(String::new(), PathBuf::from(&key));
             let mut lookup = |parent: &str, name: &str| {
-                dir_child_lookup(Path::new(dir), &mut files, parent, name, "mod.d.rut")
+                dir_child_lookup(
+                    Path::new(dir),
+                    &mut files,
+                    Path::new(&root_canon),
+                    parent,
+                    name,
+                    "mod.d.rut",
+                )
             };
             let mods: BTreeMap<String, ModSource> =
                 mount_mod_children(&src_text, &root_canon, Mode::Decl, "mod.d.rut", &mut lookup)
@@ -1162,8 +1200,16 @@ fn mod_tree_present(dir: &Path, root_file: &Path, mode: Mode, child_file: &str) 
         .into_owned();
     let mut files = BTreeMap::new();
     files.insert(String::new(), root_file.to_path_buf());
-    let mut lookup =
-        |parent: &str, name: &str| dir_child_lookup(dir, &mut files, parent, name, child_file);
+    let mut lookup = |parent: &str, name: &str| {
+        dir_child_lookup(
+            dir,
+            &mut files,
+            Path::new(&root_canon),
+            parent,
+            name,
+            child_file,
+        )
+    };
     mount_mod_children(&text, &root_canon, mode, child_file, &mut lookup).is_ok()
 }
 

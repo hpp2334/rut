@@ -238,7 +238,7 @@ fn a_cycle_through_a_file_child_is_the_loud_cyclic_mod_error() {
     .unwrap();
     let err = rut_native::load_dir(&pkg).unwrap_err().to_string();
     assert!(err.contains("cyclic mod:"), "{err}");
-    assert!(err.contains("`b` (a/b/b.rut)"), "{err}");
+    assert!(err.contains("`b` (b.rut)"), "{err}");
 }
 
 #[test]
@@ -343,7 +343,7 @@ fn a_mounted_module_nothing_declares_is_named_at_compile() {
             path: "ghost".to_string(),
             vis: Vis::Self_,
             text: "pub fn boo() -> i32 { return 0; }\n".to_string(),
-            file: "mod.rut".to_string(),
+            file: "ghost/mod.rut".to_string(),
         },
     );
     let c = rut_driver::RutRun::new()
@@ -663,7 +663,7 @@ fn modpkg(spec: &str, root: &str, mods: Vec<(&str, Vis, &str)>) -> rut_driver::M
                         path: p.to_string(),
                         vis: v,
                         text: t.to_string(),
-                        file: "mod.rut".to_string(),
+                        file: format!("{p}/mod.rut"),
                     },
                 )
             })

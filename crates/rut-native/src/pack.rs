@@ -728,7 +728,14 @@ fn pack_host_root(
     let mut files = BTreeMap::new();
     files.insert(String::new(), src_path.clone());
     let mut lookup = |parent: &str, name: &str| {
-        crate::walk::dir_child_lookup(dir, &mut files, parent, name, "mod.d.rut")
+        crate::walk::dir_child_lookup(
+            dir,
+            &mut files,
+            Path::new(&root_canon),
+            parent,
+            name,
+            "mod.d.rut",
+        )
     };
     let mods: BTreeMap<String, rut_driver::ModSource> = rut_driver::mount_mod_children(
         &src,

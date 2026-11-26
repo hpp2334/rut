@@ -470,6 +470,13 @@ fn entry_child_lookup<'a>(
         };
         let key = bundle_key(&format!("{base}{name}/mod.rut"))?;
         let file = bundle_key(&format!("{base}{name}.rut"))?;
+        // the record: the mod path's directory-form spelling — the
+        // archive's `{prefix}` is the package root's directory
+        let path = if parent.is_empty() {
+            name.to_string()
+        } else {
+            format!("{parent}/{name}")
+        };
         let has_dir = read_entry(entries, &key).is_ok();
         let has_file = entries.iter().any(|(n, _)| *n == file);
         if has_dir && has_file {
@@ -479,7 +486,7 @@ fn entry_child_lookup<'a>(
             return Ok(ChildLookup::Found {
                 text: read_entry(entries, &key)?,
                 canon: key,
-                file: "mod.rut".to_string(),
+                file: format!("{path}/mod.rut"),
             });
         }
         // the single-file entry alone: not a module here — bundles are

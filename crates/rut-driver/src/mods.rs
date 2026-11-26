@@ -63,34 +63,22 @@ pub struct ModSource {
     pub vis: Vis,
     /// the file's text
     pub text: String,
-    /// the file's PHYSICAL name the loader mounted: `mod.rut`/
-    /// `mod.d.rut` (directory-form) or `NAME.rut` (single-file) — the
-    /// exact spelling the diagnostics name ([`ModSource::display`];
-    /// the rows/bundle lanes are directory-form by law, so they record
-    /// the flavor's spelling)
+    /// the file's ROOT-RELATIVE path — the record the lane lays down
+    /// where it mounts the file: the file lane from the found file's
+    /// path relative to the root file's directory (`imp.rut`,
+    /// `m/a/b.rut`, `imp/mod.rut`), the zip
+    /// lane by stripping the source prefix; the rows/bundle/in-memory
+    /// lanes keep the directory form (`<path>/mod.rut`). The display
+    /// law ([`rut_lir::check::display`]) answers it verbatim.
     pub file: String,
-}
-
-impl ModSource {
-    /// The file's display path: a directory-form child spells
-    /// `<path>/mod.rut` (the root its bare file name), a single-file
-    /// child spells its own name (`imp.rut`, never the directory-form
-    /// guess) — the lsp's `display_of` law, the exact spelling the
-    /// diagnostics name.
-    pub fn display(&self) -> String {
-        if self.file == "mod.rut" || self.file == crate::decl::DECL_CHILD_FILE {
-            file_display(&self.path, &self.file)
-        } else {
-            self.file.clone()
-        }
-    }
 }
 
 /// What the FS/archive lane answers for one `mod` declaration's child
 /// lookup. The four cases ARE the diagnostics: found (with the file's
-/// canonical identity for the cycle guard and its PHYSICAL name for
-/// the diagnostics — `mod.rut`/`mod.d.rut` for a directory-form
-/// child, `NAME.rut` for a single-file one), both spellings present
+/// canonical identity for the cycle guard and its root-relative
+/// display record for the diagnostics — `imp/mod.rut` for a
+/// directory-form child, `imp.rut`/`m/a/b.rut` for a single-file one),
+/// both spellings present
 /// (the loud ambiguity), a directory without its module file, and
 /// nothing there at all. The directory form's spelling is the
 /// caller's flavor (`mod.rut` for a lib body tree, `mod.d.rut` for a
@@ -98,7 +86,7 @@ impl ModSource {
 pub enum ChildLookup {
     /// a child file read; `canon` is its canonical identity (the
     /// cycle guard's key — a symlinked alias repeats it) and `file`
-    /// the physical name the diagnostics spell
+    /// the file's root-relative display record
     Found {
         text: String,
         canon: String,
@@ -209,7 +197,7 @@ fn walk_edges(
             Resolved::Found { text, canon, file } => {
                 if chain.contains(&canon) {
                     return Err(format!(
-                        "cyclic mod: `{name}` ({path}/{file}) is already being mounted"
+                        "cyclic mod: `{name}` ({file}) is already being mounted"
                     ));
                 }
                 chain.push(canon.clone());
@@ -295,9 +283,10 @@ pub fn mount_mod_children(
     }
     let root_edges = mod_edges_of(p.ast());
     let mut out = BTreeMap::new();
-    // the declaring file's physical spelling, by mod path — the
-    // refusal messages name it (`file_display`): the root speaks the
-    // directory form, each cleanly parsed child its own found spelling
+    // the declaring file's RECORD, by mod path — the refusal messages
+    // name it ([`rut_lir::check::display`]): the root speaks the
+    // directory form, each cleanly parsed child its own root-relative
+    // path
     let mut files: BTreeMap<String, String> =
         BTreeMap::from([(String::new(), child_file.to_string())]);
     let mut refusal: Option<String> = None;
@@ -317,7 +306,7 @@ pub fn mount_mod_children(
                 if canon == root_canon {
                     let name = path.rsplit('/').next().unwrap_or(path);
                     refusal = Some(format!(
-                        "cyclic mod: `{name}` ({path}/{file}) is already being mounted"
+                        "cyclic mod: `{name}` ({file}) is already being mounted"
                     ));
                     return (Child::Childless, false);
                 }
@@ -352,23 +341,20 @@ pub fn mount_mod_children(
                 // `path` is the refused edge's own (would-be) mount
                 // path — the declaring file is the parent's
                 let parent = path.rsplit_once('/').map(|(p, _)| p).unwrap_or("");
-                let parent_file = files
-                    .get(parent)
-                    .cloned()
-                    .unwrap_or_else(|| child_file.to_string());
+                let parent_file = files.get(parent).map(String::as_str);
                 refusal = Some(match why {
                     Refusal::Ambiguous => format!(
                         "`mod {name};` in {} — both `{name}/{child_file}` and `{name}.rut` exist; \
                          the mount is ambiguous — keep one",
-                        file_display(parent, &parent_file),
+                        rut_lir::check::display(parent, parent_file),
                     ),
                     Refusal::NoModRut => format!(
                         "`mod {name};` in {} — `{name}/` has no `{child_file}`",
-                        file_display(parent, &parent_file),
+                        rut_lir::check::display(parent, parent_file),
                     ),
                     Refusal::Missing => format!(
                         "`mod {name};` in {} — no `{name}/{child_file}` beside it",
-                        file_display(parent, &parent_file),
+                        rut_lir::check::display(parent, parent_file),
                     ),
                 });
                 (Child::Childless, false) // the first refusal stops the mount
@@ -379,18 +365,6 @@ pub fn mount_mod_children(
     match refusal {
         Some(msg) => Err(msg),
         None => Ok(out),
-    }
-}
-
-/// The declaring file's display path, mod-path relative: the root is
-/// its own file name, a child `<parent>/<file name>` — the exact
-/// spelling the diagnostics name (a single-file child displays as
-/// `layout/imp.rut`, not the directory-form guess).
-fn file_display(parent: &str, file: &str) -> String {
-    if parent.is_empty() {
-        file.to_string()
-    } else {
-        format!("{parent}/{file}")
     }
 }
 
@@ -584,7 +558,7 @@ pub fn collect_module_set(spec: &str, pkg: &Mounted) -> (ModuleSet, Vec<String>)
                 p.ast()
                     .errors()
                     .iter()
-                    .map(|d| format!("`{spec}` ({path}/{child_file}): {}", d.msg)),
+                    .map(|d| format!("`{spec}` ({}): {}", m.file, d.msg)),
             );
             child_decls.insert(path.clone(), BTreeMap::new());
             set.units.push(ModuleUnit {
@@ -609,6 +583,18 @@ pub fn collect_module_set(spec: &str, pkg: &Mounted) -> (ModuleSet, Vec<String>)
     }
     // every DECLARED child must be mounted (the loader's law; a
     // hand-offered pkg that disagrees is named, never guessed around)
+    // the declaring file's record: the mounted child's own path, the
+    // root's flavor spelling
+    let file_of = |path: &str| -> Option<&str> {
+        pkg.mods
+            .get(path)
+            .map(|m| m.file.as_str())
+            .or(if path.is_empty() {
+                Some(child_file)
+            } else {
+                None
+            })
+    };
     let mut check_declared = |parent: &str, declared: &BTreeMap<String, Vis>| {
         for name in declared.keys() {
             let child = if parent.is_empty() {
@@ -617,7 +603,7 @@ pub fn collect_module_set(spec: &str, pkg: &Mounted) -> (ModuleSet, Vec<String>)
                 format!("{parent}/{name}")
             };
             if !pkg.mods.contains_key(&child) {
-                let file = file_display(parent, child_file);
+                let file = rut_lir::check::display(parent, file_of(parent));
                 problems.push(format!(
                     "`mod {name};` in `{spec}`'s {file} — no `{child}` module is mounted \
                      (the loader mounts `{child}/{child_file}` beside it)"
@@ -647,10 +633,12 @@ pub fn collect_module_set(spec: &str, pkg: &Mounted) -> (ModuleSet, Vec<String>)
             }
         };
         if !declared.contains_key(&name) {
+            let mounted = pkg.mods.get(path).map(|m| m.file.as_str());
             problems.push(format!(
-                "`{spec}`'s `{path}/{child_file}` is mounted but no `mod {name};` declares it — \
+                "`{spec}`'s `{}` is mounted but no `mod {name};` declares it — \
                  declarations are the graph: spell `mod {name};` in {}",
-                file_display(&parent, child_file),
+                rut_lir::check::display(path, mounted),
+                rut_lir::check::display(&parent, file_of(&parent)),
             ));
         }
     }
@@ -829,13 +817,13 @@ pub fn mount_rows(
             format!("{parent}/{name}")
         };
         match rows.get(&child) {
-            // rows are keyed by LOGICAL mod path — the physical name is
-            // unknowable here, so the directory form's spelling stands
-            // in (bundles are directory-form)
+            // rows are keyed by LOGICAL mod path — the physical path is
+            // unknowable here, so the directory form's record stands in
+            // (bundles are directory-form)
             Some(text) => Ok(ChildLookup::Found {
                 text: text.clone(),
-                canon: child,
-                file: child_file.to_string(),
+                canon: child.clone(),
+                file: format!("{child}/{child_file}"),
             }),
             None => Ok(ChildLookup::Missing),
         }
@@ -848,10 +836,16 @@ pub fn mount_rows(
                     Some((p, n)) => (p.to_string(), n.to_string()),
                     None => (String::new(), path.clone()),
                 };
+                let mounted = mounted.get(&parent).map(|m| m.file.as_str());
+                let parent_file = mounted.or(if parent.is_empty() {
+                    Some(child_file)
+                } else {
+                    None
+                });
                 return Err(format!(
                     "{ROWS_NAME}: `{path}/{child_file}` is carried but no `mod {name};` declares it — \
                      declarations are the graph: spell `mod {name};` in {} (re-pack the directory)",
-                    file_display(&parent, child_file),
+                    rut_lir::check::display(&parent, parent_file),
                 ));
             }
         }
@@ -876,8 +870,9 @@ mod tests {
             self.lookup_as(parent, name, "mod.rut")
         }
 
-        /// the flavor-aware twin: `file` is the physical name a found
-        /// file reports (the Decl test's `mod.d.rut`)
+        /// the flavor-aware twin: `file` is the directory form's file
+        /// name the found child reports (`mod.rut`, the Decl test's
+        /// `mod.d.rut`)
         fn lookup_as(
             &mut self,
             parent: &str,
@@ -899,15 +894,15 @@ mod tests {
                     Ok(ChildLookup::Found {
                         text: text.clone(),
                         canon,
-                        file: file.to_string(),
+                        file: format!("{child}/{file}"),
                     })
                 }
                 None => Ok(ChildLookup::Missing),
             }
         }
 
-        /// the single-file spelling: the file lives at `NAME.rut` (the
-        /// map keyed by that physical shape)
+        /// the single-file spelling: the file's record is the sibling
+        /// `NAME.rut` (the map keyed by the logical mod path)
         fn lookup_file_form(&mut self, parent: &str, name: &str) -> Result<ChildLookup, String> {
             let dir = if parent.is_empty() {
                 name.to_string()
@@ -918,7 +913,7 @@ mod tests {
                 Some(text) => Ok(ChildLookup::Found {
                     text: text.clone(),
                     canon: dir.clone(),
-                    file: format!("{name}.rut"),
+                    file: format!("{dir}.rut"),
                 }),
                 None => Ok(ChildLookup::Missing),
             }
@@ -1011,7 +1006,7 @@ mod tests {
         .unwrap();
         assert_eq!(mods.keys().collect::<Vec<_>>(), vec!["imp", "imp/deep"]);
         // the missing-child error inside the file child names ITS file
-        // (mod-path relative: the module's path plus the real name)
+        // (the found child's root-relative record)
         let mut fs = FakeFs {
             files: BTreeMap::from([("imp".into(), "mod gone;\n".into())]),
             aliases: BTreeMap::new(),
@@ -1020,10 +1015,7 @@ mod tests {
             fs.lookup_file_form(p, n)
         })
         .unwrap_err();
-        assert_eq!(
-            err,
-            "`mod gone;` in imp/imp.rut — no `gone/mod.rut` beside it"
-        );
+        assert_eq!(err, "`mod gone;` in imp.rut — no `gone/mod.rut` beside it");
     }
 
     #[test]
@@ -1063,7 +1055,7 @@ mod tests {
         .unwrap_err();
         assert_eq!(
             err,
-            "`mod grid;` in layout/layout.rut — both `grid/mod.rut` and `grid.rut` exist; \
+            "`mod grid;` in layout.rut — both `grid/mod.rut` and `grid.rut` exist; \
              the mount is ambiguous — keep one"
         );
     }
@@ -1196,7 +1188,7 @@ mod tests {
                 path: String::new(),
                 vis: Vis::Self_,
                 text: "pub fn span() -> i32 { return 1; }\n".into(),
-                file: "mod.rut".into(),
+                file: "layout/mod.rut".into(),
             },
         );
         let json = rows_json("mod layout;\n", &mods);
@@ -1244,7 +1236,7 @@ mod tests {
                     path: path.to_string(),
                     vis: *vis,
                     text: text.to_string(),
-                    file: "mod.d.rut".to_string(),
+                    file: format!("{path}/mod.d.rut"),
                 },
             );
         }
@@ -1362,7 +1354,7 @@ mod tests {
                 path: "layout".into(),
                 vis: Vis::Pub,
                 text: "pub fn span() -> i32 { return 1; }\n".into(),
-                file: "mod.rut".into(),
+                file: "layout/mod.rut".into(),
             },
         );
         let (set, problems) = collect_module_set("app", &pkg);

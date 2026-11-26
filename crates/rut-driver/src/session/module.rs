@@ -322,7 +322,9 @@ fn srczip_mods(
             (Some(text), None) => Ok(crate::mods::ChildLookup::Found {
                 text,
                 canon: dir_form,
-                file: child_file.to_string(),
+                // the record: the entry key stripped of `{prefix}src/`
+                // — the child's root-relative directory-form path
+                file: format!("{child}/{child_file}"),
             }),
             (None, Some(text)) => Ok(crate::mods::ChildLookup::Found {
                 text,
@@ -559,7 +561,7 @@ mod srczip_tests {
         let imp = tree.mods.get("imp").expect("the private child");
         assert_eq!(imp.vis, rut_ast::Vis::Self_);
         let layout = tree.mods.get("layout").expect("the directory-form child");
-        assert_eq!(layout.file, "mod.rut");
+        assert_eq!(layout.file, "layout/mod.rut");
     }
 
     #[test]

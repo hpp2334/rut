@@ -247,7 +247,7 @@ impl<'a> Ctx<'a> {
                                         "duplicate fn `{}` — already declared in module `{}` ({})",
                                         self.name(f.name.ident),
                                         home,
-                                        ModInputs::display(&home)
+                                        self.mods.display(&home)
                                     )
                                 }
                                 _ => {
@@ -310,7 +310,7 @@ impl<'a> Ctx<'a> {
                         self.name(name),
                         head,
                         self.name(name),
-                        ModInputs::display(&self.cur_mod),
+                        self.mods.display(&self.cur_mod),
                     )
                 }
                 prev => format!(

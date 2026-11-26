@@ -1241,7 +1241,7 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                 format!(
                     "`{}` is not declared in module `{m}` ({})",
                     self.ctx.name(name),
-                    crate::check::ModInputs::display(&m),
+                    self.ctx.mods.display(&m),
                 ),
             );
             return Some(Err(()));

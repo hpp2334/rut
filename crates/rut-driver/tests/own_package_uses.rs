@@ -23,13 +23,23 @@ fn mod_source(path: &str, vis: Vis, text: &str) -> rut_driver::ModSource {
 }
 
 /// The single-file flavor: the loader mounted `NAME.rut`, and the
-/// diagnostics spell that physical name.
+/// diagnostics spell that physical name. The directory form records
+/// the lane's root-relative path (`<path>/mod.rut`).
 fn mod_file_source(path: &str, vis: Vis, text: &str, file: &str) -> rut_driver::ModSource {
+    let record = if file == "mod.rut" || file == rut_driver::decl::DECL_CHILD_FILE {
+        if path.is_empty() {
+            file.to_string()
+        } else {
+            format!("{path}/{file}")
+        }
+    } else {
+        file.to_string()
+    };
     rut_driver::ModSource {
         path: path.to_string(),
         vis,
         text: text.to_string(),
-        file: file.to_string(),
+        file: record,
     }
 }
 

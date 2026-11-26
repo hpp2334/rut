@@ -312,6 +312,11 @@ pub struct ModInputs {
     /// one scope per mounted file, keyed by mod path (the root's `""`
     /// row is present only when children exist)
     pub scopes: std::collections::BTreeMap<String, ModScope>,
+    /// the mounted file's ROOT-RELATIVE path per mod path — the record
+    /// the loader lane laid down where it mounted the file (`imp.rut`,
+    /// `m/a/b.rut`, `imp/mod.rut`). `None`/absent = the lane kept no
+    /// record, so [`ModInputs::display`] answers the bare law.
+    pub mod_files: std::collections::BTreeMap<String, Option<String>>,
 }
 
 impl ModInputs {
@@ -339,14 +344,25 @@ impl ModInputs {
         }
     }
 
-    /// The declaring file's display path: `""` is `mod.rut`, a child
-    /// `<parent>/mod.rut` — the exact spelling the diagnostics name.
-    pub fn display(path: &str) -> String {
-        if path.is_empty() {
-            "mod.rut".to_string()
-        } else {
-            format!("{path}/mod.rut")
-        }
+    /// The declaring file's display path: the record the loader laid
+    /// down for this mod path when it has one, else the bare law
+    /// ([`display`]).
+    pub fn display(&self, path: &str) -> String {
+        display(path, self.mod_files.get(path).and_then(Option::as_deref))
+    }
+}
+
+/// THE DISPLAY-PATH LAW — one home for every diagnostic that names a
+/// module's file: the path RELATIVE TO THE PACKAGE'S ROOT-FILE
+/// DIRECTORY (`imp.rut`, `m/a/b.rut`, `imp/mod.rut`). A lane that
+/// mounted the file hands its record in (`file`); the bare law is the
+/// directory-form guess (`""` → `mod.rut`, `p` → `p/mod.rut`) for the
+/// lanes that keep none.
+pub fn display(path: &str, file: Option<&str>) -> String {
+    match file {
+        Some(f) => f.to_string(),
+        None if path.is_empty() => "mod.rut".to_string(),
+        None => format!("{path}/mod.rut"),
     }
 }
 
@@ -1333,13 +1349,13 @@ impl<'a> Ctx<'a> {
             };
             return Some(format!(
                 "`{n}` is declared in the root module ({}) — bind it with {head}",
-                ModInputs::display(&home),
+                self.mods.display(&home),
             ));
         }
         let q = home.replace('/', "::");
         Some(format!(
             "`{n}` is declared in module `{home}` ({}) — bind it with `use {q}::{{ {n} }}` (or qualify: `{q}::{n}`)",
-            ModInputs::display(&home),
+            self.mods.display(&home),
         ))
     }
 
@@ -1560,7 +1576,7 @@ impl<'a> Ctx<'a> {
                 "duplicate type name `{}` — already declared in module `{}` ({})",
                 self.name(name),
                 home,
-                ModInputs::display(&home)
+                self.mods.display(&home)
             ),
             None => format!("duplicate type name `{}`", self.name(name)),
         }
@@ -1881,7 +1897,7 @@ impl<'a> Ctx<'a> {
                         "duplicate `entry fn` `{}` — the entry fn in module `{}` ({}) already spells it; the host calls entry fns by name",
                         self.name(name),
                         first_mod,
-                        ModInputs::display(&first_mod),
+                        self.mods.display(&first_mod),
                     ),
                 ),
                 None => {

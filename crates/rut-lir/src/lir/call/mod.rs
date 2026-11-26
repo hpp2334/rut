@@ -195,7 +195,7 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                         format!(
                             "`{}` is declared in module `{home}` ({}) — bind it with `use {q}::{{ {} }}` (or qualify: `{}{}::{}`(..))",
                             self.ctx.name(base),
-                            crate::check::ModInputs::display(&home),
+                            self.ctx.mods.display(&home),
                             self.ctx.name(base),
                             prefix,
                             self.ctx.name(base),
@@ -867,7 +867,7 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                     format!(
                         "`{}` is not declared in module `{m}` ({})",
                         self.ctx.name(seg.name.ident),
-                        crate::check::ModInputs::display(&m),
+                        self.ctx.mods.display(&m),
                     ),
                 );
                 return Some(Err(()));
@@ -903,12 +903,12 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                 Some(home) => format!(
                     "`{}` is not declared in module `{m}` ({}) — it lives in module `{home}`",
                     self.ctx.name(name),
-                    crate::check::ModInputs::display(&m),
+                    self.ctx.mods.display(&m),
                 ),
                 None => format!(
                     "`{}` is not declared in module `{m}` ({})",
                     self.ctx.name(name),
-                    crate::check::ModInputs::display(&m),
+                    self.ctx.mods.display(&m),
                 ),
             };
             self.ctx.err(sp, msg);

@@ -594,7 +594,7 @@ impl<'a> GraphCompiler<'a> {
         // gates its leaves under the crossing predicate. The validated
         // dep heads ensure; the own bindings ride the compile.
         let (uses, own_uses, foreign_reexports) =
-            self.validate_qualified_uses(spec, module, parsed.ast(), &layout)?;
+            self.validate_qualified_uses(spec, parsed.ast(), &layout)?;
         // the pkg-rooted module path (`calc::math::sqrt(x)`) spells NO
         // use — the fully-qualified form is self-sufficient — so a
         // DECLARED dep that mounts a mod tree ensures beside the used
@@ -835,18 +835,6 @@ pub(crate) fn dep_use_heads(
     out
 }
 
-/// The file a mod path lives in, spelled for the own-lane texts: the
-/// loader's physical record (`imp.rut` single-file, `imp/mod.rut`
-/// directory-form), the root's body `mod.rut` — the exact file the
-/// user sees, never the directory-form guess.
-fn file_display(module: &crate::session::Mounted, path: &str) -> String {
-    match module.mods.get(path) {
-        Some(m) => m.display(),
-        None if path.is_empty() => "mod.rut".to_string(),
-        None => format!("{path}/mod.rut"),
-    }
-}
-
 /// The file-module inputs a compilation resolves against (phase 3):
 /// the concatenated text's file ranges plus the scope tree built from
 /// the pkg's mounted module set — [`rut_lir::check::mod_tree_from`] is
@@ -856,12 +844,29 @@ pub(crate) fn mod_inputs_of(
     module: &crate::session::Mounted,
     files: Vec<(u32, String)>,
 ) -> rut_lir::check::ModInputs {
+    // the mounted children's records ride their `ModSource` (the file
+    // lane's root-relative path, the rows/archive lanes' directory
+    // form); the ROOT is the body's flavor's file name — the declaring
+    // file the dep lanes have always spelled (`mod.rut`/`mod.d.rut`)
+    let root_file = match &module.body {
+        crate::session::MountedBody::Host { .. } => crate::decl::DECL_CHILD_FILE,
+        _ => "mod.rut",
+    };
+    let mut mod_files: std::collections::BTreeMap<String, Option<String>> = module
+        .mods
+        .iter()
+        .map(|(path, m)| (path.clone(), Some(m.file.clone())))
+        .collect();
+    mod_files
+        .entry(String::new())
+        .or_insert_with(|| Some(root_file.to_string()));
     rut_lir::check::ModInputs {
         files,
         scopes: rut_lir::check::mod_tree_from(
             module.mods.iter().map(|(path, m)| (path.as_str(), m.vis)),
         )
         .scopes,
+        mod_files,
     }
 }
 
@@ -924,7 +929,7 @@ impl GraphCompiler<'_> {
     /// module: a miss is the dep lanes' unknown-import shape (plus the
     /// module the name does live in, when it lives in the package), a
     /// visibility refusal names the importing file and the declaring
-    /// file's PHYSICAL name, a module name names the walk. A head that
+    /// file's recorded path, a module name names the walk. A head that
     /// names BOTH a declared dep and an own mod edge is the loud
     /// ambiguity (mounts and mod edges are different namespaces; silence
     /// here would be a trap). Answers the dep heads to ensure plus the
@@ -933,7 +938,6 @@ impl GraphCompiler<'_> {
     fn validate_qualified_uses(
         &mut self,
         spec: &str,
-        module: &crate::session::Mounted,
         ast: &Ast,
         layout: &rut_lir::check::ModInputs,
     ) -> Option<IfaceRespell> {
@@ -980,7 +984,7 @@ impl GraphCompiler<'_> {
                 } else {
                     format!(
                         "this package's own module `{head_text}` ({})",
-                        rut_lir::check::ModInputs::display(target),
+                        layout.display(target),
                     )
                 };
                 // the use statement's span indexes the combined text —
@@ -1038,7 +1042,7 @@ impl GraphCompiler<'_> {
                 // the way the use spelled it (plus where the name does
                 // live, when it lives in this package); a visibility
                 // refusal names the importing file and the declaring
-                // file's physical name; a module name names the walk.
+                // file's recorded path; a module name names the walk.
                 let walked_name = |at: &str| -> String {
                     if at.is_empty() {
                         spec.to_string()
@@ -1096,8 +1100,8 @@ impl GraphCompiler<'_> {
                                     format!(
                                         "`{text}` is not visible from `{}` — mark it `pub` \
                                          (or `pub(pkg)`) in `{}`",
-                                        file_display(module, &from),
-                                        file_display(module, &at),
+                                        layout.display(&from),
+                                        layout.display(&at),
                                     ),
                                 ));
                             }
@@ -1225,21 +1229,6 @@ impl GraphCompiler<'_> {
             // the nameability gate already answered: `pkg` is the
             // declared dep the head resolved to. Mod-path validation
             // walks only declared heads.
-            // the dep's tree flavor names the declaring files: a host
-            // surface's children are `.d.rut` files (`mod.d.rut`), a
-            // lib body's are `mod.rut` — the diagnostics spell the one
-            // that exists
-            let child_file = match &pkg.body {
-                MountedBody::Host { .. } => crate::decl::DECL_CHILD_FILE,
-                _ => "mod.rut",
-            };
-            let at_file = |at: &str| -> String {
-                if at.is_empty() {
-                    child_file.to_string()
-                } else {
-                    format!("{at}/{child_file}")
-                }
-            };
             // walk the mod path, one `pub mod` edge per segment — the
             // shared law [`rut_lir::check::mod_walk_pub`] is the one
             // home (the dep's scope tree rides in; `Err` names the
@@ -1268,7 +1257,7 @@ impl GraphCompiler<'_> {
                                 format!(
                                     "`{seg_text}` is not a module of `{dep_name}` — no `mod {seg_text};` under {} \
                                      (`use {dep_name}::..` walks the dep's mounted `mod` tree)",
-                                    at_file(&walked),
+                                    dep_tree.display(&walked),
                                 ),
                             ));
                         }
@@ -1278,7 +1267,7 @@ impl GraphCompiler<'_> {
                                 format!(
                                     "`{seg_text}` is not visible from outside the package (`mod`, not `pub mod`) — \
                                      spell `pub mod {seg_text};` in `{dep_name}`'s {} to widen it",
-                                    at_file(&walked),
+                                    dep_tree.display(&walked),
                                 ),
                             ));
                         }
@@ -1308,7 +1297,7 @@ impl GraphCompiler<'_> {
                         match rows.iter().find(|d| d.name == text) {
                             None => Some(format!(
                                 "`{text}` is not declared in `{dep_name}`'s module `{at}` ({})",
-                                at_file(&at),
+                                dep_tree.display(&at),
                             )),
                             Some(d) if d.vis != Vis::Pub => Some(format!(
                                 "`{text}` in `{dep_name}::{}` is not `pub` — only `pub` names cross packages",

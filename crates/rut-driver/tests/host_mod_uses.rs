@@ -21,7 +21,7 @@ fn mod_source(path: &str, vis: rut_ast::Vis, text: &str) -> rut_driver::ModSourc
         path: path.to_string(),
         vis,
         text: text.to_string(),
-        file: "mod.rut".to_string(),
+        file: format!("{path}/mod.d.rut"),
     }
 }
 

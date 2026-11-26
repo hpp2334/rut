@@ -738,7 +738,7 @@ impl<'a> Ctx<'a> {
                         "`{}` is not declared in module `{}` ({}) — it lives in module `{}` — bind it with `use {q}::{{ {} }}`",
                         self.name(name),
                         m,
-                        ModInputs::display(m),
+                        self.mods.display(m),
                         home,
                         self.name(name)
                     )
@@ -747,7 +747,7 @@ impl<'a> Ctx<'a> {
                     "`{}` is not declared in module `{}` ({})",
                     self.name(name),
                     m,
-                    ModInputs::display(m)
+                    self.mods.display(m)
                 ),
             };
             self.err(sp, msg);

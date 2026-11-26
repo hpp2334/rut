@@ -76,8 +76,8 @@ impl<'a> Ctx<'a> {
                         "an inherent impl for `{}` must live in `{}`'s module ({}) — this impl is in {}",
                         self.name(spell),
                         self.name(spell),
-                        ModInputs::display(&home),
-                        ModInputs::display(&self.cur_mod),
+                        self.mods.display(&home),
+                        self.mods.display(&self.cur_mod),
                     ),
                 );
                 return;
