@@ -336,18 +336,23 @@ pub(crate) fn load_offline(path: &std::path::Path) -> Result<rut_driver::Walk, S
 // the miss path may emit its archive into the run cache and every
 // later run of the SAME closure can mount the cached bundle instead
 // of recompiling. The key is what makes a hit trustworthy: sha256 over
-// the closure's sources, manifests, `rut.lock` pins, and the rut
-// toolchain version — same key ⇒ same closure ⇒ byte-identical bundle
+// the closure's sources, manifests, `rut.lock` pins, and the RUNNING
+// TOOL's identity (its version plus the current executable's
+// `(size, mtime)`) — same key ⇒ same closure ⇒ byte-identical bundle
 // ⇒ the key cannot lie.
 //
 // Entries land at `$RUT_HOME/run/<key>.rutbundle` (the derivation is
 // rut-driver's; `RUT_HOME` overrides, `~/.rut` the fallback) — shared
 // across projects, one global cache, no per-project state.
 //
-// Key inputs, in order (all content, no timestamps):
+// Key inputs, in order (the closure's content, plus the tool's own
+// identity — never a project file's timestamp):
 // - a domain-separation tag + the toolchain version (rut-cli's crate
 //   version — the workspace's crates version in lockstep, and the
-//   compiler's behavior IS the version's),
+//   compiler's behavior IS the version's) + the running executable's
+//   `(size, mtime)`: a from-source rebuild moves the key even at an
+//   unchanged version string, so a warm store never serves the
+//   previous binary's entry (F14);
 // - per package directory, walked depth-first from the root through
 //   the manifests' `path` deps (cycle-guarded): the dir label, the
 //   manifest bytes, `rut.lock` bytes when present (url deps' content
@@ -373,10 +378,21 @@ pub(crate) fn load_offline(path: &std::path::Path) -> Result<rut_driver::Walk, S
 /// once through the driver's `sha256_hex` (public exactly so a call
 /// site keys its cache without a sha2 dependency of its own).
 fn run_cache_key(dir: &std::path::Path, resolved: &mut bool) -> Result<String, String> {
+    Ok(rut_driver::sha256_hex(&run_cache_key_buffer(
+        dir, resolved,
+    )?))
+}
+
+/// The framed key buffer behind [`run_cache_key`] — the pin holds it,
+/// and the hash is the only step above it.
+fn run_cache_key_buffer(dir: &std::path::Path, resolved: &mut bool) -> Result<Vec<u8>, String> {
     let mut buf: Vec<u8> = Vec::new();
     // the toolchain version: the compiler's behavior is part of the key
     field(&mut buf, b"rut-run-cache-v1");
     field(&mut buf, env!("CARGO_PKG_VERSION").as_bytes());
+    // and the RUNNING TOOL's own identity: a rebuilt binary at the same
+    // version string is a different compiler — its key must differ
+    field(&mut buf, &tool_identity());
     // the store's address law travels with the key: a url dep's
     // resolved BYTES key the run — a re-pinned dep (new pin ⇒ new
     // store address ⇒ new bytes) moves the key, so the walk (and its
@@ -386,7 +402,35 @@ fn run_cache_key(dir: &std::path::Path, resolved: &mut bool) -> Result<String, S
     let pins = lock_pins(dir)?;
     let mut seen = std::collections::BTreeSet::new();
     hash_closure(dir, &specs, &pins, &mut buf, &mut seen, resolved)?;
-    Ok(rut_driver::sha256_hex(&buf))
+    Ok(buf)
+}
+
+/// The running tool's own identity, framed as key fields: the current
+/// executable's `(size, mtime)`. The direction is the cache-miss law's:
+/// a rebuilt binary MOVES the key (never serves the previous compiler's
+/// entry), a merely touched binary MISSES (safe — a miss re-runs), and
+/// a copied binary (the `~/.cargo/bin/rut` shape) misses once and
+/// re-runs. Unknown identity is a stable sentinel: the key can only
+/// over-miss, never let two different tools agree.
+fn tool_identity() -> Vec<u8> {
+    let mut buf: Vec<u8> = Vec::new();
+    match std::env::current_exe().and_then(std::fs::metadata) {
+        Ok(meta) => {
+            field(&mut buf, b"exe-size");
+            field(&mut buf, &meta.len().to_le_bytes());
+            let mtime = meta
+                .modified()
+                .ok()
+                .and_then(|t| t.duration_since(std::time::UNIX_EPOCH).ok());
+            field(&mut buf, b"exe-mtime");
+            match mtime {
+                Some(d) => field(&mut buf, &d.as_nanos().to_le_bytes()),
+                None => field(&mut buf, b"<unknown>"),
+            }
+        }
+        Err(_) => field(&mut buf, b"exe-unknown"),
+    }
+    buf
 }
 
 /// The root lock's pins (url → sha256) — the store addresses' right
@@ -640,6 +684,49 @@ mod tests {
         // a second write replaces atomically (no partial reads)
         store_run_cache(&a, b"fresh");
         assert_eq!(std::fs::read(&a).unwrap(), b"fresh");
+    }
+
+    // ---- the run key's tool identity (F14) ----
+
+    /// The key must name the RUNNING TOOL, not just its version: a
+    /// from-source rebuild at an unchanged `CARGO_PKG_VERSION` must not
+    /// serve the previous binary's cache entry (F14's recorded repro:
+    /// warm store + rebuilt binary → a re-run). The pin holds both
+    /// halves: the composed key buffer contains the exe's `(size,
+    /// mtime)` bytes, and the same binary answers them stably.
+    #[test]
+    fn the_run_key_carries_the_tools_own_identity() {
+        let _home = Home::new("identity");
+        let dir = hello_world("identity");
+
+        // stability: the same binary answers the same identity
+        let identity = tool_identity();
+        assert!(!identity.is_empty(), "the running tool has an identity");
+        assert_eq!(
+            tool_identity(),
+            identity,
+            "the same binary answers the same identity"
+        );
+
+        // the composed key buffer carries those exact bytes — a rebuild
+        // moves them, and the key moves with them
+        let mut resolved = true;
+        let buf = run_cache_key_buffer(&dir, &mut resolved).expect("the closure keys");
+        assert!(resolved, "a dep-free closure resolves");
+        assert!(
+            buf.windows(identity.len())
+                .any(|w| w == identity.as_slice()),
+            "the key buffer carries the tool's own (size, mtime) identity"
+        );
+
+        // and the key itself is stable across calls
+        let mut a = true;
+        let mut b = true;
+        assert_eq!(
+            run_cache_key(&dir, &mut a).expect("keyed"),
+            run_cache_key(&dir, &mut b).expect("keyed"),
+            "the same binary and closure answer the same key"
+        );
     }
 
     #[test]
