@@ -39,7 +39,10 @@ pub type AliasTargetRow = (TypeId, Option<(IdentId, Vec<IdentId>)>, IdentId);
 pub type InherentRow = (usize, usize, Vec<(IdentId, TypeId)>);
 /// A signature-resolution memo key: the annotation node, its
 /// substitution env, the `Self` binding, and the module it resolves
-/// in. See [`Ctx::resolve_sig_ty`].
+/// in. An annotation that names none of the env's idents is
+/// ENV-INDEPENDENT — its key carries the EMPTY env, so a read under a
+/// partial substitution and a read under the completed one are ONE
+/// question. See [`Ctx::resolve_sig_ty`].
 pub type SigKey = (
     rut_ast::AnyHandle,
     Vec<(IdentId, TypeId)>,
@@ -2463,19 +2466,64 @@ impl<'a> Ctx<'a> {
     /// box question, the body compile, a call site's expected types)
     /// reads it. A failed spelling then diagnoses once at its
     /// declaration, never once per lane.
+    ///
+    /// An annotation that names no env ident is ENV-INDEPENDENT: the
+    /// substitution cannot rebind any name it spells, so it resolves
+    /// identically under every env — its key carries the EMPTY env and
+    /// the partial-env read and the completed-env read are one question.
     pub fn resolve_sig_ty(
         &mut self,
         node: TyRef,
         env: &[(IdentId, TypeId)],
         self_ty: Option<TypeId>,
     ) -> TypeId {
-        let key = (node.any(), env.to_vec(), self_ty, self.cur_mod.clone());
+        // an annotation that names no env ident is ENV-INDEPENDENT: keyed
+        // once, answered once — the partial-env read and the completed-env
+        // read are one question
+        let key_env: Vec<(IdentId, TypeId)> = if self.mentions_any(node, env) {
+            env.to_vec()
+        } else {
+            Vec::new()
+        };
+        let key = (node.any(), key_env, self_ty, self.cur_mod.clone());
         if let Some(&t) = self.sig_memo.get(&key) {
             return t;
         }
         let t = self.resolve_sig_ty_deep(node, env, self_ty);
         self.sig_memo.insert(key, t);
         t
+    }
+
+    /// Does the annotation subtree name any of the env's idents? The
+    /// env's idents are exactly the names the substitution could
+    /// rebind; a leaf that spells none of them resolves identically
+    /// under any env. The walk covers the annotation's own names only
+    /// (annotation nodes are tiny): path segments, their generic
+    /// arguments, and the structural containers.
+    fn mentions_any(&self, node: TyRef, env: &[(IdentId, TypeId)]) -> bool {
+        match node {
+            TyRef::Path(h) => h.get(self.ast).segs.iter().any(|seg| {
+                env.iter().any(|(g, _)| *g == seg.name.ident)
+                    || seg.generics.iter().any(|g| self.mentions_any(*g, env))
+            }),
+            TyRef::Self_(_) | TyRef::Error(_) => false,
+            TyRef::Fn(h) => {
+                let n = h.get(self.ast);
+                n.params.iter().any(|p| self.mentions_any(*p, env)) || self.mentions_any(n.ret, env)
+            }
+            TyRef::Opt(h) => self.mentions_any(h.get(self.ast).inner, env),
+            TyRef::Array(h) => self.mentions_any(h.get(self.ast).elem, env),
+            TyRef::Tuple(h) => h
+                .get(self.ast)
+                .elems
+                .iter()
+                .any(|e| self.mentions_any(*e, env)),
+            TyRef::Union(h) => h
+                .get(self.ast)
+                .elems
+                .iter()
+                .any(|e| self.mentions_any(*e, env)),
+        }
     }
 
     /// Signature resolution with `Self` handled at ANY structural depth —

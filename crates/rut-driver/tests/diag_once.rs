@@ -75,3 +75,56 @@ fn a_called_fns_unknown_parameter_type_diagnoses_once() {
         "the diag sits at the parameter's type: {ds:?}"
     );
 }
+
+/// THE DOOR ANSWERS ONCE: a generic fn's env-FREE annotation names no
+/// generic parameter, so the free-call lane's partial-env read and its
+/// completed-env read are ONE question — the leaf is diagnosed once at
+/// its declaration, never once per env.
+#[test]
+fn a_generic_fns_env_free_leaf_diagnoses_once() {
+    let src = "fn g<T>(x: Nope, y: T) { }\n\
+               entry fn main() { g(1, 2); }\n";
+    let ds = compile(src).diags;
+    let ms = msgs(&ds);
+    assert_eq!(ds.len(), 1, "an env-free leaf is asked once: {ms:?}");
+    assert_eq!(ms[0], "unknown type `Nope`", "{ms:?}");
+    let lo = src.find("Nope").expect("the parameter's type") as u32;
+    assert_eq!(
+        ds[0].span,
+        Span::new(lo, lo + 4),
+        "the diag sits at the parameter's type: {ds:?}"
+    );
+}
+
+/// THE CONTROL: an annotation that NAMES a generic parameter is
+/// env-DEPENDENT — its key keeps the substitution, so each
+/// instantiation is its own question. Two calls with different argument
+/// types both type; a mismatch is still caught at the binding, never
+/// hidden behind a first-instantiation cache hit.
+#[test]
+fn env_mentioning_annotations_still_resolve_per_instantiation() {
+    let src = "fn id<T>(x: T) -> T { return x; }\n\
+               entry fn main() {\n\
+               \x20   let a: i32 = id(1);\n\
+               \x20   let b: str = id(\"s\");\n\
+               }\n";
+    let ds = compile(src).diags;
+    assert!(ds.is_empty(), "both instantiations type: {:?}", msgs(&ds));
+
+    let bad = "fn id<T>(x: T) -> T { return x; }\n\
+               entry fn main() {\n\
+               \x20   let a: i32 = id(1);\n\
+               \x20   let b: bool = id(\"s\");\n\
+               }\n";
+    let ds = compile(bad).diags;
+    let ms = msgs(&ds);
+    assert_eq!(
+        ds.len(),
+        1,
+        "the second instantiation's type is live: {ms:?}"
+    );
+    assert_eq!(
+        ms[0], "let `b` is `bool` but the initializer is `str`",
+        "{ms:?}"
+    );
+}
