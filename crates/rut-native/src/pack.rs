@@ -82,10 +82,10 @@ pub async fn pack_dir_opts_with(
 ) -> Result<(Vec<u8>, Option<Vec<u8>>), PackError> {
     let src = FsSource::at(dir);
     let lock = crate::walk::read_lock(&src, dir.to_string_lossy().as_ref())
-        .map_err(rut_driver::pack::PackError::from)?;
+        .map_err(|e| PackError::law(format!("pack: {e}")))?;
     let map = crate::walk::prefetch_urls(&src, dir.to_string_lossy().as_ref(), &lock, fetch)
         .await
-        .map_err(rut_driver::pack::PackError::from)?;
+        .map_err(|e| PackError::law(format!("pack: {e}")))?;
     pack_dir_opts_locked(dir, opts, &map, &lock)
 }
 
@@ -109,10 +109,10 @@ pub fn pack_dir_zip(dir: &Path) -> Result<Vec<u8>, PackError> {
 pub async fn pack_dir_zip_with(dir: &Path, fetch: &dyn DepRemote) -> Result<Vec<u8>, PackError> {
     let src = FsSource::at(dir);
     let lock = crate::walk::read_lock(&src, dir.to_string_lossy().as_ref())
-        .map_err(rut_driver::pack::PackError::from)?;
+        .map_err(|e| PackError::law(format!("pack: {e}")))?;
     let map = crate::walk::prefetch_urls(&src, dir.to_string_lossy().as_ref(), &lock, fetch)
         .await
-        .map_err(rut_driver::pack::PackError::from)?;
+        .map_err(|e| PackError::law(format!("pack: {e}")))?;
     pack_dir_zip_locked(dir, &map, &lock)
 }
 
@@ -123,7 +123,7 @@ pub fn pack_dir_zip_fetched(
 ) -> Result<Vec<u8>, PackError> {
     let src = FsSource::at(dir);
     let lock = crate::walk::read_lock(&src, dir.to_string_lossy().as_ref())
-        .map_err(rut_driver::pack::PackError::from)?;
+        .map_err(|e| PackError::law(format!("pack: {e}")))?;
     pack_dir_zip_locked(dir, map, &lock)
 }
 
@@ -141,7 +141,7 @@ fn pack_dir_zip_locked(
         Ok(bytes) => bytes,
         Err(_) if std::fs::read(dir.join(MANIFEST_RETIRED)).is_ok() => {
             return Err(PackError::law(format!(
-                "{} found — the manifest is `{}` (JSONC: comments and trailing commas legal) \
+                "pack: {} found — the manifest is `{}` (JSONC: comments and trailing commas legal) \
                  since wire 9; re-name the file or re-pack the directory",
                 dir.join(MANIFEST_RETIRED).display(),
                 rut_driver::bundle::MANIFEST_NAME,
@@ -150,20 +150,19 @@ fn pack_dir_zip_locked(
         Err(e) => return Err(PackError::io(manifest_path.display(), e)),
     };
     let manifest_text = String::from_utf8(manifest_bytes)
-        .map_err(|_| PackError::law(format!("{}: not UTF-8", manifest_path.display())))?;
+        .map_err(|_| PackError::law(format!("pack: {}: not UTF-8", manifest_path.display())))?;
     let manifest = parse_manifest(&manifest_text)?;
-    let name = manifest
-        .name
-        .clone()
-        .ok_or_else(|| PackError::law(format!("{} has no `name`", manifest_path.display())))?;
+    let name = manifest.name.clone().ok_or_else(|| {
+        PackError::law(format!("pack: {} has no `name`", manifest_path.display()))
+    })?;
     let src = FsSource::at(dir);
     let dir_key = dir.to_string_lossy().into_owned();
     let mut world = World::new();
     let root = walk_dir(&mut world, &src, &dir_key, map, lock)
-        .map_err(rut_driver::pack::PackError::from)?;
+        .map_err(|e| PackError::law(format!("pack: {e}")))?;
     if root != name {
         return Err(PackError::law(format!(
-            "{} names itself `{root}` — expected `{name}`",
+            "pack: {} names itself `{root}` — expected `{name}`",
             manifest_path.display()
         )));
     }
@@ -187,7 +186,7 @@ fn pack_dir_zip_locked(
         let b_root = b.0 == rut_driver::bundle::MANIFEST_NAME;
         b_root.cmp(&a_root).then_with(|| a.0.cmp(&b.0))
     });
-    rut_driver::bundle::write_srczip(&entries).map_err(|e| PackError::law(e.to_string()))
+    rut_driver::bundle::write_srczip(&entries).map_err(|e| PackError::law(format!("pack: {e}")))
 }
 
 /// One collected package's staged shape: its entries relative to the
@@ -233,14 +232,18 @@ fn collect_tree(
         let node = if let Some(url) = desc.get("url") {
             collect_url_node(spec, url, map)?
         } else if let Some(rel) = desc.get("path") {
-            let dep_dir_key = src.resolve(dir_key, rel).map_err(PackError::law)?;
+            let dep_dir_key = src
+                .resolve(dir_key, rel)
+                .map_err(|e| PackError::law(format!("pack: {e}")))?;
             let dep_dir = PathBuf::from(&dep_dir_key);
             let dep_manifest_path = dep_dir.join(rut_driver::bundle::MANIFEST_NAME);
             let dep_text = String::from_utf8(
                 std::fs::read(&dep_manifest_path)
                     .map_err(|e| PackError::io(dep_manifest_path.display(), e))?,
             )
-            .map_err(|_| PackError::law(format!("{}: not UTF-8", dep_manifest_path.display())))?;
+            .map_err(|_| {
+                PackError::law(format!("pack: {}: not UTF-8", dep_manifest_path.display()))
+            })?;
             let dep_manifest = parse_manifest(&dep_text)?;
             let dep_mount_key = crate::walk::mount_key_for(&dep_dir_key, spec);
             collect_tree(
@@ -256,7 +259,7 @@ fn collect_tree(
             )?
         } else {
             return Err(PackError::law(format!(
-                "dep `{spec}` has no `path` or `url`"
+                "pack: dep `{spec}` has no `path` or `url`"
             )));
         };
         rows.insert(spec.clone(), format!("deps/{}", node.ident));
@@ -270,13 +273,13 @@ fn collect_tree(
     // `src/` the mount never reads
     let mounted = world.pkgs.get(mount_key).ok_or_else(|| {
         PackError::law(format!(
-            "dep `{mount_key}` walked but never mounted — the closure and the world disagree"
+            "pack: dep `{mount_key}` walked but never mounted — the closure and the world disagree"
         ))
     })?;
     validate_tree(dir, mounted, manifest)?;
     // the rewrite: every row points inside, the wire rows drop
     let rewritten =
-        rewrite_for_zip(manifest_text, &rows).map_err(|e| PackError::law(e.to_string()))?;
+        rewrite_for_zip(manifest_text, &rows).map_err(|e| PackError::law(format!("pack: {e}")))?;
     // the fingerprint: the rewritten manifest + the `src/` `.rut`
     // sources — content-derived, context-free
     let mut fp_files: Vec<(String, Vec<u8>)> = vec![(
@@ -316,7 +319,7 @@ fn collect_url_node(
 ) -> Result<StagedNode, PackError> {
     let bytes = map.get(url).ok_or_else(|| {
         PackError::law(format!(
-            "dep `{spec}` is declared by url ({url}) — the bytes are not in the fetched map; \
+            "pack: dep `{spec}` is declared by url ({url}) — the bytes are not in the fetched map; \
              rut pack never downloads, run `rut install` first"
         ))
     })?;
@@ -325,21 +328,22 @@ fn collect_url_node(
         .next()
         .is_some_and(|e| e.eq_ignore_ascii_case("zip"))
     {
-        let entries = read_srczip(bytes).map_err(|e| PackError::law(format!("{url}: {e}")))?;
+        let entries =
+            read_srczip(bytes).map_err(|e| PackError::law(format!("pack: {url}: {e}")))?;
         let manifest_text = entries
             .iter()
             .find(|(n, _)| n == rut_driver::bundle::MANIFEST_NAME)
             .map(|(_, b)| String::from_utf8_lossy(b).into_owned())
             .ok_or_else(|| {
                 PackError::law(format!(
-                    "{url}: no `{}` at the archive root",
+                    "pack: {url}: no `{}` at the archive root",
                     rut_driver::bundle::MANIFEST_NAME
                 ))
             })?;
         let dm = parse_manifest(&manifest_text)?;
         let pkg_name = dm
             .name
-            .ok_or_else(|| PackError::law(format!("{url}: rut.jsonc has no `name`")))?;
+            .ok_or_else(|| PackError::law(format!("pack: {url}: rut.jsonc has no `name`")))?;
         let own: Vec<(String, Vec<u8>)> = entries
             .iter()
             .filter(|(n, _)| {
@@ -356,14 +360,14 @@ fn collect_url_node(
     } else {
         // IR verbatim: the bundle's own wire fingerprint names the dir
         let bundle_entries = rut_driver::bundle::parse_bundle(bytes)
-            .map_err(|e| PackError::law(format!("{url}: {e}")))?;
+            .map_err(|e| PackError::law(format!("pack: {url}: {e}")))?;
         let manifest_text =
             rut_driver::bundle::read_entry(&bundle_entries, rut_driver::bundle::MANIFEST_NAME)
-                .map_err(|e| PackError::law(format!("{url}: {e}")))?;
+                .map_err(|e| PackError::law(format!("pack: {url}: {e}")))?;
         let dm = parse_manifest(&manifest_text)?;
         let pkg_name = dm
             .name
-            .ok_or_else(|| PackError::law(format!("{url}: rut.jsonc has no `name`")))?;
+            .ok_or_else(|| PackError::law(format!("pack: {url}: rut.jsonc has no `name`")))?;
         let fp = rut_driver::bundle::fp16_of(&bundle_entries, "");
         Ok(StagedNode {
             entries: vec![(format!("{pkg_name}.rutbundle"), bytes.clone())],
@@ -417,7 +421,7 @@ fn collect_files_under(
 fn mounted_of<'w>(world: &'w World, key: &str) -> Result<&'w rut_driver::Mounted, PackError> {
     world.pkgs.get(key).ok_or_else(|| {
         PackError::law(format!(
-            "`{key}` walked but never mounted — the closure and the world disagree"
+            "pack: `{key}` walked but never mounted — the closure and the world disagree"
         ))
     })
 }
@@ -457,7 +461,7 @@ fn validate_tree(
     for (rel, _) in &own {
         if rel.ends_with(".rut") && !rel.starts_with("src/") {
             return Err(PackError::law(format!(
-                "{}: rut code rides only under a `src/` shell — declare it (`mod …;`) and move \
+                "pack: {}: rut code rides only under a `src/` shell — declare it (`mod …;`) and move \
                  it under `src/`, or delete it",
                 dir.join(rel).display()
             )));
@@ -509,7 +513,7 @@ fn validate_tree(
                 .any(|m| m.file.as_str() == src_rel || format!("{root_dir}{}", m.file) == src_rel);
         if !declared {
             return Err(PackError::law(format!(
-                "{}: nothing declares this module — `mod …;` it from its parent or delete it",
+                "pack: {}: nothing declares this module — `mod …;` it from its parent or delete it",
                 dir.join(rel).display()
             )));
         }
@@ -528,7 +532,7 @@ pub fn pack_dir_opts_fetched(
 ) -> Result<(Vec<u8>, Option<Vec<u8>>), PackError> {
     let src = FsSource::at(dir);
     let lock = crate::walk::read_lock(&src, dir.to_string_lossy().as_ref())
-        .map_err(rut_driver::pack::PackError::from)?;
+        .map_err(|e| PackError::law(format!("pack: {e}")))?;
     pack_dir_opts_locked(dir, opts, map, &lock)
 }
 
@@ -548,7 +552,7 @@ fn pack_dir_opts_locked(
             // the retired manifest name: the pointed cutover refusal —
             // no fallback lane reads it
             return Err(PackError::law(format!(
-                "{} found — the manifest is `{}` (JSONC: comments and trailing commas legal) \
+                "pack: {} found — the manifest is `{}` (JSONC: comments and trailing commas legal) \
                  since wire 9; re-name the file or re-pack the directory",
                 dir.join(MANIFEST_RETIRED).display(),
                 rut_driver::bundle::MANIFEST_NAME,
@@ -556,14 +560,13 @@ fn pack_dir_opts_locked(
         }
         Err(e) => return Err(PackError::io(manifest_path.display(), e)),
     };
-    let manifest = parse_manifest(
-        &String::from_utf8(manifest_bytes.clone())
-            .map_err(|_| PackError::law(format!("{}: not UTF-8", manifest_path.display())))?,
-    )?;
-    let name = manifest
-        .name
-        .clone()
-        .ok_or_else(|| PackError::law(format!("{} has no `name`", manifest_path.display())))?;
+    let manifest =
+        parse_manifest(&String::from_utf8(manifest_bytes.clone()).map_err(|_| {
+            PackError::law(format!("pack: {}: not UTF-8", manifest_path.display()))
+        })?)?;
+    let name = manifest.name.clone().ok_or_else(|| {
+        PackError::law(format!("pack: {} has no `name`", manifest_path.display()))
+    })?;
     // the packed rut.jsonc is the directory's rut.jsonc PLUS the wire
     // rows STAMPED at the pack door: a directory manifest usually
     // carries neither key (the packer is the ONE writer of the pair,
@@ -576,14 +579,15 @@ fn pack_dir_opts_locked(
     // closure) fire first.
     let stage = |manifest: &Manifest| -> Result<(Manifest, Vec<u8>), PackError> {
         let staged = ensure_wire_rows(
-            &String::from_utf8(manifest_bytes.clone())
-                .map_err(|_| PackError::law(format!("{}: not UTF-8", manifest_path.display())))?,
+            &String::from_utf8(manifest_bytes.clone()).map_err(|_| {
+                PackError::law(format!("pack: {}: not UTF-8", manifest_path.display()))
+            })?,
             rut_driver::pack::FORMAT_VERSION,
         )?;
         let staged_manifest = parse_manifest(&staged)?;
         if staged_manifest.name != manifest.name {
             return Err(PackError::law(format!(
-                "{}: staging the wire rows moved the `name` — normalize the manifest",
+                "pack: {}: staging the wire rows moved the `name` — normalize the manifest",
                 manifest_path.display()
             )));
         }
@@ -597,7 +601,7 @@ fn pack_dir_opts_locked(
     if manifest.pkg_type == PkgType::Host {
         if opts.strip {
             return Err(PackError::law(
-                "a host bundle has no symbols to strip — its root is a declaration surface, \
+                "pack: a host bundle has no symbols to strip — its root is a declaration surface, \
                  not a program; there is no binary and no sidecar",
             ));
         }
@@ -609,10 +613,10 @@ fn pack_dir_opts_locked(
     let dir_key = dir.to_string_lossy().into_owned();
     let mut world = World::new();
     let root = walk_dir(&mut world, &src, &dir_key, map, lock)
-        .map_err(rut_driver::pack::PackError::from)?;
+        .map_err(|e| PackError::law(format!("pack: {e}")))?;
     if root != name {
         return Err(PackError::law(format!(
-            "{} names itself `{root}` — expected `{name}`",
+            "pack: {} names itself `{root}` — expected `{name}`",
             manifest_path.display()
         )));
     }
@@ -635,7 +639,8 @@ fn pack_dir_opts_locked(
     for (spec, source) in &sources {
         match source {
             PkgSource::Dir(gdir) => {
-                let dm = read_manifest(&src, gdir).map_err(rut_driver::pack::PackError::from)?;
+                let dm =
+                    read_manifest(&src, gdir).map_err(|e| PackError::law(format!("pack: {e}")))?;
                 // the tree gate rides every DIR group too: the compiled
                 // lane reads this group's sources through the same
                 // reader, so an undeclared `.rut` there refuses like the
@@ -645,7 +650,7 @@ fn pack_dir_opts_locked(
                     validate_tree(Path::new(gdir), mounted, &dm)?;
                 }
                 mount_dev_table(&mut world, &src, gdir, spec, &dm, map, lock)
-                    .map_err(rut_driver::pack::PackError::from)?;
+                    .map_err(|e| PackError::law(format!("pack: {e}")))?;
             }
             PkgSource::Unpacked(gdir) => {
                 // a source-zip dep's tree is sealed wire bytes (its
@@ -655,10 +660,11 @@ fn pack_dir_opts_locked(
                 // Its tree rows already passed THAT pack's own door, so
                 // the bin lane deliberately re-gates nothing inside the
                 // sealed archive
-                let dm = read_manifest(&src, gdir).map_err(rut_driver::pack::PackError::from)?;
+                let dm =
+                    read_manifest(&src, gdir).map_err(|e| PackError::law(format!("pack: {e}")))?;
                 if !dm.dev_deps.is_empty() {
                     return Err(PackError::law(format!(
-                        "packed dep `{spec}` needs its own [dev-deps] directories, which do \
+                        "pack: packed dep `{spec}` needs its own [dev-deps] directories, which do \
                          not travel in a source zip — vendor this dep instead"
                     )));
                 }
@@ -671,7 +677,7 @@ fn pack_dir_opts_locked(
                     .unwrap_or(false);
                 if rides_source && !dm?.dev_deps.is_empty() {
                     return Err(PackError::law(format!(
-                        "packed dep `{spec}` needs its own [dev-deps] directories, which do not travel in a bundle — vendor this dep (unpack the url dep into your project) instead"
+                        "pack: packed dep `{spec}` needs its own [dev-deps] directories, which do not travel in a bundle — vendor this dep (unpack the url dep into your project) instead"
                     )));
                 }
             }
@@ -709,7 +715,7 @@ fn pack_dir_opts_locked(
 /// text must re-parse (the caller gates it).
 fn ensure_wire_rows(text: &str, version: u64) -> Result<String, PackError> {
     let brace = text.find('{').ok_or_else(|| {
-        PackError::law("the manifest has no `{` — not a JSONC object".to_string())
+        PackError::law("pack: the manifest has no `{` — not a JSONC object".to_string())
     })?;
     Ok(format!(
         "{}\n  \"format\": \"rutbundle\",\n  \"format_version\": {},{}",
@@ -751,7 +757,7 @@ fn pack_host_root(
         None => {
             if !dir.join(crate::walk::DECL_ROOT_FILE).is_file() {
                 return Err(PackError::law(format!(
-                    "{} is a host pkg with no entry — spell `\"entry\": {{ \"type\": \
+                    "pack: {} is a host pkg with no entry — spell `\"entry\": {{ \"type\": \
                      \"<surface>.d.rut\" }}` or add a `src/mod.d.rut` beside the manifest",
                     dir.join(rut_driver::bundle::MANIFEST_NAME).display()
                 )));
@@ -788,11 +794,11 @@ fn pack_host_root(
         "mod.d.rut",
         &mut lookup,
     )
-    .map_err(PackError::law)?;
+    .map_err(|e| PackError::law(format!("pack: {e}")))?;
     // the verification, half one: the surface + its tree parse and
     // lower into host rows — the exact lane a mount runs
     let tree = rut_driver::lower_decl_module(&src, &mods, &src_path.display().to_string())
-        .map_err(PackError::law)?;
+        .map_err(|e| PackError::law(format!("pack: {e}")))?;
     // the tree gate rides BOTH modes: the host arm packs the same
     // surface tree the source lane gates — an undeclared `.rut` beside
     // the root refuses here too, never a silent drop (the arm's early
@@ -815,10 +821,10 @@ fn pack_host_root(
     if !mods.is_empty() {
         let envelope_rows =
             rut_driver::lower_rows_envelope(&src, &mods, &src_path.display().to_string())
-                .map_err(PackError::law)?;
+                .map_err(|e| PackError::law(format!("pack: {e}")))?;
         if !rut_driver::rows_agree(&tree_rows, &envelope_rows) {
             return Err(PackError::law(format!(
-                "{}: the rows envelope does not lower to the tree's own rows — \
+                "pack: {}: the rows envelope does not lower to the tree's own rows — \
                  the generation invariant refuses the pack",
                 src_path.display()
             )));
@@ -828,7 +834,7 @@ fn pack_host_root(
             rut_driver::mods::rows_json(&src, &mods).into_bytes(),
         ));
     }
-    write_bundle(&entries).map_err(|e| PackError::law(e.to_string()))
+    write_bundle(&entries).map_err(|e| PackError::law(format!("pack: {e}")))
 }
 
 /// The `[deps]` graph, recursively — each package under its name, as
@@ -882,8 +888,8 @@ fn collect_group_sources_walk(
                 // the unpacked tree rode the wire — its manifest (and
                 // its embedded groups') parse on the ONE grammar at the
                 // zip boundary
-                let dm =
-                    read_manifest(src, &unpack_key).map_err(rut_driver::pack::PackError::from)?;
+                let dm = read_manifest(src, &unpack_key)
+                    .map_err(|e| PackError::law(format!("pack: {e}")))?;
                 collect_group_sources_walk(src, &unpack_key, &dm, world, out, seen, true)?;
                 continue;
             }
@@ -891,7 +897,7 @@ fn collect_group_sources_walk(
             // archive contributed (first-mount-wins decided which)
             let Some((slot, _prefix)) = world.archive_of(spec) else {
                 return Err(PackError::law(format!(
-                    "dep `{spec}` is declared by url but was not mounted from an archive"
+                    "pack: dep `{spec}` is declared by url but was not mounted from an archive"
                 )));
             };
             out.insert(
@@ -916,18 +922,20 @@ fn collect_group_sources_walk(
         }
         let rel = desc
             .get("path")
-            .ok_or_else(|| PackError::law(format!("dep `{spec}` has no `path`")))?;
-        let dep_dir = src.resolve(dir_key, rel).map_err(PackError::law)?;
+            .ok_or_else(|| PackError::law(format!("pack: dep `{spec}` has no `path`")))?;
+        let dep_dir = src
+            .resolve(dir_key, rel)
+            .map_err(|e| PackError::law(format!("pack: {e}")))?;
         // the mount key the walk used: identity dirs mount under their
         // identities — the group sources answer under the same key.
         // Inside an unpacked tree (`from_zip`) the dep dirs are the
         // zip's EMBEDDED groups — wire bytes, the one grammar at the
         // zip boundary
         let mount_key = crate::walk::mount_key_for(&dep_dir, spec);
-        let dm = read_manifest(src, &dep_dir).map_err(rut_driver::pack::PackError::from)?;
+        let dm = read_manifest(src, &dep_dir).map_err(|e| PackError::law(format!("pack: {e}")))?;
         if dm.name.as_deref() != Some(rut_driver::bundle::mount_name(&mount_key)) {
             return Err(PackError::law(format!(
-                "dep `{spec}` points at `{dep_dir}` — the manifest there names it `{}`",
+                "pack: dep `{spec}` points at `{dep_dir}` — the manifest there names it `{}`",
                 dm.name.as_deref().unwrap_or("<unnamed>")
             )));
         }
@@ -952,11 +960,12 @@ pub(crate) fn group_manifest(
     archives: &[Archive],
 ) -> Result<Manifest, PackError> {
     let bytes = group_file(source, rut_driver::bundle::MANIFEST_NAME, archives)?;
-    parse_manifest(
-        &String::from_utf8(bytes).map_err(|_| {
-            PackError::law(format!("{}: not UTF-8", rut_driver::bundle::MANIFEST_NAME))
-        })?,
-    )
+    parse_manifest(&String::from_utf8(bytes).map_err(|_| {
+        PackError::law(format!(
+            "pack: {}: not UTF-8",
+            rut_driver::bundle::MANIFEST_NAME
+        ))
+    })?)
     .map_err(rut_driver::pack::PackError::from)
 }
 
@@ -975,15 +984,15 @@ pub(crate) fn group_file(
         PkgSource::Archive { slot, prefix } => {
             let rel = rel.strip_prefix("./").unwrap_or(rel);
             let key = rut_driver::bundle::bundle_key(&format!("{prefix}{rel}"))
-                .map_err(PackError::law)?;
+                .map_err(|e| PackError::law(format!("pack: {e}")))?;
             let archive = archives.get(*slot).ok_or_else(|| {
                 PackError::law(format!(
-                    "archive slot {slot} is not in this pack's archive list"
+                    "pack: archive slot {slot} is not in this pack's archive list"
                 ))
             })?;
             rut_driver::bundle::read_entry(&archive.entries, &key)
                 .map(|b| b.into_bytes())
-                .map_err(|e| PackError::law(format!("{}: {e}", archive.origin)))
+                .map_err(|e| PackError::law(format!("pack: {}: {e}", archive.origin)))
         }
     }
 }

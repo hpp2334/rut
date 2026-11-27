@@ -10,15 +10,23 @@ use crate::bundle::ManifestError;
 /// Why a directory did not pack.
 #[derive(Debug, Error)]
 pub enum PackError {
-    /// a filesystem read failed — the path names the file
-    #[error("cannot read {path}: {source}")]
+    /// a filesystem read failed — the path names the file. The pack
+    /// lane's name rides the Display: every PackError text carries
+    /// exactly one `pack: ` prefix (the message owns the lane name —
+    /// one prefix per message), so this variant's Display is the one
+    /// home for every Io construction.
+    #[error("pack: cannot read {path}: {source}")]
     Io {
         path: String,
         #[source]
         source: std::io::Error,
     },
-    /// the manifest grammar refused
-    #[error(transparent)]
+    /// the manifest grammar refused. The grammar's own text is
+    /// unprefixed (its lane speaks manifest law); surfacing THROUGH a
+    /// pack failure, the pack lane's name rides this Display — the
+    /// transparent passthrough is the one home for every
+    /// ManifestError construction.
+    #[error("pack: {0}")]
     Manifest(#[from] ManifestError),
     /// the long tail: today's refusal text, verbatim
     #[error("{0}")]

@@ -172,7 +172,9 @@ pub fn pack(w: &PackWorld, opts: &PackOpts) -> Result<(Vec<u8>, Option<Vec<u8>>)
     // the name gate: the entries spell the manifest's name, so a
     // nameless manifest refuses here (the value itself rides the walk)
     if w.manifest.name.is_none() {
-        return Err(PackError::law("the manifest has no `name`".to_string()));
+        return Err(PackError::law(
+            "pack: the manifest has no `name`".to_string(),
+        ));
     }
     let root = w.loaded.root.clone();
     // the closure's session: the walked pkgs + the prelude (the ONLY
@@ -197,7 +199,7 @@ pub fn pack(w: &PackWorld, opts: &PackOpts) -> Result<(Vec<u8>, Option<Vec<u8>>)
         let spec = pkg.spec.clone();
         session
             .register_module(&spec, pkg)
-            .map_err(|e| PackError::law(e.to_string()))?;
+            .map_err(|e| PackError::law(format!("pack: {e}")))?;
     }
     let _ = session.mount(crate::run::core_pkg());
     // the rode-along closure law: every dep an archive group's manifest
@@ -208,7 +210,8 @@ pub fn pack(w: &PackWorld, opts: &PackOpts) -> Result<(Vec<u8>, Option<Vec<u8>>)
     // the check matches by name half.
     for (spec, source) in &w.sources {
         if let PkgSource::Archive { .. } = source {
-            let dm = group_manifest(source, &w.archives, &w.read).map_err(PackError::law)?;
+            let dm = group_manifest(source, &w.archives, &w.read)
+                .map_err(|e| PackError::law(format!("pack: {e}")))?;
             for dep in dm.deps.keys() {
                 let ridden = *dep == root
                     || w.sources
@@ -216,7 +219,7 @@ pub fn pack(w: &PackWorld, opts: &PackOpts) -> Result<(Vec<u8>, Option<Vec<u8>>)
                         .any(|k| crate::bundle::mount_name(k) == dep.as_str());
                 if !ridden {
                     return Err(PackError::law(format!(
-                        "packed dep `{spec}` declares `{dep}`, but that group did not ride — the output would be missing its `{dep}` group; vendor this dep (unpack the url dep into your project) instead"
+                        "pack: packed dep `{spec}` declares `{dep}`, but that group did not ride — the output would be missing its `{dep}` group; vendor this dep (unpack the url dep into your project) instead"
                     )));
                 }
             }
@@ -248,7 +251,7 @@ pub fn pack(w: &PackWorld, opts: &PackOpts) -> Result<(Vec<u8>, Option<Vec<u8>>)
             ) && !units.linked.contains_key(spec)
             {
                 return Err(PackError::law(format!(
-                    "compiled group `{spec}` (from {}) is not part of this program's compiled closure — a bundled binary cannot ride unpackaged; use it or vendor this dep",
+                    "pack: compiled group `{spec}` (from {}) is not part of this program's compiled closure — a bundled binary cannot ride unpackaged; use it or vendor this dep",
                     w.archives[*slot].origin
                 )));
             }
@@ -345,12 +348,12 @@ pub fn pack(w: &PackWorld, opts: &PackOpts) -> Result<(Vec<u8>, Option<Vec<u8>>)
     // template rows inside the binary — the delivery law.)
     let root_pkg = session
         .resolve(&root)
-        .map_err(|e| PackError::law(e.to_string()))?;
+        .map_err(|e| PackError::law(format!("pack: {e}")))?;
     let mut root_files: Vec<(String, Vec<u8>)> = Vec::new();
     if !opts.strip {
         let entry = decl_entry::render_program_entry(&units.programs[root_idx]);
         decl_entry::check_round_trip(&root, &units.programs[root_idx], &entry)
-            .map_err(PackError::law)?;
+            .map_err(|e| PackError::law(format!("pack: {e}")))?;
         root_files.push(("mod.d.rut".into(), entry.into_bytes()));
     }
     if !root_pkg.mods.is_empty() {
@@ -374,11 +377,12 @@ pub fn pack(w: &PackWorld, opts: &PackOpts) -> Result<(Vec<u8>, Option<Vec<u8>>)
         if *spec == root || session.resolve(spec).is_err() {
             continue; // the root rode above; unmounted names never ride
         }
-        let dm = group_manifest(source, &w.archives, &w.read).map_err(PackError::law)?;
+        let dm = group_manifest(source, &w.archives, &w.read)
+            .map_err(|e| PackError::law(format!("pack: {e}")))?;
         let gname = crate::bundle::mount_name(spec);
         if dm.name.as_deref() != Some(gname) {
             return Err(PackError::law(format!(
-                "dep `{spec}` names itself `{}` in its manifest — expected `{gname}`",
+                "pack: dep `{spec}` names itself `{}` in its manifest — expected `{gname}`",
                 dm.name.as_deref().unwrap_or("<unnamed>")
             )));
         }
@@ -387,8 +391,8 @@ pub fn pack(w: &PackWorld, opts: &PackOpts) -> Result<(Vec<u8>, Option<Vec<u8>>)
             let &(idx, _) = units.linked.get(spec).unwrap();
             // the group's manifest rides byte-for-byte: the loader reads
             // its name and mount flags from it
-            let toml =
-                group_file(source, MANIFEST_NAME, &w.archives, &w.read).map_err(PackError::law)?;
+            let toml = group_file(source, MANIFEST_NAME, &w.archives, &w.read)
+                .map_err(|e| PackError::law(format!("pack: {e}")))?;
             files.push((MANIFEST_NAME.into(), toml));
             files.push((
                 "mod.rutc".into(),
@@ -402,7 +406,7 @@ pub fn pack(w: &PackWorld, opts: &PackOpts) -> Result<(Vec<u8>, Option<Vec<u8>>)
             if !opts.strip {
                 let entry = decl_entry::render_program_entry(&units.programs[idx]);
                 decl_entry::check_round_trip(spec, &units.programs[idx], &entry)
-                    .map_err(PackError::law)?;
+                    .map_err(|e| PackError::law(format!("pack: {e}")))?;
                 files.push(("mod.d.rut".into(), entry.into_bytes()));
             }
             // the module rows, group flavor (see the root arm above)
@@ -436,7 +440,7 @@ pub fn pack(w: &PackWorld, opts: &PackOpts) -> Result<(Vec<u8>, Option<Vec<u8>>)
                         // host pkg keeps the flat shape (no `rut.mods`)
                         let m = session
                             .resolve(spec)
-                            .map_err(|e| PackError::law(e.to_string()))?;
+                            .map_err(|e| PackError::law(format!("pack: {e}")))?;
                         let (root_text, host_rows) = match &m.body {
                             MountedBody::Host {
                                 root_surface,
@@ -446,7 +450,7 @@ pub fn pack(w: &PackWorld, opts: &PackOpts) -> Result<(Vec<u8>, Option<Vec<u8>>)
                             _ => (String::new(), Vec::new()),
                         };
                         let toml = group_file(source, MANIFEST_NAME, &w.archives, &w.read)
-                            .map_err(PackError::law)?;
+                            .map_err(|e| PackError::law(format!("pack: {e}")))?;
                         files.push((MANIFEST_NAME.into(), toml));
                         files.push(("mod.d.rut".into(), root_text.clone().into_bytes()));
                         if !m.mods.is_empty() {
@@ -455,10 +459,10 @@ pub fn pack(w: &PackWorld, opts: &PackOpts) -> Result<(Vec<u8>, Option<Vec<u8>>)
                                 &m.mods,
                                 &format!("{gdir}/mod.d.rut"),
                             )
-                            .map_err(PackError::law)?;
+                            .map_err(|e| PackError::law(format!("pack: {e}")))?;
                             if !decl_entry::rows_agree(&host_rows, &envelope_rows) {
                                 return Err(PackError::law(format!(
-                                    "dep `{spec}`: the rows envelope does not lower to \
+                                    "pack: dep `{spec}`: the rows envelope does not lower to \
                                      the tree's own rows — the generation invariant refuses \
                                      the pack"
                                 )));
@@ -470,7 +474,7 @@ pub fn pack(w: &PackWorld, opts: &PackOpts) -> Result<(Vec<u8>, Option<Vec<u8>>)
                         }
                     } else {
                         collect_source_group(gdir, &dm, &mods, "", &w.read, &mut files)
-                            .map_err(PackError::law)?;
+                            .map_err(|e| PackError::law(format!("pack: {e}")))?;
                         // the module rows, group flavor (see the root arm
                         // above): the tree rides beside the file set
                         if !mods.is_empty() {
@@ -516,7 +520,7 @@ pub fn pack(w: &PackWorld, opts: &PackOpts) -> Result<(Vec<u8>, Option<Vec<u8>>)
             if let Some((_, key_fp)) = crate::bundle::parse_identity(spec) {
                 if key_fp != fp {
                     return Err(PackError::law(format!(
-                        "dep `{spec}`'s mounted identity disagrees with its staged file set \
+                        "pack: dep `{spec}`'s mounted identity disagrees with its staged file set \
                          (`{key_fp}` vs `{fp}`) — refuse, never guess"
                     )));
                 }
@@ -525,7 +529,7 @@ pub fn pack(w: &PackWorld, opts: &PackOpts) -> Result<(Vec<u8>, Option<Vec<u8>>)
         if let Some(prev) = staged.get(&ident) {
             if prev != &files {
                 return Err(PackError::law(format!(
-                    "two dep groups stage to the same identity `{ident}` with different file sets — \
+                    "pack: two dep groups stage to the same identity `{ident}` with different file sets — \
                      refuse, never guess"
                 )));
             }
@@ -562,7 +566,7 @@ pub fn pack(w: &PackWorld, opts: &PackOpts) -> Result<(Vec<u8>, Option<Vec<u8>>)
                 };
                 if !staged.contains_key(&ident) {
                     return Err(PackError::law(format!(
-                        "the ledger names `{ident}`, but no group staged under that identity — \
+                        "pack: the ledger names `{ident}`, but no group staged under that identity — \
                          the closure and the file set disagree"
                     )));
                 }
@@ -601,12 +605,13 @@ pub fn pack(w: &PackWorld, opts: &PackOpts) -> Result<(Vec<u8>, Option<Vec<u8>>)
     for (ident, files) in &staged {
         for (rel, bytes) in files {
             entries.push((
-                bundle_key(&format!("deps/{ident}/{rel}")).map_err(PackError::law)?,
+                bundle_key(&format!("deps/{ident}/{rel}"))
+                    .map_err(|e| PackError::law(format!("pack: {e}")))?,
                 bytes.clone(),
             ));
         }
     }
-    let bundle = write_bundle(&entries).map_err(|e| PackError::law(e.to_string()))?;
+    let bundle = write_bundle(&entries).map_err(|e| PackError::law(format!("pack: {e}")))?;
     Ok((bundle, symtab))
 }
 

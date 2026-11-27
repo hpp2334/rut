@@ -57,9 +57,21 @@ fn run(tag: &str, dir: &Path) -> String {
 /// on the compile-before-encode arm — a source zip carries source and
 /// packs clean.
 fn pack(tag: &str, dir: &Path) -> String {
+    pack_mode(tag, dir, &["--mode", "bin"])
+}
+
+/// [`pack`] in the default source mode.
+fn pack_source(tag: &str, dir: &Path) -> String {
+    pack_mode(tag, dir, &[])
+}
+
+/// `rut pack <dir>` with extra args (the mode), stderr captured.
+fn pack_mode(tag: &str, dir: &Path, mode: &[&str]) -> String {
     let home = rut_testkit::Scratch::new(&format!("cli-display-paths-home-{tag}"));
     let out = rut_cmd(&home)
-        .args(["pack", "--mode", "bin", dir.to_str().unwrap()])
+        .args(["pack"])
+        .args(mode)
+        .arg(dir.to_str().unwrap())
         .output()
         .expect("run rut pack <dir>");
     assert!(!out.status.success(), "the pack must refuse");
@@ -262,10 +274,11 @@ fn the_dep_lane_names_a_single_file_child_by_its_file() {
 
 #[test]
 fn a_pack_failure_message_carries_its_prefix_once() {
-    // F74: the PackError family self-identifies — the unit-diag
-    // refusal embeds its own `pack: ` (rut-driver's pack lane) — so
-    // the CLI's printer states nothing: exactly one prefix, never the
-    // `pack: pack: ` double.
+    // F74: the pack lane's refusal texts carry their own `pack: `
+    // prefix (the five unit-diag/stability sites do; review round 1
+    // completed the family — EVERY PackError Display now carries
+    // exactly one) — so the CLI's printer states nothing: exactly one
+    // prefix, never the `pack: pack: ` double.
     let root = scratch("pack-prefix");
     let dir = root.join("poison");
     write(&dir, "rut.jsonc", r#"{"name": "poison"}"#);
@@ -282,5 +295,55 @@ fn a_pack_failure_message_carries_its_prefix_once() {
     assert!(
         !stderr.contains("pack: pack: "),
         "one prefix per message — the printer states nothing: {stderr}"
+    );
+}
+
+#[test]
+fn a_nameless_manifest_refuses_with_exactly_one_prefix_in_both_modes() {
+    // review round 1: the PackError family is NOT wholesale
+    // self-identifying — the no-`name` refusal (the cheapest bare
+    // shape, refused before the walk) must still reach the user with
+    // exactly one `pack: ` prefix, in both pack modes.
+    let root = scratch("pack-noname");
+    let dir = root.join("noname");
+    write(&dir, "rut.jsonc", "{}");
+    let stderr = pack("pack-noname", &dir);
+    assert!(
+        stderr.contains("pack: ") && stderr.contains("has no `name`"),
+        "the bin-mode refusal carries one lane prefix: {stderr}"
+    );
+    assert!(
+        !stderr.contains("pack: pack: "),
+        "one prefix per message: {stderr}"
+    );
+    let stderr = pack_source("pack-noname-src", &dir);
+    assert!(
+        stderr.contains("pack: ") && stderr.contains("has no `name`"),
+        "the source-mode refusal carries one lane prefix: {stderr}"
+    );
+    assert!(
+        !stderr.contains("pack: pack: "),
+        "one prefix per message: {stderr}"
+    );
+}
+
+#[test]
+fn a_missing_manifest_refuses_with_exactly_one_prefix() {
+    // the Io variant's Display is the one home for its prefix — a
+    // directory with no `rut.jsonc` reads as `pack: cannot read …`,
+    // never bare, never double. (The directory itself must exist — a
+    // missing DIR is refused earlier by the cache lane's own prefixed
+    // message.)
+    let root = scratch("pack-nomanifest");
+    let dir = root.join("empty");
+    std::fs::create_dir_all(&dir).unwrap();
+    let stderr = pack("pack-nomanifest", &dir);
+    assert!(
+        stderr.contains("pack: cannot read "),
+        "the io refusal carries one lane prefix: {stderr}"
+    );
+    assert!(
+        !stderr.contains("pack: pack: "),
+        "one prefix per message: {stderr}"
     );
 }

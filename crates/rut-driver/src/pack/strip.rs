@@ -43,12 +43,13 @@ pub(super) fn strip_arm(
         if rides_compiled(session, spec, units) {
             continue; // a `.rutc` group — no source binds anything
         }
-        let dm = group_manifest(source, archives, read).map_err(PackError::law)?;
+        let dm = group_manifest(source, archives, read)
+            .map_err(|e| PackError::law(format!("pack: {e}")))?;
         for dep in dm.deps.keys() {
             let dep_compiled = rides_compiled(session, dep, units);
             if dep_compiled {
                 return Err(PackError::law(format!(
-                    "--strip needs a fully-compiled closure: the source group \
+                    "pack: --strip needs a fully-compiled closure: the source group \
                          `{spec}` binds compiled `{dep}`'s surface at load, whose \
                          names would be mangled — restructure the closure, or \
                          pack without `--strip`"
@@ -77,6 +78,7 @@ pub(super) fn strip_arm(
             groups.push((spec.clone(), prog));
         }
     }
-    let map = rut_core::strip::strip_programs(&mut groups).map_err(PackError::law)?;
+    let map = rut_core::strip::strip_programs(&mut groups)
+        .map_err(|e| PackError::law(format!("pack: {e}")))?;
     Ok(Some(map.to_bytes()))
 }
