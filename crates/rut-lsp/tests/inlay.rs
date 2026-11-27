@@ -441,10 +441,12 @@ fn the_doc_own_callee_wins_over_a_same_named_foreign_fn() {
     // the doc's `f` plus a same-named free fn in another index: the
     // callee resolves through the FILE SCOPE (the one home — the doc's
     // own decl binds `f`; the foreign index is no binding of this
-    // file), so the hint types through the own decl. (The pre-phase
-    // pin read "no unique match, no hints" — the flat window's law;
-    // the file-scope law supersedes it: the compiler binds the own
-    // `f` and types `x` as `i32` here.)
+    // file), so BOTH lanes type through the own decl — the binding and
+    // the call's `a:` param hint. (The pre-phase pin read "no unique
+    // match, no hints" — the flat window's law; the file-scope law
+    // supersedes it: the compiler binds the own `f` and types `x` as
+    // `i32` here. F61 carries the same home order into the param lane,
+    // which used to ask only the chain-wide unique sweep.)
     let mut s = S::boot();
     s.index_file(
         "file:///ws/other/lib.rut",
@@ -454,8 +456,8 @@ fn the_doc_own_callee_wins_over_a_same_named_foreign_fn() {
     let hs = s.inlay_all("file:///t/main.rut", src);
     assert_eq!(
         labels(&hs),
-        vec![": i32".to_string()],
-        "the own fn types the binding: {hs:?}"
+        vec![": i32".to_string(), "a:".to_string()],
+        "the own fn prices both hints: {hs:?}"
     );
     // a callee the file binds TWICE (two use leaves of one name — the
     // one-name refusal) stays silent: no pick between the bindings
@@ -538,6 +540,54 @@ both_uri_shapes! {
                 assert!(tooltip(h).contains("Counter"), "{h}");
             }
         }
+    }
+}
+
+both_uri_shapes! {
+    #[test]
+    fn a_use_leaf_names_the_param_hint_its_type_lane_answers() {
+        // F61: the TYPE lane asks the FILE SCOPE first (the use leaf
+        // binds `mk` — `ty_infer`'s `call_ty`), while the param lane
+        // asked only the chain-wide unique sweep. A second same-named
+        // free `mk` elsewhere in the chain therefore suppressed the
+        // param hint the type hint already showed; both lanes must ask
+        // the same homes in the same order.
+        let (mut s, _io) = rut_new::boot();
+        // a second free `mk` in the chain (another package's file) —
+        // the unique sweep sees two, the file scope sees the one the
+        // use leaf binds
+        s.index_file(
+            "file:///ws/other/lib.rut",
+            "fn mk(b: str) -> str {\n    return b;\n}\n",
+        );
+        let uri = rut_new::at("src/child/mod.rut");
+        let src = "use m::{ mk };\nfn k() -> i32 { let c = mk(41); return c.bump(); }\n";
+        let hs = s.inlay_all(&uri, src);
+        // the type hint types through the use leaf (the compiler's own
+        // binding order) — this half was never the defect
+        let typed: Vec<&str> = hs
+            .iter()
+            .filter(|h| h["kind"] == 1)
+            .map(label)
+            .collect();
+        assert_eq!(typed, [": Counter"], "{hs:?}");
+        // ...and the call's param hint rides the same home: one `mk`
+        // answers (the second spelling is no candidate of this file)
+        assert_eq!(labels(&hs), [": Counter", "n:"], "{hs:?}");
+    }
+}
+
+both_uri_shapes! {
+    #[test]
+    fn a_use_leaf_alone_still_names_the_param_hint() {
+        // the green guard beside F61's red: with one `mk` in the world
+        // the chain sweep found it too, so the hint showed at base and
+        // keeps showing after the home-order fix
+        let (mut s, _io) = rut_new::boot();
+        let uri = rut_new::at("src/child/mod.rut");
+        let src = "use m::{ mk };\nfn k() -> i32 { let c = mk(41); return c.bump(); }\n";
+        let hs = s.inlay_all(&uri, src);
+        assert_eq!(labels(&hs), [": Counter", "n:"], "{hs:?}");
     }
 }
 

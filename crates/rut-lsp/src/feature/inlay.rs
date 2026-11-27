@@ -39,6 +39,7 @@ use ls_types::{
 
 use rut_ast::{ElseBranch, ExprRef, ItemRef, StmtRef};
 
+use crate::resolve::ty_infer::QualHit;
 use crate::world::{FileId, World};
 
 /// one hint before position/label conversion — byte-based so the range
@@ -177,7 +178,7 @@ struct CallCx<'a> {
     out: &'a mut Vec<InlayRow>,
 }
 
-impl CallCx<'_> {
+impl<'a> CallCx<'a> {
     fn walk_methods(&mut self, methods: &[rut_ast::MethodRef]) {
         let ast = self.w.file(self.file).doc.ast();
         for m in methods {
@@ -286,8 +287,11 @@ impl CallCx<'_> {
         }
     }
 
-    /// `f(..)` — a free fn by unique match (the `call_ty` law:
-    /// ambiguity is a miss, never a wrong name)
+    /// `f(..)` — a free fn's params, asked through the SAME homes in
+    /// the SAME order the type lane asks them (`ty_infer`'s `call_ty`):
+    /// the queried FILE SCOPE first — its own decl, a use leaf, the
+    /// ambient rows — the chain-wide unique sweep only as the
+    /// hook-less fallback (ambiguity is a miss, never a wrong name)
     fn free_call(&mut self, callee: ExprRef, args: &[ExprRef]) {
         let ExprRef::Path(h) = callee else {
             return;
@@ -298,11 +302,36 @@ impl CallCx<'_> {
             return;
         }
         let name = ast.name(segs[0].name.ident);
-        let Some(one) = crate::resolve::unique_free_fn(self.w, self.file, name) else {
-            return;
+        // the ONE home first — the type lane's own `qual`
+        // (`member::expr_ty`'s construction), so a file-scope answer
+        // prices both hints alike
+        let qual = |segs: &[String], is_ty: bool| -> Option<QualHit<'a>> {
+            if !is_ty && segs.len() == 1 {
+                return crate::resolve::functions(self.w, self.file, &segs[0])
+                    .into_iter()
+                    .find(|f| f.owner().is_none())
+                    .map(QualHit::Fn);
+            }
+            let scope = crate::resolve::qualified_scope(self.w, self.file, segs, is_ty)?;
+            Some(if is_ty {
+                QualHit::Ty(crate::world::ty::Ty::named(scope.types.first()?.name()))
+            } else {
+                QualHit::Fn(scope.fns.into_iter().next()?)
+            })
         };
-        let Some(crate::resolve::View::Fn(one)) = one.view(self.w) else {
-            return;
+        let one = match qual(&[name.to_string()], false) {
+            Some(QualHit::Fn(f)) => f,
+            _ => {
+                // the chain-wide sweep — the hook-less callers'
+                // fallback only
+                let Some(one) = crate::resolve::unique_free_fn(self.w, self.file, name) else {
+                    return;
+                };
+                let Some(crate::resolve::View::Fn(f)) = one.view(self.w) else {
+                    return;
+                };
+                f
+            }
         };
         let params = one.params();
         self.arg_hints(&params, args);
