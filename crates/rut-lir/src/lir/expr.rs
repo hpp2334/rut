@@ -1124,7 +1124,7 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                             self.ctx.err(
                                 sp,
                                 format!(
-                                    "{m}.{} — {}",
+                                    "`{m}::{}` — {}",
                                     self.ctx.name(seg.name.ident),
                                     self.ctx.vis_hint(seg.name.ident, &from, &m, e.vis)
                                 ),
@@ -1180,7 +1180,7 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                     self.ctx.err(
                         sp,
                         format!(
-                            "{m}.{} — {}",
+                            "`{m}::{}` — {}",
                             self.ctx.name(name),
                             self.ctx.vis_hint(name, &from, &m, vis)
                         ),
@@ -1194,7 +1194,7 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                     self.ctx.err(
                         sp,
                         format!(
-                            "{m}.{} — {}",
+                            "`{m}::{}` — {}",
                             self.ctx.name(name),
                             self.ctx.vis_hint(name, &from, &m, lvis)
                         ),
@@ -1212,7 +1212,7 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                     self.ctx.err(
                         sp,
                         format!(
-                            "{m}.{} — {}",
+                            "`{m}::{}` — {}",
                             self.ctx.name(name),
                             self.ctx.vis_hint(name, &from, &m, e.vis)
                         ),

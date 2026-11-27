@@ -246,7 +246,12 @@ fn a_flat_packages_own_name_is_refused() {
     // use head at all (mod_head's flat law), so the compiler refuses
     // the whole use line with the mounted-but-undeclared message —
     // the refusal the LSP walk mirrors (a refused head answers
-    // nothing)
+    // nothing). This refusal is the RUN closure gate's (the head is
+    // neither a declared dep nor an own module edge, so `compile()`
+    // returns the resolver's error before any unit compiles); it
+    // carries no span of its own, which is why this pin asserts the
+    // message alone. The graph compiler's own-use door is a separate
+    // site with the use's span.
     let flat = rut_driver::Mounted::source(
         "flat",
         r#"use flat::{ x };
@@ -707,9 +712,12 @@ fn a_host_dep_keeps_the_d_rut_spelling() {
         "net".to_string(),
         mod_source("net", Vis::Pub, "pub host fn connect(url: str) -> i64;\n"),
     );
-    let host = rut_driver::lower_decl_module(root, &children, "myhost.d.rut")
+    let mut host = rut_driver::lower_decl_module(root, &children, "myhost.d.rut")
         .expect("lowers")
         .named("myhost");
+    // the mount carries the root file the manifest spells — the
+    // structural entry the walk's producers stamp
+    host.entry.type_path = Some("./myhost.d.rut".to_string());
     let app = rut_driver::Mounted::source(
         "app",
         "use myhost::nope::{ x };\n\
@@ -721,7 +729,7 @@ fn a_host_dep_keeps_the_d_rut_spelling() {
     assert!(
         g.diags[0]
             .msg
-            .contains("`nope` is not a module of `myhost` — no `mod nope;` under mod.d.rut"),
+            .contains("`nope` is not a module of `myhost` — no `mod nope;` under myhost.d.rut"),
         "got: {}",
         g.diags[0].msg
     );
@@ -738,6 +746,10 @@ fn a_qualified_fn_value_resolves() {
 pub fn f(x: i32) -> i32 { return x + 1; }
 
 fn secret() -> i32 { return 0; }
+
+let hidden: i32 = 3;
+
+enum Dim { Low }
 
 pub mod deep;
 "#;
@@ -764,8 +776,10 @@ entry fn main() -> i64 {
     let g = graph_of(vec![app], "app");
     run_main(g, 15); // f(1)=2, f(2)=3, twice(5)=10
 
-    // the controls, over the same module source: the private fn and the
-    // type are refused with today's messages
+    // the controls, over the same module source: the private fn, the
+    // module let, the enum, the enum-member segment, and the type are
+    // refused with today's messages — each qualified spelling is the
+    // law's `m::name`, matching the call lane
     let mut app = rut_driver::Mounted::source(
         "app",
         r#"mod m;
@@ -773,6 +787,9 @@ entry fn main() -> i64 {
 entry fn main() -> i64 {
     let g = m::secret;
     let c = m::Color;
+    let h = m::hidden;
+    let d = m::Dim;
+    let l = m::Dim::Low;
     return 0;
 }
 "#,
@@ -787,13 +804,22 @@ entry fn main() -> i64 {
     assert_eq!(
         msgs(&g),
         vec![
-            "m.secret — `secret` is private to module `m` — visible only inside it and its \
+            "`m::secret` — `secret` is private to module `m` — visible only inside it and its \
              submodules; declare it `pub` (or `pub(pkg)`) to widen"
                 .to_string(),
             "`Color` is a type — construct it (a literal, a class method, a newtype call), \
              never name it bare"
                 .to_string(),
+            "`m::hidden` — `hidden` is private to module `m` — visible only inside it and its \
+             submodules; declare it `pub` (or `pub(pkg)`) to widen"
+                .to_string(),
+            "`m::Dim` — `Dim` is private to module `m` — visible only inside it and its \
+             submodules; declare it `pub` (or `pub(pkg)`) to widen"
+                .to_string(),
+            "`m::Dim` — `Dim` is private to module `m` — visible only inside it and its \
+             submodules; declare it `pub` (or `pub(pkg)`) to widen"
+                .to_string(),
         ],
-        "the private fn and the type keep their refusals"
+        "the private fn, module let, enum and member segment keep their refusals"
     );
 }

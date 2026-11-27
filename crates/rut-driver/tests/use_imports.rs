@@ -480,6 +480,37 @@ fn a_cyclic_re_export_refuses() {
 }
 
 #[test]
+fn every_independent_cycle_is_named_once() {
+    // two INDEPENDENT re-export cycles in one unit — a↔b on `f`, c↔d
+    // on `g` — both consumed and called: the refusal is one per cycle
+    // (the reported set is keyed by the walked spelling, never one
+    // latch for the whole unit)
+    let root = "mod a;\nmod b;\nmod c;\nmod d;\n\n\
+                use a::{ f };\n\
+                use c::{ g };\n\n\
+                entry fn main() -> i32 { return f() + g(); }\n";
+    let g = own_graph_of(
+        root,
+        &[
+            ("a", "pub use b::{ f };\n".to_string()),
+            ("b", "pub use a::{ f };\n".to_string()),
+            ("c", "pub use d::{ g };\n".to_string()),
+            ("d", "pub use c::{ g };\n".to_string()),
+        ],
+    );
+    assert_eq!(g.diags.len(), 2, "one refusal per cycle: {:?}", msgs(&g));
+    let all = msgs(&g).join("\n");
+    assert!(
+        all.contains("cyclic `pub use` — `f` re-exports itself through `a` -> `b` -> `a`"),
+        "the f cycle is named: {all}"
+    );
+    assert!(
+        all.contains("cyclic `pub use` — `g` re-exports itself through `c` -> `d` -> `c`"),
+        "the g cycle is named: {all}"
+    );
+}
+
+#[test]
 fn a_pub_use_of_a_dependency_name_inside_the_own_lane_binds() {
     // `b` re-exports a DEPENDENCY's `f` (`pub use somepkg::{ f }`) and
     // the root imports it through the own lane. Law 3: the row is a

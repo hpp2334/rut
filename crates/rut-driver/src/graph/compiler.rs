@@ -2,7 +2,7 @@
 //! the closure, compiles each under its own scope, and routes the
 //! owner-anchored instantiation requests.
 
-use std::collections::{HashMap, HashSet};
+use std::collections::{BTreeSet, HashMap, HashSet};
 
 use rut_core::binary::Program;
 use rut_lexer::diag::Diag;
@@ -835,6 +835,28 @@ pub(crate) fn dep_use_heads(
     out
 }
 
+/// A re-export cycle's stable spelling: the closed walk's module chain
+/// rotated so its smallest name leads, then joined (`a -> b -> a`).
+/// The same cycle reached from either end spells ONE identity — the
+/// reported set keys on it, never on the direction the use line
+/// happened to walk.
+fn cycle_spelling(chain: &[String]) -> String {
+    let body = &chain[..chain.len().saturating_sub(1)];
+    let Some(start) = body
+        .iter()
+        .enumerate()
+        .min_by_key(|(_, m)| m.as_str())
+        .map(|(i, _)| i)
+    else {
+        return chain.join(" -> ");
+    };
+    let mut rotated: Vec<&str> = body[start..].iter().map(String::as_str).collect();
+    rotated.extend(body[..start].iter().map(String::as_str));
+    let first = rotated[0];
+    rotated.push(first);
+    rotated.join(" -> ")
+}
+
 /// The file-module inputs a compilation resolves against (phase 3):
 /// the concatenated text's file ranges plus the scope tree built from
 /// the pkg's mounted module set — [`rut_lir::check::mod_tree_from`] is
@@ -846,11 +868,19 @@ pub(crate) fn mod_inputs_of(
 ) -> rut_lir::check::ModInputs {
     // the mounted children's records ride their `ModSource` (the file
     // lane's root-relative path, the rows/archive lanes' directory
-    // form); the ROOT is the body's flavor's file name — the declaring
-    // file the dep lanes have always spelled (`mod.rut`/`mod.d.rut`)
-    let root_file = match &module.body {
-        crate::session::MountedBody::Host { .. } => crate::decl::DECL_CHILD_FILE,
-        _ => "mod.rut",
+    // form); the ROOT names the root's OWN file: the entry's spelled
+    // `type` (src-relative, the archive lane's root record shape),
+    // else the body flavor's default (`mod.rut`/`mod.d.rut` — the
+    // convention's own spelling when the manifest names none)
+    let root_file: String = match module.entry.type_path.as_deref() {
+        Some(tp) => {
+            let rel = crate::bundle::src_rel(tp);
+            rel.strip_prefix("src/").unwrap_or(&rel).to_string()
+        }
+        None => match &module.body {
+            crate::session::MountedBody::Host { .. } => crate::decl::DECL_CHILD_FILE.to_string(),
+            _ => "mod.rut".to_string(),
+        },
     };
     let mut mod_files: std::collections::BTreeMap<String, Option<String>> = module
         .mods
@@ -859,7 +889,7 @@ pub(crate) fn mod_inputs_of(
         .collect();
     mod_files
         .entry(String::new())
-        .or_insert_with(|| Some(root_file.to_string()));
+        .or_insert_with(|| Some(root_file));
     rut_lir::check::ModInputs {
         files,
         scopes: rut_lir::check::mod_tree_from(
@@ -952,8 +982,10 @@ impl GraphCompiler<'_> {
         // never a path to chase across the boundary)
         let mut foreign_reexports: Vec<(String, String, Vec<String>)> = Vec::new();
         // a cycle is one fact of the re-export graph, not one per use
-        // line that walks into it — the first use line reports it
-        let mut cycle_reported = false;
+        // line that walks into it — the first use line reports it; the
+        // set keys by the walked SPELLING, so every independent cycle
+        // is named once (one latch per unit would silence the second)
+        let mut cycle_reported: BTreeSet<String> = BTreeSet::new();
         let session = self.session;
         for it in ast.root().items(ast).to_vec() {
             let ItemRef::Use(uh) = it else {
@@ -974,7 +1006,13 @@ impl GraphCompiler<'_> {
                 let e = session
                     .resolve_use(spec, &head_text, &self.root)
                     .unwrap_err();
-                self.diags.push(Diag::new(Span::new(0, 0), e.to_string()));
+                // the use's own span: the refusal is written at the
+                // line it was spelled (the ambiguity branch's shape)
+                self.diags.extend(attribute_diags(
+                    vec![Diag::new(span, e.to_string())],
+                    spec,
+                    layout,
+                ));
                 ok = false;
                 continue;
             }
@@ -1144,8 +1182,8 @@ impl GraphCompiler<'_> {
                                         ));
                                     }
                                     rut_lir::check::ReexportEdge::Cycle(chain) => {
-                                        if !cycle_reported {
-                                            cycle_reported = true;
+                                        let spelling = cycle_spelling(&chain);
+                                        if cycle_reported.insert(spelling) {
                                             let through = chain
                                                 .iter()
                                                 .map(|m| format!("`{m}`"))
