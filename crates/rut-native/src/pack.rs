@@ -463,6 +463,17 @@ fn validate_tree(
         .type_path
         .as_deref()
         .map(rut_driver::bundle::src_rel);
+    // the record is ROOT-FILE-DIR-relative; `src_rel` is `src/`-relative.
+    // A nested custom root (`entry.type = "./app/mod.d.rut"`) records
+    // its children relative to `src/app/`, so the gate needs that parent
+    // directory as the second prefix arm. The default root's parent is
+    // `src/` itself — the empty prefix, already covered above.
+    let root_dir = surface_rel
+        .as_deref()
+        .and_then(|rel| rel.strip_prefix("src/"))
+        .and_then(|rel| rel.rsplit_once('/'))
+        .map(|(dir, _)| format!("{dir}/"))
+        .unwrap_or_default();
     for (rel, _) in &own {
         if !rel.starts_with("src/") || !rel.ends_with(".rut") {
             continue;
@@ -471,7 +482,10 @@ fn validate_tree(
         let declared = src_rel == "mod.rut"
             || src_rel == "mod.d.rut"
             || surface_rel.as_deref() == Some(format!("src/{src_rel}").as_str())
-            || mounted.mods.values().any(|m| m.file.as_str() == src_rel);
+            || mounted
+                .mods
+                .values()
+                .any(|m| m.file.as_str() == src_rel || format!("{root_dir}{}", m.file) == src_rel);
         if !declared {
             return Err(PackError::law(format!(
                 "{}: nothing declares this module — `mod …;` it from its parent or delete it",
@@ -581,6 +595,15 @@ fn pack_dir_opts_locked(
             manifest_path.display()
         )));
     }
+    // the tree gates ride BOTH modes: the compiled lane gates the same
+    // directory the source lane does — an undeclared `.rut` under
+    // `src/` refuses here too, never a silent drop from the bundle
+    let mounted = world.pkgs.get(&root).ok_or_else(|| {
+        PackError::law(format!(
+            "`{root}` walked but never mounted — the closure and the world disagree"
+        ))
+    })?;
+    validate_tree(dir, mounted, &manifest)?;
     let (manifest, manifest_bytes) = stage(&manifest)?;
     // the closure's group set: dir deps as directories, url deps as
     // their archive's locations (enumerated closed — no recursion)

@@ -348,3 +348,55 @@ fn the_pack_tree_gates_refuse_stray_and_undeclared_rut_code() {
     // clean again, the pack succeeds
     pack_dir_zip(&util).expect("clean tree packs");
 }
+
+#[test]
+fn the_bin_mode_refuses_a_src_orphan_like_the_zip_mode() {
+    // F53: both pack modes gate the same tree. An undeclared `.rut`
+    // under `src/` is not quietly dropped by the compiled lane.
+    let root = scratch("bin-orphan");
+    let util = root.join("util");
+    lib_pkg(&util, "util");
+    write(&util, "src/orphan.rut", "fn orphan() {}\n");
+    let err = match pack_dir(&util) {
+        Ok(bytes) => panic!(
+            "the bin mode packed an orphan silently ({} bytes) — the file is dropped",
+            bytes.len()
+        ),
+        Err(e) => e,
+    };
+    assert!(
+        err.to_string().contains("nothing declares this module"),
+        "{err}"
+    );
+    std::fs::remove_file(util.join("src/orphan.rut")).unwrap();
+    // clean again, the bin pack succeeds
+    pack_dir(&util).expect("clean tree packs");
+}
+
+#[test]
+fn a_nested_custom_root_packs_its_declared_children() {
+    // F54: a host root spelled `./app/mod.d.rut` records its children
+    // relative to the ROOT FILE's directory (`tool/mod.d.rut`), while
+    // the gate compares against the `src/`-relative path
+    // (`app/tool/mod.d.rut`). The legal layout must pack.
+    let root = scratch("nested-root");
+    let hh = root.join("hh");
+    write(
+        &hh,
+        "rut.jsonc",
+        r#"{ "name": "hh", "type": "host", "entry": { "type": "./app/mod.d.rut" } }"#,
+    );
+    write(&hh, "src/app/mod.d.rut", "pub mod tool;\n");
+    write(
+        &hh,
+        "src/app/tool/mod.d.rut",
+        "pub host fn helper() -> i32;\n",
+    );
+    let zip = pack_dir_zip(&hh).expect("a nested custom root is a legal layout");
+    let entries = rut_driver::bundle::read_srczip(&zip).expect("read back");
+    assert!(
+        entries.iter().any(|(n, _)| n == "src/app/tool/mod.d.rut"),
+        "{:?}",
+        entries.iter().map(|(n, _)| n).collect::<Vec<_>>()
+    );
+}
