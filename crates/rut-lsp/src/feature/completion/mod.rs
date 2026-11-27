@@ -372,26 +372,6 @@ fn bare_prefix(
     src: &str,
 ) -> String {
     let on = |sp: Span| partial_text(head, sp, pos);
-    if std::env::var("RUT_EDGE_DEBUG").is_ok() {
-        let kind = match c {
-            Cursor::Name { .. } => "Name",
-            Cursor::Decl(_) => "Decl",
-            Cursor::Path { .. } => "Path",
-            Cursor::Nothing => "Nothing",
-            _ => "other",
-        };
-        let nb = w
-            .file(w.id_of(head))
-            .doc
-            .bindings()
-            .iter()
-            .map(|b| (ast.name(b.name), b.decl_ident_span.lo, b.decl_ident_span.hi))
-            .collect::<Vec<_>>();
-        eprintln!(
-            "bare debug: pos={pos} cursor={kind} p0={:?} bindings={nb:?}",
-            p0.kind
-        );
-    }
     match c {
         Cursor::Name { span, .. } => on(*span),
         Cursor::Decl(d) => on(d.name_span(w)),
