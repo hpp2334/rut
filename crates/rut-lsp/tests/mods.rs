@@ -291,6 +291,66 @@ fn hover_names_a_nested_single_file_child_by_its_path() {
     );
 }
 
+#[test]
+fn the_display_prefers_the_asking_files_root_among_same_named_packages() {
+    // two mounted packages of ONE name at different directories: the
+    // display's base — the package root file's directory — must be the
+    // root that OWNS the asking file, so the second package's
+    // single-file child spells `util.rut`, never the bare law's
+    // `util/mod.rut` (the first store-order root's guess)
+    let mut s = S::boot();
+    // the first `app` — store order first, a root with a child of its own
+    s.index_mod_at(
+        "file:///ws/one/app/src/mod.rut",
+        "app",
+        "",
+        "pub mod imp;\nentry fn main() -> nil {\n}\n",
+    );
+    s.index_mod_at(
+        "file:///ws/one/app/src/imp.rut",
+        "app",
+        "imp",
+        "pub fn one() -> i32 { return 1; }\n",
+    );
+    // the second `app` — the asking file's package, a single-file child
+    // only this package has
+    let root = "file:///ws/two/app/src/mod.rut";
+    let doc = "pub mod util;\nentry fn main() -> nil {\n}\n";
+    s.index_mod_at(root, "app", "", doc);
+    s.index_mod_at(
+        "file:///ws/two/app/src/util.rut",
+        "app",
+        "util",
+        "pub fn tag() -> i32 { return 2; }\n",
+    );
+    let md = markdown(s.hover_at(root, doc, "util;", 1));
+    assert!(
+        md.contains("file module — `util.rut`"),
+        "the asking file's root is the display base: {md}"
+    );
+}
+
+#[test]
+fn the_one_package_world_display_stays_the_root_relative_path() {
+    // the green guard beside the preference pin: with ONE package the
+    // display answers exactly as it always did
+    let mut s = S::boot();
+    let root = "file:///ws/app/src/mod.rut";
+    let doc = "pub mod util;\nentry fn main() -> nil {\n}\n";
+    s.index_mod_at(root, "app", "", doc);
+    s.index_mod_at(
+        "file:///ws/app/src/util.rut",
+        "app",
+        "util",
+        "pub fn tag() -> i32 { return 2; }\n",
+    );
+    let md = markdown(s.hover_at(root, doc, "util;", 1));
+    assert!(
+        md.contains("file module — `util.rut`"),
+        "the one-package display is unchanged: {md}"
+    );
+}
+
 // ---- the mod-name slot: the disk probe beside the open document ----
 // Nothing is indexed in these tests — the slot never consults the
 // chain; the disk beside the document is the whole answer.

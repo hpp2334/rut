@@ -132,8 +132,10 @@ pub(crate) fn mod_tree(w: &World, pkg: Option<&str>, prefer: FileId) -> ModInput
     let mut tree = ModInputs::default();
     let mine = |f: &File| f.stamp.module.as_deref() == pkg;
     // the package root — the display carrier's base: every record is a
-    // mounted file's origin minus this file's directory
-    let root = root_file(w, pkg);
+    // mounted file's origin minus this file's directory, and the root
+    // is the one that owns the asking (`prefer`) file among same-named
+    // packages
+    let root = root_file(w, pkg, &w.file(prefer).stamp.origin);
     // the stamped rows: every file stamped at a child path speaks for
     // that module; the first in store order supplies the scope (the
     // `prefer` overwrite below re-answers for the document's own)
@@ -261,19 +263,45 @@ pub(crate) fn use_walk(w: &World, pkg: &str, file: FileId, segs: &[String]) -> O
 /// The file that speaks for `pkg`'s ROOT module: the first stamped
 /// `""` file in store order, a flat named file only where no stamped
 /// root stands ([`matches_mod`]'s law — the same root [`mod_tree`]
-/// fills its `""` row from). The display carrier's base: every record
-/// is a mounted file's origin minus this file's directory.
-fn root_file<'a>(w: &'a World, pkg: Option<&str>) -> Option<&'a File> {
-    w.files()
-        .map(|id| w.file(id))
-        .find(|f| matches_mod(f, pkg, "") && f.stamp.mod_path.is_some())
-        .or_else(|| {
-            pkg.and_then(|_| {
-                w.files()
-                    .map(|id| w.file(id))
-                    .find(|f| matches_mod(f, pkg, "") && f.stamp.mod_path.is_none())
-            })
-        })
+/// fills its `""` row from) — and among roots of one package name, the
+/// root whose origin's DIRECTORY prefixes the asking file's origin
+/// (`of`) first: two mounted packages of one name answer the root that
+/// OWNS the asking child. The first match stays the fallback for a
+/// file no root prefixes. The display carrier's base: every record is
+/// a mounted file's origin minus this file's directory.
+fn root_file<'a>(w: &'a World, pkg: Option<&str>, of: &str) -> Option<&'a File> {
+    let roots = |stamped: bool| -> Vec<&'a File> {
+        w.files()
+            .map(|id| w.file(id))
+            .filter(|f| matches_mod(f, pkg, "") && f.stamp.mod_path.is_some() == stamped)
+            .collect()
+    };
+    // the stamped shape first; a flat named file only where no stamped
+    // root stands
+    let mut staged = roots(true);
+    if staged.is_empty() && pkg.is_some() {
+        staged = roots(false);
+    }
+    staged
+        .iter()
+        .copied()
+        .find(|f| origin_dir_prefixes(&f.stamp.origin, of))
+        .or_else(|| staged.first().copied())
+}
+
+/// does `root`'s origin DIRECTORY prefix `of`'s path? The lexical
+/// prefix test [`root_file`] prefers by — `file://` stripped the way
+/// [`root_relative`] strips it, the directory cut at the last `/` (a
+/// non-path origin names no directory, so it prefixes nothing).
+fn origin_dir_prefixes(root: &str, of: &str) -> bool {
+    fn path(origin: &str) -> &str {
+        origin.strip_prefix("file://").unwrap_or(origin)
+    }
+    let root = path(root);
+    let Some(i) = root.rfind('/') else {
+        return false;
+    };
+    path(of).starts_with(&root[..=i])
 }
 
 /// The carrier fact both display lanes read: `origin`'s path RELATIVE
@@ -294,24 +322,28 @@ pub(crate) fn root_relative(root_origin: &str, origin: &str) -> Option<String> {
 
 /// [`display_of`]'s answer for ONE mounted file — the resolved
 /// module's own path relative to its package root's directory, the
-/// display law's fact. No root row or no path fact carries none, and
-/// the bare law stands in.
+/// display law's fact. The root is the one that owns the resolved
+/// file among same-named packages ([`root_file`]). No root row or no
+/// path fact carries none, and the bare law stands in.
 pub fn display_of(w: &World, pkg: Option<&str>, child: &str) -> String {
     let mounted = w.files().find(|id| {
         mod_path_of(w.file(*id)) == child
             && pkg.is_none_or(|p| w.file(*id).stamp.module.as_deref() == Some(p))
     });
-    let file = mounted
-        .map(|id| w.file(id))
-        .and_then(|f| record_of(root_file(w, pkg.or(f.stamp.module.as_deref())), f));
+    let file = mounted.map(|id| w.file(id)).and_then(|f| {
+        record_of(
+            root_file(w, pkg.or(f.stamp.module.as_deref()), &f.stamp.origin),
+            f,
+        )
+    });
     rut_lir::check::display(child, file.as_deref())
 }
 
 /// [`display_of`] over ONE resolved file — the render's shape (the
-/// resolved module's own real path; the law's bare form when the file
-/// carries no path fact).
+/// resolved module's own real path; the root is the one that owns this
+/// file; the law's bare form when the file carries no path fact).
 pub(crate) fn display_of_single(w: &World, f: &File, child: &str) -> String {
-    let file = record_of(root_file(w, f.stamp.module.as_deref()), f);
+    let file = record_of(root_file(w, f.stamp.module.as_deref(), &f.stamp.origin), f);
     rut_lir::check::display(child, file.as_deref())
 }
 
