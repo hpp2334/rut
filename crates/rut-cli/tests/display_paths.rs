@@ -51,6 +51,21 @@ fn run(tag: &str, dir: &Path) -> String {
     String::from_utf8_lossy(&out.stderr).into_owned()
 }
 
+/// `rut pack <dir>`'s stderr through a scratch home — the pack lane's
+/// own door (a pack failure exits 2 through `pack_failed`). Bin mode:
+/// the unit-diag poison gate (err_poison.rs's `pack_dir` shape) lives
+/// on the compile-before-encode arm — a source zip carries source and
+/// packs clean.
+fn pack(tag: &str, dir: &Path) -> String {
+    let home = rut_testkit::Scratch::new(&format!("cli-display-paths-home-{tag}"));
+    let out = rut_cmd(&home)
+        .args(["pack", "--mode", "bin", dir.to_str().unwrap()])
+        .output()
+        .expect("run rut pack <dir>");
+    assert!(!out.status.success(), "the pack must refuse");
+    String::from_utf8_lossy(&out.stderr).into_owned()
+}
+
 /// Assert the refusal names `file` and never the directory-form guess.
 fn names(stderr: &str, file: &str, wrong: &str) {
     assert!(
@@ -242,5 +257,30 @@ fn the_dep_lane_names_a_single_file_child_by_its_file() {
         &run("dep-lane", &dir),
         "`calc`'s module `math` (math.rut)",
         "(math/mod.rut)",
+    );
+}
+
+#[test]
+fn a_pack_failure_message_carries_its_prefix_once() {
+    // F74: the PackError family self-identifies — the unit-diag
+    // refusal embeds its own `pack: ` (rut-driver's pack lane) — so
+    // the CLI's printer states nothing: exactly one prefix, never the
+    // `pack: pack: ` double.
+    let root = scratch("pack-prefix");
+    let dir = root.join("poison");
+    write(&dir, "rut.jsonc", r#"{"name": "poison"}"#);
+    write(
+        &dir,
+        "src/mod.rut",
+        "entry fn main() {\n    let n: Bogus = 10;\n}\n",
+    );
+    let stderr = pack("pack-prefix", &dir);
+    assert!(
+        stderr.contains("pack: "),
+        "the refusal carries the lane prefix: {stderr}"
+    );
+    assert!(
+        !stderr.contains("pack: pack: "),
+        "one prefix per message — the printer states nothing: {stderr}"
     );
 }

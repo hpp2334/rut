@@ -106,7 +106,7 @@ pub(crate) fn pack(args: &PackArgs) {
 /// A pack failure: the message, the poisoned-cache eviction when the
 /// pin law names one, exit 2.
 fn pack_failed(e: rut_driver::pack::PackError) -> ! {
-    eprintln!("pack: {e}");
+    eprintln!("{e}");
     cache::evict_poisoned_cache(&e.to_string());
     std::process::exit(2);
 }
