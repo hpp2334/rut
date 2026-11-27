@@ -8877,8 +8877,8 @@ msgid "**Struct fields are always public** — the field law has no dial (see [S
 msgstr ""
 
 #: src/reference/modules-and-visibility.md:451
-msgid "Visibility is checked at compile time; it has no runtime representation. Only `pub` names enter a module's export table; a non-exported declaration is _known_ inside its module but _nameable_ nowhere else — which is how libraries hide implementation surfaces behind exported ones. Hiding stops at the checker's door: every non-generic fn/method body is type-checked even when nothing calls it."
-msgstr "可见性在编译期检查；它没有运行时表示。只有 `pub` 名称会进入模块的导出表；未导出的声明在其模块内部是 _已知_ 的，但在其他任何地方都 _无法命名_ —— 库正是借此把实现细节隐藏在导出接口之后。这种隐藏止步于检查器门前：每个非泛型 fn/方法体即使无人调用也会被类型检查。"
+msgid "Visibility is checked at compile time; it has no runtime representation. Only `pub` names enter a module's export table; a non-exported declaration is _known_ inside its module but _nameable_ nowhere else — which is how libraries hide implementation surfaces behind exported ones. Hiding stops at the checker's door: every non-generic fn body whose parameters are not interface-typed is type-checked even when nothing calls it. The two exclusions are by design — such a body compiles only where something calls it: a generic fn or method is monomorphized at its call sites (the call supplies the substitution), and a fn with an interface-typed parameter is specialized per call (the call supplies the parameter's concrete origin), so a never-called body of either is never checked. Methods have no interface-typed-parameter exclusion — a non-generic method body is checked dead like any other."
+msgstr "可见性在编译期检查；它没有运行时表示。只有 `pub` 名称会进入模块的导出表；未导出的声明在其模块内部是 _已知_ 的，但在其他任何地方都 _无法命名_ —— 库正是借此把实现细节隐藏在导出接口之后。这种隐藏止步于检查器门前：每个非泛型、参数不含接口类型的 fn 体即使无人调用也会被类型检查。这两个例外是设计使然——这样的 fn 体只在有调用的地方编译：泛型 fn 或方法在其调用点单态化（调用供给替换），带接口类型参数的 fn 则按次特化（调用供给参数的具体来源），因此两者中从未被调用的 fn 体永远不会被检查。方法没有接口类型参数的例外——非泛型方法体与任何其他方法体一样，即使无人调用也会被检查。"
 
 #: src/reference/primitive-types.md:3
 msgid "The primitive types, the one sharing regime, and integer semantics."
@@ -10576,103 +10576,103 @@ msgid "**No parameter properties**: parameters are parameters — the `Self { fi
 msgstr "**没有参数属性**：参数就是参数 —— `Self { field: name }` 字面量把参数→字段的映射写明确。"
 
 #: src/reference/classes.md:80
-msgid "**`async` class methods are not woven in this build** — they parse, and the checker refuses one wherever it reaches it, dead or called (a generic async method, or one in a generic class nothing has instantiated, is simply never reached). Async points live in free fns or `async { }` blocks inside sync methods ([async](async.md))."
-msgstr "**`async` 类方法在此构建中不会被编织** —— 它们能通过解析，而检查器无论在哪里遇到一个（无论是否被调用）都会拒绝它（泛型 async 方法，或从未被实例化的泛型类中的 async 方法，根本不会被检查到）。async 点是自由 fn，或同步方法内的 `async { }` 块（见 [async](async.md)）。"
+msgid "**`async` class methods are not woven in this build** — they parse, and the checker refuses one wherever it reaches it, dead or called (a generic async method, or one in a generic class nothing has instantiated, is simply never reached). Async points live in free fns or `async { }` blocks inside sync methods ([async](async.md)); on that lane the checker's coverage is narrower: a non-generic async fn whose parameters are not interface-typed is type-checked even when nothing calls it, while a generic async fn, or one with an interface-typed parameter, has a body that compiles only at its call sites — a dead one of either is never checked (a non-generic async method itself is always reached: the never-reached cases above are the only ones)."
+msgstr "**`async` 类方法在此构建中不会被编织** —— 它们能通过解析，而检查器无论在哪里遇到一个（无论是否被调用）都会拒绝它（泛型 async 方法，或从未被实例化的泛型类中的 async 方法，根本不会被检查到）。async 点是自由 fn，或同步方法内的 `async { }` 块（见 [async](async.md)）；对自由 fn 而言，检查器的覆盖面更窄：非泛型且参数不含接口类型的 async fn 即使无人调用也会被类型检查，而泛型 async fn 或带接口类型参数的 async fn 只在其调用点编译 fn 体——两者若从未被调用，就永远不会被检查（非泛型 async 方法本身总会被检查到：上面列出的根本不会被检查到的情形就是仅有的情形）。"
 
-#: src/reference/classes.md:87
+#: src/reference/classes.md:93
 msgid "`[constructor]` — the designated construction surface"
 msgstr "`[constructor]`——指定的构造表面"
 
-#: src/reference/classes.md:89
+#: src/reference/classes.md:95
 msgid "A bracket marker designates THE member a surface binds to — the member's name is free; the designation routes the call. Three designated surfaces, one law:"
 msgstr "括号标记指定的是表面所绑定的**那一个**成员——成员的名字是自由的；指定路由调用。三个指定表面，一条法则："
 
-#: src/reference/classes.md:93
+#: src/reference/classes.md:99
 msgid "marker"
 msgstr "标记"
 
-#: src/reference/classes.md:93 src/reference/stdlib.md:122
+#: src/reference/classes.md:99 src/reference/stdlib.md:122
 #: src/reference/stdlib.md:225
 msgid "surface"
 msgstr "表面"
 
-#: src/reference/classes.md:93
+#: src/reference/classes.md:99
 msgid "caller"
 msgstr "调用者"
 
-#: src/reference/classes.md:93
+#: src/reference/classes.md:99
 msgid "signature owner"
 msgstr "签名归属"
 
-#: src/reference/classes.md:93
+#: src/reference/classes.md:99
 msgid "body compiled"
 msgstr "体如何编译"
 
-#: src/reference/classes.md:95 src/reference/stdlib.md:89
+#: src/reference/classes.md:101 src/reference/stdlib.md:89
 msgid "`[disposal]`"
 msgstr "`[disposal]`"
 
-#: src/reference/classes.md:95
+#: src/reference/classes.md:101
 msgid "cell death"
 msgstr "单元死亡"
 
-#: src/reference/classes.md:95
+#: src/reference/classes.md:101
 msgid "the engine, at refcount zero"
 msgstr "引擎，在引用计数归零时"
 
-#: src/reference/classes.md:95
+#: src/reference/classes.md:101
 msgid "the engine — `(self, cx: DisposalContext)`"
 msgstr "引擎——`(self, cx: DisposalContext)`"
 
-#: src/reference/classes.md:95
+#: src/reference/classes.md:101
 msgid "eagerly queued at death ([the Rc heap](rc-heap.md))"
 msgstr "死亡时即刻入队（[the Rc heap](rc-heap.md)）"
 
-#: src/reference/classes.md:96 src/reference/stdlib.md:88
+#: src/reference/classes.md:102 src/reference/stdlib.md:88
 msgid "`[iterable]`"
 msgstr "`[iterable]`"
 
-#: src/reference/classes.md:96
+#: src/reference/classes.md:102
 msgid "`for (x of it)`"
 msgstr "`for (x of it)`"
 
-#: src/reference/classes.md:96
+#: src/reference/classes.md:102
 msgid "the for-of desugar"
 msgstr "for-of 脱糖"
 
-#: src/reference/classes.md:96
+#: src/reference/classes.md:102
 msgid "the member — its `emit` parameter fixes `E`"
 msgstr "成员——它的 `emit` 参数定下 `E`"
 
-#: src/reference/classes.md:96
+#: src/reference/classes.md:102
 msgid "fused into the loop ([interfaces](interfaces.md))"
 msgstr "融合进循环（[接口](interfaces.md)）"
 
-#: src/reference/classes.md:97 src/reference/stdlib.md:90
+#: src/reference/classes.md:103 src/reference/stdlib.md:90
 msgid "`[constructor]`"
 msgstr "`[constructor]`"
 
-#: src/reference/classes.md:97
+#: src/reference/classes.md:103
 msgid "the call form `Type(..)`"
 msgstr "调用形式 `Type(..)`"
 
-#: src/reference/classes.md:97
+#: src/reference/classes.md:103
 msgid "user code"
 msgstr "用户代码"
 
-#: src/reference/classes.md:97
+#: src/reference/classes.md:103
 msgid "the member — its parameters fix the call's shape"
 msgstr "成员——它的参数定下调用的形状"
 
-#: src/reference/classes.md:97
+#: src/reference/classes.md:103
 msgid "byte-identical to `Point::from_xy(..)`"
 msgstr "与 `Point::from_xy(..)` 逐字节相同"
 
-#: src/reference/classes.md:99
+#: src/reference/classes.md:105
 msgid "`[constructor]` designates the class's construction surface — the call form `Type(..)` binds to the one marked member:"
 msgstr "`[constructor]` 指定类的构造表面——调用形式 `Type(..)` 绑定到那**一个**被标记的成员："
 
-#: src/reference/classes.md:102
+#: src/reference/classes.md:108
 msgid ""
 "```rut\n"
 "use ink::{ Logger };\n"
@@ -10696,47 +10696,47 @@ msgid ""
 "```"
 msgstr ""
 
-#: src/reference/classes.md:127
+#: src/reference/classes.md:133
 msgid "**Sugar, not a new mechanism.** `Point(1.0, 2.0)` lowers byte-identically to `Point::from_xy(1.0, 2.0)` — the marker changes what the call form binds to, never what the call compiles to. `Point` as a bare (non-call) expression stays an error: the construction surface is the call form `Type(..)`, never the bare name."
 msgstr "**是糖，不是新机制。** `Point(1.0, 2.0)` 的 lower 与 `Point::from_xy(1.0, 2.0)` 逐字节相同——标记改变的是调用形式绑定到谁，绝不是调用被编译成什么。`Point` 作为裸的（非调用）表达式仍是错误：构造表面是调用形式 `Type(..)`，绝不是裸名字。"
 
-#: src/reference/classes.md:133
+#: src/reference/classes.md:139
 msgid "**One designated constructor per class, on the inherent impl only.** Class bodies stay fields-only; a second `[constructor]` member is refused — \"`Point` already carries a `[constructor]` member — `origin` and `from_xy` both designate the construction surface; at most one per class (`Point(..)` must lower to one member)\". The member takes no receiver — \"a `[constructor]` member takes no receiver — `fn <free>(..) -> Self` (the call `Type(..)` spells the class, not a value)\" — and returns `Self` (or `?Self`): \"a `[constructor]` member returns `Self` (or `?Self` — the try-construction: `Type(..)` then yields `?Type`)\". An unknown bracket word was always refused, and the closed set now names three: \"`[fragile]` is not a designated surface — the closed marker set is `[disposal]`, `[iterable]`, and `[constructor]`\"."
 msgstr "**每个类至多一个被指定的构造器，且只在固有 impl 上。** 类主体保持只有字段；第二个 `[constructor]` 成员会被拒绝——\"`Point` already carries a `[constructor]` member — `origin` and `from_xy` both designate the construction surface; at most one per class (`Point(..)` must lower to one member)\"。该成员不带接收者——\"a `[constructor]` member takes no receiver — `fn <free>(..) -> Self` (the call `Type(..)` spells the class, not a value)\"——并且返回 `Self`（或 `?Self`）：\"a `[constructor]` member returns `Self` (or `?Self` — the try-construction: `Type(..)` then yields `?Type`)\"。未知的括号词从来都会被拒绝，而封闭集合现在点名三个：\"`[fragile]` is not a designated surface — the closed marker set is `[disposal]`, `[iterable]`, and `[constructor]`\"。"
 
-#: src/reference/classes.md:146
+#: src/reference/classes.md:152
 msgid "**`?Self` is try-construction.** A constructor spelled `fn parse(s: str) -> ?Self` makes `Type(..)` answer `?Type` — the call yields the nullable, `nil` on a refused construction, exactly like the method call it is."
 msgstr "**`?Self` 是 try 构造。** 拼写为 `fn parse(s: str) -> ?Self` 的构造器让 `Type(..)` 应答 `?Type`——调用产出可空，构造被拒时得到 `nil`，与它本来就是的那次方法调用完全一致。"
 
-#: src/reference/classes.md:150
+#: src/reference/classes.md:156
 msgid "**Newtypes never carry it** — `JsonI64(64)` is already the newtype's construction surface, the compiler-provided positional mint; there is nothing for the marker to designate. Structs and enums are refused too — structs construct by literal, and an enum's members are its own immortal singletons."
 msgstr "**新类型（newtype）从不携带它**——`JsonI64(64)` 已经是新类型的构造表面，即编译器提供的位置铸造；标记无可指定之物。结构体与枚举同样被拒绝——结构体以字面量构造，枚举的成员是它自己的不朽单例。"
 
-#: src/reference/classes.md:155
+#: src/reference/classes.md:161
 msgid "**The seal holds.** Visibility rides the method's `pub` — an unannotated (module-private) constructor answers `Type(..)` only inside its own module. Outside, the used-class hint says so: \"`Point` constructs through its class methods (`Point::new(..)`) — mark one `[constructor]` to call the class itself\". Arity is the member call's — the refusal names the member (`Point::from_xy`)."
 msgstr "**密封依然成立。** 可见性跟随方法的 `pub`——未加注解的（模块私有）构造器只在自己的模块内应答 `Type(..)`。在模块之外，用到该类处的提示会说明这一点：\"`Point` constructs through its class methods (`Point::new(..)`) — mark one `[constructor]` to call the class itself\"。参数个数沿用成员调用的——拒绝信息点名成员（`Point::from_xy`）。"
 
-#: src/reference/classes.md:161
+#: src/reference/classes.md:167
 msgid "**Resolution order for `Name(args)`** is the layer model derived: the local layer answers first (a fn body's own fns), then the file scope, then the ambient prelude. A class's call form sits in the file scope too — so a free fn named `Point` and a class `Point` can no longer both spell: the one-name law refuses the second spelling (``duplicate name `Point` — the class already declares it in this file``). What remains is the ladder within one name: the newtype mint first, then the designated constructor, then the error."
 msgstr "**`Name(args)` 的解析顺序**是分层模型的推论：局部层先应答（fn 体自己的 fn），然后是文件作用域，然后是环境性的 prelude。类的调用形式同样落在文件作用域里——因此名为 `Point` 的自由函数与类 `Point` 再也不能同时拼写：单一名字法则拒绝第二处拼写（``duplicate name `Point` — the class already declares it in this file``）。剩下的是同一个名字之内的阶梯：先新类型铸造，再被指定的构造器，最后才是错误。"
 
-#: src/reference/classes.md:170
+#: src/reference/classes.md:176
 msgid "**Generics ride the method-call path.** `Box(3)` infers exactly like `Box::of(3)` — the sugar IS the member call after resolution."
 msgstr "**泛型走方法调用路径。** `Box(3)` 的推断与 `Box::of(3)` 完全一致——解析之后，糖**就是**那次成员调用。"
 
-#: src/reference/classes.md:172
+#: src/reference/classes.md:178
 msgid "**Named constructors stay live.** `new`, `from_square`, `parse`, `open`, `default` — every existing class method keeps its place; the marker designates one of them as the call form's target, it does not remove the siblings."
 msgstr "**命名构造器依然可用。** `new`、`from_square`、`parse`、`open`、`default`——每个既有类方法都留在原位；标记只是把其中之一指定为调用形式的目标，绝不移除其余兄弟。"
 
-#: src/reference/classes.md:177
+#: src/reference/classes.md:183
 msgid "Newtypes: the one-field wrapper"
 msgstr "新类型：单字段包装器"
 
-#: src/reference/classes.md:179
+#: src/reference/classes.md:185
 msgid "`class Name(Wrapped);` — the positional one-field decl. It IS an ordinary class: exactly one field, `inner`, of the wrapped type. The positional spelling additionally provides the constructor — the call form `Name(value)`:"
 msgstr "`class Name(Wrapped);` —— 位置式单字段声明。它就是一个普通的类：恰好一个字段 `inner`，类型是被包装的类型。位置式写法额外提供了构造器——调用形式 `Name(value)`："
 
-#: src/reference/classes.md:184
+#: src/reference/classes.md:190
 msgid ""
 "```rut\n"
 "class JsonI64(i64);              // the wrapper family — one per wrapped\n"
@@ -10750,83 +10750,83 @@ msgid ""
 "```"
 msgstr ""
 
-#: src/reference/classes.md:195
+#: src/reference/classes.md:201
 msgid "**The wrapped type is unrestricted** — primitives, composites, tuples, fn types, another module's class: `class Opt(?i64);`, `class Pair((i32, str));`, `class Cb(fn(i32) -> str);` are all legal. The wrapped position is a FIELD type, never an impl target — that is the point. A wrapper is how a primitive or a third-party type gains a capability satisfaction can't reach: declare the wrapper, implement on it, hand the wrapper across the boundary."
 msgstr "**被包装的类型不受限制** —— 原始类型、复合类型、元组、fn 类型、另一个模块的类：`class Opt(?i64);`、`class Pair((i32, str));`、`class Cb(fn(i32) -> str);` 全都合法。被包装的位置是一个字段类型，绝不是 impl 目标——这正是要点。包装器，就是让原始类型或第三方类型获得满足（satisfaction）够不着的能力的方式：声明包装器，在其上实现，把包装器递过边界。"
 
-#: src/reference/classes.md:202
+#: src/reference/classes.md:208
 msgid "**No auto-insertion, ever.** `dump(64)` is an error forever; the capability exists exactly where the constructor is spelled. And no implicit forwarding: the wrapper exposes exactly its own members — `inner` (the ordinary field, ordinary visibility) and its `impl` methods."
 msgstr "**绝不自动插入。** `dump(64)` 永远是错误；能力只存在于拼写出构造器的地方。也没有隐式转发：包装器暴露的恰好是它自己的成员——`inner`（普通字段，普通可见性）与它的 `impl` 方法。"
 
-#: src/reference/classes.md:207
+#: src/reference/classes.md:213
 msgid "**The naming law**: wrappers are named for what they wrap (`JsonI64`, never `JsonExt`). Per-type wrappers with type-specific bodies when the bodies differ; a generic wrapper covers the uniform cases: `class DebugWrap<T>(T);`."
 msgstr "**命名法则**：包装器以它所包装的东西命名（`JsonI64`，绝不是 `JsonExt`）。方法体各异时用逐类型的包装器，各带自己的方法体；一致的地方用泛型包装器覆盖：`class DebugWrap<T>(T);`。"
 
-#: src/reference/classes.md:211
+#: src/reference/classes.md:217
 msgid "**The generic instantiation law**: a binder is determined by the wrapped argument when it appears there (`class Tail<T>([T]);` → `Tail([1, 2])` is a `Tail<i32>`), or by explicit type arguments at the constructor (`Converter<i32>(\"64\")` — `class Converter<T>(str);` cannot infer, the binder is not in `str`). If any binder is undetermined, the call spells ALL binders — all-or-nothing: `class Pair<A, B>(i32);` accepts `Pair<i32, str>(7)`, never `Pair<i32>(7)`."
 msgstr "**泛型实例化法则**：绑定名出现在被包装实参中时，由该实参确定（`class Tail<T>([T]);` → `Tail([1, 2])` 就是一个 `Tail<i32>`）；否则由构造器处的显式类型实参确定（`Converter<i32>(\"64\")` —— `class Converter<T>(str);` 无法推断，绑定名不在 `str` 里）。只要有任何一个绑定名未被确定，调用就必须拼写出全部绑定名——全有或全无：`class Pair<A, B>(i32);` 接受 `Pair<i32, str>(7)`，绝不接受 `Pair<i32>(7)`。"
 
-#: src/reference/classes.md:219
+#: src/reference/classes.md:225
 msgid "**The third-party adapter** (the orphan case, dissolved): `class TheirJson(TheirType);` plus an inherent `encode` hands THEIR type the capability — consumers manufacture `TheirJson(x)` from their own modules; the newtype flag rides the class's surface row like the class itself does."
 msgstr "**第三方适配器**（孤儿情形，就此消解）：`class TheirJson(TheirType);` 加上固有的 `encode`，就把能力交到了他们的类型手里——使用方在自己的模块里制造 `TheirJson(x)`；newtype 标志与类本身一样，搭载在类的接口面行上。"
 
-#: src/reference/classes.md:224
+#: src/reference/classes.md:230
 msgid "A braced class — even one with a single `inner` field — has no call construction of its own: the positional spelling is what provides the newtype's constructor, and a braced class gains the call form only by designating a `[constructor]` member (above). A newtype itself never carries the marker — its mint already IS `Name(v)`; everything else stays sealed."
 msgstr "花括号类——哪怕只有一个 `inner` 字段——也没有自己的调用构造：位置式写法才是新类型构造器的提供者，而花括号类只有指定一个 `[constructor]` 成员（见上）才能获得调用形式。新类型本身从不携带该标记——它的铸造**就是** `Name(v)`；其余一切保持封闭。"
 
-#: src/reference/classes.md:231
+#: src/reference/classes.md:237
 msgid "At runtime the construction mints a real cell: the wrapper is a value like every class."
 msgstr "在运行时，这次构造铸造一个真实的单元：包装器和任何类一样，是一个值。"
 
-#: src/reference/classes.md:234
+#: src/reference/classes.md:240
 msgid "Methods: explicit `self`"
 msgstr "方法：显式 `self`"
 
-#: src/reference/classes.md:236
+#: src/reference/classes.md:242
 msgid "**The receiver is explicit.** An instance method spells its receiver as the first parameter — `fn add(self, x: i32, y: i32)` — and the body reads fields through `self`. A method that mutates just writes through `self`: mutation is the default, gated only by the caller's const opt-out (a `const` binding refuses its own reassignment, never the write-through — see [Modules and visibility](modules-and-visibility.md))."
 msgstr "**接收者是显式的。** 实例方法把接收者写为第一个参数 —— `fn add(self, x: i32, y: i32)` —— 体内透过 `self` 读取字段。会做修改的方法直接透过 `self` 写：可变是默认，只受调用方的 const 退出把关（`const` 绑定拒绝自身的重新赋值，绝不拒绝穿透写入——参见[模块与可见性](modules-and-visibility.md)）。"
 
-#: src/reference/classes.md:243
+#: src/reference/classes.md:249
 msgid "A method **without** a `self` parameter is a **class method** — invoked on the class itself (`Rect::new(..)`, `Self.new(..)` inside the body). Presence or absence of `self` is the whole distinction. Class methods are ordinary functions: they validate, default, cache, register, or hand out singletons."
 msgstr "**没有** `self` 参数的方法是**类方法** —— 在类本身上调用（`Rect::new(..)`，体内为 `Self.new(..)`）。有或没有 `self` 就是全部区别。类方法就是普通函数：它们做校验、给默认值、缓存、注册或发放单例。"
 
-#: src/reference/classes.md:248
+#: src/reference/classes.md:254
 msgid "**A computed property is a method** (`c.count()`), and a settable one takes an argument (`c.set_count(n)`). One member kind, one call convention."
 msgstr "**计算属性就是一个方法**（`c.count()`），可写的属性则接受一个参数（`c.set_count(n)`）。一种成员类别，一种调用约定。"
 
-#: src/reference/classes.md:251
+#: src/reference/classes.md:257
 msgid "**Static fields** are declared `static name: T = init;` in the class body, with the same visibility forms as fields."
 msgstr "**静态字段**在类体内声明为 `static name: T = init;`，拥有与字段相同的可见性形式。"
 
-#: src/reference/classes.md:254
+#: src/reference/classes.md:260
 msgid "Member visibility"
 msgstr "成员可见性"
 
-#: src/reference/classes.md:256
+#: src/reference/classes.md:262
 msgid "Members follow the same visibility forms as declarations (see [Modules and visibility](modules-and-visibility.md)): an unannotated field or method is **module-private**; `pub`, `pub(super)`, `pub(pkg)` expose it to the form's audience. The construction surface is therefore explicit: `pub fn new(..)` builds; unannotated members stay the class's own business within its module."
 msgstr "成员遵循与声明相同的可见性形式（参见[模块与可见性](modules-and-visibility.md)）：未加注解的字段或方法是**模块私有**的；`pub`、`pub(super)`、`pub(pkg)` 将其暴露给相应形式的受众。构造面因此是显式的：`pub fn new(..)` 负责构建；未加注解的成员仍是类在其模块内的私事。"
 
-#: src/reference/classes.md:263
+#: src/reference/classes.md:269
 msgid "Reference semantics and equality"
 msgstr "引用语义与相等"
 
-#: src/reference/classes.md:265
+#: src/reference/classes.md:271
 msgid "A class value is a **heap cell handle** like every non-primitive (see [By-reference and nullable](by-reference-and-nullable.md)): assignment shares, mutation is visible through aliases. `==` is cell identity; field-wise comparison is an interface you write for it."
 msgstr ""
 
-#: src/reference/classes.md:270
+#: src/reference/classes.md:276
 msgid "No inheritance"
 msgstr "没有继承"
 
-#: src/reference/classes.md:272
+#: src/reference/classes.md:278
 msgid "**No `extends` for classes** — no base-class constructors (`super(..)`), no method overriding, no `super.m()`, no `protected`."
 msgstr "**类没有 `extends`** —— 没有基类构造器（`super(..)`），没有方法重写，没有 `super.m()`，没有 `protected`。"
 
-#: src/reference/classes.md:274
+#: src/reference/classes.md:280
 msgid "Code sharing is composition (hold a helper object or struct in a field) or free functions; polymorphism is only the structural kind — a type used through an interface whose members it has (see [Interfaces and dispatch](interfaces.md))."
 msgstr ""
 
-#: src/reference/classes.md:278
+#: src/reference/classes.md:284
 msgid "Layout stays trivial: fields at fixed offsets — identical inside every cell payload (see [Reified types and layout](reified-types.md)) — no prefix layout, no fat pointers, and every object has exactly one concrete class forever. That keeps `is` a single descriptor check."
 msgstr "布局保持平凡：字段位于固定偏移 —— 在每个单元载荷内部完全一致（参见[具体化类型与布局](reified-types.md)）—— 没有前缀布局，没有胖指针，每个对象永远恰好只有一个具体类。这让 `is` 只需一次描述符检查。"
 

@@ -453,4 +453,12 @@ and every class member — carries a visibility:
   non-exported declaration is *known* inside its module but *nameable*
   nowhere else — which is how libraries hide implementation surfaces
   behind exported ones. Hiding stops at the checker's door: every
-  non-generic fn/method body is type-checked even when nothing calls it.
+  non-generic fn body whose parameters are not interface-typed is
+  type-checked even when nothing calls it. The two exclusions are by
+  design — such a body compiles only where something calls it: a
+  generic fn or method is monomorphized at its call sites (the call
+  supplies the substitution), and a fn with an interface-typed
+  parameter is specialized per call (the call supplies the
+  parameter's concrete origin), so a never-called body of either is
+  never checked. Methods have no interface-typed-parameter exclusion —
+  a non-generic method body is checked dead like any other.

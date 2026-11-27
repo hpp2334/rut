@@ -11391,8 +11391,15 @@ msgid ""
 "Only `pub` names enter a module's export table; a non-exported declaration "
 "is _known_ inside its module but _nameable_ nowhere else — which is how "
 "libraries hide implementation surfaces behind exported ones. Hiding stops at "
-"the checker's door: every non-generic fn/method body is type-checked even "
-"when nothing calls it."
+"the checker's door: every non-generic fn body whose parameters are not "
+"interface-typed is type-checked even when nothing calls it. The two "
+"exclusions are by design — such a body compiles only where something calls "
+"it: a generic fn or method is monomorphized at its call sites (the call "
+"supplies the substitution), and a fn with an interface-typed parameter is "
+"specialized per call (the call supplies the parameter's concrete origin), so "
+"a never-called body of either is never checked. Methods have no "
+"interface-typed-parameter exclusion — a non-generic method body is checked "
+"dead like any other."
 msgstr ""
 
 #: src/reference/primitive-types.md:3
@@ -13507,108 +13514,113 @@ msgid ""
 "checker refuses one wherever it reaches it, dead or called (a generic async "
 "method, or one in a generic class nothing has instantiated, is simply never "
 "reached). Async points live in free fns or `async { }` blocks inside sync "
-"methods ([async](async.md))."
+"methods ([async](async.md)); on that lane the checker's coverage is "
+"narrower: a non-generic async fn whose parameters are not interface-typed is "
+"type-checked even when nothing calls it, while a generic async fn, or one "
+"with an interface-typed parameter, has a body that compiles only at its call "
+"sites — a dead one of either is never checked (a non-generic async method "
+"itself is always reached: the never-reached cases above are the only ones)."
 msgstr ""
 
-#: src/reference/classes.md:87
+#: src/reference/classes.md:93
 msgid "`[constructor]` — the designated construction surface"
 msgstr ""
 
-#: src/reference/classes.md:89
+#: src/reference/classes.md:95
 msgid ""
 "A bracket marker designates THE member a surface binds to — the member's "
 "name is free; the designation routes the call. Three designated surfaces, "
 "one law:"
 msgstr ""
 
-#: src/reference/classes.md:93
+#: src/reference/classes.md:99
 msgid "marker"
 msgstr ""
 
-#: src/reference/classes.md:93 src/reference/stdlib.md:122
+#: src/reference/classes.md:99 src/reference/stdlib.md:122
 #: src/reference/stdlib.md:225
 msgid "surface"
 msgstr ""
 
-#: src/reference/classes.md:93
+#: src/reference/classes.md:99
 msgid "caller"
 msgstr ""
 
-#: src/reference/classes.md:93
+#: src/reference/classes.md:99
 msgid "signature owner"
 msgstr ""
 
-#: src/reference/classes.md:93
+#: src/reference/classes.md:99
 msgid "body compiled"
 msgstr ""
 
-#: src/reference/classes.md:95 src/reference/stdlib.md:89
+#: src/reference/classes.md:101 src/reference/stdlib.md:89
 msgid "`[disposal]`"
 msgstr ""
 
-#: src/reference/classes.md:95
+#: src/reference/classes.md:101
 msgid "cell death"
 msgstr ""
 
-#: src/reference/classes.md:95
+#: src/reference/classes.md:101
 msgid "the engine, at refcount zero"
 msgstr ""
 
-#: src/reference/classes.md:95
+#: src/reference/classes.md:101
 msgid "the engine — `(self, cx: DisposalContext)`"
 msgstr ""
 
-#: src/reference/classes.md:95
+#: src/reference/classes.md:101
 msgid "eagerly queued at death ([the Rc heap](rc-heap.md))"
 msgstr ""
 
-#: src/reference/classes.md:96 src/reference/stdlib.md:88
+#: src/reference/classes.md:102 src/reference/stdlib.md:88
 msgid "`[iterable]`"
 msgstr ""
 
-#: src/reference/classes.md:96
+#: src/reference/classes.md:102
 msgid "`for (x of it)`"
 msgstr ""
 
-#: src/reference/classes.md:96
+#: src/reference/classes.md:102
 msgid "the for-of desugar"
 msgstr ""
 
-#: src/reference/classes.md:96
+#: src/reference/classes.md:102
 msgid "the member — its `emit` parameter fixes `E`"
 msgstr ""
 
-#: src/reference/classes.md:96
+#: src/reference/classes.md:102
 msgid "fused into the loop ([interfaces](interfaces.md))"
 msgstr ""
 
-#: src/reference/classes.md:97 src/reference/stdlib.md:90
+#: src/reference/classes.md:103 src/reference/stdlib.md:90
 msgid "`[constructor]`"
 msgstr ""
 
-#: src/reference/classes.md:97
+#: src/reference/classes.md:103
 msgid "the call form `Type(..)`"
 msgstr ""
 
-#: src/reference/classes.md:97
+#: src/reference/classes.md:103
 msgid "user code"
 msgstr ""
 
-#: src/reference/classes.md:97
+#: src/reference/classes.md:103
 msgid "the member — its parameters fix the call's shape"
 msgstr ""
 
-#: src/reference/classes.md:97
+#: src/reference/classes.md:103
 msgid "byte-identical to `Point::from_xy(..)`"
 msgstr ""
 
-#: src/reference/classes.md:99
+#: src/reference/classes.md:105
 msgid ""
 "`[constructor]` designates the class's construction surface — the call form "
 "`Type(..)` binds to the one marked member:"
 msgstr ""
 
-#: src/reference/classes.md:102
+#: src/reference/classes.md:108
 msgid ""
 "```rut\n"
 "use ink::{ Logger };\n"
@@ -13632,7 +13644,7 @@ msgid ""
 "```"
 msgstr ""
 
-#: src/reference/classes.md:127
+#: src/reference/classes.md:133
 msgid ""
 "**Sugar, not a new mechanism.** `Point(1.0, 2.0)` lowers byte-identically to "
 "`Point::from_xy(1.0, 2.0)` — the marker changes what the call form binds to, "
@@ -13641,7 +13653,7 @@ msgid ""
 "the bare name."
 msgstr ""
 
-#: src/reference/classes.md:133
+#: src/reference/classes.md:139
 msgid ""
 "**One designated constructor per class, on the inherent impl only.** Class "
 "bodies stay fields-only; a second `[constructor]` member is refused — "
@@ -13657,14 +13669,14 @@ msgid ""
 "and `[constructor]`\"."
 msgstr ""
 
-#: src/reference/classes.md:146
+#: src/reference/classes.md:152
 msgid ""
 "**`?Self` is try-construction.** A constructor spelled `fn parse(s: str) -> "
 "?Self` makes `Type(..)` answer `?Type` — the call yields the nullable, `nil` "
 "on a refused construction, exactly like the method call it is."
 msgstr ""
 
-#: src/reference/classes.md:150
+#: src/reference/classes.md:156
 msgid ""
 "**Newtypes never carry it** — `JsonI64(64)` is already the newtype's "
 "construction surface, the compiler-provided positional mint; there is "
@@ -13673,7 +13685,7 @@ msgid ""
 "singletons."
 msgstr ""
 
-#: src/reference/classes.md:155
+#: src/reference/classes.md:161
 msgid ""
 "**The seal holds.** Visibility rides the method's `pub` — an unannotated "
 "(module-private) constructor answers `Type(..)` only inside its own module. "
@@ -13683,7 +13695,7 @@ msgid ""
 "(`Point::from_xy`)."
 msgstr ""
 
-#: src/reference/classes.md:161
+#: src/reference/classes.md:167
 msgid ""
 "**Resolution order for `Name(args)`** is the layer model derived: the local "
 "layer answers first (a fn body's own fns), then the file scope, then the "
@@ -13695,13 +13707,13 @@ msgid ""
 "error."
 msgstr ""
 
-#: src/reference/classes.md:170
+#: src/reference/classes.md:176
 msgid ""
 "**Generics ride the method-call path.** `Box(3)` infers exactly like "
 "`Box::of(3)` — the sugar IS the member call after resolution."
 msgstr ""
 
-#: src/reference/classes.md:172
+#: src/reference/classes.md:178
 msgid ""
 "**Named constructors stay live.** `new`, `from_square`, `parse`, `open`, "
 "`default` — every existing class method keeps its place; the marker "
@@ -13709,18 +13721,18 @@ msgid ""
 "siblings."
 msgstr ""
 
-#: src/reference/classes.md:177
+#: src/reference/classes.md:183
 msgid "Newtypes: the one-field wrapper"
 msgstr ""
 
-#: src/reference/classes.md:179
+#: src/reference/classes.md:185
 msgid ""
 "`class Name(Wrapped);` — the positional one-field decl. It IS an ordinary "
 "class: exactly one field, `inner`, of the wrapped type. The positional "
 "spelling additionally provides the constructor — the call form `Name(value)`:"
 msgstr ""
 
-#: src/reference/classes.md:184
+#: src/reference/classes.md:190
 msgid ""
 "```rut\n"
 "class JsonI64(i64);              // the wrapper family — one per wrapped\n"
@@ -13734,7 +13746,7 @@ msgid ""
 "```"
 msgstr ""
 
-#: src/reference/classes.md:195
+#: src/reference/classes.md:201
 msgid ""
 "**The wrapped type is unrestricted** — primitives, composites, tuples, fn "
 "types, another module's class: `class Opt(?i64);`, `class Pair((i32, "
@@ -13744,7 +13756,7 @@ msgid ""
 "declare the wrapper, implement on it, hand the wrapper across the boundary."
 msgstr ""
 
-#: src/reference/classes.md:202
+#: src/reference/classes.md:208
 msgid ""
 "**No auto-insertion, ever.** `dump(64)` is an error forever; the capability "
 "exists exactly where the constructor is spelled. And no implicit forwarding: "
@@ -13752,14 +13764,14 @@ msgid ""
 "ordinary visibility) and its `impl` methods."
 msgstr ""
 
-#: src/reference/classes.md:207
+#: src/reference/classes.md:213
 msgid ""
 "**The naming law**: wrappers are named for what they wrap (`JsonI64`, never "
 "`JsonExt`). Per-type wrappers with type-specific bodies when the bodies "
 "differ; a generic wrapper covers the uniform cases: `class DebugWrap<T>(T);`."
 msgstr ""
 
-#: src/reference/classes.md:211
+#: src/reference/classes.md:217
 msgid ""
 "**The generic instantiation law**: a binder is determined by the wrapped "
 "argument when it appears there (`class Tail<T>([T]);` → `Tail([1, 2])` is a "
@@ -13770,7 +13782,7 @@ msgid ""
 "str>(7)`, never `Pair<i32>(7)`."
 msgstr ""
 
-#: src/reference/classes.md:219
+#: src/reference/classes.md:225
 msgid ""
 "**The third-party adapter** (the orphan case, dissolved): `class "
 "TheirJson(TheirType);` plus an inherent `encode` hands THEIR type the "
@@ -13778,7 +13790,7 @@ msgid ""
 "the newtype flag rides the class's surface row like the class itself does."
 msgstr ""
 
-#: src/reference/classes.md:224
+#: src/reference/classes.md:230
 msgid ""
 "A braced class — even one with a single `inner` field — has no call "
 "construction of its own: the positional spelling is what provides the "
@@ -13787,17 +13799,17 @@ msgid ""
 "the marker — its mint already IS `Name(v)`; everything else stays sealed."
 msgstr ""
 
-#: src/reference/classes.md:231
+#: src/reference/classes.md:237
 msgid ""
 "At runtime the construction mints a real cell: the wrapper is a value like "
 "every class."
 msgstr ""
 
-#: src/reference/classes.md:234
+#: src/reference/classes.md:240
 msgid "Methods: explicit `self`"
 msgstr ""
 
-#: src/reference/classes.md:236
+#: src/reference/classes.md:242
 msgid ""
 "**The receiver is explicit.** An instance method spells its receiver as the "
 "first parameter — `fn add(self, x: i32, y: i32)` — and the body reads fields "
@@ -13807,7 +13819,7 @@ msgid ""
 "visibility](modules-and-visibility.md))."
 msgstr ""
 
-#: src/reference/classes.md:243
+#: src/reference/classes.md:249
 msgid ""
 "A method **without** a `self` parameter is a **class method** — invoked on "
 "the class itself (`Rect::new(..)`, `Self.new(..)` inside the body). Presence "
@@ -13815,23 +13827,23 @@ msgid ""
 "functions: they validate, default, cache, register, or hand out singletons."
 msgstr ""
 
-#: src/reference/classes.md:248
+#: src/reference/classes.md:254
 msgid ""
 "**A computed property is a method** (`c.count()`), and a settable one takes "
 "an argument (`c.set_count(n)`). One member kind, one call convention."
 msgstr ""
 
-#: src/reference/classes.md:251
+#: src/reference/classes.md:257
 msgid ""
 "**Static fields** are declared `static name: T = init;` in the class body, "
 "with the same visibility forms as fields."
 msgstr ""
 
-#: src/reference/classes.md:254
+#: src/reference/classes.md:260
 msgid "Member visibility"
 msgstr ""
 
-#: src/reference/classes.md:256
+#: src/reference/classes.md:262
 msgid ""
 "Members follow the same visibility forms as declarations (see [Modules and "
 "visibility](modules-and-visibility.md)): an unannotated field or method is "
@@ -13840,11 +13852,11 @@ msgid ""
 "builds; unannotated members stay the class's own business within its module."
 msgstr ""
 
-#: src/reference/classes.md:263
+#: src/reference/classes.md:269
 msgid "Reference semantics and equality"
 msgstr ""
 
-#: src/reference/classes.md:265
+#: src/reference/classes.md:271
 msgid ""
 "A class value is a **heap cell handle** like every non-primitive (see "
 "[By-reference and nullable](by-reference-and-nullable.md)): assignment "
@@ -13852,17 +13864,17 @@ msgid ""
 "field-wise comparison is an interface you write for it."
 msgstr ""
 
-#: src/reference/classes.md:270
+#: src/reference/classes.md:276
 msgid "No inheritance"
 msgstr ""
 
-#: src/reference/classes.md:272
+#: src/reference/classes.md:278
 msgid ""
 "**No `extends` for classes** — no base-class constructors (`super(..)`), no "
 "method overriding, no `super.m()`, no `protected`."
 msgstr ""
 
-#: src/reference/classes.md:274
+#: src/reference/classes.md:280
 msgid ""
 "Code sharing is composition (hold a helper object or struct in a field) or "
 "free functions; polymorphism is only the structural kind — a type used "
@@ -13870,7 +13882,7 @@ msgid ""
 "dispatch](interfaces.md))."
 msgstr ""
 
-#: src/reference/classes.md:278
+#: src/reference/classes.md:284
 msgid ""
 "Layout stays trivial: fields at fixed offsets — identical inside every cell "
 "payload (see [Reified types and layout](reified-types.md)) — no prefix "
