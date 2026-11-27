@@ -190,6 +190,10 @@ pub enum Cmd {
         pkg: String,
         mod_path: String,
         src: String,
+        /// the mount's parse mode — the caller's lane word (the scan
+        /// lane passes the filename default; the dep walk the tree's
+        /// flavor)
+        mode: crate::doc::Mode,
         tx: Tx,
     },
 }
@@ -469,6 +473,7 @@ fn dispatch(l: &mut Loop, cmd: Cmd) {
             pkg,
             mod_path,
             src,
+            mode,
             tx,
         } => {
             // the host's scan-index lane — the wire's String moves into
@@ -476,7 +481,7 @@ fn dispatch(l: &mut Loop, cmd: Cmd) {
             reply(
                 tx,
                 wire::ModDecls {
-                    decls: l.session.index_mod_at(&uri, &pkg, &mod_path, src),
+                    decls: l.session.index_mod_at(&uri, &pkg, &mod_path, src, mode),
                 },
             )
         }

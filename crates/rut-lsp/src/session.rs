@@ -98,6 +98,15 @@ impl Session {
     /// under the uri mounts
     /// [`File::open_scratch`](crate::world::File::open_scratch) — an
     /// open document no loader ever stamped.
+    ///
+    /// A DOCUMENT'S PARSE MODE IS ITS MOUNT'S WHEN A MOUNT OWNS THE
+    /// URI, THE FILENAME'S OTHERWISE. A file the world already holds
+    /// keeps the tree its mount parsed ([`File::from_src`] parsed with
+    /// `stamp.mode`; the sync only edits it), so a host tree's
+    /// `tool.rut` stays Decl however its name reads; a uri no mount
+    /// owns is a scratch, and [`Stamp::scratch`](crate::world::Stamp::scratch)
+    /// derives its mode from the filename. No re-parse here revises a
+    /// mount's word.
     pub(crate) fn sync(&mut self, uri: &str, src: &str) -> FileId {
         let id = match self.world.open(uri).or_else(|| self.world.get(uri)) {
             Some(id) => id,
@@ -178,7 +187,10 @@ impl Session {
     /// file at a MOD PATH (the pkg root `""`, a mounted child its
     /// `<path>`), answering the parsed file's own `mod` declarations —
     /// the walk's next hop (structure lives in the parse, never in
-    /// path munging). The reply describes the PUSHED text even when
+    /// path munging). `mode` is THE MOUNT'S WORD: the grammar the
+    /// caller parsed the tree with (a host tree's children are Decl
+    /// whatever their filenames say; the scan lane passes the
+    /// filename default). The reply describes the PUSHED text even when
     /// the file is open (the host walks what is on disk): the decls
     /// read off the built file BEFORE the mount — an open file keeps
     /// its buffer and drops the incoming text.
@@ -188,12 +200,14 @@ impl Session {
         pkg: &str,
         mod_path: &str,
         src: String,
+        mode: crate::doc::Mode,
     ) -> Vec<wire::ModDecl> {
         self.drop_shifted_inlays(uri);
-        let file = File::from_src(
-            crate::world::Stamp::workspace(uri, Some(pkg), Some(mod_path)),
-            src,
-        );
+        let mut stamp = crate::world::Stamp::workspace(uri, Some(pkg), Some(mod_path));
+        // the lane's word: a mount stamps the mode it parsed with; the
+        // filename convention answers only where no mount owns the file
+        stamp.mode = mode;
+        let file = File::from_src(stamp, src);
         let decls: Vec<wire::ModDecl> = file
             .mods()
             .iter()

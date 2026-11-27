@@ -33,6 +33,12 @@ use super::{classify, symbols, Symbol, TokenType};
 /// `.d.rut` parses in declaration mode; everything else is
 /// full `Mode::Impl` — the filename convention, THE authority on which
 /// grammar a document parses (the manifest/bundle rows follow it too).
+///
+/// A MOUNT OWNS ITS OWN WORD: a file a mount laid down parses and
+/// stamps with the mode its tree was mounted with (a host tree's
+/// `tool.rut` is Decl however its name reads), so this convention
+/// answers only for a file no mount owns — an open document's scratch,
+/// the scan lane's filename default.
 pub fn mode_of(path: &str) -> Mode {
     if path.ends_with(".d.rut") {
         Mode::Decl

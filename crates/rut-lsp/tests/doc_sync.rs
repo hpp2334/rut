@@ -80,6 +80,34 @@ fn the_queries_answer_over_the_synced_text() {
 }
 
 #[test]
+fn an_open_host_child_honours_its_mounts_mode() {
+    // F49: opening a host tree's single-file child must answer the tree
+    // the mount parsed — Decl. The filename (`tool.rut`) says Impl, so
+    // at base the mount's doc carried an Impl parse and the surface
+    // syntax squiggled `declaration keyword in an implementation file`.
+    use std::rc::Rc;
+    let mut io = MemIo::default();
+    io.put(
+        "/ws/hh/rut.jsonc",
+        "{\n  \"name\": \"hh\",\n  \"type\": \"host\"\n}\n",
+    );
+    io.put("/ws/hh/src/mod.d.rut", "pub mod tool;\n");
+    let child = "pub host fn helper() -> i32;\n";
+    io.put("/ws/hh/src/tool.rut", child);
+    let io = Rc::new(io);
+    let mut s = S::with_io(&io);
+    let out = s.resolve(&["/ws/hh"]);
+    assert_eq!(out["missing"].as_array().unwrap().len(), 0, "{out}");
+
+    let a = s.analyze("file:///ws/hh/src/tool.rut", child);
+    let diags = a["diags"].as_array().unwrap();
+    assert!(
+        diags.is_empty(),
+        "the mount's mode is the open document's: {a}"
+    );
+}
+
+#[test]
 fn an_edit_repair_keeps_the_tree_whole() {
     // an edit that breaks and re-parses a decl: the queries answer on
     // the repaired tree (recovery inside the same document, exactly a

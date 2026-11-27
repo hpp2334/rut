@@ -332,10 +332,12 @@ fn a_host_trees_single_file_child_mounts() {
     // ground truth 14: a host surface's `pub mod tool;` declares the
     // SINGLE-FILE child `tool.rut` beside it. The compiler probes both
     // child spellings for every flavor (`rut-native`'s `dir_child_lookup`),
-    // so the walk must too — before this pin the Decl flavor probed only
-    // `tool/mod.d.rut`: the edge answered empty and the leaf's hover was
-    // null (the app's check lane, a separate lane, still misses it —
-    // the child's filename-derived mode).
+    // so the walk must too — before the first fix the Decl flavor probed
+    // only `tool/mod.d.rut`: the edge answered empty and the leaf's hover
+    // was null. The check lane is the second face: the mount used to
+    // stamp the child from its FILENAME (`tool.rut` → Impl) while the
+    // CLI mounts the whole host tree Decl, so the app's use squiggled
+    // `unknown function \`helper\`` — the mode is the tree's.
     let mut io = MemIo::default();
     io.put(
         "/ws/hh/rut.jsonc",
@@ -391,6 +393,86 @@ fn a_host_trees_single_file_child_mounts() {
     assert!(
         md.contains("pub host fn helper() -> i32"),
         "the leaf's hover answers the child's row: {md}"
+    );
+
+    // the app's CHECK lane — the compile over the mounted tree: the
+    // child's stamp is the tree's Decl mode, so the host surface's
+    // Decl filter keeps its row and `helper` binds
+    let a = s.analyze(app_uri, app);
+    let diags = a["diags"].as_array().unwrap();
+    assert!(
+        diags.is_empty(),
+        "the app's check lane mounts the host tree: {a}"
+    );
+}
+
+#[test]
+fn a_host_trees_child_keeps_its_own_edges() {
+    // the nested edge: a host tree's child is Decl syntax (`host fn`),
+    // so it mounts its own `pub mod inner;` only when the mount parsed
+    // it with the TREE's mode. At base the child parsed with its
+    // filename's Impl mode, came back unclean and mounted Childless —
+    // the inner edge never walked and the app's use of it found nothing.
+    let mut io = MemIo::default();
+    io.put(
+        "/ws/hh/rut.jsonc",
+        "{\n  \"name\": \"hh\",\n  \"type\": \"host\"\n}\n",
+    );
+    io.put("/ws/hh/src/mod.d.rut", "pub mod tool;\n");
+    io.put(
+        "/ws/hh/src/tool.rut",
+        "pub host fn tag() -> i32;\npub mod inner;\n",
+    );
+    io.put("/ws/hh/src/inner/mod.d.rut", "pub host fn deep() -> i32;\n");
+    io.put(
+        "/ws/app/rut.jsonc",
+        "{\n  \"name\": \"app\",\n  \"deps\": {\"hh\": {\"path\": \"../hh\"}}\n}\n",
+    );
+    let app = "use hh::tool::inner::{ deep };\nentry fn main() {\n    let n = deep();\n}\n";
+    io.put("/ws/app/src/mod.rut", app);
+    let io = Rc::new(io);
+    let mut s = S::with_io(&io);
+    let out = s.resolve(&["/ws/app"]);
+    assert_eq!(out["missing"].as_array().unwrap().len(), 0, "{out}");
+
+    let app_uri = "file:///ws/app/src/mod.rut";
+    let hits = s.def_in(app_uri, app, "{ deep }", 1, 2);
+    assert_eq!(hits.len(), 1, "the child's own edge walks: {hits:?}");
+    assert!(
+        hits[0]["uri"]
+            .as_str()
+            .unwrap()
+            .ends_with("/hh/src/inner/mod.d.rut"),
+        "the inner surface: {hits:?}"
+    );
+}
+
+#[test]
+fn the_ambiguity_hint_names_the_trees_true_child_file() {
+    // F50: a host tree's both-spellings refusal names the file the
+    // flavor actually probed — `NAME/mod.d.rut` — never a hardcoded
+    // `NAME/mod.rut` that no host tree has.
+    let mut io = MemIo::default();
+    io.put(
+        "/ws/hh/rut.jsonc",
+        "{\n  \"name\": \"hh\",\n  \"type\": \"host\"\n}\n",
+    );
+    io.put("/ws/hh/src/mod.d.rut", "pub mod tool;\n");
+    io.put("/ws/hh/src/tool/mod.d.rut", "pub host fn a() -> i32;\n");
+    io.put("/ws/hh/src/tool.rut", "pub host fn b() -> i32;\n");
+    let io = Rc::new(io);
+    let mut s = S::with_io(&io);
+    let _ = s.resolve(&["/ws/hh"]);
+    let notes = io.notes.borrow();
+    assert!(
+        notes
+            .iter()
+            .any(|n| n.contains("tool/mod.d.rut") && n.contains("tool.rut")),
+        "the hint names the tree's true child file: {notes:?}"
+    );
+    assert!(
+        !notes.iter().any(|n| n.contains("tool/mod.rut")),
+        "no file a host tree has: {notes:?}"
     );
 }
 

@@ -58,7 +58,7 @@ use std::collections::{BTreeMap, HashSet};
 use rut_ast::Vis;
 use rut_driver::mods::{mount_edges, Child, ChildLookup, Edge, Refusal};
 
-use crate::doc::{mode_of, Document};
+use crate::doc::{mode_of, Document, Mode};
 use crate::env::Io;
 use crate::load::manifest::{DepRow, DepSource};
 use crate::session::Session;
@@ -330,10 +330,19 @@ fn mount_mod_tree(
         ctx.files -= 1;
     }
     let text = String::from_utf8_lossy(&bytes).into_owned();
+    // THE MOUNT'S MODE — the tree's flavor, one decision for the root
+    // and every child below (the CLI's two mounts: `walk.rs`'s lib
+    // tree is Impl, its host surface tree Decl). Everything this tree
+    // mounts parses and stamps with it.
+    let tree_mode = if decl_flavor {
+        Mode::Decl
+    } else {
+        mode_of(&root_path)
+    };
     // the root re-stamp REPLACES the entries loop's row (same origin) —
     // the fresh read moves into the parse; the reply's `mod` edges
     // open the mount
-    let root_edges = mod_edges(state.index_mod_at(&root_path, module, "", text));
+    let root_edges = mod_edges(state.index_mod_at(&root_path, module, "", text, tree_mode));
     // the children mount BESIDE THE ROOT FILE — inside the package's
     // `src/` shell. The map both closures share: mod path → the
     // directory its edges declare in (the found file's own directory
@@ -407,15 +416,21 @@ fn mount_mod_tree(
                     return (Child::Childless, false);
                 }
                 ctx.files -= 1;
+                // ONE DECISION, BOTH READS: the mount's mode is the
+                // tree's flavor — a host tree's single-file child is
+                // Decl syntax whatever its filename says — and the
+                // clean-parse and the stamp below ride it together
+                let mode = if decl_flavor {
+                    Mode::Decl
+                } else {
+                    mode_of(&canon)
+                };
                 // the driver's law: a child that fails to parse mounts
-                // CHILDLESS — its `mod` edges never walk (the mode is
-                // the file-name convention: the same parse the mount
-                // below runs)
+                // CHILDLESS — its `mod` edges never walk (the same
+                // parse the mount below runs)
                 let mod_path = path.to_string();
-                let clean = Document::parse(mode_of(&canon), text.clone())
-                    .ast()
-                    .is_clean();
-                let decls = state.index_mod_at(&canon, module, &mod_path, text);
+                let clean = Document::parse(mode, text.clone()).ast().is_clean();
+                let decls = state.index_mod_at(&canon, module, &mod_path, text, mode);
                 if !clean {
                     return (Child::Childless, true);
                 }
@@ -464,7 +479,7 @@ fn mount_mod_tree(
                         io,
                         &format!("mods:{file_form}"),
                         &format!(
-                            "rut: {module} — both {name}/mod.rut and {name}.rut exist; keep one"
+                            "rut: {module} — both {name}/{child_file} and {name}.rut exist; keep one"
                         ),
                     );
                 }

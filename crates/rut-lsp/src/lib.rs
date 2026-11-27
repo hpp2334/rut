@@ -488,6 +488,11 @@ impl Lsp {
     /// `{ "decls": [{ "name", "vis" }] }` — so the host's mount walk
     /// reads its next hop from the core's parse (JS moves bytes, the
     /// module parses; no JS-side rut parsing).
+    ///
+    /// The mode is the FILENAME DEFAULT (`mode_of(&uri)`) — the scan
+    /// lane owns no tree flavor; a mount that does (the dep walk) hands
+    /// its own word to the session body directly. The wire stays four
+    /// strings: the face never sees a mode.
     pub async fn index_mod_at(
         &self,
         uri: String,
@@ -495,12 +500,14 @@ impl Lsp {
         mod_path: String,
         src: String,
     ) -> String {
+        let mode = crate::doc::mode_of(&uri);
         self.text(|tx| {
             actor::event_loop::Msg::Cmd(actor::event_loop::Cmd::IndexModAt {
                 uri,
                 pkg,
                 mod_path,
                 src,
+                mode,
                 tx,
             })
         })
