@@ -1924,6 +1924,15 @@ impl<'a> Ctx<'a> {
                         "`entry fn {fname}` cannot be generic — the published signature is one concrete shape"
                     ),
                 );
+                // the refusal poisons what it refuses: the body's
+                // generics can never bind at root time (subst is empty),
+                // so compiling it as a root is noise by construction —
+                // the name leaves the entry list and rides nothing
+                // downstream. The SIGNATURE refusals below do NOT
+                // poison: a bad param/ret type leaves the body
+                // compilable and its true diags landing (phase 3's law,
+                // pinned in diag_once.rs).
+                self.entries.retain(|&n| n != name);
                 continue;
             }
             for p in &fd.params {

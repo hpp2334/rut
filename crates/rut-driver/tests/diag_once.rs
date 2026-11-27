@@ -167,3 +167,138 @@ fn a_sound_entry_signature_still_reports_the_bodys_mismatch() {
         "{ms:?}"
     );
 }
+
+// ---------------------------------------------------------------------
+// the free-generic compare defers (F68)
+//
+// A param whose path names free decl generics (`x: Other<T>`) cannot
+// resolve under the env the unify lane holds at param 0 — the final
+// catch-all resolved it anyway and diagnosed the names it could not
+// yet bind (`unknown type `T``, then `Other<<err>>` at the call). The
+// compare DEFERS to the completed-substitution ptys pass, the lane
+// that owns the proof.
+// ---------------------------------------------------------------------
+
+/// THE RED PIN: the legal program compiles clean. At the pre-fix tree
+/// it drew TWO false diags — `unknown type `T`` at the signature and
+/// `argument is `Other<i32>`, `Other<<err>>` expected` at the call.
+#[test]
+fn a_free_generic_param_compare_defers_to_the_completed_substitution() {
+    let src = "class Other<T> { n: T }\n\
+               fn g<T>(x: Other<T>, y: T) -> nil { return nil; }\n\
+               entry fn main() -> nil {\n\
+               \x20   let o = Other<i32> { n: 1 };\n\
+               \x20   g(o, 2);\n\
+               \x20   return nil;\n\
+               }\n";
+    let ds = compile(src).diags;
+    assert!(
+        ds.is_empty(),
+        "the legal program compiles clean: {:?}",
+        msgs(&ds)
+    );
+}
+
+/// THE ORDER GUARD: the reversed param order was green at base by
+/// accident — the partial env happened to hold `T` by the time param 1
+/// resolved. The deferral retires the order-dependence: both orders
+/// answer identically. (Recorded green at base.)
+#[test]
+fn the_reversed_param_order_answers_like_the_forward_one() {
+    let src = "class Other<T> { n: T }\n\
+               fn g<T>(y: T, x: Other<T>) -> nil { return nil; }\n\
+               entry fn main() -> nil {\n\
+               \x20   let o = Other<i32> { n: 1 };\n\
+               \x20   g(2, o);\n\
+               \x20   return nil;\n\
+               }\n";
+    let ds = compile(src).diags;
+    assert!(
+        ds.is_empty(),
+        "the reversed order compiles clean: {:?}",
+        msgs(&ds)
+    );
+}
+
+/// THE MISMATCH GUARD: the deferral silences no true verdict — a
+/// genuine argument mismatch still diagnoses from the
+/// completed-substitution ptys pass.
+#[test]
+fn a_genuine_mismatch_still_diagnoses_from_the_ptys_pass() {
+    let src = "class Other<T> { n: T }\n\
+               fn g<T>(x: Other<T>, y: T) -> nil { return nil; }\n\
+               entry fn main() -> nil {\n\
+               \x20   g(\"s\", 2);\n\
+               \x20   return nil;\n\
+               }\n";
+    let ds = compile(src).diags;
+    let ms = msgs(&ds);
+    assert_eq!(
+        ds.len(),
+        1,
+        "one true diag from the ptys pass, and nothing else: {ms:?}"
+    );
+    assert!(
+        ms[0].starts_with("argument 1 is `str`") && ms[0].contains("`Other<"),
+        "the mismatch names the argument and the concrete expected type: {ms:?}"
+    );
+    assert_eq!(
+        ms[0], "argument 1 is `str`, `Other<i32>` expected",
+        "`T` binds from param 1 (i32) — the ptys pass spells the CONCRETE expected type: {ms:?}"
+    );
+}
+
+/// THE UNBINDABLE GUARD: `h<T>(x: Other<T>)` over an `Other<i32>`
+/// argument binds no `T` — the completeness check in the free lane
+/// (the proof's owner) names it, once.
+#[test]
+fn an_unbindable_free_generic_still_names_the_inference_failure() {
+    let src = "class Other<T> { n: T }\n\
+               fn h<T>(x: Other<T>) -> nil { return nil; }\n\
+               entry fn main() -> nil {\n\
+               \x20   let o = Other<i32> { n: 1 };\n\
+               \x20   h(o);\n\
+               \x20   return nil;\n\
+               }\n";
+    let ds = compile(src).diags;
+    let ms = msgs(&ds);
+    assert_eq!(
+        ds.len(),
+        1,
+        "the completeness check is the one voice: {ms:?}"
+    );
+    assert!(
+        ms[0].starts_with("cannot infer generic parameter `T` — annotate the call"),
+        "{ms:?}"
+    );
+}
+
+// ---------------------------------------------------------------------
+// the refusal poisons the root (F70)
+//
+// A refused generic entry stayed in `ctx.entries`, so the roots loop
+// compiled its body as a root under an empty substitution — the false
+// `unknown type `T`` cascaded beside the real refusal. The refusal
+// kills the entry's root-hood; the SIGNATURE refusals do NOT poison
+// (pinned above).
+// ---------------------------------------------------------------------
+
+/// THE RED PIN: the generic-entry refusal is the ONE diag. At the
+/// pre-fix tree the program printed THREE — the refusal, the false
+/// `unknown type `T`` from the poisoned root compile, and the body's
+/// own `let` mismatch.
+#[test]
+fn a_refused_generic_entry_poisons_its_root_hood() {
+    let src = "entry fn main<T>(x: T) { let y: i32 = \"s\"; }\n";
+    let ds = compile(src).diags;
+    let ms = msgs(&ds);
+    assert_eq!(
+        ds.len(),
+        1,
+        "the refusal, and nothing else — the body rides nothing: {ms:?}"
+    );
+    assert_eq!(
+        ms[0], "`entry fn main` cannot be generic — the published signature is one concrete shape",
+        "{ms:?}"
+    );
+}

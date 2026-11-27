@@ -2893,3 +2893,36 @@ fn cross_package_receiver_call_on_a_self_less_method_is_a_diagnostic() {
     );
     assert_diag_at(app, d, "b.make()");
 }
+
+// =====================================================================
+// the arity proof ahead of the index (F65)
+//
+// A plain arity typo on a used class's GENERIC method panicked the
+// compiler: the extern mirror lane's inference loop indexed the
+// method's parameter list by the call's argument index, and the arity
+// proof sat AFTER the loop. The proof has one home, ahead of the
+// consumption — the free and inline call lanes already sit in this
+// shape.
+// =====================================================================
+
+#[test]
+fn cross_package_arity_typo_on_a_used_generic_method_diagnoses_at_the_call() {
+    // `pick<T>` takes (self, x: T, y: i32) — the call spells 3 args for
+    // 2 params. At the pre-fix tree this panicked (`ptys0[2]` out of
+    // bounds, exit 101) instead of diagnosing at the call. The used
+    // class is a `pub struct` with an impl-block method — the same
+    // surface shape the F19 receiver pins ride (a class refuses
+    // instance literals, so the consumer's `B { n: 0 }` would never
+    // reach the extern lane).
+    let lib = "pub struct B { n: i32 }\n\
+               impl B { pub fn pick<T>(self, x: T, y: i32) -> T { return x; } }\n";
+    let app = "use lib::{ B };\n\
+               entry fn main() -> nil { let b = B { n: 0 }; let _ = b.pick(1, 2, 3); }\n";
+    let diags = compile_with_diags_spanned(
+        &[modpkg("lib", lib, vec![]), modpkg("app", app, vec![])],
+        "app",
+    );
+    assert_eq!(diags.len(), 1, "{diags:?}");
+    assert_eq!(diags[0].msg, "call arity: 3 args for 2 params", "{diags:?}");
+    assert_diag_at(app, &diags[0], "b.pick(1, 2, 3)");
+}

@@ -117,6 +117,18 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
             // resolves as a type at its own span
             self.check_method_generics(name, mgen.len(), &generics)?;
         }
+        // arity is proven BEFORE any positional consumption: the lambda
+        // and inference lanes below index the method's parameter list by
+        // the call's argument index — the proof has one home, ahead of
+        // both (free.rs and inline.rs already sit in this shape)
+        let mparams_len = self.ctx.extern_inherents[ih].methods[midx].params.len();
+        if args.len() != mparams_len {
+            self.ctx.err(
+                sp,
+                format!("call arity: {} args for {} params", args.len(), mparams_len),
+            );
+            return Err(());
+        }
         if !mgen.is_empty() && generics.is_empty() {
             // the unannotated-lambda diagnosis (v1): a fully unannotated
             // lambda cannot drive the placeholder signature's unification
@@ -210,13 +222,6 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
         // the receiver IS the instantiation: `#Self` substitutes to it;
         // the method's own generics substitute through the same env
         let (ptys, ret_ty) = self.extern_sig(ih, midx, &full_subst, Some(rt));
-        if args.len() != ptys.len() {
-            self.ctx.err(
-                sp,
-                format!("call arity: {} args for {} params", args.len(), ptys.len()),
-            );
-            return Err(());
-        }
         // the method's own generics are in scope for nested calls
         // (`Vec.new()` inside `source<Vec<Todo>>(Vec.new())` sees
         // T → Vec<Todo> through self.subst)

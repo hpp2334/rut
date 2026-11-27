@@ -335,6 +335,18 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                 }
                 Ok(())
             }
+            TyRef::Path(_)
+                if !self
+                    .free_generics(param_node, decl_generics, subst)
+                    .is_empty() =>
+            {
+                // a param naming free generics cannot resolve under the
+                // env this lane holds — the compare DEFERS to the
+                // completed-substitution ptys pass (free.rs / inline.rs),
+                // the lane that owns the proof; the completeness check
+                // there owns the unbindable case
+                Ok(())
+            }
             TyRef::Path(_) => {
                 // builtin containers (`opaque`): resolve and compare — the
                 // core names, gated on the use statement like everywhere
