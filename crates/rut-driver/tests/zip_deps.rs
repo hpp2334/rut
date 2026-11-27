@@ -481,3 +481,65 @@ fn the_bin_mode_refuses_a_dir_deps_orphan_like_the_zip_mode() {
     pack_dir(&app).expect("clean dep tree packs in bin mode");
     pack_dir_zip(&app).expect("clean dep tree packs in source mode");
 }
+
+#[test]
+fn a_lib_documentation_surface_never_declares_a_colliding_stray() {
+    // F54, law 7: the prefix arm reads the MOUNT's own root — always
+    // `src/mod.rut` for a lib pkg — never the manifest's documentation
+    // surface. A lib's nested `entry.type` must not whitelist a stray
+    // whose path collides with a real child's record under it.
+    let root = scratch("lib-surface-stray");
+    let lib = root.join("libsurf");
+    write(
+        &lib,
+        "rut.jsonc",
+        r#"{ "name": "libsurf", "type": "lib", "entry": { "type": "./app/out.d.rut" } }"#,
+    );
+    write(&lib, "src/mod.rut", "pub mod tool;\n");
+    write(
+        &lib,
+        "src/tool/mod.rut",
+        "pub fn tool() -> i64 { return 1; }\n",
+    );
+    write(
+        &lib,
+        "src/app/out.d.rut",
+        "/// documented surface, no body yet.\n",
+    );
+    // the clean tree (the documentation surface + the real child)
+    // packs in BOTH modes — the surface file itself stays declared
+    pack_dir(&lib).expect("clean lib tree packs in bin mode");
+    pack_dir_zip(&lib).expect("clean lib tree packs in source mode");
+    // the colliding stray: the child record `tool/mod.rut` must NOT
+    // gain the documentation surface's `app/` prefix
+    write(&lib, "src/app/tool/mod.rut", "fn stray() {}\n");
+    let err = match pack_dir(&lib) {
+        Ok(bytes) => panic!(
+            "the bin mode packed a colliding stray silently ({} bytes) — the file is dropped",
+            bytes.len()
+        ),
+        Err(e) => e,
+    };
+    assert!(
+        err.to_string().contains("nothing declares this module"),
+        "{err}"
+    );
+    let err = pack_dir_zip(&lib).expect_err("the source lane gates the same tree");
+    assert!(
+        err.to_string().contains("nothing declares this module"),
+        "{err}"
+    );
+    // the control: a non-colliding stray refuses in both modes
+    std::fs::remove_file(lib.join("src/app/tool/mod.rut")).unwrap();
+    write(&lib, "src/app/tool/modx.rut", "fn stray() {}\n");
+    let err = pack_dir(&lib).expect_err("a non-colliding stray refuses in bin mode");
+    assert!(
+        err.to_string().contains("nothing declares this module"),
+        "{err}"
+    );
+    let err = pack_dir_zip(&lib).expect_err("a non-colliding stray refuses in source mode");
+    assert!(
+        err.to_string().contains("nothing declares this module"),
+        "{err}"
+    );
+}

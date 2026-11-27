@@ -411,6 +411,17 @@ fn collect_files_under(
     Ok(())
 }
 
+/// The mount a walked pkg registered — the tree gates' ctx. A walk that
+/// answers a name without mounting it is the closure/world disagreement:
+/// loud, never a silent skip of a gate.
+fn mounted_of<'w>(world: &'w World, key: &str) -> Result<&'w rut_driver::Mounted, PackError> {
+    world.pkgs.get(key).ok_or_else(|| {
+        PackError::law(format!(
+            "`{key}` walked but never mounted — the closure and the world disagree"
+        ))
+    })
+}
+
 /// The pack-time tree laws (both modes' worth of hygiene, one gate):
 /// no `.rut` file outside the `src/` shell (a nested package root — a
 /// dir with its own `rut.jsonc` — is not this pkg's code and skips),
@@ -463,16 +474,23 @@ fn validate_tree(
         .type_path
         .as_deref()
         .map(rut_driver::bundle::src_rel);
-    // the record is ROOT-FILE-DIR-relative; `src_rel` is `src/`-relative.
-    // A nested custom root (`entry.type = "./app/mod.d.rut"`) records
-    // its children relative to `src/app/`, so the gate needs that parent
-    // directory as the second prefix arm. The default root's parent is
-    // `src/` itself — the empty prefix, already covered above. The
-    // derivation is the one home (`rut_driver::mods::child_dir`), the
-    // same rule every mounting lane reads.
-    let root_src_rel = surface_rel
-        .as_deref()
-        .and_then(|rel| rel.strip_prefix("src/"));
+    // the record is ROOT-FILE-DIR-relative; `src_rel` is `src/`-relative,
+    // so the gate needs the tree's own root directory as a second prefix
+    // arm. ONLY a host (decl-surface) tree has a nested root file: its
+    // root is the spelled `entry.type` surface, and its children record
+    // relative to that file's directory. A lib pkg's tree root is always
+    // `src/mod.rut` (its `entry.type` is a DOCUMENTATION surface, never
+    // the tree root), so its records are already `src/`-relative and no
+    // prefix applies — the kind row the walk reads decides, never the
+    // surface path's shape. The derivation itself is the one home
+    // (`rut_driver::mods::child_dir`), the same rule every mounting lane
+    // reads.
+    let root_src_rel = match manifest.pkg_type {
+        PkgType::Host => surface_rel
+            .as_deref()
+            .and_then(|rel| rel.strip_prefix("src/")),
+        PkgType::Lib => None,
+    };
     let root_dir = match root_src_rel.map(rut_driver::mods::child_dir) {
         Some(dir) if !dir.is_empty() => format!("{dir}/"),
         _ => String::new(),
@@ -601,11 +619,7 @@ fn pack_dir_opts_locked(
     // the tree gates ride BOTH modes: the compiled lane gates the same
     // directory the source lane does — an undeclared `.rut` under
     // `src/` refuses here too, never a silent drop from the bundle
-    let mounted = world.pkgs.get(&root).ok_or_else(|| {
-        PackError::law(format!(
-            "`{root}` walked but never mounted — the closure and the world disagree"
-        ))
-    })?;
+    let mounted = mounted_of(&world, &root)?;
     validate_tree(dir, mounted, &manifest)?;
     let (manifest, manifest_bytes) = stage(&manifest)?;
     // the closure's group set: dir deps as directories, url deps as
@@ -627,11 +641,7 @@ fn pack_dir_opts_locked(
                 // reader, so an undeclared `.rut` there refuses like the
                 // source lane's collect_tree node
                 {
-                    let mounted = world.pkgs.get(spec).ok_or_else(|| {
-                        PackError::law(format!(
-                            "dep `{spec}` walked but never mounted — the closure and the world disagree"
-                        ))
-                    })?;
+                    let mounted = mounted_of(&world, spec)?;
                     validate_tree(Path::new(gdir), mounted, &dm)?;
                 }
                 mount_dev_table(&mut world, &src, gdir, spec, &dm, map, lock)
@@ -641,7 +651,10 @@ fn pack_dir_opts_locked(
                 // a source-zip dep's tree is sealed wire bytes (its
                 // root AND its embedded groups — the ONE grammar at
                 // the zip boundary) and its dev tables never travel:
-                // one that still declares dirs it needs is the refusal
+                // one that still declares dirs it needs is the refusal.
+                // Its tree rows already passed THAT pack's own door, so
+                // the bin lane deliberately re-gates nothing inside the
+                // sealed archive
                 let dm = read_manifest(&src, gdir).map_err(rut_driver::pack::PackError::from)?;
                 if !dm.dev_deps.is_empty() {
                     return Err(PackError::law(format!(
