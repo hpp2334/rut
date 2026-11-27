@@ -128,3 +128,42 @@ fn env_mentioning_annotations_still_resolve_per_instantiation() {
         "{ms:?}"
     );
 }
+
+/// THE ENTRY GATE MASKS ONLY ITSELF: a bad entry signature resolves
+/// through the signature door and never suppresses the body pass — the
+/// unknown parameter type and the body's own `let` mismatch ride ONE
+/// compile. (At the mask: only the unknown type is reported.)
+#[test]
+fn a_bad_entry_signature_does_not_mask_the_bodys_diagnostics() {
+    let src = "entry fn main(x: Nope) -> nil { let y: i32 = \"s\"; }\n";
+    let ds = compile(src).diags;
+    let ms = msgs(&ds);
+    assert_eq!(
+        ds.len(),
+        2,
+        "the signature's diag rides WITH the body's: {ms:?}"
+    );
+    assert!(
+        ms.iter().any(|m| m == "unknown type `Nope`"),
+        "the signature failure is reported: {ms:?}"
+    );
+    assert!(
+        ms.iter()
+            .any(|m| m == "let `y` is `i32` but the initializer is `str`"),
+        "the body's mismatch is reported in the same compile: {ms:?}"
+    );
+}
+
+/// THE CONTROL: the same body under a SOUND entry signature reports
+/// the mismatch — unchanged by the mask's death.
+#[test]
+fn a_sound_entry_signature_still_reports_the_bodys_mismatch() {
+    let src = "entry fn main(x: i32) -> nil { let y: i32 = \"s\"; }\n";
+    let ds = compile(src).diags;
+    let ms = msgs(&ds);
+    assert_eq!(ds.len(), 1, "the mismatch, and nothing else: {ms:?}");
+    assert_eq!(
+        ms[0], "let `y` is `i32` but the initializer is `str`",
+        "{ms:?}"
+    );
+}

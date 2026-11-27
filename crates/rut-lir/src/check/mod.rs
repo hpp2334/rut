@@ -1933,7 +1933,7 @@ impl<'a> Ctx<'a> {
                 let Some(t) = pd.get(self.ast).ty else {
                     continue;
                 };
-                let ty = self.resolve_type(t, &[]);
+                let ty = self.resolve_sig_ty(t, &[], None);
                 // the quiet-audit law: a failing signature already
                 // diagnosed at resolution — the crossing verdict on the
                 // poison row would read as a false second error
@@ -1952,7 +1952,7 @@ impl<'a> Ctx<'a> {
                 }
             }
             if let Some(r) = fd.ret {
-                let ty = self.resolve_type(r, &[]);
+                let ty = self.resolve_sig_ty(r, &[], None);
                 // the quiet-audit law (see the param lane): the poison
                 // signature skips the crossing verdict
                 if self.ty_is_err(ty) {

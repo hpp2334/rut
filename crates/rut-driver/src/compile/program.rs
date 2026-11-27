@@ -1268,12 +1268,10 @@ fn compile_program_inner(
     // above the own block; the default greatest-base attribution would
     // steal the ids into the requester's space).
     // the entry surface's crossing contract is compile-time: bad signatures are source diagnostics, never call-time
-    // surprises for the embedder
+    // surprises for the embedder. The gate masks only ITSELF: a bad
+    // signature rides WITH the bodies' diagnostics — the unit flows on,
+    // and the stage-end check after the roots owns the fail
     ctx.check_entries();
-    if !ctx.diags.is_empty() {
-        diags.append(&mut ctx.diags.clone());
-        return fail(diags, ast_dump, ast_json);
-    }
     // module lets (load-time expression check)
     ctx.compile_module_lets();
     // compilation roots: every `entry fn` — the host-callable
