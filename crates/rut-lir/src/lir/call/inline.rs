@@ -42,6 +42,23 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
         };
         let md = mnode.get(self.ctx.ast).clone();
         let (params, ret, mname) = (md.params, md.ret, md.name.ident);
+        // a receiver call resolves a SELF-BEARING method: a self-less
+        // method is a static — addressed by its owner, never through a
+        // receiver. `params.len() - 1` below is safe only under this
+        // gate (a zero-param method would underflow it).
+        if !params.first().is_some_and(|p| self.ctx.is_self_param(*p)) {
+            self.ctx.err(
+                sp,
+                format!(
+                    "`{}` takes no `self` — call it as `{}::{}`, \
+                     or spell `self` as its first parameter",
+                    self.ctx.name(mname),
+                    self.ctx.name(dname),
+                    self.ctx.name(mname),
+                ),
+            );
+            return Err(());
+        }
         // the method's own generics: the site's explicit list gates
         // first (the arity + resolution law — the helper), then the
         // resolved args join the class's substitution
@@ -51,6 +68,8 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
         for (g, t) in decl_generics.iter().zip(site_args) {
             subst.push((*g, t));
         }
+        // SAFE BY CONSTRUCTION: the gate above proved a self-bearing
+        // method, so its first parameter is the receiver (params.len() ≥ 1).
         if args.len() != params.len() - 1 {
             self.ctx.err(
                 sp,

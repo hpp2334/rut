@@ -2780,3 +2780,65 @@ fn anchor_no_longer_feeds_the_child() {
         c.graph.diags
     );
 }
+
+// =====================================================================
+// phase 1 — a call site never assumes a receiver (F19)
+//
+// A method reached through a receiver must spell `self` as its first
+// parameter: a self-less method is a STATIC, addressed by its owner.
+// A receiver call on one is a source diagnostic at the CALL — never a
+// subtraction underflow (`params.len() - 1` is safe only under this
+// gate).
+// =====================================================================
+
+/// A class whose impl declares `make` with no `self` — legal, and
+/// addressable as `B::make()`.
+const SELF_LESS_MAKE: &str = "class B { n: i32 }\nimpl B { fn make() -> i32 { return 1; } }\n";
+
+#[test]
+fn receiver_call_on_a_self_less_method_is_a_diagnostic() {
+    let src = format!(
+        "{SELF_LESS_MAKE}entry fn main() -> nil {{ let b = B {{ n: 0 }}; let _ = b.make(); }}\n"
+    );
+    let diags = compile_with_diags(&[modpkg("app", &src, vec![])], "app");
+    assert_eq!(diags.len(), 1, "{diags:?}");
+    assert!(
+        diags[0].contains("`make` takes no `self`")
+            && diags[0].contains("`B::make`")
+            && diags[0].contains("spell `self` as its first parameter"),
+        "{diags:?}"
+    );
+}
+
+#[test]
+fn receiver_call_with_an_argument_still_names_the_static_spelling() {
+    // the one-parameter method: `params.len() - 1` is 0 at base, so the
+    // receiver call reports a MISLEADING arity ("0 params") instead of
+    // the no-self reason — this pin holds the law's message
+    let src = "class B { n: i32 }\nimpl B { fn make(x: i32) -> i32 { return x; } }\n\
+               entry fn main() -> nil { let b = B { n: 0 }; let _ = b.make(1); }\n";
+    let diags = compile_with_diags(&[modpkg("app", src, vec![])], "app");
+    assert_eq!(diags.len(), 1, "{diags:?}");
+    assert!(
+        diags[0].contains("`make` takes no `self`") && diags[0].contains("`B::make`"),
+        "{diags:?}"
+    );
+}
+
+#[test]
+fn static_call_on_a_self_less_method_stays_clean() {
+    // the green guard: the owner-addressed spelling is the method's
+    // address — unchanged by the call-site gate
+    let src = format!("{SELF_LESS_MAKE}entry fn main() -> nil {{ let _ = B::make(); }}\n");
+    let diags = compile_with_diags(&[modpkg("app", &src, vec![])], "app");
+    assert!(diags.is_empty(), "{diags:?}");
+}
+
+#[test]
+fn a_never_called_self_less_declaration_stays_clean() {
+    // the green guard: the declaration is legal whether or not a call
+    // reaches it
+    let src = format!("{SELF_LESS_MAKE}entry fn main() -> nil {{ }}\n");
+    let diags = compile_with_diags(&[modpkg("app", &src, vec![])], "app");
+    assert!(diags.is_empty(), "{diags:?}");
+}
