@@ -142,6 +142,60 @@ fn in_memory_bytes_load_without_a_file() {
 }
 
 #[test]
+fn a_loose_entry_bundle_mounts_the_single_file_twin() {
+    // F51: a hand-built entry set (no `rut.mods` rows — the loose
+    // entries lane) carries its child as the SINGLE-FILE spelling
+    // `tool.rut` beside the declaring root. The mount probes BESIDE THE
+    // DECLARING FILE (the `mods.rs` `child_probes` law), never in a
+    // directory named after the parent's mod path — so `mod tool;`
+    // mounts `tool.rut`, records it by the display law's form, and the
+    // child's own declaration is consumable.
+    let root = "mod tool;\nuse tool::{ three };\nentry fn main() -> i32 { return three(); }\n";
+    let child = "pub fn three() -> i32 { return 3; }\n";
+    let manifest_src = r#"{"format": "rutbundle", "format_version": 13, "name": "loose"}"#;
+    let bytes = rut_driver::bundle::write_bundle(&[
+        ("rut.jsonc".into(), manifest_src.as_bytes().to_vec()),
+        ("mod.rut".into(), root.as_bytes().to_vec()),
+        ("tool.rut".into(), child.as_bytes().to_vec()),
+    ])
+    .unwrap();
+    let bundle = rut_driver::bundle::Bundle::parse(&bytes).unwrap();
+    let manifest = rut_driver::bundle::parse_manifest(manifest_src).unwrap();
+    let pkg = rut_driver::bundle_entry_pkg(bundle.entries(), "", &manifest)
+        .unwrap()
+        .named("loose");
+    assert_eq!(pkg.mods.keys().collect::<Vec<_>>(), vec!["tool"]);
+    assert_eq!(
+        pkg.mods["tool"].file, "tool.rut",
+        "the single-file twin's record is its own name beside the declaring file"
+    );
+    let compiled = rut_driver::RutRun::new()
+        .mount(pkg)
+        .entrypoint("loose")
+        .compile()
+        .expect("compile the loose-entry mount");
+    assert!(
+        compiled.graph.diags.is_empty(),
+        "{:?}",
+        compiled.graph.diags
+    );
+    let flat = rut_core::link::flatten(compiled.graph.program.expect("linked program"));
+    rut_vm::verify::verify(&flat).expect("verify");
+    let limits = rut_vm::interp::Limits {
+        fuel: Some(2_000_000),
+        heap_limit_bytes: Some(16 * 1024 * 1024),
+        interrupt_every: 1024,
+    };
+    let mut vm = rut_vm::interp::Vm::builder()
+        .program(std::rc::Rc::new(flat))
+        .limits(limits)
+        .hosts(rut_vm::interp::HostRegistry::new())
+        .build()
+        .expect("vm");
+    assert_eq!(vm.call::<_, i32>("main", ()).expect("run"), 3);
+}
+
+#[test]
 fn refusals() {
     let base = rut_testkit::Scratch::new("bundle-ref");
     let src = "entry fn main() -> i32 { return 7; }\n".as_bytes();

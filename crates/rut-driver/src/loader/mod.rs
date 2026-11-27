@@ -451,28 +451,31 @@ pub fn rows_mods(
 }
 
 /// The archive-entries child lookup for the mod mount — the same case
-/// law the FS lane answers, over entry keys: the directory form
-/// `NAME/mod.rut` first, else the single-file `NAME.rut`, both present
-/// the loud ambiguity. A bundle is DIRECTORY-FORM only (the packer
-/// mounts rows; loose file entries never mount as modules), so the
-/// single-file spelling falling alone is the loud missing error — the
-/// dir-form fix named. Entries are archive-relative and canonical —
-/// the cycle guard keys on the key itself.
+/// law the FS and source-zip lanes answer, over entry keys: the
+/// directory form `<declaring dir>/NAME/<child file>` first, else the
+/// single-file `<declaring dir>/NAME.rut` BESIDE THE DECLARING FILE,
+/// both present the loud ambiguity. The read closure remembers each
+/// mounted child's RECORD by mod path (the root seeded with the root
+/// entry's own name), so the probe base derives from that record
+/// through [`crate::mods::child_probes`] — never from the parent's mod
+/// path joined as a directory (the mirror every lane deleted). Entries
+/// are archive-relative and canonical — the cycle guard keys on the key
+/// itself.
 fn entry_child_lookup<'a>(
     entries: &'a [(String, Vec<u8>)],
     prefix: &'a str,
+    child_file: &'a str,
 ) -> impl FnMut(&str, &str) -> Result<ChildLookup, String> + 'a {
+    // the parents' RECORDS by mod path: the root is the entry beside
+    // the manifest, each child the entry key minus `{prefix}`
+    let mut records: BTreeMap<String, String> =
+        BTreeMap::from([(String::new(), child_file.to_string())]);
     move |parent: &str, name: &str| {
-        let base = if parent.is_empty() {
-            prefix.to_string()
-        } else {
-            format!("{prefix}{parent}/")
-        };
-        let key = bundle_key(&format!("{base}{name}/mod.rut"))?;
-        let file = bundle_key(&format!("{base}{name}.rut"))?;
-        // the record: the mod path's directory-form spelling — the
-        // archive's `{prefix}` is the package root's directory
-        let path = if parent.is_empty() {
+        let parent_file = records.get(parent).map_or(child_file, String::as_str);
+        let (dir_rel, file_rel) = crate::mods::child_probes(parent_file, name, child_file);
+        let key = bundle_key(&format!("{prefix}{dir_rel}"))?;
+        let file = bundle_key(&format!("{prefix}{file_rel}"))?;
+        let child_path = if parent.is_empty() {
             name.to_string()
         } else {
             format!("{parent}/{name}")
@@ -483,15 +486,27 @@ fn entry_child_lookup<'a>(
             return Ok(ChildLookup::Ambiguous);
         }
         if has_dir {
+            records.insert(child_path, dir_rel.clone());
             return Ok(ChildLookup::Found {
                 text: read_entry(entries, &key)?,
                 canon: key,
-                file: format!("{path}/mod.rut"),
+                file: dir_rel,
             });
         }
-        // the single-file entry alone: not a module here — bundles are
-        // directory-form (the loud misses name the dir-form fix)
-        let dir = bundle_key(&format!("{base}{name}/"))?;
+        if has_file {
+            records.insert(child_path, file_rel.clone());
+            return Ok(ChildLookup::Found {
+                text: read_entry(entries, &file)?,
+                canon: file,
+                file: file_rel,
+            });
+        }
+        // nothing under either spelling: a directory holding no module
+        // file is the loud NoModRut (the dir-form fix), else Missing
+        let dir = bundle_key(&format!(
+            "{prefix}{}",
+            dir_rel.strip_suffix(child_file).unwrap_or(&dir_rel)
+        ))?;
         if entries.iter().any(|(n, _)| n.starts_with(&dir)) {
             return Ok(ChildLookup::NoModRut);
         }
@@ -664,7 +679,7 @@ fn plain_source_pkg(
     manifest: &Manifest,
     src: String,
 ) -> Result<Mounted, String> {
-    let mut lookup = entry_child_lookup(entries, prefix);
+    let mut lookup = entry_child_lookup(entries, prefix, "mod.rut");
     let mods = mount_mod_children(
         &src,
         &format!("\u{0}{prefix}"),
