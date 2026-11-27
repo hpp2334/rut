@@ -150,7 +150,7 @@ fn the_template_files_are_the_carrier() {
 #[test]
 fn scaffold_refuses_to_clobber() {
     for seeded in ["rut.jsonc", "src/mod.rut", "rut.lock"] {
-        let root = scratch(&format!("clobber-{}", seeded.replace('/', "-")));
+        let root = scratch(&format!("clobber-{seeded}"));
         let dir = root.join("hello");
         let seeded_path = dir.join(seeded);
         std::fs::create_dir_all(seeded_path.parent().unwrap()).unwrap();

@@ -12,9 +12,15 @@ impl Scratch {
     /// A new empty directory under the temp root:
     /// `rut-{tag}-{pid}-{n}` — `n` from a process-wide counter, so two
     /// guards in one test never share a directory.
+    ///
+    /// A tag is one path segment: a `/` (or `\`) is flattened to `-`
+    /// before the join, so the scratch is always ONE flat directory
+    /// directly under the root — the guard owns its path's shape, never
+    /// the call site.
     pub fn new(tag: &str) -> Self {
         static NEXT: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
         let n = NEXT.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+        let tag = tag.replace(['/', '\\'], "-");
         let path = temp_root().join(format!("rut-{tag}-{}-{n}", std::process::id()));
         std::fs::create_dir_all(&path)
             .unwrap_or_else(|e| panic!("rut-testkit: create {}: {e}", path.display()));
