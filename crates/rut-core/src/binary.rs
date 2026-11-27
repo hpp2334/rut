@@ -2017,6 +2017,19 @@ fn validate_surface(
             ty(m.ret)?;
         }
     }
+    // a type export's `local` names a row inside the carried type block.
+    // The coarse total is the honest bound: the row carries no scope
+    // tag, so a per-block bound would need one (the funcs lane's
+    // re-export caveat).
+    for t in &s.type_exports {
+        if t.local as usize >= types_len {
+            let tname = s.names.name(t.name);
+            return Err(format!(
+                "bad surface type export `{tname}` (local {} outside the carried types)",
+                t.local
+            ));
+        }
+    }
     for (t, _, _) in &s.native_impls {
         ty(*t)?;
     }
@@ -3443,6 +3456,39 @@ mod tests {
             decode(&encode(&p)).is_err(),
             "iface local outside the iface table"
         );
+    }
+
+    #[test]
+    fn decode_bounds_every_type_export_local() {
+        // F41: a type export's `local` names a row inside the carried
+        // type block — a malformed row (past the end) refuses at decode;
+        // the well-formed control decodes unchanged.
+        let mut p = sample();
+        let point = p.interner.lookup("Point").unwrap();
+        p.surface.types = p.types.types[boot_len() as usize..].to_vec();
+        p.surface.scope_blocks.push((7, 0));
+        p.surface.type_exports.push(SurfaceType {
+            name: point,
+            local: 3, // the carried block holds exactly one row
+            is_class: false,
+            is_generic: false,
+            newtype: false,
+            params: Vec::new(),
+            scope: None,
+            owner: None,
+        });
+        // the producer's law: the surface's names ARE the program's
+        p.surface.names = p.interner.clone();
+        let err = decode(&encode(&p)).expect_err("type export local past the carried types");
+        assert!(
+            err.contains("bad surface type export `Point` (local 3 outside the carried types)"),
+            "{err}"
+        );
+
+        // the guard: the same row at a lawful local decodes unchanged
+        p.surface.type_exports[0].local = 0;
+        let q = decode(&encode(&p)).expect("a well-formed surface decodes");
+        assert_eq!(q.surface, p.surface);
     }
 
     fn boot_len() -> u32 {
