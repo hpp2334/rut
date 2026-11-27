@@ -84,11 +84,14 @@ area=9
   fns or `async { }` blocks inside sync methods
   ([async](async.md)); on that lane the checker's coverage is
   narrower: a non-generic async fn whose parameters are not
-  interface-typed is type-checked even when nothing calls it, while a
-  generic async fn, or one with an interface-typed parameter, has a
-  body that compiles only at its call sites — a dead one of either is
-  never checked (a non-generic async method itself is always reached:
-  the never-reached cases above are the only ones).
+  interface-typed is type-checked even when nothing calls it; a
+  generic async fn is refused at its declaration instead, dead or
+  called — the weave refuses generics (v1 weaves only non-generic
+  async fns), so its body compiles nowhere; and one with an
+  interface-typed parameter is the lane's only never-checked shape —
+  its body compiles only at its call sites, where the parameter's
+  concrete origin is known (a non-generic async method itself is
+  always reached: the never-reached cases above are the only ones).
 
 ### `[constructor]` — the designated construction surface
 

@@ -456,9 +456,14 @@ and every class member — carries a visibility:
   non-generic fn body whose parameters are not interface-typed is
   type-checked even when nothing calls it. The two exclusions are by
   design — such a body compiles only where something calls it: a
-  generic fn or method is monomorphized at its call sites (the call
-  supplies the substitution), and a fn with an interface-typed
+  generic sync fn or method is monomorphized at its call sites (the
+  call supplies the substitution), and a fn with an interface-typed
   parameter is specialized per call (the call supplies the
   parameter's concrete origin), so a never-called body of either is
-  never checked. Methods have no interface-typed-parameter exclusion —
-  a non-generic method body is checked dead like any other.
+  never checked. The generic arm's one refusal is on the async lane:
+  a generic async fn is refused at its declaration, dead or called —
+  the weave refuses generics there ([async](async.md)); a generic
+  async method is instead simply never reached
+  ([classes](classes.md)). Methods have no interface-typed-parameter
+  exclusion — a non-generic sync method body is checked dead like any
+  other.
