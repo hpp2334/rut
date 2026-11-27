@@ -675,6 +675,18 @@ fn modpkg(spec: &str, root: &str, mods: Vec<(&str, Vis, &str)>) -> rut_driver::M
 /// Compile the offered pkgs (entrypoint `spec`), handing back the
 /// diagnostic messages.
 fn compile_with_diags(pkgs: &[rut_driver::Mounted], entry: &str) -> Vec<String> {
+    compile_with_diags_spanned(pkgs, entry)
+        .into_iter()
+        .map(|d| d.msg)
+        .collect()
+}
+
+/// [`compile_with_diags`] with the spans kept — the "at the call" half
+/// of a diagnostic's law is unreadable through the messages alone.
+fn compile_with_diags_spanned(
+    pkgs: &[rut_driver::Mounted],
+    entry: &str,
+) -> Vec<rut_lexer::diag::Diag> {
     let mut run = rut_driver::RutRun::new();
     // the hand world declares loosely: every pkg names every other
     // (the law bounds uses by declarations, never declarations by
@@ -694,7 +706,21 @@ fn compile_with_diags(pkgs: &[rut_driver::Mounted], entry: &str) -> Vec<String> 
         .entrypoint(entry)
         .compile()
         .expect("compile carries the diags");
-    c.graph.diags.iter().map(|d| d.msg.clone()).collect()
+    c.graph.diags
+}
+
+/// Assert a diagnostic's span sits inside `needle`'s occurrence in `src`
+/// — the call site, not a 0,0 or a neighbour's span.
+fn assert_diag_at(src: &str, d: &rut_lexer::diag::Diag, needle: &str) {
+    let at = src.find(needle).expect("the call is in the source");
+    assert!(
+        d.span.lo as usize >= at
+            && d.span.hi as usize <= at + needle.len()
+            && d.span.hi > d.span.lo,
+        "diag span {:?} is not inside `{needle}` at byte {at}: {}",
+        d.span,
+        d.msg
+    );
 }
 
 fn run_main_pkgs(pkgs: &[rut_driver::Mounted], entry: &str) -> i64 {
@@ -2800,14 +2826,17 @@ fn receiver_call_on_a_self_less_method_is_a_diagnostic() {
     let src = format!(
         "{SELF_LESS_MAKE}entry fn main() -> nil {{ let b = B {{ n: 0 }}; let _ = b.make(); }}\n"
     );
-    let diags = compile_with_diags(&[modpkg("app", &src, vec![])], "app");
+    let diags = compile_with_diags_spanned(&[modpkg("app", &src, vec![])], "app");
     assert_eq!(diags.len(), 1, "{diags:?}");
+    let d = &diags[0];
     assert!(
-        diags[0].contains("`make` takes no `self`")
-            && diags[0].contains("`B::make`")
-            && diags[0].contains("spell `self` as its first parameter"),
+        d.msg.contains("`make` takes no `self`")
+            && d.msg.contains("`B::make`")
+            && d.msg.contains("spell `self` as its first parameter"),
         "{diags:?}"
     );
+    // the law's "at the call" half: the span sits inside `b.make()`
+    assert_diag_at(&src, d, "b.make()");
 }
 
 #[test]
@@ -2841,4 +2870,26 @@ fn a_never_called_self_less_declaration_stays_clean() {
     let src = format!("{SELF_LESS_MAKE}entry fn main() -> nil {{ }}\n");
     let diags = compile_with_diags(&[modpkg("app", &src, vec![])], "app");
     assert!(diags.is_empty(), "{diags:?}");
+}
+
+#[test]
+fn cross_package_receiver_call_on_a_self_less_method_is_a_diagnostic() {
+    // the SAME law on the used-type lane: `find_extern_inherent` matches
+    // by NAME only, so a self-less method of a used class reaches the
+    // extern receiver arm — a diagnostic at the call, never the arm's
+    // assume-the-receiver assert
+    let lib = "pub struct B { n: i32 }\nimpl B { pub fn make() -> i32 { return 1; } }\n";
+    let app = "use lib::{ B };\n\
+               entry fn main() -> nil { let b = B { n: 0 }; let _ = b.make(); }\n";
+    let diags = compile_with_diags_spanned(
+        &[modpkg("lib", lib, vec![]), modpkg("app", app, vec![])],
+        "app",
+    );
+    assert_eq!(diags.len(), 1, "{diags:?}");
+    let d = &diags[0];
+    assert!(
+        d.msg.contains("`make` takes no `self`") && d.msg.contains("`B::make`"),
+        "{diags:?}"
+    );
+    assert_diag_at(app, d, "b.make()");
 }

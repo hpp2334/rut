@@ -64,7 +64,27 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
     ) -> TcResult<TypeId> {
         let m = self.ctx.extern_inherents[ih].methods[midx].clone();
         let (name, func, has_self, mgen) = (m.name, m.local, m.has_self, m.generics);
-        debug_assert!(has_self, "instance call routed a class method");
+        // a receiver call resolves a SELF-BEARING method: a self-less
+        // method is a static — addressed by its owner, never through a
+        // receiver. `find_extern_inherent` matches by NAME only, so a
+        // used class's class method reaches this arm; the local lane's
+        // gate (inline.rs) spells the same diagnostic.
+        if !has_self {
+            let owner = dname
+                .map(|d| self.ctx.name(d).to_string())
+                .unwrap_or_else(|| self.ctx.type_name(rt).to_string());
+            self.ctx.err(
+                sp,
+                format!(
+                    "`{}` takes no `self` — call it as `{}::{}`, \
+                     or spell `self` as its first parameter",
+                    self.ctx.name(name),
+                    owner,
+                    self.ctx.name(name),
+                ),
+            );
+            return Err(());
+        }
         // a generic METHOD's own parameters join the class's
         // substitution: explicit site arguments first (`source<i64>`),
         // else structural unification against the placeholder signature
