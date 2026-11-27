@@ -376,10 +376,10 @@ fn a_host_trees_single_file_child_mounts() {
         hits.len() == 1 && !no_hover(&hover),
         "the walk's two answers — edge: {hits:?}; hover: {hover}"
     );
-    // the walk joins path rows with `/` — the host env resolves the
-    // `..` (dep_walk's path law), so the origin spells `app/../hh`
+    // the walk collapses `..` lexically — the origin spells the file's
+    // true path, one spelling per file (dep_walk's path law)
     assert_eq!(
-        hits[0]["uri"], "file:///ws/app/../hh/src/tool.rut",
+        hits[0]["uri"], "file:///ws/hh/src/tool.rut",
         "the child file: {hits:?}"
     );
     assert_eq!(

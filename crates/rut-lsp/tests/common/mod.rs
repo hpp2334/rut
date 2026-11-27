@@ -773,12 +773,13 @@ pub mod rut_new {
     }
 
     /// the dep's files as the WALK stamps their origins — rooted
-    /// paths, the path row's joined `..` carried (the walk's own law):
-    /// a hover's provenance line reads `— /ws/app/../calc/…`. Spelled
-    /// in the PIN's way (the harness brings answer uris back to it,
-    /// whatever dir the hiding run put on disk)
+    /// paths, the path row's `..` collapsed (the walk's own law: one
+    /// spelling per file): a hover's provenance line reads
+    /// `— /ws/calc/…`. Spelled in the PIN's way (the harness brings
+    /// answer uris back to it, whatever dir the hiding run put on
+    /// disk — the dep's own dir is never renamed)
     pub fn calc(rel: &str) -> String {
-        format!("/ws/app/../calc/{rel}")
+        format!("/ws/calc/{rel}")
     }
 
     /// the same file as a jump target — the definition layer's uri
@@ -829,7 +830,7 @@ pub mod rut_new {
     ];
 
     /// the dep's files on disk (the walk mounts them — plain-path
-    /// origins, the `..` row carried)
+    /// origins, the `..` row collapsed)
     pub const CALC_FILES: [(&str, &str); 3] = [
         ("src/mod.rut", CALC_ROOT),
         ("src/math/mod.rut", CALC_MATH),

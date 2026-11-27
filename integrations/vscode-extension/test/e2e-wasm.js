@@ -1794,7 +1794,9 @@ async function main() {
                 );
             }
             const want = {
-                uri: `file://${PROJ}/../ink/src/mod.rut`,
+                // the walk collapses the path row's `..` — the origin
+                // spells the dep file's true path
+                uri: `file://${WS}/ink/src/mod.rut`,
                 range: identAt(inkSrc, /^\s*pub fn info\(self, msg: str\)/, 'info'),
                 len: 4,
             };

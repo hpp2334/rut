@@ -607,16 +607,33 @@ fn mount_url_dep(ctx: &mut WalkCtx, state: &mut Session, row: &DepRow, depth: us
     );
 }
 
-// ---- the rooted-string path helpers (join with `/` only — the host
-// normalizes; `std::path` never enters) ----
+// ---- the rooted-string path helpers (join with `/` only — `std::path`
+// never enters; the host resolves reads) ----
 
-/// `<dir>/<rel>` (an absolute `rel` wins, mirroring `path.resolve`)
+/// `<dir>/<rel>`, `<seg>/..` collapsed lexically (an absolute `rel`
+/// wins, mirroring `path.resolve`) — ONE spelling per file, so the
+/// origin a signature or a diagnostic names is the file's true path.
+/// A `..` pops the last segment only when it is a real name; a leading
+/// `..` stays (a path above the base is legal input the host's reads
+/// resolve), and nothing here touches the fs.
 fn join(dir: &str, rel: &str) -> String {
     if rel.starts_with('/') {
-        rel.to_string()
-    } else {
-        format!("{dir}/{rel}")
+        return rel.to_string();
     }
+    let joined = format!("{dir}/{rel}");
+    let mut segs: Vec<&str> = Vec::new();
+    for seg in joined.split('/') {
+        if seg == ".."
+            && segs
+                .last()
+                .is_some_and(|last| !last.is_empty() && *last != "." && *last != "..")
+        {
+            segs.pop();
+        } else {
+            segs.push(seg);
+        }
+    }
+    segs.join("/")
 }
 
 /// the last `/` segment — the module name a manifest-less dir answers

@@ -43,8 +43,8 @@ struct FsIo {
 }
 
 impl FsIo {
-    /// a rooted string → the fs path (lexical `..`/`.` collapsing; the
-    /// walk joins with `/` only, the host normalizes)
+    /// a rooted string → the fs path (lexical `..`/`.` collapsing — the
+    /// host normalizes any spelling a caller hands it)
     fn resolve(&self, path: &str) -> PathBuf {
         let mut out: Vec<&str> = Vec::new();
         for seg in path.split('/') {
@@ -242,10 +242,23 @@ fn snapshot(dir: &Path) -> Vec<String> {
 }
 
 /// the walk's origin spelling for a path under `base`: joined with `/`
-/// exactly as the walk does (`..` preserved — the HOST env normalizes,
-/// the walk never munges)
+/// and `..` collapsed exactly as the walk does (ONE spelling per file —
+/// the joined row names the file's true path)
 fn walk_path(base: &Path, rel: &str) -> String {
-    format!("{}/{}", base.display(), rel)
+    let joined = format!("{}/{}", base.display(), rel);
+    let mut segs: Vec<&str> = Vec::new();
+    for seg in joined.split('/') {
+        if seg == ".."
+            && segs
+                .last()
+                .is_some_and(|last| !last.is_empty() && *last != "." && *last != "..")
+        {
+            segs.pop();
+        } else {
+            segs.push(seg);
+        }
+    }
+    segs.join("/")
 }
 
 /// an absolute-path origin as the definition layer spells it on the
@@ -893,8 +906,8 @@ fn the_mod_tree_spellings_mount_and_hint_on_both() {
         "{notes:?}"
     );
     // both legal spellings mounted — the dir form's nested child at
-    // its own path, the file form at its own file (origins carry the
-    // joined `..` — the HOST env normalizes, the walk never munges)
+    // its own path, the file form at its own file (origins collapse
+    // the joined `..` — one spelling per file, the walk's path law)
     let doc = "use gadgets::dirform::nested::{ nested_tag };\nuse gadgets::fileform::{ file_tag };\nfn main() -> nil {\n}\n";
     assert_eq!(
         def_uris(&lsp, &mut pool, doc, "nested_tag"),
