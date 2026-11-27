@@ -52,6 +52,10 @@ pub(super) fn auto_import_completions(
                 .as_deref()
                 .is_some_and(|m| direct_deps.contains(m))
     };
+    // the asking file's own package — the let gate's stamp comparison
+    // ([`crate::resolve::pkg::same_pkg`], the gate's one home): the
+    // lets loop below keeps only the asking file's own package's lets
+    let asking = w.file(file).stamp.module.as_deref();
     // the (name, pkg) set the import map spells — an imported name
     // is never re-offered with an insert edit
     let imported: HashSet<(&str, &str)> = crate::resolve::pkg::import_map(w.file(file))
@@ -118,6 +122,13 @@ pub(super) fn auto_import_completions(
             foreign(fv.name(), &doc, CompletionKind::Fn);
         }
         for l in f.lets() {
+            // the compiler's own law: a module let crosses no package
+            // surface (`program.rs`) — a foreign let is no import
+            // offer (the host surface's folded consts are the one
+            // exemption the compiler spells; see `pkg::same_pkg`)
+            if !crate::resolve::pkg::same_pkg(asking, f) {
+                continue;
+            }
             let doc = l.doc_lines();
             foreign(l.name(), &doc, CompletionKind::Const);
         }

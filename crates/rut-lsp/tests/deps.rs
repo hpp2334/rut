@@ -448,6 +448,40 @@ fn a_host_trees_child_keeps_its_own_edges() {
 }
 
 #[test]
+fn an_open_custom_entry_surface_compiles_as_its_mounts_mode() {
+    // F79's observable face: a host pkg may spell its entry surface
+    // under a name the filename convention reads as Impl (`entry.type`
+    // — the manifest mints the entry's Decl mode, not the filename),
+    // so the check lane's upsert used to re-derive Impl from the
+    // filename and `build_world`'s Impl branch compiled the DECL
+    // surface as an implementation body: the false
+    // `declaration keyword in an implementation file` squiggle on a
+    // clean surface. The stamp's owner answers — the row's mounted
+    // mode rides the world assembly, and the surface lowers as the
+    // host pkg it is. (The standard `.d.rut` root spells no divergence
+    // — `mode_of` agrees with the mount there; this fixture is the
+    // branch the filename convention gets wrong.)
+    let mut io = MemIo::default();
+    io.put(
+        "/ws/hh/rut.jsonc",
+        "{\n  \"name\": \"hh\",\n  \"type\": \"host\",\n  \"entry\": { \"type\": \"./surface.rut\" }\n}\n",
+    );
+    let surface = "pub host fn helper() -> i32;\n";
+    io.put("/ws/hh/src/surface.rut", surface);
+    let io = Rc::new(io);
+    let mut s = S::with_io(&io);
+    let out = s.resolve(&["/ws/hh"]);
+    assert_eq!(out["missing"].as_array().unwrap().len(), 0, "{out}");
+
+    let a = s.analyze("file:///ws/hh/src/surface.rut", surface);
+    let diags = a["diags"].as_array().unwrap();
+    assert!(
+        diags.is_empty(),
+        "the mount's mode is the check lane's world row: {a}"
+    );
+}
+
+#[test]
 fn the_ambiguity_hint_names_the_trees_true_child_file() {
     // F50: a host tree's both-spellings refusal names the file the
     // flavor actually probed — `NAME/mod.d.rut` — never a hardcoded

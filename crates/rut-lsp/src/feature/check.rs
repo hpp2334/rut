@@ -183,13 +183,20 @@ pub fn check_doc(
             groups.last_mut().expect("just pushed")
         }
     };
-    let vis = slot.files.get(&path).map(|f| f.vis).unwrap_or(Vis::Pub);
+    let existing = slot.files.get(&path);
+    let vis = existing.map(|f| f.vis).unwrap_or(Vis::Pub);
+    // the stamp's owner answers: a row the world already stamped keeps its
+    // mode — the filename convention is the fallback for a row that does
+    // not exist, never the override for one that does
+    let mode = existing
+        .map(|f| f.mode)
+        .unwrap_or_else(|| crate::doc::mode_of(doc_uri));
     slot.files.insert(
         path,
         FileSrc {
             uri: doc_uri.to_string(),
             text: doc_text,
-            mode: crate::doc::mode_of(doc_uri),
+            mode,
             vis,
         },
     );

@@ -313,6 +313,9 @@ pub(crate) fn walked_surface<'a>(
         scoped.into_iter().filter(|id| member(*id)).collect()
     };
     let mut rows: Vec<ExportRow<'a>> = Vec::new();
+    // the asking file's own package — the let gate's stamp comparison
+    // ([`crate::resolve::pkg::same_pkg`], the gate's one home)
+    let asking = w.file(file).stamp.module.as_deref();
     for id in &scope {
         let f = w.file(*id);
         // the walkable children — pub edges only (cross-package law)
@@ -338,7 +341,11 @@ pub(crate) fn walked_surface<'a>(
             }
         }
         for l in f.lets() {
-            if l.vis() == Vis::Pub {
+            // the compiler's own law: a module let crosses no package
+            // surface (`program.rs`) — a foreign let is no use-tier
+            // row (the host surface's folded consts are the one
+            // exemption the compiler spells; see `pkg::same_pkg`)
+            if l.vis() == Vis::Pub && crate::resolve::pkg::same_pkg(asking, f) {
                 rows.push(ExportRow::Let(l));
             }
         }

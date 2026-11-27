@@ -34,6 +34,24 @@ pub fn matches_pkg(f: &File, pkg: &str) -> bool {
         .any(|seg| seg.strip_suffix(".rut").unwrap_or(seg) == pkg)
 }
 
+/// a module let crosses NO package surface — the compiler's own law
+/// (`program.rs`: "a module let does not cross package surfaces; it
+/// binds only inside its own package") — the offer tiers' gate: only
+/// a file of the ASKING file's own package answers a let. The
+/// `Option<String>` stamp comparison: an unowned asking file keeps
+/// only unowned rows. THE ONE EXEMPTION the compiler itself spells: a
+/// HOST pkg's surface `pub let` folds into const rows that bind BARE
+/// at the pkg's root and DO cross — `use calc_host::{ PI }` compiles
+/// and runs (the std math family, the book's documented spelling,
+/// host-fns.md) — and the mount's word for a host file is the Decl
+/// mode (a mount stamps the mode it parsed with), so a Decl-mode
+/// file's lets answer every asker. Probed live under the store guard:
+/// the lib pkg's module let import errors naming the law above, the
+/// host surface's `PI` import compiles clean.
+pub fn same_pkg(asking: Option<&str>, f: &File) -> bool {
+    f.stamp.mode == crate::doc::Mode::Decl || f.stamp.module.as_deref() == asking
+}
+
 /// the document's import map: imported name -> its `use` pkg — the
 /// (name, pkg) set shape the auto-import tier dedups against (and
 /// typeDefinition's computed-head gate restricts by; the bare/type

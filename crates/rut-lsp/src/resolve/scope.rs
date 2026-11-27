@@ -472,10 +472,11 @@ fn use_bound<'a>(
     // a module let crosses NO package surface — the compiler's own law
     // (`program.rs`: "a module let does not cross package surfaces; it
     // binds only inside its own package"), and the editor never answers
-    // what the compiler refuses. The let sweep therefore keeps only
-    // files of the asking file's own package (the `Option<String>`
-    // stamp comparison: an unowned asking file keeps only unowned
-    // rows). Pub TYPES and FNS still cross — their push is unchanged.
+    // what the compiler refuses. The let sweep rides
+    // [`crate::resolve::pkg::same_pkg`] — the gate's ONE home (the
+    // asking file's own package answers; the host surface's folded
+    // consts are the compiler's own crossing exemption). Pub TYPES and
+    // FNS still cross — their push is unchanged.
     let asking = w.file(file).stamp.module.as_deref();
     for &id in &in_scope {
         if id == file {
@@ -487,7 +488,7 @@ fn use_bound<'a>(
             tys.push((f, t));
         }
         for l in f.lets() {
-            if l.name() == name && l.vis() == Vis::Pub && f.stamp.module.as_deref() == asking {
+            if l.name() == name && l.vis() == Vis::Pub && crate::resolve::pkg::same_pkg(asking, f) {
                 lets.push((f, l));
             }
         }

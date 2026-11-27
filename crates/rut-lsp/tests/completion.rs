@@ -1927,3 +1927,61 @@ fn a_computed_head_with_two_same_named_mounted_types_answers_nothing() {
     assert!(offers(&items, "aaa"), "one candidate answers: {items:?}");
 }
 }
+
+// ---- the let-offer gate (F81 + F82): the compiler's own crossing law ----
+
+both_uri_shapes! {
+#[test]
+fn an_auto_import_tier_offers_no_foreign_module_let() {
+    // law 6 / F81: the auto-import tier proposed `use calc::{CPI}` —
+    // the import the compiler refuses (`program.rs`: "a module let
+    // does not cross package surfaces; it binds only inside its own
+    // package" — probed live: the run errors naming exactly that). The
+    // tier's lets loop rides `pkg::same_pkg`: only the asking file's
+    // own package answers a let (a HOST surface's folded consts stay —
+    // `use calc_host::{ PI }` compiles, the book's documented
+    // spelling). The types and fns loops are untouched: pub types and
+    // fns DO cross packages (the control).
+    let (mut s, _io) = rut_new::boot();
+    let uri = rut_new::at("src/child/mod.rut");
+    let src = "fn k() -> f64 { return CP }\n";
+    let items = s.complete_at(&uri, src, "return CP", 1);
+    assert!(
+        import_offer(&items, "CPI").is_none(),
+        "a foreign module let is no import offer: {:?}",
+        labels(&items)
+    );
+    // the control: the same dep's pub fn still rides the tier
+    let src = "fn k() -> i32 { return cm }\n";
+    let items = s.complete_at(&uri, src, "return cm", 1);
+    assert!(
+        import_offer(&items, "cmk").is_some(),
+        "a foreign pub fn is still offered: {:?}",
+        labels(&items)
+    );
+}
+}
+
+both_uri_shapes! {
+#[test]
+fn a_qualified_use_tier_answers_no_foreign_module_let() {
+    // law 6 / F82: `use calc::math::{CP⏐` — the walked surface's Let
+    // rows rode the enumeration, answering `CPI` — the leaf import the
+    // compiler refuses (the same crossing law as F81). The Let push
+    // rides `pkg::same_pkg` (a host surface's folded consts stay);
+    // the walked pub fn still answers (the control).
+    let (mut s, _io) = rut_new::boot();
+    let uri = rut_new::at("src/child/mod.rut");
+    let items = s.complete_pos(&uri, "use calc::math::{CP", 0, 19);
+    assert!(
+        !offers(&items, "CPI"),
+        "a foreign module let is no use-tier row: {:?}",
+        labels(&items)
+    );
+    // the control: the walked module's pub fn still answers
+    let items = s.complete_pos(&uri, "use calc::math::{c", 0, 18);
+    let ls = labels(&items);
+    assert!(ls.contains(&"cmk"), "the walked pub fn answers: {ls:?}");
+    assert!(!ls.contains(&"CPI"), "no foreign let beside it: {ls:?}");
+}
+}
