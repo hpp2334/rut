@@ -1582,3 +1582,29 @@ fn a_package_private_re_export_across_packages_jumps_nowhere() {
     );
 }
 }
+
+// ---- phase 6 task A: one declaration or nothing (F40) ----
+
+both_uri_shapes! {
+#[test]
+fn a_deps_module_let_jumps_nowhere() {
+    // law 6 / F40's definition face: the compiler refuses a module let
+    // across a package surface, so go-to-definition lands nowhere —
+    // while the same module's `pub` fn (the control) does land
+    let (mut s, _io) = rut_new::boot();
+    let uri = rut_new::at("src/child/mod.rut");
+    let src = "use calc::math::{ CPI };\nfn k() -> f64 { return CPI; }\n";
+    let hits = s.def_at(&uri, src, "CPI", 2);
+    assert!(
+        hits.is_empty(),
+        "a dep's module let jumps nowhere: {hits:?}"
+    );
+    let hits = s.def_at(
+        &uri,
+        "use calc::math::{ cmk };\nfn k() -> i32 { return cmk(1).deg(); }\n",
+        "cmk",
+        2,
+    );
+    assert_eq!(hits.len(), 1, "a dep's pub fn lands: {hits:?}");
+}
+}

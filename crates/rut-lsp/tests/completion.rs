@@ -1857,3 +1857,73 @@ fn the_typed_prefix_rides_the_cursor_s_own_name_span() {
         labels(&items)
     );
 }
+
+// ---- phase 6 task A: one declaration or nothing (F40, F59) ----
+
+both_uri_shapes! {
+#[test]
+fn a_deps_module_let_is_no_bound_name_of_the_bare_tier() {
+    // law 6 / F40's completion face: the file scope's cross-package
+    // sweep keeps only the asking file's own package's module lets
+    // (the compiler refuses the import), so the imported name is no
+    // row the bare tier could enumerate — and the auto-import tier
+    // never re-offers a name the document already imports
+    let (mut s, _io) = rut_new::boot();
+    let uri = rut_new::at("src/child/mod.rut");
+    let src = "use calc::math::{ CPI };\nfn k() -> f64 { return CP }\n";
+    let items = s.complete_at(&uri, src, "return CP", 1);
+    assert!(
+        !offers(&items, "CPI"),
+        "a dep's module let is no bound name: {:?}",
+        labels(&items)
+    );
+    // the control: the same module's pub fn IS the bound name
+    let src = "use calc::math::{ cmk };\nfn k() -> i32 { return cm }\n";
+    let items = s.complete_at(&uri, src, "return cm", 1);
+    assert!(offers(&items, "cmk"), "the dep's pub fn binds: {items:?}");
+}
+}
+
+both_uri_shapes! {
+#[test]
+fn a_computed_head_with_two_same_named_mounted_types_answers_nothing() {
+    // law 6 / F59: a COMPUTED type head (the ctor binding `w`, whose
+    // type nothing spells) resolves through the doc's import pkgs, the
+    // world's flat sweep the fallback — and the fallback answers ONE
+    // declaration or NOTHING. Two mounted packages declare `Widget`:
+    // a pick between them is the one-name law's refusal, so the
+    // member tier is empty
+    let mut s = S::boot();
+    s.index_mod_at(
+        "file:///deps/aa/mod.rut",
+        "aa",
+        "",
+        "pub class Widget {\n    n: i32,\n}\nimpl Widget {\n    pub fn aaa(self) -> i32 { return self.n + 1; }\n}\n",
+    );
+    s.index_mod_at(
+        "file:///deps/bb/mod.rut",
+        "bb",
+        "",
+        "pub class Widget {\n    n: i32,\n}\nimpl Widget {\n    pub fn bbb(self) -> i32 { return self.n + 2; }\n}\n",
+    );
+    let uri = "file:///ws/app/src/mod.rut";
+    let src = "entry fn main() -> nil {\n    let w = Widget(1);\n    w.\n}\n";
+    let items = s.complete_at(uri, src, "w.", 1);
+    assert!(
+        items.is_empty(),
+        "two same-named mounted types answer nothing: {:?}",
+        labels(&items)
+    );
+    // the control: the SAME question with ONE candidate answers its
+    // members (the fallback lane is alive — it is no pick)
+    let mut s = S::boot();
+    s.index_mod_at(
+        "file:///deps/aa/mod.rut",
+        "aa",
+        "",
+        "pub class Widget {\n    n: i32,\n}\nimpl Widget {\n    pub fn aaa(self) -> i32 { return self.n + 1; }\n}\n",
+    );
+    let items = s.complete_at(uri, src, "w.", 1);
+    assert!(offers(&items, "aaa"), "one candidate answers: {items:?}");
+}
+}

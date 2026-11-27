@@ -2618,3 +2618,29 @@ fn qualified_tail_caret_past_the_name_still_answers_the_member() {
     assert_eq!(pos_pair(&refs[0]["range"]["start"]), (0, 13), "{refs:?}");
     assert_eq!(pos_pair(&refs[1]["range"]["start"]), (2, 19), "{refs:?}");
 }
+
+// ---- phase 6 task A: one declaration or nothing (F40, F59) ----
+
+both_uri_shapes! {
+#[test]
+fn a_deps_module_let_crosses_no_surface_in_hover() {
+    // law 6 / F40: the compiler refuses a module let across a package
+    // surface ("a module let does not cross package surfaces; it binds
+    // only inside its own package" — `program.rs`), so the editor
+    // answers none: the file scope's cross-package sweep keeps only
+    // files of the asking file's own package. The `pub` fn beside it
+    // is the control — fns DO cross, the fix is the let sweep.
+    let (mut s, _io) = rut_new::boot();
+    let uri = rut_new::at("src/child/mod.rut");
+    let src = "use calc::math::{ CPI };\nfn k() -> f64 { return CPI; }\n";
+    let h = s.hover_at(&uri, src, "CPI", 2);
+    assert!(no_hover(&h), "a dep's module let answers no hover: {h:?}");
+    let md = markdown(s.hover_at(
+        &uri,
+        "use calc::math::{ cmk };\nfn k() -> i32 { return cmk(1).deg(); }\n",
+        "cmk",
+        2,
+    ));
+    assert!(md.contains("pub fn cmk(d: i32) -> Calc"), "{md}");
+}
+}

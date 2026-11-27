@@ -469,6 +469,14 @@ fn use_bound<'a>(
     let mut tys: Vec<(&File, TyView<'a>)> = Vec::new();
     let mut lets: Vec<(&File, LetView<'a>)> = Vec::new();
     let mut fns: Vec<(&File, FnView<'a>)> = Vec::new();
+    // a module let crosses NO package surface — the compiler's own law
+    // (`program.rs`: "a module let does not cross package surfaces; it
+    // binds only inside its own package"), and the editor never answers
+    // what the compiler refuses. The let sweep therefore keeps only
+    // files of the asking file's own package (the `Option<String>`
+    // stamp comparison: an unowned asking file keeps only unowned
+    // rows). Pub TYPES and FNS still cross — their push is unchanged.
+    let asking = w.file(file).stamp.module.as_deref();
     for &id in &in_scope {
         if id == file {
             continue;
@@ -479,7 +487,7 @@ fn use_bound<'a>(
             tys.push((f, t));
         }
         for l in f.lets() {
-            if l.name() == name && l.vis() == Vis::Pub {
+            if l.name() == name && l.vis() == Vis::Pub && f.stamp.module.as_deref() == asking {
                 lets.push((f, l));
             }
         }
@@ -618,7 +626,9 @@ pub(crate) fn type_via_imports<'a>(w: &'a World, file: FileId, name: &str) -> Op
     // ctor-inference shape — `Logger("h")` typing a binding off a
     // mounted dep without a use edge); the mounted carrier wins
     // over the embedded prelude. Spelled names never ride this —
-    // the spelling lanes stop at [`file_scope`].
+    // the spelling lanes stop at [`file_scope`]. The staging is the
+    // preference, never a pick: two same-named mounted types are two
+    // declarations, and the lane answers NOTHING (the one-name law).
     let mut flat: Vec<(&File, TyView<'a>)> = Vec::new();
     for id in w.chain(file) {
         if id == file {
@@ -629,8 +639,11 @@ pub(crate) fn type_via_imports<'a>(w: &'a World, file: FileId, name: &str) -> Op
             flat.push((f, t));
         }
     }
-    let picked = prefer_mounted(&flat);
-    picked.into_iter().next().map(|(_, t)| t)
+    let staged = prefer_mounted(&flat);
+    let mut one = staged.iter().map(|&(_, t)| t);
+    let first = one.next()?;
+    let same = one.all(|t| std::ptr::eq(t.file, first.file) && t.h == first.h);
+    same.then_some(first)
 }
 
 // ---- the qualified path — the module namespace lane ----
