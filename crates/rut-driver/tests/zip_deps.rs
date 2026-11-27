@@ -400,3 +400,84 @@ fn a_nested_custom_root_packs_its_declared_children() {
         entries.iter().map(|(n, _)| n).collect::<Vec<_>>()
     );
 }
+
+#[test]
+fn the_bin_mode_refuses_a_host_roots_orphan_like_the_zip_mode() {
+    // F53, the host arm: the host surface's tree is gated in BOTH
+    // modes — the bin lane's host early return must not skip it.
+    let root = scratch("bin-host-orphan");
+    let hh = root.join("hh");
+    write(
+        &hh,
+        "rut.jsonc",
+        r#"{ "name": "hh", "type": "host", "entry": { "type": "./app/mod.d.rut" } }"#,
+    );
+    write(&hh, "src/app/mod.d.rut", "pub mod tool;\n");
+    write(
+        &hh,
+        "src/app/tool/mod.d.rut",
+        "pub host fn helper() -> i32;\n",
+    );
+    write(&hh, "src/app/orphan.d.rut", "pub host fn stray() -> i32;\n");
+    let err = match pack_dir(&hh) {
+        Ok(bytes) => panic!(
+            "the bin mode packed a host orphan silently ({} bytes) — the file is dropped",
+            bytes.len()
+        ),
+        Err(e) => e,
+    };
+    assert!(
+        err.to_string().contains("nothing declares this module"),
+        "{err}"
+    );
+    let err = pack_dir_zip(&hh).expect_err("the source lane gates the same tree");
+    assert!(
+        err.to_string().contains("nothing declares this module"),
+        "{err}"
+    );
+    std::fs::remove_file(hh.join("src/app/orphan.d.rut")).unwrap();
+    // clean again, BOTH modes pack
+    pack_dir(&hh).expect("clean host tree packs in bin mode");
+    pack_dir_zip(&hh).expect("clean host tree packs in source mode");
+}
+
+#[test]
+fn the_bin_mode_refuses_a_dir_deps_orphan_like_the_zip_mode() {
+    // F53, the group trees: every PkgSource::Dir the compiled lane reads
+    // is gated like the source lane's collect_tree recursion.
+    let root = scratch("bin-dep-orphan");
+    let helper = root.join("helper");
+    lib_pkg(&helper, "helper");
+    write(&helper, "src/orphan.rut", "fn orphan() {}\n");
+    let app = root.join("app");
+    write(
+        &app,
+        "rut.jsonc",
+        r#"{ "name": "app", "deps": { "helper": { "path": "../helper" } } }"#,
+    );
+    write(
+        &app,
+        "src/mod.rut",
+        "use helper::{answer};\nentry fn go() -> i64 { return answer(); }\n",
+    );
+    let err = match pack_dir(&app) {
+        Ok(bytes) => panic!(
+            "the bin mode packed a dep's orphan silently ({} bytes) — the file is dropped",
+            bytes.len()
+        ),
+        Err(e) => e,
+    };
+    assert!(
+        err.to_string().contains("nothing declares this module"),
+        "{err}"
+    );
+    let err = pack_dir_zip(&app).expect_err("the source lane gates the same tree");
+    assert!(
+        err.to_string().contains("nothing declares this module"),
+        "{err}"
+    );
+    std::fs::remove_file(helper.join("src/orphan.rut")).unwrap();
+    // clean again, BOTH modes pack
+    pack_dir(&app).expect("clean dep tree packs in bin mode");
+    pack_dir_zip(&app).expect("clean dep tree packs in source mode");
+}

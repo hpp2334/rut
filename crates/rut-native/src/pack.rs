@@ -467,13 +467,16 @@ fn validate_tree(
     // A nested custom root (`entry.type = "./app/mod.d.rut"`) records
     // its children relative to `src/app/`, so the gate needs that parent
     // directory as the second prefix arm. The default root's parent is
-    // `src/` itself — the empty prefix, already covered above.
-    let root_dir = surface_rel
+    // `src/` itself — the empty prefix, already covered above. The
+    // derivation is the one home (`rut_driver::mods::child_dir`), the
+    // same rule every mounting lane reads.
+    let root_src_rel = surface_rel
         .as_deref()
-        .and_then(|rel| rel.strip_prefix("src/"))
-        .and_then(|rel| rel.rsplit_once('/'))
-        .map(|(dir, _)| format!("{dir}/"))
-        .unwrap_or_default();
+        .and_then(|rel| rel.strip_prefix("src/"));
+    let root_dir = match root_src_rel.map(rut_driver::mods::child_dir) {
+        Some(dir) if !dir.is_empty() => format!("{dir}/"),
+        _ => String::new(),
+    };
     for (rel, _) in &own {
         if !rel.starts_with("src/") || !rel.ends_with(".rut") {
             continue;
@@ -619,6 +622,18 @@ fn pack_dir_opts_locked(
         match source {
             PkgSource::Dir(gdir) => {
                 let dm = read_manifest(&src, gdir).map_err(rut_driver::pack::PackError::from)?;
+                // the tree gate rides every DIR group too: the compiled
+                // lane reads this group's sources through the same
+                // reader, so an undeclared `.rut` there refuses like the
+                // source lane's collect_tree node
+                {
+                    let mounted = world.pkgs.get(spec).ok_or_else(|| {
+                        PackError::law(format!(
+                            "dep `{spec}` walked but never mounted — the closure and the world disagree"
+                        ))
+                    })?;
+                    validate_tree(Path::new(gdir), mounted, &dm)?;
+                }
                 mount_dev_table(&mut world, &src, gdir, spec, &dm, map, lock)
                     .map_err(rut_driver::pack::PackError::from)?;
             }
@@ -765,6 +780,11 @@ fn pack_host_root(
     // lower into host rows — the exact lane a mount runs
     let tree = rut_driver::lower_decl_module(&src, &mods, &src_path.display().to_string())
         .map_err(PackError::law)?;
+    // the tree gate rides BOTH modes: the host arm packs the same
+    // surface tree the source lane gates — an undeclared `.rut` beside
+    // the root refuses here too, never a silent drop (the arm's early
+    // return must not skip the gate)
+    validate_tree(dir, &tree, manifest)?;
     let tree_rows = match &tree.body {
         rut_driver::MountedBody::Host { host_funcs, .. } => host_funcs.clone(),
         _ => Vec::new(),
