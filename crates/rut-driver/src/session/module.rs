@@ -316,11 +316,27 @@ fn srczip_mods(
 ) -> Result<BTreeMap<String, crate::mods::ModSource>, String> {
     let base = format!("{prefix}src/");
     // the parents' records by mod path — the root's `src/`-relative
-    // name, each child's entry key stripped of `{prefix}src/`
+    // name, each child's entry key stripped of `{prefix}src/`. This
+    // map is the PROBE chain (a parent's file, as `child_probes` reads
+    // it), so it stays `src/`-relative; the DISPLAY record handed back
+    // to the mount is this key minus the root's own directory.
     let root_record = root_rel
         .strip_prefix("src/")
         .unwrap_or(root_rel)
         .to_string();
+    // THE ROOT'S OWN DIRECTORY — the display law's prefix (the FS
+    // lane's record is the found file relative to the ROOT FILE's
+    // directory: `tool/mod.d.rut` under a root at `src/app/mod.d.rut`,
+    // `mod.rut`'s own directory empty for the default root)
+    let root_dir = crate::mods::child_dir(&root_record).to_string();
+    let display = |rel: &str| -> String {
+        // the subtraction is a no-op for the default root (the prefix
+        // is empty), so the flat-root records stay byte-identical
+        match rel.strip_prefix(&format!("{root_dir}/")) {
+            Some(rest) => rest.to_string(),
+            None => rel.to_string(),
+        }
+    };
     let mut records: BTreeMap<String, String> =
         BTreeMap::from([(String::new(), root_record.clone())]);
     let mut read = |parent: &str, child: &str| -> Result<crate::mods::ChildLookup, String> {
@@ -342,7 +358,7 @@ fn srczip_mods(
                 Ok(crate::mods::ChildLookup::Found {
                     text,
                     canon: dir_form,
-                    file: dir_rel,
+                    file: display(&dir_rel),
                 })
             }
             (None, Some(text)) => {
@@ -350,7 +366,7 @@ fn srczip_mods(
                 Ok(crate::mods::ChildLookup::Found {
                     text,
                     canon: file_form,
-                    file: file_rel,
+                    file: display(&file_rel),
                 })
             }
             (None, None) => Ok(crate::mods::ChildLookup::Missing),

@@ -6,7 +6,10 @@
 //! `rut_driver::mods::child_dir`; each lane's lookup reads it.
 //!
 //! One pin per lane: the FS walk (green — the reference), the pack
-//! gate, the source-zip read, and the bundle.
+//! gate, the source-zip read, and the bundle. A nested custom root
+//! (`entry.type = "./app/mod.d.rut"`) records its children relative
+//! to the ROOT FILE's directory — the display law's form on the FS
+//! lane and the zip lane alike.
 
 use std::path::Path;
 
@@ -73,6 +76,37 @@ fn zip_entries(dir_form: bool) -> Vec<(String, Vec<u8>)> {
     entries.push((
         format!("src/{}", record(dir_form)),
         CHILD.as_bytes().to_vec(),
+    ));
+    entries
+}
+
+/// The child's record BESIDE a NESTED custom root: the root surface
+/// lives at `src/app/mod.d.rut` (`entry.type = "./app/mod.d.rut"`), so
+/// its child sits at `src/app/tool/…` and the display record — the
+/// found file relative to the ROOT FILE's directory — is
+/// `tool/mod.d.rut` / `tool.rut`, never the `src/`-relative
+/// `app/tool/…` the zip lane used to spell.
+fn nested_record(dir_form: bool) -> &'static str {
+    if dir_form {
+        "tool/mod.d.rut"
+    } else {
+        "tool.rut"
+    }
+}
+
+/// The nested-root source zip's entries, written by hand so the zip
+/// lane is tested on its own (not through the pack gate).
+const NESTED_MANIFEST: &str =
+    r#"{ "name": "nested", "type": "host", "entry": { "type": "./app/mod.d.rut" } }"#;
+
+fn nested_zip_entries(dir_form: bool) -> Vec<(String, Vec<u8>)> {
+    let mut entries = vec![
+        ("rut.jsonc".to_string(), NESTED_MANIFEST.as_bytes().to_vec()),
+        ("src/app/mod.d.rut".to_string(), b"pub mod tool;\n".to_vec()),
+    ];
+    entries.push((
+        format!("src/app/{}", nested_record(dir_form)),
+        b"pub host fn tool_ping() -> bool;\n".to_vec(),
     ));
     entries
 }
@@ -160,6 +194,46 @@ fn the_source_zip_lane_mounts_a_child_beside_a_single_file_parent() {
             "{recs:?}"
         );
         assert_eq!(run(walk), 1, "dir_form={dir_form}");
+    }
+}
+
+#[test]
+fn a_nested_roots_child_records_the_display_form_on_the_zip_lane() {
+    for dir_form in [false, true] {
+        // the model: the FS lane's own record for the same tree — the
+        // root file under `src/app/`, its child beside it
+        let root = scratch(if dir_form { "nested-dir" } else { "nested" });
+        let pkg = root.join("nested");
+        write(&pkg, "rut.jsonc", NESTED_MANIFEST);
+        write(&pkg, "src/app/mod.d.rut", "pub mod tool;\n");
+        write(
+            &pkg,
+            &format!("src/app/{}", nested_record(dir_form)),
+            "pub host fn tool_ping() -> bool;\n",
+        );
+        let disk = rut_native::load_dir(&pkg).expect("the FS lane mounts the nested root");
+        let fs_record = disk.pkg("nested").expect("nested mounted").mods["tool"]
+            .file
+            .clone();
+        assert_eq!(
+            fs_record,
+            nested_record(dir_form),
+            "the FS lane is the model"
+        );
+
+        // the zip lane over the same tree, by hand: the child's record
+        // is the entry key minus `src/` minus the ROOT's own directory —
+        // the FS lane's form byte-for-byte
+        let bytes =
+            rut_driver::bundle::write_srczip(&nested_zip_entries(dir_form)).expect("write the zip");
+        let walk = rut_driver::Mounted::from_srczip(&bytes).expect("the nested root mounts");
+        let zip_record = walk.pkg("nested").expect("nested mounted").mods["tool"]
+            .file
+            .clone();
+        assert_eq!(
+            zip_record, fs_record,
+            "dir_form={dir_form}: the zip lane records the FS lane's form"
+        );
     }
 }
 
