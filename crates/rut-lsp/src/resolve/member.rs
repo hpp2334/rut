@@ -157,10 +157,24 @@ fn member_derived<'a>(
             }
         }
     }
-    // the mounted-over-embed pick over the same hits (one home)
-    match super::prefer_mounted(&hits).into_iter().next() {
-        Some((_, f)) => MemberHit::Found(MemberTarget::ImplFn(f)),
-        None => MemberHit::None,
+    // the mounted-over-embed staging over the same hits (one home),
+    // then ONE DECLARATION answers: every staged hit must be the same
+    // node — the phase-27 same-node law the type lane's computed-head
+    // cell already spells. Two mounted impl fns of the owner name are
+    // two declarations, and the editor answers NEITHER (the first-take
+    // is exactly the pick the compiler would refuse to make). The file
+    // is compared by object identity (the world holds one `File` per
+    // origin, so `ptr::eq` IS file identity) and the node by
+    // `AnyHandle`'s own slot+generation equality.
+    let staged = super::prefer_mounted(&hits);
+    let mut staged = staged.iter().map(|&(_, f)| f);
+    let Some(first) = staged.next() else {
+        return MemberHit::None;
+    };
+    if staged.all(|f| std::ptr::eq(f.file, first.file) && f.h == first.h) {
+        MemberHit::Found(MemberTarget::ImplFn(first))
+    } else {
+        MemberHit::None
     }
 }
 
