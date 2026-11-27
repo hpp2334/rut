@@ -1679,12 +1679,8 @@ impl<'a> P<'a> {
     fn needs_parens(&self, h: ExprRef, role: Role) -> bool {
         // a lambda's body is a full expression and an assignment takes
         // whatever operand stood left of `=` — either bare spelling
-        // re-nests the node in every role BUT the statement's value
-        // position, where the statement already prints it bare (the
-        // `let`'s own shape): there the group drops
-        if matches!(h, ExprRef::Lambda(_) | ExprRef::Assign(_))
-            && !matches!(role, Role::AssignValue)
-        {
+        // re-nests the node in every role, so both keep their group
+        if matches!(h, ExprRef::Lambda(_) | ExprRef::Assign(_)) {
             return true;
         }
         match role {
@@ -1781,8 +1777,7 @@ impl<'a> P<'a> {
             }
             // the value side takes the whole expression: no reduce
             // level anchors through it, so the bare spelling re-parses
-            // whole — the statement's value position prints a lambda or
-            // assignment bare (the `let`'s own shape)
+            // whole (a lambda or assignment value kept its group above)
             Role::AssignValue => false,
         }
     }
