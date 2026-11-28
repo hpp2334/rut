@@ -258,7 +258,8 @@ impl Store {
         } else {
             self.ensure_fresh<T>(id);
         }
-        return opaque::downcast<T>(self.kv.get(id));
+        let raw = opaque::downcast<T>(self.kv.get(id)!);
+        return raw!;
     }
 
     /// The one WRITE — over sources (plain) and mutations (programs).
@@ -274,8 +275,8 @@ impl Store {
         let id = w.atom_id();
         let k = self.kind_of(id);
         if (k == 2) {
-            let p = self.programs.get(id);
-            let f = opaque::downcast<fn(MutCtx, A) -> R>(p);
+            let p = self.programs.get(id)!;
+            let f = opaque::downcast<fn(MutCtx, A) -> R>(p)!;
             return f(MutCtx { store: self }, arg);
         }
         if (k == 0) {
@@ -284,7 +285,7 @@ impl Store {
                 if (p != nil) {
                     // never-written has no content to skip: any first
                     // write is a change
-                    let prev = opaque::downcast<str>(p);
+                    let prev = opaque::downcast<str>(p!);
                     // the lane's argument read back at the lane's own type:
                     // the box erases A, the downcast answers nil for a
                     // non-str write on this lane (a compile-valid body for
@@ -298,16 +299,16 @@ impl Store {
                     // never meets this) — same law, same bytes of meaning
                     let same: bool = prev == cur;
                     if (same) {
-                        return opaque::downcast<R>(opaque(arg)); // content-equal: no bump, nothing stales
+                        return opaque::downcast<R>(opaque(arg))!; // content-equal: no bump, nothing stales
                     }
                 }
             }
             self.kv.put(id, opaque(arg));
             self.bump(id);
-            return opaque::downcast<R>(opaque(arg));
+            return opaque::downcast<R>(opaque(arg))!;
         }
         panic("store: a derived is not writable — read it with get");
-        return opaque::downcast<R>(opaque(arg)); // unreachable: the panic above is the loud answer
+        return opaque::downcast<R>(opaque(arg))!; // unreachable: the panic above is the loud answer
     }
 
     // ---- the pull ----
@@ -317,7 +318,7 @@ impl Store {
     /// — a declaration bug in a closure, named loud, drift-style.
     fn ensure_fresh<T>(self, id: u32) -> nil {
         for (let f of self.in_flight) {
-            if (f == id) {
+            if (f! == id) {
                 panic(f"store: derived #{id} reads itself — a discovered cycle");
             }
         }
@@ -326,8 +327,8 @@ impl Store {
         }
         self.in_flight.push(id);
         self.edges.put(id, Vec::new()); // re-bind: this compute re-records
-        let p = self.programs.get(id);
-        let f = opaque::downcast<fn(DeriveCtx) -> T>(p);
+        let p = self.programs.get(id)!;
+        let f = opaque::downcast<fn(DeriveCtx) -> T>(p)!;
         let v = f(DeriveCtx { store: self, reader: id });
         self.kv.put(id, opaque(v));
         self.bump(id); // the VALUE moved — downstream keys on this gen
@@ -354,15 +355,15 @@ impl Store {
         if (s == nil) {
             return true;
         }
-        for (let d of deps) {
-            let g = s.get(d);
+        for (let d of deps!) {
+            let g = s!.get(d!);
             if (g == nil) {
                 return true;
             }
-            if (g != self.gen_of(d)) {
+            if (g! != self.gen_of(d!)) {
                 return true;
             }
-            if (self.kind_of(d) == 1 && self.stale(d)) {
+            if (self.kind_of(d!) == 1 && self.stale(d!)) {
                 return true; // the upstream moved through its own deps
             }
         }
@@ -370,16 +371,16 @@ impl Store {
     }
 
     fn note_seen(self, id: u32) -> nil {
-        let deps = self.edges.get(id);
+        let deps = self.edges.get(id)!;
         let s: HashMap<u32, i64> = HashMap();
         for (let d of deps) {
-            s.put(d, self.gen_of(d));
+            s.put(d!, self.gen_of(d!));
         }
         self.seen.put(id, s);
     }
 
     fn record_edge(self, reader: u32, dep: u32) -> nil {
-        let es = self.edges.get(reader);
+        let es = self.edges.get(reader)!;
         es.push(dep);
     }
 
@@ -388,7 +389,7 @@ impl Store {
         if (g == nil) {
             return 0;
         }
-        return g;
+        return g!;
     }
 
     fn bump(self, id: u32) -> nil {
@@ -400,7 +401,7 @@ impl Store {
         if (k == nil) {
             panic(f"store: atom #{id} is unknown");
         }
-        return k;
+        return k!;
     }
 
     fn lane_of(self, id: u32) -> bool {
@@ -408,7 +409,7 @@ impl Store {
         if (b == nil) {
             return false;
         }
-        return b;
+        return b!;
     }
 
     // ---- observability (the twins' oracle — observability ONLY; no
@@ -421,13 +422,13 @@ impl Store {
     /// The discovered edges, joined by id ("0|1") — the declared-DAG
     /// twin's successor: the DAG is now WHAT THE PROGRAM READS.
     pub fn deps_of<T, A requires Readable>(self, a: A) -> str {
-        let deps = self.edges.get(a.atom_id());
+        let deps = self.edges.get(a.atom_id())!;
         let out = "";
         for (let d of deps) {
             if (out != "") {
-                out = f"{out}|{d}";
+                out = f"{out}|{d!}";
             } else {
-                out = f"{d}";
+                out = f"{d!}";
             }
         }
         return out;

@@ -70,7 +70,7 @@ pub fn world_boot(boot_line: str) -> World {
         let reqs = ctx.get<Vec<domain::Req>, Source<Vec<domain::Req>>>(reqs$);
         let open = 0;
         for (let t of items) {
-            if (t.done == false) {
+            if (t!.done == false) {
                 open += 1;
             }
         }
@@ -133,11 +133,11 @@ pub fn world_boot(boot_line: str) -> World {
         if (at < 0) {
             panic(f"server: no request '{tag}' — the answer names no booked row");
         }
-        let req = rs[at];
+        let req = rs[at]!;
         let kept: Vec<domain::Req> = Vec::new();
         for (let r of rs) {
-            if (r.tag != tag) {
-                kept.push(r);
+            if (r!.tag != tag) {
+                kept.push(r!);
             }
         }
         ctx.set<Vec<domain::Req>, Vec<domain::Req>, Source<Vec<domain::Req>>>(reqs$, kept); // consume the answered row
@@ -177,10 +177,10 @@ pub fn world_boot(boot_line: str) -> World {
                 return ("", line);
             }
             let its = ctx.get<Vec<domain::Todo>, Source<Vec<domain::Todo>>>(items$);
-            its[at2].done = its[at2].done == false;
+            its[at2]!.done = its[at2]!.done == false;
             ctx.set<Vec<domain::Todo>, Vec<domain::Todo>, Source<Vec<domain::Todo>>>(items$, its); // the write point: store + mark
             let to = "open";
-            if (its[at2].done) {
+            if (its[at2]!.done) {
                 to = "done";
             }
             let line = f"toggled #{req.todo} to {to}";
@@ -196,11 +196,11 @@ pub fn world_boot(boot_line: str) -> World {
             return ("", line);
         }
         let its = ctx.get<Vec<domain::Todo>, Source<Vec<domain::Todo>>>(items$);
-        let gone = its[at3].title;
+        let gone = its[at3]!.title;
         let kept2: Vec<domain::Todo> = Vec::new();
         for (let t of its) {
-            if (t.id != req.todo) {
-                kept2.push(t);
+            if (t!.id != req.todo) {
+                kept2.push(t!);
             }
         }
         ctx.set<Vec<domain::Todo>, Vec<domain::Todo>, Source<Vec<domain::Todo>>>(items$, kept2); // the write point: store + mark
@@ -246,7 +246,7 @@ pub fn world_boot(boot_line: str) -> World {
             return opaque(nil);
         }
         ctx.set<str, str, Source<str>>(note$, f"requested toggle #{todo}");
-        let r: domain::Req = req;
+        let r: domain::Req = req!;
         return opaque(r);
     });
 
@@ -257,7 +257,7 @@ pub fn world_boot(boot_line: str) -> World {
             return opaque(nil);
         }
         ctx.set<str, str, Source<str>>(note$, f"requested remove #{todo}");
-        let r: domain::Req = req;
+        let r: domain::Req = req!;
         return opaque(r);
     });
 
@@ -304,11 +304,11 @@ pub fn world_boot(boot_line: str) -> World {
         let rs = ctx.get<Vec<domain::Req>, Source<Vec<domain::Req>>>(reqs$);
         let list = card().pad(12).gap(8).hook("list");
         for (let t of items) {
-            list.w(app::todo_row(t, domain::has_pending_for(rs, t.id), toggle_row, remove_row));
+            list.w(app::todo_row(t!, domain::has_pending_for(rs, t!.id), toggle_row, remove_row));
         }
         for (let rq of rs) {
-            if (rq.kind == domain::KIND_ADD) {
-                list.w(pending(f"... {rq.title}"));
+            if (rq!.kind == domain::KIND_ADD) {
+                list.w(pending(f"... {rq!.title}"));
             }
         }
         return list;

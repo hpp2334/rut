@@ -52,7 +52,7 @@ pub(pkg) fn mk_req(id: i64, tag: str, kind: i64, todo: i64, title: str, latency:
 
 pub(pkg) fn find_todo(items: Vec<Todo>, todo: i64) -> i32 {
     for (let i = 0; i < items.len(); i += 1) {
-        if (items[i].id == todo) {
+        if (items[i]!.id == todo) {
             return i;
         }
     }
@@ -61,7 +61,7 @@ pub(pkg) fn find_todo(items: Vec<Todo>, todo: i64) -> i32 {
 
 pub(pkg) fn find_req(rs: Vec<Req>, tag: str) -> i32 {
     for (let i = 0; i < rs.len(); i += 1) {
-        if (rs[i].tag == tag) {
+        if (rs[i]!.tag == tag) {
             return i;
         }
     }
@@ -70,7 +70,7 @@ pub(pkg) fn find_req(rs: Vec<Req>, tag: str) -> i32 {
 
 pub(pkg) fn find_by_title(items: Vec<Todo>, title: str) -> i32 {
     for (let i = 0; i < items.len(); i += 1) {
-        if (items[i].title == title) {
+        if (items[i]!.title == title) {
             return i;
         }
     }
@@ -79,11 +79,11 @@ pub(pkg) fn find_by_title(items: Vec<Todo>, title: str) -> i32 {
 
 pub(pkg) fn has_pending_for(rs: Vec<Req>, todo: i64) -> bool {
     for (let r of rs) {
-        if (r.todo == todo) {
-            if (r.kind == KIND_TOGGLE) {
+        if (r!.todo == todo) {
+            if (r!.kind == KIND_TOGGLE) {
                 return true;
             }
-            if (r.kind == KIND_REMOVE) {
+            if (r!.kind == KIND_REMOVE) {
                 return true;
             }
         }

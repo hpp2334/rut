@@ -99,8 +99,8 @@ entry fn nothing() -> nil { return; }
 entry fn make() -> opaque { let b: ?Box = Box { rows: Vec::new() }; return opaque(b); }
 entry fn put(c: opaque) -> u32 {
     let b = opaque::downcast<?Box>(c);
-    b.rows.push(Row { id: 1 });
-    return b.rows.len() as u32;
+    b!!.rows.push(Row { id: 1 });
+    return b!!.rows.len() as u32;
 }
 "#;
 

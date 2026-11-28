@@ -837,7 +837,7 @@ async fn stream_first(url: str) -> nil {
     if (c == nil) {
         out("first-next=eof");
     } else {
-        let v: bytes = c;
+        let v: bytes = c!;
         out(f"first-next={v.len()}");
     }
     let b = await resp.body();

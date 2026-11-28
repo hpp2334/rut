@@ -50,8 +50,8 @@ impl TodoList {
     /// first when absence matters (no `?.` sugar).
     pub fn title_of(self, id: i32) -> str {
         for (let t of self.items) {
-            if (t.id == id) {
-                return t.title;
+            if (t!.id == id) {
+                return t!.title;
             }
         }
         return "";
@@ -59,7 +59,7 @@ impl TodoList {
 
     pub fn has_title(self, id: i32) -> bool {
         for (let t of self.items) {
-            if (t.id == id) { return true; }
+            if (t!.id == id) { return true; }
         }
         return false;
     }
@@ -68,8 +68,8 @@ impl TodoList {
     pub fn render(self) -> str {
         let out = f"TodoList[{self.len()}]";
         for (let t of self.items) {
-            let mark = when (t.done) { true -> "x", else -> " " };
-            out = f"{out}\n  #{t.id} [{mark}] {t.title}";
+            let mark = when (t!.done) { true -> "x", else -> " " };
+            out = f"{out}\n  #{t!.id} [{mark}] {t!.title}";
         }
         return out;
     }
@@ -78,8 +78,8 @@ impl TodoList {
 
     pub fn set_done(self, id: i32, done: bool) -> bool {
         for (let i = 0; i < self.items.len(); i += 1) {
-            if (self.items[i].id == id) {
-                self.items[i].done = done;
+            if (self.items[i]!.id == id) {
+                self.items[i]!.done = done;
                 return true;
             }
         }
@@ -92,9 +92,9 @@ impl TodoList {
         let kept: Vec<Todo> = Vec::new();
         let removed = false;
         for (let t of self.items) {
-            when (t.id == id) {
+            when (t!.id == id) {
                 true -> { removed = true; },   // drop the row
-                else -> { kept.push(t); },     // keep everything else
+                else -> { kept.push(t!); },    // keep everything else
             }
         }
         if (removed) {
@@ -115,7 +115,7 @@ struct Lists {
 /// unrestricted types.
 fn at(c: opaque, h: u32) -> TodoList {
     let lists = opaque::downcast<?Lists>(c);
-    return lists.lists[h as i32];
+    return lists!!.lists[h as i32]!;
 }
 
 // ---- the host surface (entry = callable by the embedder) ----
@@ -127,8 +127,8 @@ entry fn createContainer() -> opaque {
 
 entry fn create(c: opaque) -> u32 {
     let k = opaque::downcast<?Lists>(c);
-    k.lists.push(TodoList::new());
-    return (k.lists.len() - 1) as u32;
+    k!!.lists.push(TodoList::new());
+    return (k!!.lists.len() - 1) as u32;
 }
 
 entry fn add(c: opaque, h: u32, title: str) -> i32 {

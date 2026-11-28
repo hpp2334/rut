@@ -131,14 +131,14 @@ pub(pkg) fn lower(w: widget::Widget) -> Lowered {
         if (w.tvar == nil) {
             panic("t1: Text without a variant — construct with text/done/title/pending/muted");
         }
-        let v: widget::TVariant = w.tvar;
+        let v: widget::TVariant = w.tvar!;
         cls = join_cls(cls, tvar_token(v));
     }
     if (widget::is_button(w)) {
         if (w.bvar == nil) {
             panic("t1: Button without a variant — construct with btn/quiet");
         }
-        let v: widget::BVariant = w.bvar;
+        let v: widget::BVariant = w.bvar!;
         cls = join_cls(cls, bvar_token(v));
         listens = "click";
     }

@@ -42,7 +42,7 @@ impl Moderator {
 
     fn is_muted(self, name: str) -> bool {
         for (let m of self.muted) {
-            if (m == name) {
+            if (m! == name) {
                 return true;
             }
         }

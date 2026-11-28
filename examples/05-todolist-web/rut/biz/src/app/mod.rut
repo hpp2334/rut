@@ -55,7 +55,7 @@ fn take_app(c: opaque) -> AppRoot {
     if (root == nil) {
         panic("app: the event container is not an AppRoot — host drift");
     }
-    let r: AppRoot = root;
+    let r: AppRoot = root!;
     return r;
 }
 
@@ -70,7 +70,7 @@ fn dom_event(r: AppRoot, id: str, detail: str) -> (?opaque, str) {
     let booked = t1_event(r.t1, id, detail);
     let req = opaque::downcast<domain::Req>(booked);
     if (req != nil) {
-        tim_after(req.latency, req.tag);
+        tim_after(req!.latency, req!.tag);
     }
     paint(r);
     return (opaque(r), "");

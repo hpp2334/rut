@@ -37,14 +37,14 @@ async fn probe(log: opaque, url: str) -> nil {
     if (terr == nil) {
         logger_log(log, 2, "err=nil");
     } else {
-        let t: str = terr;
+        let t: str = terr!;
         logger_log(log, 2, f"err={t}");
     }
     let rerr = resp.read_error();
     if (rerr == nil) {
         logger_log(log, 2, "read-err=nil");
     } else {
-        let t: str = rerr;
+        let t: str = rerr!;
         logger_log(log, 2, f"read-err={t}");
     }
     let b = await resp.body();
@@ -64,7 +64,7 @@ async fn streamed(log: opaque, url: str) -> nil {
             if (e != nil) { failed = true; }
             break;
         }
-        let chunk: bytes = c;
+        let chunk: bytes = c!;
         total += chunk.len();
     }
     logger_log(log, 2, f"stream-total={total}");
@@ -293,7 +293,7 @@ async fn probe(log: opaque, url: str) -> nil {
     let resp = await client.get(url).build().send();
     let b = await resp.body();
     logger_log(log, 2, f"drain={b.len()}");
-    logger_log(log, 2, f"read-err={resp.read_error()}");
+    logger_log(log, 2, f"read-err={resp.read_error()!}");
 }
 
 entry fn boot(url: str) -> nil {
@@ -409,7 +409,7 @@ async fn probe(log: opaque, url: str) -> nil {
     if (le == nil) {
         logger_log(log, 2, "late-err=nil");
     } else {
-        let t: str = le;
+        let t: str = le!;
         logger_log(log, 2, f"late-err={t}");
     }
 }
@@ -423,7 +423,7 @@ async fn probe2(log: opaque, url: str) -> nil {
     let c = await s.next();
     let n: i32 = -1;
     if (c != nil) {
-        let v: bytes = c;
+        let v: bytes = c!;
         n = v.len();
     }
     logger_log(log, 2, f"first-next={n}");
@@ -739,7 +739,7 @@ async fn streamed(log: opaque, url: str) -> nil {
             if (e != nil) { failed = true; }
             break;
         }
-        let chunk: bytes = c;
+        let chunk: bytes = c!;
         total += chunk.len();
     }
     logger_log(log, 2, f"total={total}");
@@ -879,7 +879,7 @@ async fn probe(log: opaque, url: str) -> nil {
     let first = await http_stream_next(s);
     let n: i32 = -1;
     if (first != nil) {
-        let v: bytes = first;
+        let v: bytes = first!;
         n = v.len();
     }
     logger_log(log, 2, f"first={n}");
@@ -899,7 +899,7 @@ async fn probe(log: opaque, url: str) -> nil {
     if (re == nil) {
         logger_log(log, 2, "read-err=nil");
     } else {
-        let t: str = re;
+        let t: str = re!;
         logger_log(log, 2, f"read-err={t}");
     }
 }

@@ -159,7 +159,7 @@ entry fn main() {
             .take(2),
     );
     let got: Vec<i32> = out.collected();
-    log.info(f"got={got[0]} {got[1]} {got.len()}");
+    log.info(f"got={got[0]!} {got[1]!} {got.len()}");
     let joined = StrFlow("hey").into_flow().fold("", fn(acc: str, c: str) -> str { return f"{acc}{c}"; });
     log.info(f"joined={joined}");
     let names: Flow<str> = VecFlow(words).into_flow().map(fn(s: str) -> str { return f"<{s}>"; });
@@ -370,8 +370,9 @@ fn a_ink_consumer_runs_through_the_dependency_lane() {
 // LOCAL generic fn in the consumer's own unit). That lane's container
 // wrappers over foreign element types verify-refuse on a load below —
 // `verify: function with_capacity (#16): op @1: arrnew repr does not
-// match the element type` — identically on this phase's base revision
-// (7c7bf592), so it is not this plan's.
+// match the element type` — identically on the base revision it was
+// recorded against (7c7bf592, that lane's own phase base), so it is
+// not this plan's.
 // ---------------------------------------------------------------------
 
 const JSON_CONSUMER: &str = r#"
@@ -382,22 +383,22 @@ entry fn main() {
     let log = Logger("t");
     let (num, en) = decodeJson<JsonI64>("64");
     if (en == nil) {
-        let iv: JsonI64 = num;
+        let iv: JsonI64 = num!;
         log.info(f"i={iv.get()}");
     }
     let (word, es) = decodeJson<JsonStr>("\"hi\"");
     if (es == nil) {
-        let sv: JsonStr = word;
+        let sv: JsonStr = word!;
         log.info(f"s={sv.get()}");
     }
     let (j, ej) = encodeJson(JsonI64(7));
     if (ej == nil) {
-        let t: str = j;
+        let t: str = j!;
         log.info(f"enc={t}");
     }
     let (j2, ej2) = encodeJson(JsonStr("out"));
     if (ej2 == nil) {
-        let t2: str = j2;
+        let t2: str = j2!;
         log.info(f"enc2={t2}");
     }
     let (bad, eb) = decodeJson<JsonI64>("{oops");
@@ -449,7 +450,7 @@ entry fn main() {
     let second = m.put("a", 3);
     let g = m.get("a");
     if (g != nil) {
-        let n: i32 = g;
+        let n: i32 = g!;
         log.info(f"a={n} new1={first} new2={second}");
     }
     log.info(f"hasc={m.has("c")} len={m.len()}");
@@ -468,7 +469,7 @@ entry fn main() {
     mi.put(2, "two");
     let gv = mi.get(2);
     if (gv != nil) {
-        let t: str = gv;
+        let t: str = gv!;
         log.info(f"2={t} milen={mi.len()}");
     }
 }
@@ -512,10 +513,10 @@ entry fn main() {
     let w: Vec<str> = Vec::from(["a", "b"]);
     w.push("c");
     let last = v.pop();
-    log.info(f"{v.len()} {last} {v[1]} {w[2]}");
+    log.info(f"{v.len()} {last} {v[1]!} {w[2]!}");
     let total: i32 = 0;
     for (let x of v) {
-        total += x;
+        total += x!;
     }
     log.info(f"sum={total}");
     let bs: Vec<u8> = Vec::filled(65u8, 3);
@@ -526,7 +527,7 @@ entry fn main() {
     log.info(f"arr={fixed.len()}");
     let big: Vec<i64> = Vec::with_capacity(8);
     big.push(9000000000i64);
-    log.info(f"big={big[0]}");
+    log.info(f"big={big[0]!}");
 }
 "#;
 

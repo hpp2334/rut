@@ -135,7 +135,7 @@ fn decode_entry_files<T requires JsonDeserialize>(r: JsonReader) -> (?Vec<T>, ?D
     while (r.more()) {
         let (x, e) = T::decode(r);
         if (e != nil) { return (nil, e); }
-        v.push(x);
+        v.push(x!);
     }
     r.end_array();
     if (r.failed()) { return (nil, r.error()); }
@@ -187,10 +187,10 @@ impl Entry {
         if (name == nil) {
             return (nil, DecodeJsonError { kind: DecodeErrorKind::WrongType, at: r.err_at() as i64, got: "", expected: "name" });
         }
-        let nm: str = name;
+        let nm: str = name!;
         let sz: i64 = 0;
         if (size != nil) {
-            let v: i64 = size;
+            let v: i64 = size!;
             sz = v;
         }
         return (Entry { name: nm, size: sz, hash: hash, files: files }, nil);
@@ -206,7 +206,7 @@ impl Entry {
 fn encode_entry_array<T requires JsonSerialize>(kids: Vec<T>, w: JsonWriter) -> ?EncodeJsonError {
     w.begin_array();
     for (let x of kids) {
-        let e = x.encode(w);
+        let e = x!.encode(w);
         if (e != nil) { return e; }
     }
     w.end_array();
@@ -223,12 +223,12 @@ impl Entry {
         w.key("size");
         w.write_i64(self.size);
         if (self.hash != nil) {
-            let h: str = self.hash;
+            let h: str = self.hash!;
             w.key("hash");
             w.write_str(h);
         }
         if (self.files != nil) {
-            let kids: Vec<Entry> = self.files;
+            let kids: Vec<Entry> = self.files!;
             w.key("files");
             let e = encode_entry_array<Entry>(kids, w);
             if (e != nil) { return e; }
@@ -318,7 +318,7 @@ fn human_size(b: i64) -> str {
 // are the stable prefix; a missing hash prints as "-".
 fn hash8(h: ?str) -> str {
     if (h == nil) { return "-"; }
-    let s: str = h;
+    let s: str = h!;
     return s.slice(0, 8);
 }
 
@@ -328,15 +328,15 @@ fn emit_dir(prefix: str, fs: Vec<Entry>) {
     for (let e of fs) {
         let pfx = prefix;
         if (pfx.len() > 0) {
-            pfx = f"{pfx}/{e.name}";
+            pfx = f"{pfx}/{e!.name}";
         } else {
-            pfx = e.name;
+            pfx = e!.name;
         }
-        if (e.files != nil) {
-            let kids: Vec<Entry> = e.files;
+        if (e!.files != nil) {
+            let kids: Vec<Entry> = e!.files!;
             emit_dir(pfx, kids);
         } else {
-            out(f"{pfx}\t{human_size(e.size)}\t{hash8(e.hash)}");
+            out(f"{pfx}\t{human_size(e!.size)}\t{hash8(e!.hash)}");
         }
     }
 }
@@ -351,7 +351,7 @@ fn emit_dir(prefix: str, fs: Vec<Entry>) {
 fn map_response(resp: Response, notfound: str, host: str) -> ?str {
     let s = resp.status();
     if (s == 0) {
-        let why: str = resp.transport_error();
+        let why: str = resp.transport_error()!;
         return f"rgh: network error: {why}";
     }
     if (s == 404) { return f"rgh: {notfound} (checked the CDN: {host})"; }
@@ -367,20 +367,20 @@ async fn do_list(client: HttpClient, owner: str, repo: str, rf: str) -> i32 {
     let resp = await client.get(url).build().send();
     let err = map_response(resp, "no such repo or ref", "data.jsdelivr.com");
     if (err != nil) {
-        let why: str = err;
+        let why: str = err!;
         eprint(why);
         return 1;
     }
     let (tree, e) = decode_root_bytes<Root>(await resp.body());
     if (e != nil) {
-        let why: DecodeJsonError = e;
+        let why: DecodeJsonError = e!;
         eprint(f"rgh: the CDN's tree JSON did not parse at {why.at}: expected {why.expected}");
         return 1;
     }
     if (tree != nil) {
-        let doc: Root = tree;
+        let doc: Root = tree!;
         if (doc.files != nil) {
-            let fs: Vec<Entry> = doc.files;
+            let fs: Vec<Entry> = doc.files!;
             emit_dir("", fs);
         }
     }
@@ -396,7 +396,7 @@ async fn do_download(client: HttpClient, owner: str, repo: str, rf: str, path: s
     let resp = await client.get(url).build().send();
     let err = map_response(resp, "no such file (or repo/ref)", "cdn.jsdelivr.net");
     if (err != nil) {
-        let why: str = err;
+        let why: str = err!;
         eprint(why);
         return 1;
     }
@@ -404,7 +404,7 @@ async fn do_download(client: HttpClient, owner: str, repo: str, rf: str, path: s
     // old file's tail into a fresh download)
     let terr: ?str = write_file(dest, "".encode());
     if (terr != nil) {
-        let why: str = terr;
+        let why: str = terr!;
         eprint(f"rgh: {dest}: {why}");
         return 1;
     }
@@ -416,16 +416,16 @@ async fn do_download(client: HttpClient, owner: str, repo: str, rf: str, path: s
             // EOF — or a mid-read failure? the sticky error names it
             let rerr = stream.error();
             if (rerr != nil) {
-                let why: str = rerr;
+                let why: str = rerr!;
                 eprint(f"rgh: {dest}: {why}");
                 return 1;
             }
             break;
         }
-        let chunk: bytes = c;
+        let chunk: bytes = c!;
         let werr: ?str = append_file(dest, chunk);
         if (werr != nil) {
-            let why: str = werr;
+            let why: str = werr!;
             eprint(f"rgh: {dest}: {why}");
             return 1;
         }
@@ -452,7 +452,7 @@ async fn rgh_run(args: str) -> i32 {
     let have_ref = false;
     let i: i32 = 0;
     while (i < argc) {
-        let a = argv[i];
+        let a = argv[i]!;
         if (!a.starts_with(0, "--")) { break; }
         if (a.starts_with(0, "--repo=")) {
             if (have_repo) { return usage("--repo given twice"); }
@@ -480,21 +480,21 @@ async fn rgh_run(args: str) -> i32 {
     if (i >= argc) { return usage("missing a subcommand (list | download)"); }
 
     let client = HttpClient();
-    let sub = argv[i];
+    let sub = argv[i]!;
     if (sub == "list") {
-        if (i + 1 < argc) { return usage(f"list takes no arguments (got {argv[i + 1]})"); }
+        if (i + 1 < argc) { return usage(f"list takes no arguments (got {argv[i + 1]!})"); }
         return await do_list(client, owner, repo, rf);
     }
     if (sub == "download") {
         if (i + 1 >= argc) { return usage("download needs a repo path"); }
-        let path = argv[i + 1];
+        let path = argv[i + 1]!;
         if (path.len() == 0) { return usage("download needs a repo path"); }
         if (path.code_at(path.len() - 1) == 47) {
             return usage(f"download: {path} is a directory target — rgh downloads one file");
         }
         let dest = basename(path);
         if (i + 2 < argc) {
-            dest = argv[i + 2];
+            dest = argv[i + 2]!;
         }
         if (i + 3 < argc) { return usage("download takes a repo path and at most one dest"); }
         return await do_download(client, owner, repo, rf, path, dest);

@@ -272,14 +272,14 @@ entry fn valued_bits(t: opaque) -> i64 {
     if (map_hvput(t, opaque(1 as i64), opaque(0 as i64)) & 1 != 1) { fails += 1; }   // fresh; the box holds 0
     let raw = map_hvget(t, opaque(1 as i64));
     if (raw == nil) { fails += 10; }                             // a hit, never the miss
-    let z: ?i64 = opaque::downcast<i64>(raw);
-    if (z != 0) { fails += 100; }                                // the box holds a zero
+    let z: ?i64 = opaque::downcast<i64>(raw!);
+    if (z! != 0) { fails += 100; }                                // the box holds a zero
     if (map_hvget(t, opaque(2 as i64)) != nil) { fails += 1000; }             // the miss
     if (map_hvput(t, opaque(1 as i64), opaque(5 as i64)) & 1 != 0) { fails += 10000; }  // replace: not newly
     let raw2 = map_hvget(t, opaque(1 as i64));
     if (raw2 == nil) { fails += 100000; }
-    let v: ?i64 = opaque::downcast<i64>(raw2);
-    if (v != 5) { fails += 1000000; }
+    let v: ?i64 = opaque::downcast<i64>(raw2!);
+    if (v! != 5) { fails += 1000000; }
     if (map_hvremove(t, opaque(1 as i64)) < 0) { fails += 10000000; }
     if (map_hvget(t, opaque(1 as i64)) != nil) { fails += 100000000; }
     if (map_hvremove(t, opaque(1 as i64)) != -1) { fails += 1000000000; }
@@ -302,14 +302,14 @@ entry fn valued_strs(t: opaque) -> i64 {
     let fails: i64 = 0;
     let a: str = "alpha-alpha-alpha-alpha";
     if (map_hvput(t, opaque(1 as i64), opaque(a)) & 1 != 1) { fails += 1; }
-    let got: ?str = opaque::downcast<str>(map_hvget(t, opaque(1 as i64)));
-    if (got != a) { fails += 10; }
+    let got: ?str = opaque::downcast<str>(map_hvget(t, opaque(1 as i64))!);
+    if (got! != a) { fails += 10; }
     if (map_hvput(t, opaque(2 as i64), opaque("beta-value")) & 1 != 1) { fails += 100; }
     if (map_hvput(t, opaque(1 as i64), opaque("gamma-value")) & 1 != 0) { fails += 1000; }   // replace
-    let g: ?str = opaque::downcast<str>(map_hvget(t, opaque(1 as i64)));
-    if (g != "gamma-value") { fails += 10000; }
-    let b: ?str = opaque::downcast<str>(map_hvget(t, opaque(2 as i64)));
-    if (b != "beta-value") { fails += 100000; }
+    let g: ?str = opaque::downcast<str>(map_hvget(t, opaque(1 as i64))!);
+    if (g! != "gamma-value") { fails += 10000; }
+    let b: ?str = opaque::downcast<str>(map_hvget(t, opaque(2 as i64))!);
+    if (b! != "beta-value") { fails += 100000; }
     return fails;
 }
 
@@ -330,7 +330,7 @@ entry fn iter_walk(t: opaque) -> i64 {
     let cell = map_iter_next(cur);
     while (cell != nil) {
         if (n >= 3) { fails += 1; break; }
-        word[n] = opaque::downcast<i64>(cell);
+        word[n] = opaque::downcast<i64>(cell!)!;
         n += 1;
         cell = map_iter_next(cur);
     }
@@ -346,7 +346,7 @@ entry fn iter_i8_width(t: opaque) -> i64 {
     let cur = map_iter_new(t, type_id<i8>());
     let cell = map_iter_next(cur);
     if (cell == nil) { return 1; }
-    if (opaque::downcast<i8>(cell) != -5) { return 2; }
+    if (opaque::downcast<i8>(cell!)! != -5) { return 2; }
     if (map_iter_next(cur) != nil) { return 3; }
     return 0;
 }
@@ -358,7 +358,7 @@ entry fn iter_u64_high_bit(t: opaque) -> i64 {
     let cur = map_iter_new(t, type_id<u64>());
     let cell = map_iter_next(cur);
     if (cell == nil) { return 1; }
-    if (opaque::downcast<u64>(cell) != big) { return 2; }
+    if (opaque::downcast<u64>(cell!)! != big) { return 2; }
     return 0;
 }
 
@@ -374,7 +374,7 @@ entry fn iter_str_keys(t: opaque) -> i64 {
     let n: i64 = 0;
     let cell = map_iter_next(cur);
     while (cell != nil) {
-        let k = opaque::downcast<str>(cell);
+        let k = opaque::downcast<str>(cell!)!;
         if (n == 0) { first = k; }
         n += 1;
         cell = map_iter_next(cur);
@@ -400,10 +400,10 @@ entry fn iter_snapshot_survives_removal(t: opaque) -> i64 {
     let c1 = map_iter_next(cur);
     map_hremove(t, opaque(1 as i64));
     map_hremove(t, opaque(2 as i64));
-    if (opaque::downcast<i64>(c1) != 1) { return 1; }
+    if (opaque::downcast<i64>(c1!)! != 1) { return 1; }
     let c2 = map_iter_next(cur);
     if (c2 == nil) { return 2; }
-    if (opaque::downcast<i64>(c2) != 2) { return 3; }
+    if (opaque::downcast<i64>(c2!)! != 2) { return 3; }
     if (map_iter_next(cur) != nil) { return 4; }
     if (map_len(t) != 0) { return 5; }
     return 0;
