@@ -187,15 +187,26 @@ both_uri_shapes! {
 #[test]
 fn definition_on_an_unknown_receiver_falls_through_to_the_name_lanes() {
     // Act 3 delta: the unified walk keeps the more informative answer —
-    // a member whose receiver resolves to no type falls through to the
+    // a member whose receiver resolves to NO type falls through to the
     // bare-name lanes on the member's name (hover always did; definition
     // answered [] — today's two walks disagreed, listed here with a pin)
     let mut s = S::boot();
-    let src = "fn bump() -> i32 { return 1; }\nentry fn main() -> i32 {\n    let x = 1;\n    return x.bump();\n}\n";
     let uri = "file:///t/recv.rut";
+    // the receiver must resolve to nothing — since the numerics
+    // re-spell an i32 receiver RESOLVES (the width declares a body),
+    // and a resolved receiver is final: no fall-through
+    let src = "fn bump() -> i32 { return 1; }\nentry fn main() -> i32 {\n    let x = mystery();\n    return x.bump();\n}\n";
     let hits = s.def_in(uri, src, "x.bump", 1, 2);
     assert_eq!(hits.len(), 1, "{hits:?}");
     assert_eq!(pos_pair(&hits[0]["range"]["start"]), (0, 3), "{hits:?}");
+    // the resolved receiver is final — `bump` is no member of i32 and
+    // the bare-name lanes never leak past it
+    let src = "fn bump() -> i32 { return 1; }\nentry fn main() -> i32 {\n    let x = 1;\n    return x.bump();\n}\n";
+    let hits = s.def_in(uri, src, "x.bump", 1, 2);
+    assert!(
+        hits.is_empty(),
+        "a resolved receiver is final over the name lanes: {hits:?}"
+    );
 }
 }
 

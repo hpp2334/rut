@@ -11,7 +11,8 @@
 // SURFACE LETS, re-exported through `math` by its
 // `pub use calc_host::{ PI, .. }` (callers never touch `calc_host`).
 // The INTEGER numeric methods (`wrapping_*`, `saturating_*`,
-// `checked_*`) are core's `builtin impl` methods; `NAN` is core's too
+// `checked_*`) are core's, declared on the primitives' own bodies;
+// `NAN` is core's too
 // (`use core::{ NAN }`).
 
 pub mod math;

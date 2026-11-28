@@ -65,13 +65,16 @@ fn graph_of(c: Result<rut_driver::Compiled, rut_driver::RunError>) -> rut_driver
     }
 }
 
-/// The names core.d.rut declares: (builtin fns, builtin types, builtin
-/// traits, plain traits) + the `builtin impl` method table
-/// (prim → method names). The fn/type/trait name lists carry each
-/// decl's ambient bit (`true` — `prelude builtin`, `false` —
-/// `pub builtin`) so the lockstep can check VISIBILITY AGREEMENT
-/// against `Surface::core`'s rows.
-fn declared_names() -> DeclSurfaces {
+/// The names core.d.rut declares: (builtin fns, builtin types, plain
+/// traits) + the numeric-method table (prim → method names) the
+/// integer primitives declare on their OWN `builtin primitive` bodies.
+/// The fn/type name lists carry each decl's ambient bit (`true` —
+/// `prelude builtin`, `false` — `pub builtin`) so the lockstep can
+/// check VISIBILITY AGREEMENT against `Surface::core`'s rows. The
+/// `int_prims` set (the numeric table's receivers, derived from the
+/// surface) routes a primitive body to the numeric comparison;
+/// `str`/`bytes` stay doc-surface.
+fn declared_names(int_prims: &std::collections::BTreeSet<String>) -> DeclSurfaces {
     let doc = parse_with_recover(CORE_DECL.to_string(), Mode::Decl);
     assert!(
         doc.ast().is_clean(),
@@ -82,7 +85,7 @@ fn declared_names() -> DeclSurfaces {
     let mut builtin_fns = Vec::new();
     let mut builtin_types = Vec::new();
     let mut plain_ifaces = Vec::new();
-    let mut builtin_impls = Vec::new();
+    let mut prim_methods = Vec::new();
     for it in ast.root().items(ast) {
         match it {
             ItemRef::SurfaceFn(h) => {
@@ -110,40 +113,72 @@ fn declared_names() -> DeclSurfaces {
             ItemRef::BuiltinPrimitive(h) => {
                 let d = h.get(ast);
                 let n = ast.name(d.name.ident).to_string();
-                // `str`/`bytes` are language primitives — their
-                // member contracts are doc surface, not registered natives
-                if rut_ast::parser::is_primitive_ty(&n) {
-                    continue;
+                if int_prims.contains(&n) {
+                    // the integer width declares its numeric methods on
+                    // its OWN body — the rows ride the native_impls
+                    // comparison
+                    let names = d
+                        .members
+                        .iter()
+                        .filter_map(|&m| match m {
+                            MethodRef::Method(mh) => {
+                                Some(ast.name(mh.get(ast).name.ident).to_string())
+                            }
+                            MethodRef::Error(_) => None,
+                        })
+                        .collect();
+                    prim_methods.push((n, names));
+                } else if rut_ast::parser::is_primitive_ty(&n) {
+                    // `str`/`bytes` are language primitives — their
+                    // member contracts are doc surface, not registered
+                    // natives (exactly that pair: any other
+                    // primitive-named body would silently duck the
+                    // numeric comparison)
+                    assert!(
+                        n == "str" || n == "bytes",
+                        "a primitive body outside the numeric table must be the doc-surface pair, got {n}"
+                    );
+                } else {
+                    builtin_types.push((n, d.ambient()));
                 }
-                builtin_types.push((n, d.ambient()));
             }
             ItemRef::Interface(h) => {
                 plain_ifaces.push(ast.name(h.get(ast).name.ident).to_string());
-            }
-            ItemRef::BuiltinImpl(h) => {
-                let d = h.get(ast);
-                let names = d
-                    .methods
-                    .iter()
-                    .filter_map(|&m| match m {
-                        MethodRef::Method(mh) => Some(ast.name(mh.get(ast).name.ident).to_string()),
-                        MethodRef::Error(_) => None,
-                    })
-                    .collect();
-                builtin_impls.push((ast.name(d.prim.ident).to_string(), names));
             }
             // `host fn`/`host struct` are the embedder's surface — a
             // toolchain decl file may not spell them
             other => panic!("core declares an embedder surface item: {other:?}"),
         }
     }
-    (builtin_fns, builtin_types, plain_ifaces, builtin_impls)
+    (builtin_fns, builtin_types, plain_ifaces, prim_methods)
 }
 
 #[test]
 fn core_decl_matches_the_compilers_surface() {
     let surface = rut_core::binary::Surface::core();
-    let (builtin_fns, builtin_types, plain_ifaces, builtin_impls) = declared_names();
+    // the numeric table's receivers, by name — the ONE set that routes
+    // a primitive body to the native_impls comparison
+    let prim_name = |t: rut_core::types::TypeId| -> String {
+        use rut_core::types::*;
+        match t {
+            TY_I8 => "i8",
+            TY_I16 => "i16",
+            TY_I32 => "i32",
+            TY_I64 => "i64",
+            TY_U8 => "u8",
+            TY_U16 => "u16",
+            TY_U32 => "u32",
+            TY_U64 => "u64",
+            _ => panic!("non-int prim in native_impls: {t:?}"),
+        }
+        .to_string()
+    };
+    let int_prims: std::collections::BTreeSet<String> = surface
+        .native_impls
+        .iter()
+        .map(|(t, _, _)| prim_name(*t))
+        .collect();
+    let (builtin_fns, builtin_types, plain_ifaces, prim_methods) = declared_names(&int_prims);
 
     // builtin types: the decl's `builtin` decls are exactly the native
     // types — name AND ambient bit (the decl spelling vs the row)
@@ -192,25 +227,11 @@ fn core_decl_matches_the_compilers_surface() {
         "core.d.rut builtin fns == Surface::core native_fns"
     );
 
-    // builtin impls: the decl's `builtin impl <prim>` blocks are exactly
-    // the numeric-method table — same prims, same method names per prim
+    // numeric methods: the decl's integer primitive bodies carry
+    // exactly the numeric-method table — same prims, same method
+    // names per prim
     //
-    let prim_name = |t: rut_core::types::TypeId| -> String {
-        use rut_core::types::*;
-        match t {
-            TY_I8 => "i8",
-            TY_I16 => "i16",
-            TY_I32 => "i32",
-            TY_I64 => "i64",
-            TY_U8 => "u8",
-            TY_U16 => "u16",
-            TY_U32 => "u32",
-            TY_U64 => "u64",
-            _ => panic!("non-int prim in native_impls: {t:?}"),
-        }
-        .to_string()
-    };
-    let mut decl_impls: Vec<(String, Vec<String>)> = builtin_impls;
+    let mut decl_impls: Vec<(String, Vec<String>)> = prim_methods;
     for (_, ms) in &mut decl_impls {
         ms.sort();
     }
@@ -231,7 +252,7 @@ fn core_decl_matches_the_compilers_surface() {
         .collect();
     assert_eq!(
         decl_impls, surf_impls,
-        "core.d.rut builtin impl blocks == Surface::core native_impls"
+        "core.d.rut primitive bodies == Surface::core native_impls"
     );
 
     // consts: `NAN` is core's one const — f64, name-explicit

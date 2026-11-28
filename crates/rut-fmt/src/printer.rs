@@ -896,12 +896,6 @@ impl<'a> P<'a> {
                 self.text(self.a.name(d.name.ident));
                 self.iface_body(&d.members, span);
             }
-            ItemRef::BuiltinImpl(h) => {
-                let d = h.get(self.a);
-                self.text("prelude builtin impl ");
-                self.text(self.a.name(d.prim.ident));
-                self.iface_body(&d.methods, span);
-            }
             // the refusal gate (`is_clean`) means no Error slot can
             // reach the printer; the arm is the exhaustiveness law
             ItemRef::Error(_) => {}

@@ -569,6 +569,24 @@ fn decl_mode_formats_bodiless_methods() {
     );
 }
 
+#[test]
+fn decl_mode_round_trips_a_builtin_primitive_int() {
+    // the numerics re-spell: the integer widths declare on their own
+    // primitive bodies — the print re-derives nothing, the ambient
+    // spelling rides the modifier chain
+    let src = "prelude builtin primitive i32 {\n\
+               fn wrapping_add(self, y: i32) -> i32;\n\
+               fn checked_add(self, y: i32) -> (i32, bool);\n\
+               }\n";
+    let out = format(src, Mode::Decl, &Style::default()).unwrap();
+    assert_eq!(
+        out,
+        "prelude builtin primitive i32 {\n    fn wrapping_add(self, y: i32) -> i32;\n    fn checked_add(self, y: i32) -> (i32, bool);\n}\n"
+    );
+    // the round trip is exact
+    assert_eq!(format(&out, Mode::Decl, &Style::default()).unwrap(), out);
+}
+
 // ---- block tails (the `}`-closed last statement: no `;`) ----
 
 #[test]

@@ -22,9 +22,7 @@ pub use impl_block::ImplNode;
 pub use import::UseNode;
 pub use let_decl::ModuleLetNode;
 pub use module_decl::{ModDeclNode, ModuleNode};
-pub use surface::{
-    BuiltinImplNode, BuiltinPrimitiveNode, BuiltinTyNode, Linkage, SurfaceFnNode, SurfaceStructNode,
-};
+pub use surface::{BuiltinPrimitiveNode, BuiltinTyNode, Linkage, SurfaceFnNode, SurfaceStructNode};
 pub use type_alias::AliasNode;
 
 use crate::ast::error::ErrorNode;
@@ -50,7 +48,6 @@ pub enum ItemRef {
     SurfaceStruct(Handle<SurfaceStructNode>),
     BuiltinTy(Handle<BuiltinTyNode>),
     BuiltinPrimitive(Handle<BuiltinPrimitiveNode>),
-    BuiltinImpl(Handle<BuiltinImplNode>),
     Error(Handle<ErrorNode>),
 }
 
@@ -74,7 +71,6 @@ impl ItemRef {
             ItemRef::SurfaceStruct,
             ItemRef::BuiltinTy,
             ItemRef::BuiltinPrimitive,
-            ItemRef::BuiltinImpl,
             ItemRef::Error,
         )
     }
@@ -172,12 +168,6 @@ impl ItemRef {
             _ => None,
         }
     }
-    pub fn as_builtin_impl(self) -> Option<Handle<BuiltinImplNode>> {
-        match self {
-            ItemRef::BuiltinImpl(h) => Some(h),
-            _ => None,
-        }
-    }
     /// the universal address — the tree index's walk currency
     pub fn any(self) -> AnyHandle {
         crate::slot_any!(
@@ -197,7 +187,6 @@ impl ItemRef {
             ItemRef::SurfaceStruct,
             ItemRef::BuiltinTy,
             ItemRef::BuiltinPrimitive,
-            ItemRef::BuiltinImpl,
             ItemRef::Error,
         )
     }

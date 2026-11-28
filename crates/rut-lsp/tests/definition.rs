@@ -695,13 +695,27 @@ fn type_definition_on_a_type_token_is_its_own_decl() {
 #[test]
 fn misses_stay_misses() {
     let mut s = S::boot();
-    // keywords, unknown names, and decl-less primitives are empty
+    // keywords and unknown names are empty; a PRIMITIVE's name has a
+    // decl to jump to since the numerics re-spell (the widths declare
+    // on their own bodies) — pinned below, not here
     let src = "entry fn main() -> nil {\n}\n";
     let hits = s.def_at("file:///t/main.rut", src, "fn", 1);
     assert!(hits.is_empty(), "{hits:?}");
+    // `i32` names the integer primitive's own body now — the jump
+    // lands on the declaring row in the prelude
     let src = "entry fn main() -> nil {\n    let x = i32::max(1);\n}\n";
     let hits = s.def_at("file:///t/main.rut", src, "i32::max", 1);
-    assert!(hits.is_empty(), "i32 has no decl to jump to: {hits:?}");
+    assert_eq!(hits.len(), 1, "{hits:?}");
+    assert_eq!(hits[0]["uri"], "rut/core/src/core.d.rut");
+    const CORE: &str = include_str!("../../../rut/core/src/core.d.rut");
+    let real = CORE.replace("\r\n", "\n");
+    let want = byte_of(&real, "prelude builtin primitive i32 {", 1)
+        + "prelude builtin primitive ".len() as u32;
+    assert_eq!(
+        span_of(&real, &hits[0]),
+        (want as usize, want as usize + "i32".len()),
+        "the primitive body's own name: {hits:?}"
+    );
     let src = "entry fn main() -> nil {\n    let x = mystery();\n}\n";
     let hits = s.def_at("file:///t/main.rut", src, "mystery", 1);
     assert!(hits.is_empty(), "{hits:?}");

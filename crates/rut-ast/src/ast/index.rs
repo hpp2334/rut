@@ -15,9 +15,9 @@ use crate::ast::expr::{
 };
 use crate::ast::handle::AnyHandle;
 use crate::ast::item::{
-    AliasNode, BuiltinImplNode, BuiltinPrimitiveNode, BuiltinTyNode, ClassNode, EnumNode,
-    FieldDeclNode, FnNode, ImplNode, InterfaceNode, MethodDeclNode, ModuleLetNode, ModuleNode,
-    ParamNode, StructNode, SurfaceFnNode, SurfaceStructNode,
+    AliasNode, BuiltinPrimitiveNode, BuiltinTyNode, ClassNode, EnumNode, FieldDeclNode, FnNode,
+    ImplNode, InterfaceNode, MethodDeclNode, ModuleLetNode, ModuleNode, ParamNode, StructNode,
+    SurfaceFnNode, SurfaceStructNode,
 };
 use crate::ast::pat::{PatLitNode, PatPathNode};
 use crate::ast::stmt::{
@@ -149,8 +149,6 @@ pub(crate) fn children_of(ast: &Ast, h: AnyHandle) -> Vec<AnyHandle> {
         out.extend(n.get(ast).members.iter().map(|m| m.any()));
     } else if let Some(n) = h.downcast::<BuiltinPrimitiveNode>() {
         out.extend(n.get(ast).members.iter().map(|m| m.any()));
-    } else if let Some(n) = h.downcast::<BuiltinImplNode>() {
-        out.extend(n.get(ast).methods.iter().map(|m| m.any()));
     }
     // members
     else if let Some(n) = h.downcast::<FieldDeclNode>() {

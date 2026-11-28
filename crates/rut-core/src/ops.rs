@@ -81,7 +81,7 @@ pub enum BitOp {
 }
 
 /// Compiler-lowered native methods: the operations
-/// `core`'s `builtin impl <int>` blocks declare and the frontend expands
+/// the integer primitives' own `builtin primitive` bodies declare and the frontend expands
 /// inline at the method call (`x.wrapping_add(y)`) instead of calling —
 /// wrapping, saturating and checked integer arithmetic. The id travels in
 /// the module surface (no `FuncCode`); `rut-lir` owns the lowering,

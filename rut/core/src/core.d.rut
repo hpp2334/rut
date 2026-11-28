@@ -9,8 +9,9 @@
 //
 // One surface kind in this file: `builtin` — the ENGINE implements it,
 // compiler-lowered (ops and rut-lir lowering): the
-// primitives/fns below, and the `builtin impl <prim>` numeric
-// methods. core registers no host bodies at all; `host fn` is
+// primitives below — their members declared on their own bodies,
+// the integer widths' numeric methods included — and the fns. core
+// registers no host bodies at all; `host fn` is
 // exclusively the EMBEDDER'S surface (a registered NativeModule).
 // The decls exist so users and the LSP see every signature — the
 // lockstep test keeps them true to rut-lir's lowering tables.
@@ -88,10 +89,12 @@ pub builtin class Weak<T> {
 // ---- engine builtin primitives (compiler-lowered members) ----
 // The boot primitives declare their surface here — `builtin primitive`,
 // never a class: the Rust-side
-// representation is the boot table's, unchanged. v1.1: the primitive
-// members are declared per type — `str`/`bytes` carry their own member
-// contracts; `len` is the sequence member shared by
-// every sequence.
+// representation is the boot table's, unchanged. Every member declares
+// on its type's OWN body: `str`/`bytes` carry their own member
+// contracts (`len` is the sequence member shared by
+// every sequence), and the integer widths declare their numeric
+// methods on their own bodies below — there is no separate impl
+// surface.
 prelude builtin primitive str {
     fn len(self) -> i32;            // codepoints
     fn code(self) -> u32;           // the FIRST codepoint (traps on empty)
@@ -152,15 +155,16 @@ prelude builtin primitive opaque {
     fn downcast<T>(o: Self) -> ?T;
 }
 
-// ---- numeric methods on the integer primitives ----
-// `builtin impl <prim>` — compiler-lowered methods ON the primitive,
-// ambient like the primitive itself: `x.wrapping_add(y)` needs no `use`
-// (primitives have none). One block per width; the wrapping/saturating/
+// ---- numeric members on the integer primitives ----
+// The integer widths declare their numeric methods on their OWN
+// `builtin primitive` bodies — compiler-lowered, ambient like the
+// primitive itself: `x.wrapping_add(y)` needs no `use`
+// (primitives have none). One body per width; the wrapping/saturating/
 // checked ops replace the trap-on-overflow `+`/`-`/`*`/`<<`;
 // `checked_*` answers the v1.1 tuple `(T, bool)` — `ok` is false
 // exactly when the mathematical result escaped the width.
 
-prelude builtin impl i8 {
+prelude builtin primitive i8 {
     fn wrapping_add(self, y: i8) -> i8;
     fn wrapping_sub(self, y: i8) -> i8;
     fn wrapping_mul(self, y: i8) -> i8;
@@ -173,7 +177,7 @@ prelude builtin impl i8 {
     fn checked_mul(self, y: i8) -> (i8, bool);
 }
 
-prelude builtin impl i16 {
+prelude builtin primitive i16 {
     fn wrapping_add(self, y: i16) -> i16;
     fn wrapping_sub(self, y: i16) -> i16;
     fn wrapping_mul(self, y: i16) -> i16;
@@ -186,7 +190,7 @@ prelude builtin impl i16 {
     fn checked_mul(self, y: i16) -> (i16, bool);
 }
 
-prelude builtin impl i32 {
+prelude builtin primitive i32 {
     fn wrapping_add(self, y: i32) -> i32;
     fn wrapping_sub(self, y: i32) -> i32;
     fn wrapping_mul(self, y: i32) -> i32;
@@ -199,7 +203,7 @@ prelude builtin impl i32 {
     fn checked_mul(self, y: i32) -> (i32, bool);
 }
 
-prelude builtin impl i64 {
+prelude builtin primitive i64 {
     fn wrapping_add(self, y: i64) -> i64;
     fn wrapping_sub(self, y: i64) -> i64;
     fn wrapping_mul(self, y: i64) -> i64;
@@ -212,7 +216,7 @@ prelude builtin impl i64 {
     fn checked_mul(self, y: i64) -> (i64, bool);
 }
 
-prelude builtin impl u8 {
+prelude builtin primitive u8 {
     fn wrapping_add(self, y: u8) -> u8;
     fn wrapping_sub(self, y: u8) -> u8;
     fn wrapping_mul(self, y: u8) -> u8;
@@ -225,7 +229,7 @@ prelude builtin impl u8 {
     fn checked_mul(self, y: u8) -> (u8, bool);
 }
 
-prelude builtin impl u16 {
+prelude builtin primitive u16 {
     fn wrapping_add(self, y: u16) -> u16;
     fn wrapping_sub(self, y: u16) -> u16;
     fn wrapping_mul(self, y: u16) -> u16;
@@ -238,7 +242,7 @@ prelude builtin impl u16 {
     fn checked_mul(self, y: u16) -> (u16, bool);
 }
 
-prelude builtin impl u32 {
+prelude builtin primitive u32 {
     fn wrapping_add(self, y: u32) -> u32;
     fn wrapping_sub(self, y: u32) -> u32;
     fn wrapping_mul(self, y: u32) -> u32;
@@ -251,7 +255,7 @@ prelude builtin impl u32 {
     fn checked_mul(self, y: u32) -> (u32, bool);
 }
 
-prelude builtin impl u64 {
+prelude builtin primitive u64 {
     fn wrapping_add(self, y: u64) -> u64;
     fn wrapping_sub(self, y: u64) -> u64;
     fn wrapping_mul(self, y: u64) -> u64;

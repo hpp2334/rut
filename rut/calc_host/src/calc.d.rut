@@ -8,7 +8,7 @@
 // calc's math module (`math::PI`).
 //
 // The INTEGER numeric methods (`wrapping_*`, `saturating_*`,
-// `checked_*`) are core's `builtin impl` methods on the primitives;
+// `checked_*`) are core's, declared on the primitives' own bodies;
 // `NAN` is core's too (`use core::{NAN}`).
 //
 // Contract (std/core.d.rut): the surface is kept TRUE to the
@@ -59,8 +59,8 @@ pub host fn hypot_f64(x: f64, y: f64) -> f64;
 pub host fn copysign_f64(x: f64, y: f64) -> f64;
 pub host fn fma_f64(x: f64, y: f64, z: f64) -> f64;
 
-// ---- float helpers (ordinary host fns; the int forms are core's
-// `builtin impl` methods) ----
+// ---- float helpers (ordinary host fns; the int forms are core's,
+// declared on the primitives' own bodies) ----
 
 pub host fn abs_f64(x: f64) -> f64;
 pub host fn min_f64(x: f64, y: f64) -> f64;

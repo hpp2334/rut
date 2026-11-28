@@ -258,9 +258,6 @@ arenas! {
     builtin_tys: crate::ast::item::BuiltinTyNode => BuiltinTy, "BuiltinTy" (|n: &Self| !n.closed),
     builtin_primitives: crate::ast::item::BuiltinPrimitiveNode => BuiltinPrimitive,
     "BuiltinPrimitive" (|n: &Self| !n.closed),
-    builtin_impls: crate::ast::item::BuiltinImplNode => BuiltinImpl, "BuiltinImpl" (
-        |n: &Self| !n.closed
-    ),
     // members
     field_decls: crate::ast::item::FieldDeclNode => FieldDecl, "FieldDecl",
     method_decls: crate::ast::item::MethodDeclNode => MethodDecl, "MethodDecl",

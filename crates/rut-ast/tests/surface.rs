@@ -203,7 +203,7 @@ fn builtin_ty_parses() {
 #[test]
 fn builtin_requires_a_kind_word() {
     // builtin decls spell their kind — `prelude builtin primitive` /
-    // `prelude builtin class` / `prelude builtin impl`; a
+    // `prelude builtin class`; a
     // bare `builtin Name { .. }` is diagnosed
     let (_, diags) = parse(
         "prelude builtin Option<T> { fn some(v: T) -> Self; }",
@@ -368,29 +368,24 @@ fn host_async_fn_terminates_on_malformed() {
 }
 
 #[test]
-fn builtin_impl_decl() {
-    // `builtin impl <prim> { .. }` — the integer
-    // primitives' numeric methods, bodiless `self` receivers, tuple
-    // returns allowed (`checked_*`)
-    let src = "prelude builtin impl i32 {\n\
-               \x20   fn wrapping_add(self, y: i32) -> i32;\n\
-               \x20   fn wrapping_shl(self, n: i32) -> i32;\n\
-               \x20   fn checked_add(self, y: i32) -> (i32, bool);\n\
-               }";
-    let (doc, diags) = parse(src, Mode::Decl);
-    let ast = doc.ast();
-    assert!(
-        diags.is_empty(),
-        "builtin impl must parse cleanly: {diags:?}"
+fn builtin_impl_spelling_is_dead() {
+    // the one-surface law: every engine-implemented member declares on
+    // its type's OWN body — `builtin impl <prim> { .. }` is no
+    // grammar. The `builtin` frame refuses at the kind word
+    let (_, diags) = parse(
+        "prelude builtin impl i32 {\n\
+         \x20   fn wrapping_add(self, y: i32) -> i32;\n\
+         }",
+        Mode::Decl,
     );
-    let items = ast.root().items(ast).to_vec();
-    let ItemRef::BuiltinImpl(h) = items[0] else {
-        panic!("expected a BuiltinImpl item, got {:?}", items[0]);
-    };
-    let d = h.get(ast);
-    assert_eq!(ast.name(d.prim.ident), "i32");
-    assert_eq!(d.methods.len(), 3);
-    // it is a declaration form: an implementation file rejects it
+    assert!(
+        diags
+            .iter()
+            .any(|d| d.msg.contains("`builtin` spells its kind")),
+        "a `builtin impl` spelling must diagnose: {diags:?}"
+    );
+    // an implementation file refuses the whole surface family first
+    // (the mode gate fires before the kind word)
     let (_, diags) = parse(
         "prelude builtin impl i32 { fn abs(self) -> i32; }",
         Mode::Impl,
@@ -407,6 +402,37 @@ prelude builtin primitive opaque {
     fn downcast<T>(o: Self) -> ?T;
 }
 ";
+
+#[test]
+fn builtin_primitive_int_parses() {
+    // the numerics re-spell: the integer widths declare their numeric
+    // methods on their OWN primitive bodies — `i32` parses as a plain
+    // ident (primitive names are contextual), bodiless `self`
+    // receivers, tuple returns allowed (`checked_*`)
+    let src = "prelude builtin primitive i32 {\n\
+               \x20   fn wrapping_add(self, y: i32) -> i32;\n\
+               \x20   fn wrapping_shl(self, n: i32) -> i32;\n\
+               \x20   fn checked_add(self, y: i32) -> (i32, bool);\n\
+               }";
+    let (doc, diags) = parse(src, Mode::Decl);
+    let ast = doc.ast();
+    assert!(
+        diags.is_empty(),
+        "builtin primitive i32 must parse cleanly: {diags:?}"
+    );
+    let items = ast.root().items(ast).to_vec();
+    let ItemRef::BuiltinPrimitive(h) = items[0] else {
+        panic!("expected a BuiltinPrimitive item, got {:?}", items[0]);
+    };
+    let d = h.get(ast);
+    assert_eq!(ast.name(d.name.ident), "i32");
+    assert_eq!(d.members.len(), 3);
+    assert!(
+        d.ambient(),
+        "`prelude builtin` is the ambient spelling: {:?}",
+        d.ambient()
+    );
+}
 
 #[test]
 fn builtin_primitive_parses() {
@@ -483,12 +509,19 @@ fn the_two_builtin_spellings_parse_clean() {
     // word — it is an ordinary identifier now)
     for src in [
         "pub builtin class opaque { fn new<T>(v: T) -> Self; }",
-        "pub builtin impl i32 { fn abs(self) -> i32; }",
         "prelude builtin primitive opaque { fn downcast<T>(o: Self) -> ?T; }",
     ] {
         let (_, diags) = parse(src, Mode::Decl);
         assert!(diags.is_empty(), "`{src}` must parse clean: {diags:?}");
     }
+    // `impl` is no kind word — the spelling diagnoses like a bare one
+    let (_, diags) = parse("pub builtin impl i32 { fn abs(self) -> i32; }", Mode::Decl);
+    assert!(
+        diags
+            .iter()
+            .any(|d| d.msg.contains("`builtin` spells its kind")),
+        "the dead `builtin impl` spelling draws the kind error: {diags:?}"
+    );
     let (_, diags) = parse("pub builtin trait Mark { }", Mode::Decl);
     assert!(
         diags

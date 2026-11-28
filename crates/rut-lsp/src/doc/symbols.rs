@@ -228,18 +228,6 @@ fn item_symbol(ast: &Ast, item: ItemRef) -> Option<Symbol> {
                 children,
             ))
         }
-        ItemRef::BuiltinImpl(h) => {
-            // core's `builtin impl i32 { .. }` — a method group on a
-            // primitive; symbolized as `builtin impl <prim>`
-            let d = h.get(ast);
-            let children = method_symbols(ast, &d.methods);
-            Some(sym(
-                ast.name(d.prim.ident),
-                SymKind::Class,
-                Some(d.prim.span),
-                children,
-            ))
-        }
         ItemRef::SurfaceStruct(h) => {
             let d = h.get(ast);
             let children = field_symbols(ast, &d.fields);

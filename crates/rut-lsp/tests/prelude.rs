@@ -100,6 +100,50 @@ fn hover_over_a_core_name_renders_the_row() {
     );
 }
 
+#[test]
+fn a_primitive_member_answers_every_door() {
+    // the numerics re-spell's visibility win: the integer widths'
+    // numeric methods declare on their OWN primitive bodies, so the
+    // ordinary doors answer for `x.wrapping_add` — hover renders the
+    // row (verbatim from the prelude doc), completion offers the
+    // members, F12 jumps to the declaring row in `core.d.rut`
+    let mut s = S::boot();
+    const CORE: &str = include_str!("../../../rut/core/src/core.d.rut");
+
+    // hover renders the row
+    let src = "entry fn main() -> nil {\n    const x: i32 = 1;\n    x.wrapping_add(2);\n}\n";
+    let md = markdown(s.hover_in("file:///t/main.rut", src, ".wrapping_add", 1, 2));
+    assert!(
+        md.contains("fn wrapping_add(self, y: i32) -> i32"),
+        "the verbatim row: {md}"
+    );
+    assert!(md.contains("in `i32`"), "the owning primitive: {md}");
+
+    // completion offers the members
+    let src = "entry fn main() -> nil {\n    const x: i32 = 1;\n    x.\n}\n";
+    let items = s.complete_at("file:///t/main.rut", src, "x.", 1);
+    assert!(
+        offers(&items, "wrapping_add") && offers(&items, "checked_add"),
+        "the primitive's members complete: {:?}",
+        labels(&items)
+    );
+
+    // definition jumps to the declaring row in the prelude
+    let src = "entry fn main() -> nil {\n    const x: i32 = 1;\n    x.wrapping_add(2);\n}\n";
+    let hits = s.def_in("file:///t/main.rut", src, ".wrapping_add", 1, 2);
+    assert_eq!(hits.len(), 1, "{hits:?}");
+    assert_eq!(hits[0]["uri"], "rut/core/src/core.d.rut");
+    // the range is the member's name in the REAL source (i32's block:
+    // the third `wrapping_add` spelling)
+    let real = CORE.replace("\r\n", "\n");
+    let want = byte_of(&real, "fn wrapping_add", 3) + "fn ".len() as u32;
+    assert_eq!(
+        span_of(&real, &hits[0]),
+        (want as usize, want as usize + "wrapping_add".len()),
+        "{hits:?}"
+    );
+}
+
 /// a host mod-tree dep laid as the store lays it (the unpacked tree):
 /// a `type = "host"` manifest whose surface is a MOD TREE — the root
 /// `.d.rut` carries `pub mod net;`, the child rides `net/mod.d.rut`.

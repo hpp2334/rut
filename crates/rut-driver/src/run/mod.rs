@@ -188,9 +188,11 @@ pub struct RutRun {
     entrypoint: Option<String>,
 }
 
-/// The `core` prelude pkg — the erasure primitive (`opaque`), the
-/// engine's builtin surface (`Iterable`, the disposal pair), and the
-/// compiler-lowered functions (`panic`, the `str`/`bytes` natives).
+/// The `core` prelude pkg — the primitives (the integer widths'
+/// numeric members declared on their own bodies), the erasure
+/// primitive (`opaque`), the engine's builtin surface (`Iterable`, the
+/// disposal pair), and the compiler-lowered functions (`panic`, the
+/// `str`/`bytes` natives).
 /// v1.1 removed `Option`/`Result`/`own` — a use site diagnoses
 /// through the ordinary unknown-name ladder. A native pkg with no
 /// body: its surface is

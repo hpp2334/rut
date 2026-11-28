@@ -22,8 +22,8 @@ use crate::ast::error::ErrorNode;
 use crate::ast::expr::ExprRef;
 use crate::ast::handle::{AnyHandle, Handle, NodeKind};
 use crate::ast::item::{
-    AliasNode, BuiltinImplNode, BuiltinPrimitiveNode, BuiltinTyNode, EnumMemberNode, ImplNode,
-    ModDeclNode, SurfaceFnNode, SurfaceStructNode, UseNode,
+    AliasNode, BuiltinPrimitiveNode, BuiltinTyNode, EnumMemberNode, ImplNode, ModDeclNode,
+    SurfaceFnNode, SurfaceStructNode, UseNode,
 };
 use crate::ast::item::{
     ClassNode, EnumNode, FieldDeclNode, FieldRef, FnNode, InterfaceNode, ItemRef, MemberRef,
@@ -472,18 +472,6 @@ fn item_dump(a: &Ast, r: ItemRef, next: &mut u32) -> PrintNode {
                 PrintVal::Nodes(d.members.iter().map(|m| method_dump(a, *m, next)).collect()),
             ));
             <BuiltinPrimitiveNode as NodeKind>::NAME
-        }
-        ItemRef::BuiltinImpl(h) => {
-            let d: &BuiltinImplNode = h.get(a);
-            fields.push(field(
-                "prim",
-                PrintVal::Str(a.name(d.prim.ident).to_string()),
-            ));
-            fields.push(field(
-                "methods",
-                PrintVal::Nodes(d.methods.iter().map(|m| method_dump(a, *m, next)).collect()),
-            ));
-            <BuiltinImplNode as NodeKind>::NAME
         }
         ItemRef::Error(h) => return error_dump(a, h, next),
     };
@@ -1697,9 +1685,6 @@ fn print_node_of(a: &Ast, h: AnyHandle, next: &mut u32) -> PrintNode {
     }
     if let Some(x) = h.downcast::<BuiltinPrimitiveNode>() {
         return item_dump(a, ItemRef::BuiltinPrimitive(x), next);
-    }
-    if let Some(x) = h.downcast::<BuiltinImplNode>() {
-        return item_dump(a, ItemRef::BuiltinImpl(x), next);
     }
     if let Some(x) = h.downcast::<ErrorNode>() {
         return error_dump(a, x, next);

@@ -362,10 +362,11 @@ pub struct Surface {
     /// ambient bit (same law as [`Surface::native_types`])
     pub native_fns: Vec<(IdentId, bool)>,
     /// builtin-impl methods (`core` only): the integer
-    /// primitives' `builtin impl` blocks — `(receiver prim, method name,
-    /// lowering id)`. No `FuncCode`; rut-lir expands the method call
-    /// inline. AMBIENT like the primitives themselves: a method call
-    /// `x.wrapping_add(y)` needs no `use`.
+    /// primitives' numeric methods, declared on their own
+    /// `builtin primitive` bodies in `core.d.rut` — `(receiver prim,
+    /// method name, lowering id)`. No `FuncCode`; rut-lir expands the
+    /// method call inline. AMBIENT like the primitives themselves: a
+    /// method call `x.wrapping_add(y)` needs no `use`.
     pub native_impls: Vec<(crate::types::TypeId, IdentId, crate::ops::Intrinsic)>,
 }
 
@@ -381,7 +382,8 @@ pub const CORE_FNS: &[IdentId] = &[sym::PANIC, sym::STRING_JOIN, sym::CAPTURE_ST
 impl Surface {
     /// The core prelude surface: the builtin containers,
     /// the builtin ifaces, the compiler-lowered functions, the integer
-    /// primitives' `builtin impl` methods, and `NAN`. One
+    /// primitives' numeric methods (declared on their own
+    /// `builtin primitive` bodies in the mirrored decl), and `NAN`. One
     /// source of truth — the driver mounts it, the compiler hints from
     /// it, and `rut/core/core.d.rut` mirrors it
     /// for the LSP (kept true to the implementation by test). Every name

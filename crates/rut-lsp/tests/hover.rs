@@ -830,15 +830,28 @@ fn binding_decl_span_is_byte_exact() {
 
 #[test]
 fn primitive_type_token_hover() {
-    // M7: `i32` in type position — a static blurb, width + range
+    // M7, post re-spell: `i32` in type position renders the rich DECL
+    // — the width declares a body now, and a surface decl wins over
+    // the static blurb (the same precedence `str` pins below). The
+    // body-less primitives (`bool`, the floats) keep the blurb —
+    // pinned by primitive_bool_and_float_hover.
     let mut s = S::boot();
     let src = "fn f(x: i32) -> i32 { return x; }\n";
     let md = markdown(s.hover_at("file:///t/hov.rut", src, "i32", 1));
     assert!(md.contains("i32"), "{md}");
-    assert!(md.contains("signed 32-bit"), "{md}");
-    assert!(md.contains("-2147483648 ..= 2147483647"), "{md}");
+    assert!(
+        md.contains("prelude builtin primitive i32 {"),
+        "the declaring body wins over the static blurb: {md}"
+    );
+    assert!(
+        md.contains("fn wrapping_add(self, y: i32) -> i32"),
+        "the members render: {md}"
+    );
     let md = markdown(s.hover_at("file:///t/hov.rut", src, "i32", 2));
-    assert!(md.contains("signed 32-bit"), "{md}");
+    assert!(
+        md.contains("prelude builtin primitive i32 {"),
+        "the declaring body wins over the static blurb: {md}"
+    );
 }
 
 #[test]

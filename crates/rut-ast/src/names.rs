@@ -109,8 +109,6 @@ fn item_names(ast: &crate::Ast, item: ItemRef, out: &mut Vec<(Span, IdentId)>) {
             decl!(crate::BuiltinPrimitiveNode, h);
             method_names(ast, &h.get(ast).members, out);
         }
-        // `builtin impl` declares no new name; its methods ride
-        ItemRef::BuiltinImpl(h) => method_names(ast, &h.get(ast).methods, out),
         ItemRef::ModDecl(h) => decl!(crate::ModDeclNode, h),
         ItemRef::Use(h) => {
             let d = h.get(ast);

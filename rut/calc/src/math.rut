@@ -12,7 +12,7 @@
 // materializes each as an f64 const row.
 //
 // The integer numeric methods (`wrapping_*`, `saturating_*`,
-// `checked_*`) are core's (`builtin impl` methods on the primitives).
+// `checked_*`) are core's (declared on the primitives' own bodies).
 
 pub use calc_host::{ PI, TAU, E, SQRT_2, LN_2, LN_10, LOG2_E, LOG10_E,
              INFINITY, NEG_INFINITY, EPSILON, MAX, MIN, MIN_POSITIVE };

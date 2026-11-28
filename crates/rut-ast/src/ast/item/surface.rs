@@ -171,28 +171,7 @@ impl BuiltinPrimitiveNode {
     }
 }
 
-/// `builtin impl i32 { .. }` — numeric methods ON a primitive type,
-/// lowered inline at the call site. No visibility: no `pub impl`
-/// spelling exists (the `pub` of a `pub builtin impl` rides the
-/// modifier chain unread).
-#[derive(Clone, Debug)]
-pub struct BuiltinImplNode {
-    /// starts at the item's FIRST token — the leading modifier when
-    /// one is spelled, the linkage keyword otherwise
-    pub span: Span,
-    /// did the frame eat the member list's own `}`? `false` when the
-    /// parse closed the list at EOF — the impl is still open (the
-    /// edit lane's survivor rule asks exactly this)
-    pub closed: bool,
-    /// the modifier chain in source order
-    pub modifiers: Vec<ModifierNode>,
-    /// the receiver primitive's name and its own span
-    pub prim: Name,
-    pub methods: Vec<MethodRef>,
-}
-
 slot_alloc!(SurfaceFnNode, ItemRef::SurfaceFn);
 slot_alloc!(SurfaceStructNode, ItemRef::SurfaceStruct);
 slot_alloc!(BuiltinTyNode, ItemRef::BuiltinTy);
 slot_alloc!(BuiltinPrimitiveNode, ItemRef::BuiltinPrimitive);
-slot_alloc!(BuiltinImplNode, ItemRef::BuiltinImpl);

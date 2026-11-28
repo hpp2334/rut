@@ -813,8 +813,8 @@ fn compile_program_inner(
                 }
             }
         }
-        // the integer prims' numeric methods (core's `builtin impl`
-        // blocks): bound AMBIENT — the method call
+        // the integer prims' numeric methods (declared on their own
+        // `builtin primitive` bodies in core.d.rut): bound AMBIENT — the method call
         // `x.wrapping_add(y)` needs no `use`, the primitives themselves
         // have none
         for (prim, n, i) in &surface.native_impls {

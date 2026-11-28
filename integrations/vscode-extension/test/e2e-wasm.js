@@ -803,8 +803,9 @@ async function main() {
         smokes++;
     }
 
-    // ---- phase 1 (M7): primitive type-token hover — `i32`/`bool` have
-    // no surface decl; the static blurb (width, range) is the answer ----
+    // ---- the primitive type-token hover — since the numerics
+    // re-spell `i32` declares its own body (the rich decl render wins
+    // over the static blurb); body-less `bool` keeps the blurb ----
     {
         const uri = 'file:///ws/e2e-prim-hover.rut';
         const src = 'fn pick(x: i32, ok: bool) -> i32 {\n    return x;\n}\n';
@@ -816,10 +817,7 @@ async function main() {
         }
         const [line, ch] = posOnLine(src, /fn pick\(x: i32, ok: bool\)/, 'i32');
         const h = await rut.hover(uri, line, ch);
-        if (
-            !h?.contents.value.includes('signed 32-bit') ||
-            !h.contents.value.includes('-2147483648 ..= 2147483647')
-        ) {
+        if (!h?.contents.value.includes('prelude builtin primitive i32 {')) {
             bad.push(
                 `i32 primitive hover missed: ${h && JSON.stringify(h.contents.value.slice(0, 80))}`,
             );

@@ -59,11 +59,10 @@ pub(crate) use store::remove_any;
 
 // items
 pub use item::{
-    AliasNode, BuiltinImplNode, BuiltinPrimitiveNode, BuiltinTyNode, ClassNode, EnumMemberNode,
-    EnumNode, FieldDeclNode, FieldRef, FnNode, ImplNode, InterfaceNode, ItemRef, Linkage,
-    MemberRef, MethodDeclNode, MethodRef, ModDeclNode, ModKind, ModifierNode, ModuleLetNode,
-    ModuleNode, ParamNode, ParamRef, SelfParamNode, StructNode, SurfaceFnNode, SurfaceStructNode,
-    UseNode, Vis,
+    AliasNode, BuiltinPrimitiveNode, BuiltinTyNode, ClassNode, EnumMemberNode, EnumNode,
+    FieldDeclNode, FieldRef, FnNode, ImplNode, InterfaceNode, ItemRef, Linkage, MemberRef,
+    MethodDeclNode, MethodRef, ModDeclNode, ModKind, ModifierNode, ModuleLetNode, ModuleNode,
+    ParamNode, ParamRef, SelfParamNode, StructNode, SurfaceFnNode, SurfaceStructNode, UseNode, Vis,
 };
 // statements
 pub use stmt::{

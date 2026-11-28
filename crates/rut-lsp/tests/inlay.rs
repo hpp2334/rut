@@ -496,6 +496,21 @@ fn body_members_price_their_calls() {
 }
 
 #[test]
+fn the_primitive_int_members_price_their_calls() {
+    // the numerics re-spell rides the same door: the integer widths'
+    // numeric methods declare on their OWN primitive bodies, so
+    // `x.wrapping_add(y)` prices the call with the declared
+    // signature — `: i32`
+    let mut s = S::boot();
+    let src =
+        "entry fn main() -> nil {\n    const x: i32 = 1;\n    const y = x.wrapping_add(2);\n}\n";
+    let hs = s.inlay_all("file:///t/main.rut", src);
+    // the whole callee family answers: the type inlay AND the param
+    // hint — both priced through the declared signature
+    assert_eq!(labels(&hs), [": i32", "y:"], "{hs:?}");
+}
+
+#[test]
 fn the_http_chain_prices_through_the_real_members() {
     // the regression lock for the report: the REAL std http lane
     // mounted as the dep (the completion tier's mount precedent), the

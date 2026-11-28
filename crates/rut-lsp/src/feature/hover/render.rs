@@ -285,7 +285,7 @@ pub(crate) fn render_primitive(name: &str) -> Option<String> {
 
 fn prim_line(name: &str, signedness: &str, bits: u32, range: &str) -> String {
     format!(
-        "{}\n\n{signedness} {bits}-bit integer — {range}\n\nliterals `0`, `0{name}`; the `wrapping_*` / `saturating_*` / `checked_*` members are compiler-lowered (core's `builtin impl {name}`)",
+        "{}\n\n{signedness} {bits}-bit integer — {range}\n\nliterals `0`, `0{name}`; the `wrapping_*` / `saturating_*` / `checked_*` members are compiler-lowered (declared on the primitive's own body in `core.d.rut`)",
         code_block(name)
     )
 }

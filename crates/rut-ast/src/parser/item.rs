@@ -6,11 +6,10 @@
 //! its broken regions as ErrorNodes beside the survivors.
 
 use crate::{
-    AliasNode, BlockNode, BuiltinImplNode, BuiltinPrimitiveNode, BuiltinTyNode, ClassNode, DocData,
-    EnumNode, FieldDeclNode, FieldRef, FnNode, Handle, IdentId, ImplNode, InterfaceNode, Linkage,
-    MemberRef, MethodDeclNode, MethodRef, ModDeclNode, ModKind, ModifierNode, ModuleLetNode,
-    ParamNode, ParamRef, SelfParamNode, StructNode, SurfaceFnNode, SurfaceStructNode, TyRef,
-    UseNode,
+    AliasNode, BlockNode, BuiltinPrimitiveNode, BuiltinTyNode, ClassNode, DocData, EnumNode,
+    FieldDeclNode, FieldRef, FnNode, Handle, IdentId, ImplNode, InterfaceNode, Linkage, MemberRef,
+    MethodDeclNode, MethodRef, ModDeclNode, ModKind, ModifierNode, ModuleLetNode, ParamNode,
+    ParamRef, SelfParamNode, StructNode, SurfaceFnNode, SurfaceStructNode, TyRef, UseNode,
 };
 use rut_lexer::span::Span;
 use rut_lexer::token::Tok;
@@ -1873,7 +1872,6 @@ pub(crate) struct SurfaceFrame {
     modifiers: Vec<ModifierNode>,
     lo: u32,
     stage: SuStage,
-    is_impl: bool,
     is_primitive: bool,
     name: Name,
     generics: Vec<IdentId>,
@@ -1899,7 +1897,6 @@ impl SurfaceFrame {
             modifiers,
             lo: 0,
             stage: SuStage::Params,
-            is_impl: false,
             is_primitive: false,
             name: Name {
                 id: IdentId(0),
@@ -2071,27 +2068,16 @@ impl SurfaceFrame {
                 self.body_lo = p.expect(Tok::LBrace).map_or(p.prev_end, |s| s.lo);
                 self.members_top(p)
             }
-            Tok::Ident(k) if k == "impl" => {
-                p.bump();
-                let Some(prim) = p.expect_ident("a primitive type name") else {
-                    return Step::Pop(Done::Failed);
-                };
-                self.name = prim;
-                self.is_impl = true;
-                self.stage = SuStage::Members;
-                self.body_lo = p.expect(Tok::LBrace).map_or(p.prev_end, |s| s.lo);
-                self.members_top(p)
-            }
             Tok::Ident(_) => {
                 p.err_here(
-                    "`builtin` spells its kind — `builtin primitive <name> { .. }`, `builtin class Name { .. }`, or `builtin impl <prim> { .. }`",
+                    "`builtin` spells its kind — `builtin primitive <name> { .. }` or `builtin class Name { .. }`",
                 );
                 Step::Pop(Done::Failed)
             }
             _ => {
                 let found = p.peek(0).describe();
                 p.err_here(format!(
-                    "expected `fn`, `primitive`, `class`, or `impl` after `builtin`, found {found}"
+                    "expected `fn`, `primitive`, or `class` after `builtin`, found {found}"
                 ));
                 Step::Pop(Done::Failed)
             }
@@ -2103,21 +2089,7 @@ impl SurfaceFrame {
             let closed = p.eat_punct(Tok::RBrace);
             if closed || p.at_eof() {
                 let body = p.span_from(self.body_lo);
-                let item = if self.is_impl {
-                    BuiltinImplNode {
-                        span: p.span_from(self.lo),
-                        // the `}` closed the member list; EOF did not —
-                        // the edit lane's survivor rule asks exactly this
-                        closed,
-                        modifiers: std::mem::take(&mut self.modifiers),
-                        prim: crate::Name {
-                            ident: self.name.id,
-                            span: self.name.span,
-                        },
-                        methods: std::mem::take(&mut self.methods),
-                    }
-                    .allocate(&mut p.ast)
-                } else if self.is_primitive {
+                let item = if self.is_primitive {
                     with_doc!(
                         p,
                         BuiltinPrimitiveNode {

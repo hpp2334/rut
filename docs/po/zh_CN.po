@@ -16159,10 +16159,12 @@ msgid ""
 "                                      // computes nothing. Binds bare at the\n"
 "                                      // pkg's root (`use calc_host::{ PI }`)\n"
 "prelude builtin fn name<T>(params) -> T;   // engine fn, compiler-lowered\n"
+"prelude builtin primitive name { .. }      // engine members on a primitive\n"
+"                                           // (their own body — `str`/`bytes`,\n"
+"                                           // the integer widths)\n"
 "prelude builtin class Name<T> { .. }       // engine type member contract\n"
 "                                           // (the closed async pair among\n"
 "                                           // them — `Future<T>`, `RunContext`)\n"
-"prelude builtin impl i32 { .. }            // engine methods on a primitive\n"
 "pub builtin class Name<T> { .. }           // the import-gated twin (below)\n"
 "```"
 msgstr ""
@@ -16196,8 +16198,8 @@ msgid "A `builtin` decl spells one of two strict forms — a bare `builtin` diag
 msgstr "`builtin` 声明拼写成两种严格形式之一——裸写 `builtin` 会得到诊断 _“`builtin` must be spelled `prelude builtin` (ambient) or `pub builtin` (import-gated)”_："
 
 #: src/reference/host-fns.md:114
-msgid "**`prelude builtin`** — the **ambient** engine surface: the name binds in every compilation unit, no `use` needed. The primitives and their `builtin impl` methods, `opaque`, `StackTrace`, and `panic`/`string_join`/`capture_stacktrace` are all ambient."
-msgstr "**`prelude builtin`**——**环境自带**的引擎表面：名字在每个编译单元绑定，无需 `use`。基本类型及其 `builtin impl` 方法、`opaque`、`StackTrace`，以及 `panic`/`string_join`/`capture_stacktrace`，全是环境自带。"
+msgid "**`prelude builtin`** — the **ambient** engine surface: the name binds in every compilation unit, no `use` needed. The primitives — their numeric members (`wrapping_*`/`saturating_*`/`checked_*`, declared on the integer widths' own bodies) included — `opaque`, `StackTrace`, and `panic`/`string_join`/`capture_stacktrace` are all ambient."
+msgstr "**`prelude builtin`**——**环境自带**的引擎表面：名字在每个编译单元绑定，无需 `use`。基本类型——包括其数值成员（`wrapping_*`/`saturating_*`/`checked_*`，声明在整型宽度自身的体里）——以及 `opaque`、`StackTrace`，还有 `panic`/`string_join`/`capture_stacktrace`，全是环境自带。"
 
 #: src/reference/host-fns.md:118
 msgid "**`pub builtin`** — the **import-gated** engine surface: the name resolves only through `use core::{ .. }`, the way a package's names do. Today's rows are the closed async pair — `Future<T>`, `RunContext` — the disposal context, `DisposalContext`, and the weak reference, `Weak<T>` ([interfaces](interfaces.md), [async and await](async.md), [the Rc heap](rc-heap.md), [weak references](weak-refs.md)). The engine's weave never consults the gate — it keys on the engine symbols — so a module with no imports still iterates, awaits, and launches; only spelling a name in source gates."

@@ -118,12 +118,6 @@ fn classify_item(ast: &Ast, item: ItemRef, out: &mut Vec<(Span, TokenType)>) {
             emit(ast.name(d.name.ident), d.name.span, TokenType::Class, out);
             classify_methods(ast, &d.members, out);
         }
-        // `builtin impl i32 { .. }` declares no new name — the primitive
-        // is already in scope; only its methods classify
-        ItemRef::BuiltinImpl(h) => {
-            let d = h.get(ast);
-            classify_methods(ast, &d.methods, out);
-        }
         // mod decls ARE namespaces — their names classify here (the
         // declared head reads like the `layout` in `layout::mk`, which
         // the path law colors too)

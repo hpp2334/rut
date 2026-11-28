@@ -64,10 +64,12 @@ pub let NAME: f64 = <float literal>;  // a SURFACE CONST — f64 end-to-end, a
                                       // computes nothing. Binds bare at the
                                       // pkg's root (`use calc_host::{ PI }`)
 prelude builtin fn name<T>(params) -> T;   // engine fn, compiler-lowered
+prelude builtin primitive name { .. }      // engine members on a primitive
+                                           // (their own body — `str`/`bytes`,
+                                           // the integer widths)
 prelude builtin class Name<T> { .. }       // engine type member contract
                                            // (the closed async pair among
                                            // them — `Future<T>`, `RunContext`)
-prelude builtin impl i32 { .. }            // engine methods on a primitive
 pub builtin class Name<T> { .. }           // the import-gated twin (below)
 ```
 
@@ -112,8 +114,10 @@ diagnoses *"`builtin` must be spelled `prelude builtin` (ambient) or
 `pub builtin` (import-gated)"*:
 
 - **`prelude builtin`** — the **ambient** engine surface: the name
-  binds in every compilation unit, no `use` needed. The primitives and
-  their `builtin impl` methods, `opaque`, `StackTrace`, and
+  binds in every compilation unit, no `use` needed. The primitives —
+  their numeric members (`wrapping_*`/`saturating_*`/`checked_*`,
+  declared on the integer widths' own bodies) included — `opaque`,
+  `StackTrace`, and
   `panic`/`string_join`/`capture_stacktrace` are all ambient.
 - **`pub builtin`** — the **import-gated** engine surface: the name
   resolves only through `use core::{ .. }`, the way a package's names

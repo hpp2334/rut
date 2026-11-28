@@ -47,7 +47,8 @@ impl<'a> Ctx<'a> {
         );
     }
 
-    /// Bind a `builtin impl` numeric method of a primitive (core only):
+    /// Bind a numeric method of a primitive (core only): the methods
+    /// the primitive's own `builtin primitive` body declares —
     /// `(method name → receiver prim, lowering id)`.
     /// AMBIENT — primitive receivers resolve their methods without a
     /// `use`; rut-lir expands the call inline.
@@ -64,7 +65,8 @@ impl<'a> Ctx<'a> {
     }
 
     /// The lowering of `name` on a receiver of primitive type `recv`, if
-    /// core's `builtin impl` table declares it.
+    /// core's numeric-method table declares it (the methods the
+    /// primitive's own body spells).
     pub fn builtin_impl(&self, name: IdentId, recv: TypeId) -> Option<rut_core::ops::Intrinsic> {
         self.builtin_impls
             .get(&name)?

@@ -3,7 +3,7 @@
 //! twins, the width in the INTERNAL row name (`sqrt_f64` / `sqrt_f32`;
 //! callers spell the generic `calc::sqrt<T>` and never a suffix) — the
 //! float primitives and the float `abs`/`min`/`max`/`signum` helpers
-//! (the integer numeric methods are core's `builtin impl` methods,
+//! (the integer numeric methods are core's, declared on the primitives' own bodies,
 //! compiler-lowered — no host body).
 //!
 //! The `calc_host` module is mounted by the driver (`rut-driver`); a

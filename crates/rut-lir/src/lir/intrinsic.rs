@@ -1,5 +1,5 @@
 //! Compiler-lowered numeric methods: the operations
-//! `core`'s `builtin impl <int>` blocks declare and the frontend expands
+//! the integer primitives' own `builtin primitive` bodies declare and the frontend expands
 //! inline at the METHOD call — `x.wrapping_add(y)` — instead of calling:
 //! `wrapping_*`, `saturating_*`, `checked_*` integer arithmetic. Each
 //! lowering is a fixed sequence of typed ops (`WAddI`/`WSubI`/`WMulI`/
@@ -56,8 +56,9 @@ pub(crate) fn intrinsic_name(i: Intrinsic) -> &'static str {
 }
 
 impl<'a, 'b> FnCompiler<'a, 'b> {
-    /// `x.wrapping_add(y)` — a builtin-impl method call on a primitive
-    /// receiver (core's `builtin impl i32 { .. }` table).
+    /// `x.wrapping_add(y)` — a numeric-method call on a primitive
+    /// receiver (core's numeric-method table — the methods the
+    /// primitive's own body spells).
     /// The receiver is ALREADY compiled (its register reused — a
     /// side-effecting receiver evaluates exactly once); the width comes
     /// from its primitive type.

@@ -22,8 +22,7 @@ pub(crate) struct DeclMap {
     types: Vec<AnyHandle>,
     /// fns — free fns, surface fns, and impl-block methods (an impl
     /// method's owner derives from its parent impl's target), in
-    /// source order. `builtin impl` blocks record nothing: their
-    /// methods are compiler-lowered, core's own surfaces answer.
+    /// source order
     fns: Vec<AnyHandle>,
     /// module-scope lets
     lets: Vec<AnyHandle>,
@@ -52,8 +51,7 @@ pub(crate) fn decls_of(doc: &Document) -> DeclMap {
             ItemRef::Fn(h) => m.fns.push(h.any()),
             ItemRef::SurfaceFn(h) => m.fns.push(h.any()),
             // the inherent impl owns its methods — they ride the fns
-            // list at the impl's own position; `BuiltinImpl` records
-            // nothing (compiler-lowered)
+            // list at the impl's own position
             ItemRef::Impl(h) => {
                 for meth in &h.get(ast).methods {
                     let MethodRef::Method(mh) = meth else {
@@ -65,7 +63,7 @@ pub(crate) fn decls_of(doc: &Document) -> DeclMap {
             ItemRef::ModuleLet(h) => m.lets.push(h.any()),
             ItemRef::Use(h) => m.uses.push(h.any()),
             ItemRef::ModDecl(h) => m.mods.push(h.any()),
-            ItemRef::Module(_) | ItemRef::BuiltinImpl(_) | ItemRef::Error(_) => {}
+            ItemRef::Module(_) | ItemRef::Error(_) => {}
         }
     }
     m

@@ -274,7 +274,7 @@ pub const FROM: IdentId = IdentId(32);
 pub const ZEROED: IdentId = IdentId(33);
 pub const FROM_CODE: IdentId = IdentId(34);
 pub const BUF: IdentId = IdentId(35);
-// core's builtin-impl method names (`builtin impl i32 { .. }`) + `NAN`, core's first const — well-known so every interner
+// core's numeric-method names (the integer prims' `builtin primitive` bodies) + `NAN`, core's first const — well-known so every interner
 // agrees on the method-table keys
 pub const WRAPPING_ADD: IdentId = IdentId(36);
 pub const WRAPPING_SUB: IdentId = IdentId(37);
