@@ -72,10 +72,10 @@ pub use stmt::{
 };
 // expressions
 pub use expr::{
-    ArrayLitNode, ArrayRepeatNode, AssignNode, AsyncBlockNode, AwaitNode, BinOp, BinaryNode,
-    BlockNode, CallNode, CastNode, ExprRef, FPartAst, FStrNode, FieldInit, FieldNode, IfExprNode,
-    IndexNode, IsNode, LambdaNode, Lit, LitNode, MethodNode, PathNode, PathSeg, SelfNode,
-    StructLitNode, TupleNode, UnOp, UnaryNode, WhenArmNode, WhenExprNode,
+    ArrayLitNode, ArrayRepeatNode, AssertNode, AssignNode, AsyncBlockNode, AwaitNode, BinOp,
+    BinaryNode, BlockNode, CallNode, CastNode, ExprRef, FPartAst, FStrNode, FieldInit, FieldNode,
+    IfExprNode, IndexNode, IsNode, LambdaNode, Lit, LitNode, MethodNode, PathNode, PathSeg,
+    SelfNode, StructLitNode, TupleNode, UnOp, UnaryNode, WhenArmNode, WhenExprNode,
 };
 // types + patterns
 pub use pat::{PatElseNode, PatLitNode, PatPathNode, PatRef, PatWildNode};

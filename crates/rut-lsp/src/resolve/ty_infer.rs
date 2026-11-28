@@ -198,6 +198,13 @@ pub(crate) fn expr_ty<'a>(
             }
             t.first_arg().cloned()
         }
+        // the assert `e!` peels ONE `?` layer: `?T` → `T`, `??T` → `?T`
+        // (the engine's `deref_one` law). A non-Opt operand is a miss —
+        // never wrong text
+        ExprRef::Assert(h) => {
+            let t = expr_ty(home, idxs, h.get(ast).expr, qual)?;
+            t.opt_inner().cloned()
+        }
         // `async { .. }` mints `Future<T>` — the engine's
         // `compile_async_block` law. T is the body's answer: the first
         // valued `return` (the weave records each return's found type

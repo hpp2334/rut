@@ -107,6 +107,8 @@ enum Role {
     IsOperand,
     /// the operand of `await`
     AwaitOperand,
+    /// the operand of the postfix assert `e!`
+    AssertOperand,
     /// the value of an assignment
     AssignValue,
 }
@@ -1706,11 +1708,13 @@ impl<'a> P<'a> {
                 | ExprRef::Binary(_)
                 | ExprRef::Is(_)
                 | ExprRef::Cast(_) => true,
-                // a call or method chain, a literal, a path, `self`, an
-                // f-string, a `when`/`if`/`async` atom — the bare
-                // spelling re-parses to the same call
+                // a call or method chain, an assert (the postfix
+                // family), a literal, a path, `self`, an f-string, a
+                // `when`/`if`/`async` atom — the bare spelling
+                // re-parses to the same call
                 ExprRef::Call(_)
                 | ExprRef::Method(_)
+                | ExprRef::Assert(_)
                 | ExprRef::Lit(_)
                 | ExprRef::Path(_)
                 | ExprRef::Self_(_)
@@ -1741,11 +1745,13 @@ impl<'a> P<'a> {
                 // a chain re-associates left: `q.b.c` and `(q.b).c` are
                 // the same tree, and so are `k[i].m()` and
                 // `(k[i]).m()` — the group drops; so does a literal, a
-                // path, a call, an f-string, a `when`/`if`/`async` atom
+                // path, a call, an assert (the postfix family), an
+                // f-string, a `when`/`if`/`async` atom
                 ExprRef::Field(_)
                 | ExprRef::Index(_)
                 | ExprRef::Call(_)
                 | ExprRef::Method(_)
+                | ExprRef::Assert(_)
                 | ExprRef::Lit(_)
                 | ExprRef::Path(_)
                 | ExprRef::Self_(_)
@@ -1773,6 +1779,40 @@ impl<'a> P<'a> {
                     || (child == L_CAST && side == Side::Lhs && op == BinOp::Lt)
             }
             Role::Unary | Role::AwaitOperand => self.reduce_level(h) < L_UNARY,
+            // the assert's operand: an operator child re-nests the `!`
+            // INSIDE itself (`a + b!`, `-a!`, `await f()!`) — the group
+            // stays; a postfix-family child or an atom absorbs the `!`
+            // into its own postfix loop (`f!`, `t.x!`, `xs[i]!`,
+            // `f"{a}"!`) and composites that leave the atom frame
+            // (struct/tuple/array literals) keep theirs
+            Role::AssertOperand => match h {
+                ExprRef::Call(_)
+                | ExprRef::Method(_)
+                | ExprRef::Field(_)
+                | ExprRef::Index(_)
+                | ExprRef::Assert(_)
+                | ExprRef::Lit(_)
+                | ExprRef::Path(_)
+                | ExprRef::Self_(_)
+                | ExprRef::FStr(_) => false,
+                ExprRef::Unary(_)
+                | ExprRef::Binary(_)
+                | ExprRef::Is(_)
+                | ExprRef::Cast(_)
+                | ExprRef::Await(_)
+                | ExprRef::Struct(_)
+                | ExprRef::Tuple(_)
+                | ExprRef::ArrayLit(_)
+                | ExprRef::ArrayRepeat(_)
+                | ExprRef::WhenExpr(_)
+                | ExprRef::If(_)
+                | ExprRef::AsyncBlock(_)
+                // unreachable (the early return above), spelled so the
+                // match stays exhaustive with no wildcard arm
+                | ExprRef::Lambda(_)
+                | ExprRef::Assign(_) => true,
+                ExprRef::Block(_) | ExprRef::Error(_) => false,
+            },
             Role::CastOperand => self.reduce_level(h) < L_CAST,
             Role::IsOperand => {
                 // level 6 is not associative: a level-6 operand keeps
@@ -1814,6 +1854,7 @@ impl<'a> P<'a> {
             | ExprRef::WhenExpr(_)
             | ExprRef::If(_)
             | ExprRef::Await(_)
+            | ExprRef::Assert(_)
             | ExprRef::AsyncBlock(_)
             | ExprRef::Error(_) => L_POSTFIX,
         }
@@ -2204,6 +2245,11 @@ impl<'a> P<'a> {
                 let d = h.get(self.a);
                 self.text("await ");
                 self.operand(d.expr, Role::AwaitOperand);
+            }
+            ExprRef::Assert(h) => {
+                let d = h.get(self.a);
+                self.operand(d.expr, Role::AssertOperand);
+                self.text("!");
             }
             ExprRef::Is(h) => {
                 let d = h.get(self.a);

@@ -288,6 +288,7 @@ arenas! {
     ),
     fields: crate::ast::expr::FieldNode => Field, "Field",
     indexes: crate::ast::expr::IndexNode => Index, "Index",
+    asserts: crate::ast::expr::AssertNode => Assert, "Assert",
     unaries: crate::ast::expr::UnaryNode => Unary, "Unary",
     binaries: crate::ast::expr::BinaryNode => Binary, "Binary",
     assigns: crate::ast::expr::AssignNode => Assign, "Assign",

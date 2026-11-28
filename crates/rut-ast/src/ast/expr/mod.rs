@@ -8,7 +8,7 @@ mod fstring;
 mod lit;
 mod ops;
 
-pub use access::{CallNode, FieldNode, IndexNode, MethodNode};
+pub use access::{AssertNode, CallNode, FieldNode, IndexNode, MethodNode};
 pub use control::{
     AsyncBlockNode, AwaitNode, CastNode, IfExprNode, IsNode, WhenArmNode, WhenExprNode,
 };
@@ -44,6 +44,7 @@ pub enum ExprRef {
     Method(Handle<MethodNode>),
     Field(Handle<FieldNode>),
     Index(Handle<IndexNode>),
+    Assert(Handle<AssertNode>),
     Unary(Handle<UnaryNode>),
     Binary(Handle<BinaryNode>),
     Assign(Handle<AssignNode>),
@@ -75,6 +76,7 @@ impl ExprRef {
             ExprRef::Method,
             ExprRef::Field,
             ExprRef::Index,
+            ExprRef::Assert,
             ExprRef::Unary,
             ExprRef::Binary,
             ExprRef::Assign,
@@ -105,6 +107,7 @@ impl ExprRef {
             ExprRef::Method,
             ExprRef::Field,
             ExprRef::Index,
+            ExprRef::Assert,
             ExprRef::Unary,
             ExprRef::Binary,
             ExprRef::Assign,

@@ -447,6 +447,7 @@ fn expr_names(ast: &crate::Ast, e: ExprRef, out: &mut Vec<(Span, IdentId)>) {
             }
         }
         ExprRef::Await(h) => expr_names(ast, h.get(ast).expr, out),
+        ExprRef::Assert(h) => expr_names(ast, h.get(ast).expr, out),
         ExprRef::AsyncBlock(h) => block_names(ast, h.get(ast).body, out),
         ExprRef::Is(h) => {
             let d = h.get(ast);

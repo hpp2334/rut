@@ -2,7 +2,11 @@
 //! deliberately does NOT pin: comment reattachment shapes, literal
 //! verbatim preservation, re-paren decisions, `[style]` parsing.
 
+mod common;
+
+use common::span_free;
 use rut_ast::parser::{parse_with_recover, Mode};
+use rut_ast::AstPrinter;
 use rut_fmt::{format, Style};
 
 fn fmt(src: &str) -> String {
@@ -758,4 +762,93 @@ fn plain_headers_print_exactly_as_before() {
 fn a_source_with_diags_is_refused_never_guessed() {
     let ds = format("fn f( {", Mode::Impl, &Style::default());
     assert!(ds.is_err());
+}
+
+// ---- the postfix assert `e!` ----
+
+/// the assert's reprint: the operand rides the paren class (an
+/// operator child keeps its group, a postfix child never does), the
+/// `!` trails tight, and every spelling is idempotent
+#[test]
+fn postfix_assert_reprints() {
+    // bare postfix children: no parens ever
+    for (src, want) in [
+        (
+            "fn f() -> nil { let v = t!; }",
+            "fn f() -> nil {\n    let v = t!;\n}\n",
+        ),
+        (
+            "fn f() -> nil { let v = t!!; }",
+            "fn f() -> nil {\n    let v = t!!;\n}\n",
+        ),
+        (
+            "fn f() -> nil { let v = t!.m(); }",
+            "fn f() -> nil {\n    let v = t!.m();\n}\n",
+        ),
+        (
+            "fn f() -> nil { let v = a[i]!; }",
+            "fn f() -> nil {\n    let v = a[i]!;\n}\n",
+        ),
+        (
+            "fn f() -> nil { let v = m(1)!; }",
+            "fn f() -> nil {\n    let v = m(1)!;\n}\n",
+        ),
+        (
+            "fn f() -> nil { let v = f!(0); }",
+            "fn f() -> nil {\n    let v = f!(0);\n}\n",
+        ),
+    ] {
+        let out = fmt(src);
+        assert_eq!(out, want, "`{src}`");
+        assert_eq!(fmt(&out), out, "`{src}`: NOT idempotent");
+    }
+
+    // an operator child keeps its group: `(a + b)!`, `(-a)!` — the
+    // bare spelling would re-nest the `!` inside the operator
+    // (`a + b!`, `-a!`)
+    for (src, want) in [
+        (
+            "fn f() -> nil { let v = (a + b)!; }",
+            "fn f() -> nil {\n    let v = (a + b)!;\n}\n",
+        ),
+        (
+            "fn f() -> nil { let v = (-a)!; }",
+            "fn f() -> nil {\n    let v = (-a)!;\n}\n",
+        ),
+        (
+            "fn f() -> nil { let v = (a as i64)!; }",
+            "fn f() -> nil {\n    let v = (a as i64)!;\n}\n",
+        ),
+        (
+            "fn f() -> nil { let v = (await f())!; }",
+            "fn f() -> nil {\n    let v = (await f())!;\n}\n",
+        ),
+    ] {
+        let out = fmt(src);
+        assert_eq!(out, want, "`{src}`");
+        assert_eq!(fmt(&out), out, "`{src}`: NOT idempotent");
+    }
+}
+
+/// the tree is preserved across the reprint: fmt's output re-parses to
+/// the same span-free shape (the semantic_equiv law, one cell)
+#[test]
+fn postfix_assert_reprint_preserves_the_tree() {
+    let src = "fn f() -> nil { let v = (a + b)!.m(1)!; }";
+    let out = fmt(src);
+    let in_doc = parse_with_recover(src.to_string(), Mode::Impl);
+    let out_doc = parse_with_recover(out.clone(), Mode::Impl);
+    assert!(
+        in_doc.ast().is_clean() && out_doc.ast().is_clean(),
+        "both sides parse clean"
+    );
+    let want = span_free(&AstPrinter::text_of(
+        in_doc.ast(),
+        in_doc.text(in_doc.span()),
+    ));
+    let got = span_free(&AstPrinter::text_of(
+        out_doc.ast(),
+        out_doc.text(out_doc.span()),
+    ));
+    assert_eq!(got, want, "the tree changed under formatting");
 }

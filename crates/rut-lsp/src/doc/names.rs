@@ -573,6 +573,7 @@ fn classify_expr(ast: &Ast, e: ExprRef, out: &mut Vec<(Span, TokenType)>) {
             }
         }
         ExprRef::Await(h) => classify_expr(ast, h.get(ast).expr, out),
+        ExprRef::Assert(h) => classify_expr(ast, h.get(ast).expr, out),
         ExprRef::AsyncBlock(h) => classify_block(ast, h.get(ast).body, out),
         ExprRef::Is(h) => {
             let d = h.get(ast);

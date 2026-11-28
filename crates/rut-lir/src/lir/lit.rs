@@ -1549,6 +1549,7 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
             }
             ExprRef::Lambda(h) => self.scan_names_expr(h.get(self.ctx.ast).body, out),
             ExprRef::Await(h) => self.scan_names_expr(h.get(self.ctx.ast).expr, out),
+            ExprRef::Assert(h) => self.scan_names_expr(h.get(self.ctx.ast).expr, out),
             ExprRef::FStr(h) => {
                 for p in h.get(self.ctx.ast).parts.clone() {
                     if let FPartAst::Hole(e) = p {
@@ -1797,6 +1798,9 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                 self.walk_capture_law_expr(h.get(self.ctx.ast).body, true, assigned, captured)
             }
             ExprRef::Await(h) => {
+                self.walk_capture_law_expr(h.get(self.ctx.ast).expr, inside, assigned, captured)
+            }
+            ExprRef::Assert(h) => {
                 self.walk_capture_law_expr(h.get(self.ctx.ast).expr, inside, assigned, captured)
             }
             ExprRef::Is(h) => {

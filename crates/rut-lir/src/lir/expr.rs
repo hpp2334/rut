@@ -294,6 +294,18 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                 let expr = ah.get(self.ctx.ast).expr;
                 crate::lir::asyncfn::compile_await(self, expr, sp)
             }
+            ExprRef::Assert(nh) => {
+                // the explicit-deref law's `e!`: the operand compiles,
+                // then ONE `?` layer peels at the `!`'s own site — the
+                // ONE GetF this assert emits. A nil operand traps
+                // `NilDeref` HERE (GetF-on-nil, the engine's law); a
+                // non-Opt operand diagnoses inside `deref_one`; the
+                // poison row answers poison, silent
+                let expr = nh.get(self.ctx.ast).expr;
+                let t = self.compile_expr(expr, None)?;
+                let (t, _) = self.deref_one(t, self.last_reg, sp)?;
+                Ok(t)
+            }
             ExprRef::AsyncBlock(ah) => {
                 // the async primitive (v20): mint the frame, answer
                 // `Future<T>`. Legal everywhere — minting is pure; only

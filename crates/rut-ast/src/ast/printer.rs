@@ -38,11 +38,11 @@ use crate::ast::stmt::{
 use crate::ast::store::span_of_any;
 use crate::ast::ty::TyRef;
 use crate::{
-    ArrayLitNode, ArrayRepeatNode, AssignNode, Ast, AsyncBlockNode, AwaitNode, BinOp, BinaryNode,
-    BlockNode, CallNode, CastNode, FPartAst, FStrNode, FieldNode, IfExprNode, IndexNode, IsNode,
-    LambdaNode, LitNode, MethodNode, PatLitNode, PatPathNode, PathNode, PathSeg, StructLitNode,
-    TupleNode, TyArrayNode, TyFnNode, TyOptNode, TyPathNode, TyTupleNode, TyUnionNode, UnOp,
-    UnaryNode, WhenArmNode, WhenExprNode,
+    ArrayLitNode, ArrayRepeatNode, AssertNode, AssignNode, Ast, AsyncBlockNode, AwaitNode, BinOp,
+    BinaryNode, BlockNode, CallNode, CastNode, FPartAst, FStrNode, FieldNode, IfExprNode,
+    IndexNode, IsNode, LambdaNode, LitNode, MethodNode, PatLitNode, PatPathNode, PathNode, PathSeg,
+    StructLitNode, TupleNode, TyArrayNode, TyFnNode, TyOptNode, TyPathNode, TyTupleNode,
+    TyUnionNode, UnOp, UnaryNode, WhenArmNode, WhenExprNode,
 };
 use rut_core::IdentId;
 
@@ -1182,6 +1182,14 @@ fn expr_dump(a: &Ast, r: ExprRef, next: &mut u32) -> PrintNode {
             ));
             <AwaitNode as NodeKind>::NAME
         }
+        ExprRef::Assert(h) => {
+            let d: &AssertNode = h.get(a);
+            fields.push(field(
+                "expr",
+                PrintVal::Node(Box::new(expr_dump(a, d.expr, next))),
+            ));
+            <AssertNode as NodeKind>::NAME
+        }
         ExprRef::Is(h) => {
             let d: &IsNode = h.get(a);
             fields.push(field(
@@ -1797,6 +1805,9 @@ fn print_node_of(a: &Ast, h: AnyHandle, next: &mut u32) -> PrintNode {
     }
     if let Some(x) = h.downcast::<AwaitNode>() {
         return expr_dump(a, ExprRef::Await(x), next);
+    }
+    if let Some(x) = h.downcast::<AssertNode>() {
+        return expr_dump(a, ExprRef::Assert(x), next);
     }
     if let Some(x) = h.downcast::<AsyncBlockNode>() {
         return expr_dump(a, ExprRef::AsyncBlock(x), next);

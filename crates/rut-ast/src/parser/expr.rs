@@ -9,10 +9,10 @@
 //! hole (the recovery ladder's part tier).
 
 use crate::{
-    ArrayLitNode, ArrayRepeatNode, AssignNode, AsyncBlockNode, AwaitNode, BinOp, BinaryNode,
-    CallNode, CastNode, ExprRef, FPartAst, FStrNode, FieldInit, FieldNode, IfExprNode, IndexNode,
-    IsNode, LambdaNode, Lit, LitNode, MethodNode, ParamNode, ParamRef, PathNode, PathSeg, SelfNode,
-    StructLitNode, TupleNode, UnOp, UnaryNode, WhenExprNode,
+    ArrayLitNode, ArrayRepeatNode, AssertNode, AssignNode, AsyncBlockNode, AwaitNode, BinOp,
+    BinaryNode, CallNode, CastNode, ExprRef, FPartAst, FStrNode, FieldInit, FieldNode, IfExprNode,
+    IndexNode, IsNode, LambdaNode, Lit, LitNode, MethodNode, ParamNode, ParamRef, PathNode,
+    PathSeg, SelfNode, StructLitNode, TupleNode, UnOp, UnaryNode, WhenExprNode,
 };
 use rut_lexer::span::Span;
 use rut_lexer::token::{FPart, FStrTok, FloatSuffix, Tok, Token};
@@ -764,6 +764,19 @@ impl AtomFrame {
                     p.bump();
                     self.stage = AtomStage::PostIndex { recv: e };
                     return Step::Push(Frame::Expr(ExprFrame::new(p, ExprMode::Full)));
+                }
+                Tok::Bang => {
+                    // the postfix non-null assert `e!` — tightest
+                    // binding, one `?` layer per `!`. Wrap the
+                    // accumulated expr and CONTINUE the loop, so
+                    // `f!.x()` chains (`!` rides beside `.`, `(`, `[`;
+                    // `!=` maximal-munches separately in the lexer)
+                    p.bump();
+                    e = AssertNode {
+                        span: Span::new(self.lo.lo, p.prev_end.max(self.lo.lo)),
+                        expr: e,
+                    }
+                    .allocate(&mut p.ast);
                 }
                 _ => return Step::Pop(Done::Expr(e)),
             }

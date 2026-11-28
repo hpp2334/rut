@@ -8,9 +8,10 @@
 //! driven by the slot enums.
 
 use crate::ast::expr::{
-    ArrayLitNode, ArrayRepeatNode, AssignNode, AsyncBlockNode, AwaitNode, BinaryNode, BlockNode,
-    CallNode, CastNode, FPartAst, FStrNode, FieldNode, IfExprNode, IndexNode, IsNode, LambdaNode,
-    MethodNode, PathNode, StructLitNode, TupleNode, UnaryNode, WhenArmNode, WhenExprNode,
+    ArrayLitNode, ArrayRepeatNode, AssertNode, AssignNode, AsyncBlockNode, AwaitNode, BinaryNode,
+    BlockNode, CallNode, CastNode, FPartAst, FStrNode, FieldNode, IfExprNode, IndexNode, IsNode,
+    LambdaNode, MethodNode, PathNode, StructLitNode, TupleNode, UnaryNode, WhenArmNode,
+    WhenExprNode,
 };
 use crate::ast::handle::AnyHandle;
 use crate::ast::item::{
@@ -286,6 +287,8 @@ pub(crate) fn children_of(ast: &Ast, h: AnyHandle) -> Vec<AnyHandle> {
             out.push(e.any());
         }
     } else if let Some(n) = h.downcast::<AwaitNode>() {
+        out.push(n.get(ast).expr.any());
+    } else if let Some(n) = h.downcast::<AssertNode>() {
         out.push(n.get(ast).expr.any());
     } else if let Some(n) = h.downcast::<AsyncBlockNode>() {
         out.push(n.get(ast).body.any());

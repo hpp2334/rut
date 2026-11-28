@@ -36,6 +36,7 @@ fn kind_of(h: ExprRef) -> &'static str {
         ExprRef::WhenExpr(_) => "when",
         ExprRef::If(_) => "if",
         ExprRef::Await(_) => "await",
+        ExprRef::Assert(_) => "assert",
         ExprRef::AsyncBlock(_) => "async",
         ExprRef::Is(_) => "is",
         ExprRef::Cast(_) => "cast",
@@ -45,7 +46,7 @@ fn kind_of(h: ExprRef) -> &'static str {
 
 /// the number of `ExprRef` variants `kind_of` spells — the table below
 /// plus the unspellable kinds must add up to it
-const KIND_COUNT: usize = 24;
+const KIND_COUNT: usize = 25;
 
 /// one representative child source per spellable variant; the honesty
 /// pass proves each one parses to its claimed kind
@@ -69,6 +70,7 @@ const KINDS: &[(&str, &str)] = &[
     ("when", "when (c) { else -> 1 }"),
     ("if", "if (c) { 1 } else { 2 }"),
     ("await", "await f()"),
+    ("assert", "a!"),
     ("async", "async { 1 }"),
     ("is", "a is i64"),
     ("cast", "a as i64"),
@@ -87,7 +89,7 @@ const UNSPELLABLE: &[&str] = &["block", "error"];
 /// kind — exempt, and the exemption is asserted exact below
 const NON_TARGETS: &[&str] = &[
     "lit", "self", "call", "method", "unary", "binary", "assign", "lambda", "fstr", "struct",
-    "tuple", "array", "repeat", "when", "if", "await", "async", "is", "cast",
+    "tuple", "array", "repeat", "when", "if", "await", "assert", "async", "is", "cast",
 ];
 
 /// the side of a binary operator a child sits on
@@ -108,6 +110,7 @@ enum Role {
     CastOperand,
     IsOperand,
     AwaitOperand,
+    AssertOperand,
     AssignValue,
 }
 
@@ -123,6 +126,7 @@ fn roles() -> Vec<(&'static str, Role)> {
         ("cast-operand", Role::CastOperand),
         ("is-operand", Role::IsOperand),
         ("await-operand", Role::AwaitOperand),
+        ("assert-operand", Role::AssertOperand),
         ("assign-value", Role::AssignValue),
     ];
     for op in bin_ops {
@@ -144,6 +148,7 @@ fn spell(role: Role, child: &str) -> String {
         Role::CastOperand => format!("let r = ({child}) as i64;\n"),
         Role::IsOperand => format!("let r = ({child}) is i64;\n"),
         Role::AwaitOperand => format!("let r = await ({child});\n"),
+        Role::AssertOperand => format!("let r = ({child})!;\n"),
         Role::AssignValue => format!("let r = t = ({child});\n"),
     }
 }

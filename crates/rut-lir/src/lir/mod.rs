@@ -355,6 +355,50 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
         (ty, cur)
     }
 
+    /// The assert's ONE-layer peel — the explicit-deref law's `e!`:
+    /// operand `?T` answers `T` (ONE `?` layer per `!`; `??T` answers
+    /// `?T`), the payload read at its own repr via field 0 — the same
+    /// op the engine already traps `NilDeref` on, so a nil operand
+    /// traps at the `!`'s own site. A non-Opt operand diagnoses (the
+    /// type has no `?` to peel) and the poison row stays silent (the
+    /// quiet-audit law). This is the assert's OWN emission site: the
+    /// implicit peels beside it are still legal in this phase.
+    pub(crate) fn deref_one(
+        &mut self,
+        ty: TypeId,
+        reg: u16,
+        sp: rut_lexer::span::Span,
+    ) -> TcResult<(TypeId, u16)> {
+        match self.ctx.types.kind(ty).clone() {
+            TyKind::Opt { elem } => {
+                let d = self.new_reg(elem);
+                let repr = self.ctx.types.repr_of(elem);
+                self.emit(
+                    Op::GetF {
+                        dst: d,
+                        obj: reg,
+                        field: 0,
+                        repr,
+                    },
+                    sp.lo,
+                );
+                Ok((elem, d))
+            }
+            _ => {
+                if !self.ctx.ty_is_err(ty) {
+                    self.ctx.err(
+                        sp,
+                        format!(
+                            "`!` asserts non-nil — `{}` has no `?` to peel",
+                            self.ctx.type_name(ty)
+                        ),
+                    );
+                }
+                Err(())
+            }
+        }
+    }
+
     /// Intern an argument list into the function's operand pool.
     pub(crate) fn pool_args(&mut self, a: &[Reg]) -> (u32, u16) {
         self.pools.args(a)

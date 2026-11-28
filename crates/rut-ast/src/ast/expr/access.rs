@@ -51,7 +51,18 @@ pub struct IndexNode {
     pub idx: ExprRef,
 }
 
+/// the postfix non-null assert `e!` — one `?` layer peeled per `!`
+/// (the explicit-deref law's spelling). The span covers the whole form
+/// (the operand's first token through the `!`); the trap on nil lands
+/// at this site.
+#[derive(Clone, Debug)]
+pub struct AssertNode {
+    pub span: Span,
+    pub expr: ExprRef,
+}
+
 slot_alloc!(CallNode, ExprRef::Call);
 slot_alloc!(MethodNode, ExprRef::Method);
 slot_alloc!(FieldNode, ExprRef::Field);
 slot_alloc!(IndexNode, ExprRef::Index);
+slot_alloc!(AssertNode, ExprRef::Assert);
