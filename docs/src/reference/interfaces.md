@@ -208,7 +208,7 @@ entry fn main() {
     shapes.push(Circle { r: 1.0 });
     shapes.push(Square { side: 3.0 });
     let total: f64 = 0.0;
-    for (let sh of shapes) { total += sh.area(); }
+    for (let sh of shapes) { total += sh!.area(); }
     log.info(f"total={total}");
 }
 ```

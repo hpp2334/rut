@@ -375,7 +375,7 @@ msgid ""
 "    let marks = Vec<u8>::filled(0, limit + 1);\n"
 "    let primes: Vec<i32> = Vec::new();\n"
 "    for (let i = 2; i <= limit; i += 1) {\n"
-"        if (marks[i] == 0) {\n"
+"        if (marks[i]! == 0) {\n"
 "            primes.push(i);\n"
 "            let m = i * i;\n"
 "            while (m <= limit) {\n"
@@ -390,7 +390,7 @@ msgid ""
 "entry fn main() {\n"
 "    let log = Logger(\"sieve\");\n"
 "    let primes = sieve(100);\n"
-"    log.info(f\"{primes.len()} primes up to 100, last={primes[primes.len() - 1]}\");\n"
+"    log.info(f\"{primes.len()} primes up to 100, last={primes[primes.len() - 1]!}\");\n"
 "}\n"
 "```"
 msgstr ""
@@ -1061,7 +1061,7 @@ msgstr "文本"
 #: src/tutorial/values-and-variables.md:19 src/reference/primitive-types.md:13
 #: src/reference/literals-and-inference.md:210
 #: src/reference/rc-dispose-identity.md:124
-#: src/reference/by-reference-and-nullable.md:105
+#: src/reference/by-reference-and-nullable.md:135
 #: src/reference/value-boundary.md:36 src/reference/value-boundary.md:37
 #: src/reference/templates.md:19
 msgid "`str`"
@@ -1077,7 +1077,7 @@ msgstr "二进制"
 
 #: src/tutorial/values-and-variables.md:20 src/examples/playground-corpus.md:55
 #: src/reference/primitive-types.md:14 src/reference/rc-dispose-identity.md:125
-#: src/reference/by-reference-and-nullable.md:106
+#: src/reference/by-reference-and-nullable.md:136
 #: src/reference/value-boundary.md:38 src/reference/value-boundary.md:39
 msgid "`bytes`"
 msgstr "`bytes`"
@@ -1352,7 +1352,7 @@ msgstr "操作数"
 
 #: src/tutorial/values-and-variables.md:268
 #: src/reference/rc-dispose-identity.md:121
-#: src/reference/by-reference-and-nullable.md:102
+#: src/reference/by-reference-and-nullable.md:132
 msgid "`==` means"
 msgstr "`==` 的含义"
 
@@ -1385,19 +1385,19 @@ msgid "The one copy escape hatch is `bytes::clone()` — a fresh buffer with the
 msgstr "唯一的复制逃生舱是 `bytes::clone()`——一个装着相同八位组的新缓冲区。其他任何类型都没有泛型复制；如果你需要一个会分叉的值，就新建一个。"
 
 #: src/tutorial/values-and-variables.md:278
-msgid "Absence is `nil` on a nullable `?T` — see [errors and optionality](errors.md)."
-msgstr "缺失是可空 `?T` 上的 `nil`——参见[错误与可空性](errors.md)。"
+msgid "Absence is `nil` on a nullable `?T` — a nullable peels only through the postfix assert `e!` — see [errors and optionality](errors.md)."
+msgstr "缺失是可空 `?T` 上的 `nil`——可空值只能透过后缀断言 `e!` 解包——参见[错误与可空性](errors.md)。"
 
-#: src/tutorial/values-and-variables.md:281
+#: src/tutorial/values-and-variables.md:282
 #: src/reference/literals-and-inference.md:97
 msgid "Tuples"
 msgstr "元组"
 
-#: src/tutorial/values-and-variables.md:283
+#: src/tutorial/values-and-variables.md:284
 msgid "Records `(A, B)` are first-class values with numeric fields:"
 msgstr "记录 `(A, B)` 是带数字字段的一等值："
 
-#: src/tutorial/values-and-variables.md:285
+#: src/tutorial/values-and-variables.md:286
 msgid ""
 "```rut\n"
 "use ink::{ Logger };\n"
@@ -1415,23 +1415,23 @@ msgid ""
 "```"
 msgstr ""
 
-#: src/tutorial/values-and-variables.md:304
+#: src/tutorial/values-and-variables.md:305
 msgid "The pair is also rut's standard error channel — the next chapters use it constantly."
 msgstr "这个二元组也是 rut 标准的错误通道——接下来的章节会不断用到它。"
 
-#: src/tutorial/values-and-variables.md:307 src/tutorial/control-flow.md:400
-#: src/tutorial/functions.md:242 src/tutorial/types.md:284
-#: src/tutorial/interfaces.md:400 src/tutorial/errors.md:233
+#: src/tutorial/values-and-variables.md:308 src/tutorial/control-flow.md:400
+#: src/tutorial/functions.md:242 src/tutorial/types.md:287
+#: src/tutorial/interfaces.md:400 src/tutorial/errors.md:238
 #: src/tutorial/modules.md:300 src/tutorial/async.md:196
 #: src/tutorial/stdlib.md:409
 msgid "Put it together"
 msgstr "综合运用"
 
-#: src/tutorial/values-and-variables.md:309
+#: src/tutorial/values-and-variables.md:310
 msgid "Put this in a module directory and run it: `literals/rut.jsonc` names the two packages the program uses, and the program is `literals/src/mod.rut`:"
 msgstr "把这些放进一个模块目录并运行：`literals/rut.jsonc` 写明程序用到的两个包，程序本体是 `literals/src/mod.rut`："
 
-#: src/tutorial/values-and-variables.md:313
+#: src/tutorial/values-and-variables.md:314
 msgid ""
 "```jsonc\n"
 "// literals/rut.jsonc\n"
@@ -1447,11 +1447,11 @@ msgid ""
 "```"
 msgstr ""
 
-#: src/tutorial/values-and-variables.md:326
+#: src/tutorial/values-and-variables.md:327
 msgid "Save the program as `literals/src/mod.rut`, then `rut install literals` (fetches the two url deps and writes `rut.lock`) and `rut run literals`:"
 msgstr "把程序保存为 `literals/src/mod.rut`，然后 `rut install literals`（取回两个 url 依赖并写入 `rut.lock`）、`rut run literals`："
 
-#: src/tutorial/values-and-variables.md:330
+#: src/tutorial/values-and-variables.md:331
 msgid ""
 "```rut\n"
 "use pouch::{ Vec };\n"
@@ -1481,7 +1481,7 @@ msgid ""
 "    let bin = bytes(64);             // 64 zeroed octets\n"
 "    let p = Point { x: 1, y: 2 };    // struct literal: no `new`\n"
 "\n"
-"    log.info(f\"a={a} e={e} d64={d64} ch={ch} p.x={p.x} zero[0]={zero[0]} len={grow.len()} bin={bin.len()}\");\n"
+"    log.info(f\"a={a} e={e} d64={d64} ch={ch} p.x={p.x} zero[0]={zero[0]!} len={grow.len()} bin={bin.len()}\");\n"
 "}\n"
 "\n"
 "entry fn main() {\n"
@@ -1490,7 +1490,7 @@ msgid ""
 "```"
 msgstr ""
 
-#: src/tutorial/values-and-variables.md:370
+#: src/tutorial/values-and-variables.md:371
 msgid "Next: [control flow and `when`](control-flow.md)."
 msgstr "下一章：[控制流与 when](control-flow.md)。"
 
@@ -1672,7 +1672,7 @@ msgid ""
 "    let log = Logger(\"swap\");\n"
 "    let xs = Vec<i32>::from([1, 2, 3]);\n"
 "    swap(xs, 0, 2);\n"
-"    log.info(f\"first={xs[0]} last={xs[2]}\");\n"
+"    log.info(f\"first={xs[0]!} last={xs[2]!}\");\n"
 "}\n"
 "```"
 msgstr ""
@@ -1839,7 +1839,7 @@ msgid ""
 "    let log = Logger(\"nullable\");\n"
 "    let p: ?Point = Point { x: 1, y: 2 };\n"
 "    when (p != nil) {\n"
-"        true -> { log.info(f\"point {p.x} {p.y}\"); },\n"
+"        true -> { log.info(f\"point {p!.x} {p!.y}\"); },\n"
 "        else -> { log.info(\"point: nil\"); },\n"
 "    }\n"
 "}\n"
@@ -1966,7 +1966,7 @@ msgid ""
 "    let log = Logger(\"fns\");\n"
 "    let xs = Vec<i32>::from([1, 2, 3]);\n"
 "    swap(xs, 0, 2);\n"
-"    log.info(f\"first={xs[0]} length={length(Point { x: 3, y: 4 })}\");\n"
+"    log.info(f\"first={xs[0]!} length={length(Point { x: 3, y: 4 })}\");\n"
 "}\n"
 "```"
 msgstr ""
@@ -2183,7 +2183,7 @@ msgid ""
 "fn sum(xs: Vec<i32>) -> i32 {\n"
 "    let total = 0;\n"
 "    for (let x of xs) {\n"
-"        total += x;\n"
+"        total += x!;        // a Vec load yields ?i32 — the assert peels\n"
 "    }\n"
 "    return total;\n"
 "}\n"
@@ -2344,8 +2344,8 @@ msgid ""
 "\n"
 "fn count(n: ?Node) -> i32 {\n"
 "    let c = 1;\n"
-"    if (n.left != nil) { c += count(n.left); }\n"
-"    if (n.right != nil) { c += count(n.right); }\n"
+"    if (n!.left != nil) { c += count(n!.left); }\n"
+"    if (n!.right != nil) { c += count(n!.right); }\n"
 "    return c;\n"
 "}\n"
 "\n"
@@ -2362,14 +2362,18 @@ msgid ""
 msgstr ""
 
 #: src/tutorial/types.md:162
+msgid "The guard decides absence; the `!` reads the field — the nullable's only peel is the assert, and inside a true guard it cannot trap."
+msgstr ""
+
+#: src/tutorial/types.md:165
 msgid "Classes — sealed records"
 msgstr "类——封闭的记录"
 
-#: src/tutorial/types.md:164
+#: src/tutorial/types.md:167
 msgid "A class adds two things to a struct: module-private fields and construction gated through class methods. There is no outside literal — the only way to build a class value from outside is to call a class method that chooses to. (Cleanup hooks are not a class privilege: mark a `[disposal]` member on either shape, and the engine calls it when the value's cell refcount reaches zero — see [Rc, dispose, and identity](../reference/rc-dispose-identity.md).)"
 msgstr ""
 
-#: src/tutorial/types.md:172
+#: src/tutorial/types.md:175
 msgid ""
 "```rut\n"
 "use ink::{ Logger };\n"
@@ -2400,27 +2404,27 @@ msgid ""
 "```"
 msgstr ""
 
-#: src/tutorial/types.md:204
+#: src/tutorial/types.md:207
 msgid "The pieces:"
 msgstr "组成部分如下："
 
-#: src/tutorial/types.md:206
+#: src/tutorial/types.md:209
 msgid "**A class method is just a function without `self`.** `Rect::new(w, h)`, `Version::parse(s)`, `Rect::from_square(s)` — any no-`self` method returning `Self` is a constructor. `new` is a convention, not syntax."
 msgstr "**类方法就是不带 `self` 的函数。**`Rect::new(w, h)`、`Version::parse(s)`、`Rect::from_square(s)`——任何不带 `self` 且返回 `Self` 的方法都是构造器。`new` 是约定，不是语法。"
 
-#: src/tutorial/types.md:209
+#: src/tutorial/types.md:212
 msgid "**The `Self { .. }` literal is class-private** — legal anywhere in the class's own impl block, never outside. This is the seal."
 msgstr "**`Self { .. }` 字面量是类私有的**——在类自己的 impl 块内的任何地方都合法，出了它就再也不合法。这就是封闭。"
 
-#: src/tutorial/types.md:211
+#: src/tutorial/types.md:214
 msgid "**Instance methods spell `self` explicitly** as the first parameter; every method may write (mutability is the default). A computed property is a method (`c.count()`)."
 msgstr "**实例方法把 `self` 显式写成第一个参数**；每个方法都可以写（可变是默认）。计算属性就是一个方法（`c.count()`）。"
 
-#: src/tutorial/types.md:214
+#: src/tutorial/types.md:217
 msgid "**Construction is validation.** A constructor is an ordinary function — it can check arguments and refuse:"
 msgstr "**构造即验证。**构造器是一个普通函数——它可以检查实参并拒绝："
 
-#: src/tutorial/types.md:217
+#: src/tutorial/types.md:220
 msgid ""
 "```rut\n"
 "use ink::{ Logger };\n"
@@ -2454,11 +2458,11 @@ msgid ""
 "```"
 msgstr ""
 
-#: src/tutorial/types.md:252
+#: src/tutorial/types.md:255
 msgid "A _try_\\-constructor answers the nullable — `nil` is a failed validation, not a crash:"
 msgstr "_try_ 构造器以可空作答——`nil` 是一次验证失败，不是崩溃："
 
-#: src/tutorial/types.md:255
+#: src/tutorial/types.md:258
 msgid ""
 "```rut\n"
 "impl Version {\n"
@@ -2478,35 +2482,35 @@ msgstr ""
 "}\n"
 "```"
 
-#: src/tutorial/types.md:264
+#: src/tutorial/types.md:267
 msgid "**No inheritance.** There is no `extends`, no `super`, no overriding. Code sharing is composition (hold a helper in a field) or free functions; polymorphism is structural interfaces — the next chapter."
 msgstr ""
 
-#: src/tutorial/types.md:268
+#: src/tutorial/types.md:271
 msgid "Visibility recap"
 msgstr "可见性小结"
 
-#: src/tutorial/types.md:270
+#: src/tutorial/types.md:273
 msgid "Struct members: public, always."
 msgstr "结构体成员：永远公开。"
 
-#: src/tutorial/types.md:271
+#: src/tutorial/types.md:274
 msgid "Class members: unannotated is module-private; `pub` exposes to importers (also `pub(super)`, `pub(pkg)`)."
 msgstr "类成员：不标注即模块私有；`pub` 对导入方可见（另有 `pub(super)`、`pub(pkg)`）。"
 
-#: src/tutorial/types.md:273
+#: src/tutorial/types.md:276
 msgid "The types themselves follow the same rule: `pub class Vec<T>` is importable, a bare `class Helper` stays in its module. See [modules and packages](modules.md)."
 msgstr "类型本身遵循同一条规则：`pub class Vec<T>` 可被导入，裸的 `class Helper` 则留在其模块内。参见[模块与包](modules.md)。"
 
-#: src/tutorial/types.md:277
+#: src/tutorial/types.md:280
 msgid "Struct or class?"
 msgstr "结构体还是类？"
 
-#: src/tutorial/types.md:279
+#: src/tutorial/types.md:282
 msgid "Default to a struct: data in, data out, shared like every other value. Reach for a class when the type has rules that construction must enforce, holds private state that outsiders must not read, or owns a resource that needs explicit cleanup."
 msgstr "默认选结构体：数据进、数据出，像其他一切值一样共享。当类型带有构造时必须强制执行的规则、持有外人不得读取的私有状态、或拥有需要显式清理的资源时，才选类。"
 
-#: src/tutorial/types.md:286
+#: src/tutorial/types.md:289
 msgid ""
 "```rut\n"
 "use ink::{ Logger };\n"
@@ -2559,7 +2563,7 @@ msgid ""
 "```"
 msgstr ""
 
-#: src/tutorial/types.md:340
+#: src/tutorial/types.md:343
 msgid "Next: [interfaces and impl blocks](interfaces.md)."
 msgstr ""
 
@@ -2781,7 +2785,7 @@ msgid ""
 "    shapes.push(Square { side: 3.0 });\n"
 "    let total: f64 = 0.0;\n"
 "    for (let s of shapes) {\n"
-"        total += s.area();       // dispatches per element\n"
+"        total += s!.area();       // dispatches per element\n"
 "    }\n"
 "    log.info(f\"total={total} n={shapes.len()}\");\n"
 "}\n"
@@ -2915,7 +2919,7 @@ msgid ""
 "    for (let v of ups) {\n"
 "        got.push(v);\n"
 "    }\n"
-"    log.info(f\"n={got.len()} first={got[0]} last={got[got.len()-1]}\");\n"
+"    log.info(f\"n={got.len()} first={got[0]!} last={got[got.len()-1]!}\");\n"
 "}\n"
 "```"
 msgstr ""
@@ -2970,7 +2974,7 @@ msgid ""
 "    shapes.push(Square { side: 3.0 });\n"
 "    let total: f64 = 0.0;\n"
 "    for (let s of shapes) {\n"
-"        total += s.area();                    // itable per element\n"
+"        total += s!.area();                    // itable per element\n"
 "    }\n"
 "    log.info(f\"total={total} n={shapes.len()}\");\n"
 "}\n"
@@ -3029,10 +3033,10 @@ msgid ""
 msgstr ""
 
 #: src/tutorial/errors.md:40
-msgid "Lookups answer `?T`: a hit is the value, a miss is `nil`. Deref is automatic at every use — `p.x`, `p[i]`, `for (let x of p)`, arithmetic — and dereferencing a `nil` **traps** `NilDeref`, so guard first:"
-msgstr "查找以 `?T` 作答：命中是值，未命中是 `nil`。解引用在每次使用时自动发生——`p.x`、`p[i]`、`for (let x of p)`、算术——而对 `nil` 解引用会**触发陷阱** `NilDeref`，所以请先设守卫："
+msgid "Lookups answer `?T`: a hit is the value, a miss is `nil`. A nullable peels ONLY through the postfix assert `e!` — one `?` layer per `!` — and a `nil` operand **traps** `NilDeref` at the `!`'s own site, so every trap point is marked in the source (`grep '!'` finds them all). Reads through a nullable spell it: `p!.x`, `p![i]`, `p!.m()`; guard first where absence is expected:"
+msgstr ""
 
-#: src/tutorial/errors.md:44
+#: src/tutorial/errors.md:47
 msgid ""
 "```rut\n"
 "use nmapset::{ HashMap };\n"
@@ -3045,23 +3049,23 @@ msgid ""
 "    let n = 0;\n"
 "    let hit = scores.get(\"rut\");      // ?i32\n"
 "    if (hit != nil) {\n"
-"        n = hit + 1;                  // a hit auto-unwraps for `+`\n"
+"        n = hit! + 1;                 // inside the guard the assert cannot trap\n"
 "    }\n"
 "    log.info(f\"n={n}\");\n"
 "}\n"
 "```"
 msgstr ""
 
-#: src/tutorial/errors.md:65
-msgid "`p == nil` compares against the null. There is no flow-typing: after the guard, hand the value to a typed binding when you want a plain `T`:"
-msgstr "`p == nil` 与空值比较。没有流类型化：守卫过后，想要普通 `T` 时，把值交给一个带类型的绑定："
-
 #: src/tutorial/errors.md:68
+msgid "`p == nil` compares against the null. There is no flow-typing: inside a true guard the assert cannot trap, but the compiler does not prove it — the `!` is the author's mark. Spell the assert to hand the value to a typed binding when you want a plain `T`:"
+msgstr "`p == nil` 与空值比较。没有流类型化：在为真的守卫内断言不会触发陷阱，但编译器并不证明这一点——`!` 是作者亲手留下的标记。想要普通 `T` 时，写出断言，把值交给一个带类型的绑定："
+
+#: src/tutorial/errors.md:73
 msgid ""
 "```rut\n"
 "let err = map_response(resp, \"no such repo or ref\", \"data.jsdelivr.com\");\n"
 "if (err != nil) {\n"
-"    let why: str = err;           // the plain str behind the nullable\n"
+"    let why: str = err!;          // the assert — the plain str behind the nullable\n"
 "    eprint(why);\n"
 "    return 1;\n"
 "}\n"
@@ -3070,41 +3074,41 @@ msgstr ""
 "```rut\n"
 "let err = map_response(resp, \"no such repo or ref\", \"data.jsdelivr.com\");\n"
 "if (err != nil) {\n"
-"    let why: str = err;           // the plain str behind the nullable\n"
+"    let why: str = err!;          // the assert — the plain str behind the nullable\n"
 "    eprint(why);\n"
 "    return 1;\n"
 "}\n"
 "```"
 
-#: src/tutorial/errors.md:77
+#: src/tutorial/errors.md:82
 msgid "`nil` in an expected-`?T` position just works: `let p: ?Node = nil;`, or a `left: nil` field in a literal."
 msgstr "在期望 `?T` 的位置，`nil` 直接可用：`let p: ?Node = nil;`，或字面量里的 `left: nil` 字段。"
 
-#: src/tutorial/errors.md:80
+#: src/tutorial/errors.md:85
 msgid "The `(T, err)` answer channel"
 msgstr "`(T, err)` 应答通道"
 
-#: src/tutorial/errors.md:82
+#: src/tutorial/errors.md:87
 msgid "Functions that can fail return a pair. The convention is uniform:"
 msgstr "可能失败的函数返回一个对偶。约定是统一的："
 
-#: src/tutorial/errors.md:84
+#: src/tutorial/errors.md:89
 msgid "**empty err + a value** — success;"
 msgstr "**空 err + 一个值**——成功；"
 
-#: src/tutorial/errors.md:85
+#: src/tutorial/errors.md:90
 msgid "**empty err + `nil`** — a legitimate \"not found\";"
 msgstr "**空 err + `nil`**——正当的“未找到”；"
 
-#: src/tutorial/errors.md:86
+#: src/tutorial/errors.md:91
 msgid "**non-empty err** — failure."
 msgstr "**非空 err**——失败。"
 
-#: src/tutorial/errors.md:88
+#: src/tutorial/errors.md:93
 msgid "The simplest err is a `str` message (empty string means success):"
 msgstr "最简单的 err 是一条 `str` 消息（空字符串表示成功）："
 
-#: src/tutorial/errors.md:90
+#: src/tutorial/errors.md:95
 msgid ""
 "```rut\n"
 "fn hex_dec(s: str) -> (bytes, str) {\n"
@@ -3126,11 +3130,11 @@ msgstr ""
 "}\n"
 "```"
 
-#: src/tutorial/errors.md:100
+#: src/tutorial/errors.md:105
 msgid "Nullable halves make both slots explicit — this is the standard library's own shape, `(?T, ?E)`:"
 msgstr "可空的半边让两个槽位都显式——这正是标准库自身的形状，`(?T, ?E)`："
 
-#: src/tutorial/errors.md:103
+#: src/tutorial/errors.md:108
 msgid ""
 "```rut\n"
 "// json's entry points\n"
@@ -3144,11 +3148,11 @@ msgstr ""
 "fn encodeJson<T requires JsonSerialize>(v: T) -> (?str, ?EncodeJsonError);\n"
 "```"
 
-#: src/tutorial/errors.md:109
+#: src/tutorial/errors.md:114
 msgid "The caller destructures and checks the err half first:"
 msgstr "调用方解构，并先检查 err 那一半："
 
-#: src/tutorial/errors.md:111
+#: src/tutorial/errors.md:116
 msgid ""
 "```rut\n"
 "use json::{ decodeJson, JsonI64 };\n"
@@ -3158,28 +3162,28 @@ msgid ""
 "    let log = Logger(\"json\");\n"
 "    let (n, e) = decodeJson<JsonI64>(\"42\");\n"
 "    if (e == nil) {\n"
-"        log.info(f\"n={n.get()}\");\n"
+"        log.info(f\"n={n!.get()}\");\n"
 "    } else {\n"
 "        let why = e;\n"
-"        log.info(f\"decode failed at {why.at}\");\n"
+"        log.info(f\"decode failed at {why!.at}\");\n"
 "    }\n"
 "}\n"
 "```"
 msgstr ""
 
-#: src/tutorial/errors.md:131
+#: src/tutorial/errors.md:136
 msgid "Integer arithmetic's checked ladder uses the same idea in miniature: `x.checked_add(y)` answers `(T, bool)` where `.1` is `false` exactly when the result escaped the width — see [values and variables](values-and-variables.md)."
 msgstr "整数算术的 checked 阶梯是同一思想的微缩版：`x.checked_add(y)` 返回 `(T, bool)`，当且仅当结果超出该宽度时 `.1` 才为 `false`——参见[值与变量](values-and-variables.md)。"
 
-#: src/tutorial/errors.md:136
+#: src/tutorial/errors.md:141
 msgid "Building an error type"
 msgstr "构建一个错误类型"
 
-#: src/tutorial/errors.md:138
+#: src/tutorial/errors.md:143
 msgid "For errors a caller might want to _branch on_, pair a payloadless enum (the kind) with a fixed-field struct (the details). That is the shape `json` uses:"
 msgstr "对于调用方可能想要_据以分支_的错误，把一个无载荷的枚举（种类）与一个固定字段的结构体（细节）配成一对。这正是 `json` 使用的形状："
 
-#: src/tutorial/errors.md:142
+#: src/tutorial/errors.md:147
 msgid ""
 "```rut\n"
 "pub enum DecodeErrorKind { Unexpected, Truncated, InvalidUtf8, WrongType, Depth, Trailing }\n"
@@ -3203,11 +3207,11 @@ msgstr ""
 "}\n"
 "```"
 
-#: src/tutorial/errors.md:153
+#: src/tutorial/errors.md:158
 msgid "The caller picks: branch on `kind`, or just render the fields:"
 msgstr "调用方自行选择：按 `kind` 分支，或直接渲染字段："
 
-#: src/tutorial/errors.md:155
+#: src/tutorial/errors.md:160
 msgid ""
 "```rut\n"
 "use json::{ decodeJson, JsonI64 };\n"
@@ -3219,21 +3223,21 @@ msgid ""
 "    if (be != nil) {\n"
 "        let why = be;\n"
 "        // rejected at 0: got '[', wanted an i64\n"
-"        log.info(f\"rejected at {why.at}: got '{why.got}', wanted {why.expected}\");\n"
+"        log.info(f\"rejected at {why!.at}: got '{why!.got}', wanted {why!.expected}\");\n"
 "    }\n"
 "}\n"
 "```"
 msgstr ""
 
-#: src/tutorial/errors.md:174
+#: src/tutorial/errors.md:179
 msgid "Enums have no payloads — the struct carries the data. This split keeps every error a plain value: copy it, store it in a log, put a location next to it, test it."
 msgstr "枚举没有载荷——数据由结构体携带。这个切分让每个错误都保持为普通值：复制它、存进日志、在旁边附上位置、测试它。"
 
-#: src/tutorial/errors.md:178
+#: src/tutorial/errors.md:183
 msgid "`panic`: for bugs, not for flow"
 msgstr "`panic`：为缺陷而设，不为控制流"
 
-#: src/tutorial/errors.md:180
+#: src/tutorial/errors.md:185
 msgid ""
 "```rut\n"
 "panic(\"Rect: negative extents\");        // abort with a message\n"
@@ -3243,15 +3247,15 @@ msgstr ""
 "panic(\"Rect: negative extents\");        // abort with a message\n"
 "```"
 
-#: src/tutorial/errors.md:184
+#: src/tutorial/errors.md:189
 msgid "Use it when continuing would be a lie: a broken invariant, an impossible state, a caller error that is a programming mistake. Data problems — a bad byte in a file, a missing key, a network error — are _values_ and belong in the answer channel, so callers can recover."
 msgstr "当继续下去等于撒谎时使用它：被破坏的不变式、不可能出现的状态、属于编程失误的调用方错误。数据问题——文件里的坏字节、缺失的键、网络错误——则是_值_，属于应答通道，调用方才能恢复。"
 
-#: src/tutorial/errors.md:189
+#: src/tutorial/errors.md:194
 msgid "There is no builtin `assert`: if a package wants one, it writes the two-line helper over `panic` and owns it:"
 msgstr "没有内置的 `assert`：哪个包需要，就写下基于 `panic` 的两行辅助函数并自己拥有它："
 
-#: src/tutorial/errors.md:192
+#: src/tutorial/errors.md:197
 msgid ""
 "```rut\n"
 "fn assert(c: bool, m: str) { if (!c) { panic(m); } }\n"
@@ -3265,19 +3269,19 @@ msgstr ""
 "assert(total == expected, \"checksum\");  // abort when the condition is false\n"
 "```"
 
-#: src/tutorial/errors.md:198
+#: src/tutorial/errors.md:203
 msgid "A trap's message and a stack trace (opt-in via `capture_stacktrace()`) land in the host's diagnostics — see [diagnostics, traces, and symbolication](../reference/diagnostics.md)."
 msgstr "陷阱的消息与栈追踪（可通过 `capture_stacktrace()` 选择启用）会进入宿主的诊断信息——参见[诊断、追踪与符号化](../reference/diagnostics.md)。"
 
-#: src/tutorial/errors.md:202
+#: src/tutorial/errors.md:207
 msgid "Erasure when you truly need it"
 msgstr "真正需要擦除时"
 
-#: src/tutorial/errors.md:204
+#: src/tutorial/errors.md:209
 msgid "When a value must cross a boundary that cannot name its type — host handles, heterogeneous boxes — `opaque(v)` seals it and `opaque::downcast<T>(o) -> ?T` recovers it (`nil` on a wrong type, never a trap):"
 msgstr "当一个值必须穿越一个无法说出其类型的边界——宿主句柄、异构盒——`opaque(v)` 将它封存，`opaque::downcast<T>(o) -> ?T` 将它取回（类型不符时得到 `nil`，绝不触发陷阱）："
 
-#: src/tutorial/errors.md:209
+#: src/tutorial/errors.md:214
 msgid ""
 "```rut\n"
 "use ink::{ Logger };\n"
@@ -3289,18 +3293,18 @@ msgid ""
 "    let box1 = opaque(Point { x: 1, y: 2 });\n"
 "    let p = opaque::downcast<Point>(box1);   // ?Point\n"
 "    when (p != nil) {\n"
-"        true -> { log.info(f\"point {p.x} {p.y}\"); },\n"
+"        true -> { log.info(f\"point {p!.x} {p!.y}\"); },\n"
 "        else -> { log.info(\"point: nil\"); },\n"
 "    }\n"
 "}\n"
 "```"
 msgstr ""
 
-#: src/tutorial/errors.md:229
+#: src/tutorial/errors.md:234
 msgid "`x is T` probes the box without recovering it. This is rut's only `any`\\-shaped value, and it can do nothing until recovered — see [the reference on opaque](../reference/opaque.md)."
 msgstr "`x is T` 不取回即可探查盒。这是 rut 唯一具有 `any` 形状的值，在被取回之前它什么也做不了——参见 [opaque 参考](../reference/opaque.md)。"
 
-#: src/tutorial/errors.md:235
+#: src/tutorial/errors.md:240
 msgid ""
 "```rut\n"
 "use json::{ decodeJson, encodeJson, JsonArr, JsonI64 };\n"
@@ -3312,17 +3316,17 @@ msgid ""
 "    // a successful decode: (value, nil)\n"
 "    let (n, e) = decodeJson<JsonI64>(\"42\");\n"
 "    if (e == nil) {\n"
-"        log.info(f\"n={n.get()}\");\n"
+"        log.info(f\"n={n!.get()}\");\n"
 "    } else {\n"
 "        let why = e;\n"
-"        log.info(f\"decode failed at {why.at}: {why.expected}\");\n"
+"        log.info(f\"decode failed at {why!.at}: {why!.expected}\");\n"
 "    }\n"
 "\n"
 "    // encode answers the same shape: (?str, ?EncodeJsonError) —\n"
 "    // through the spelled wrapper: a bare [i64] never satisfies\n"
 "    let (s, ee) = encodeJson(JsonArr([JsonI64(1), JsonI64(2), JsonI64(3)]));\n"
 "    if (ee == nil) {\n"
-"        let text = s;\n"
+"        let text = s!;\n"
 "        log.info(f\"s={text}\");\n"
 "    } else {\n"
 "        log.info(\"encode failed\");\n"
@@ -3334,13 +3338,13 @@ msgid ""
 "        log.info(\"unexpected success\");\n"
 "    } else {\n"
 "        let why = be;\n"
-"        log.info(f\"rejected at {why.at}: got '{why.got}', wanted {why.expected}\");\n"
+"        log.info(f\"rejected at {why!.at}: got '{why!.got}', wanted {why!.expected}\");\n"
 "    }\n"
 "}\n"
 "```"
 msgstr ""
 
-#: src/tutorial/errors.md:278
+#: src/tutorial/errors.md:283
 msgid "Next: [modules and packages](modules.md)."
 msgstr "下一章：[模块与包](modules.md)。"
 
@@ -3396,8 +3400,8 @@ msgstr "形式"
 
 #: src/tutorial/modules.md:52 src/reference/modules-and-visibility.md:422
 #: src/reference/primitive-types.md:25
-#: src/reference/builtin-generic-types.md:85
-#: src/reference/builtin-generic-types.md:96
+#: src/reference/builtin-generic-types.md:87
+#: src/reference/builtin-generic-types.md:98
 #: src/reference/literals-and-inference.md:129 src/reference/opaque.md:14
 #: src/reference/async.md:199 src/reference/host-futures.md:34
 #: src/reference/embedding.md:375 src/reference/embedding.md:393
@@ -4054,13 +4058,13 @@ msgid ""
 "    xs.push(10);                              // amortized O(1)\n"
 "    let v = Vec<f32>::filled(0.0, 1024);       // n slots of one value\n"
 "    let w = Vec<i32>::from([1, 2, 3]);         // from a fixed array (copies)\n"
-"    let x = xs[0];                            // indexing\n"
+"    let x = xs[0]!;                           // indexing — the load is ?i32, the assert peels\n"
 "    xs[0] = 42;                               // a write through the binding\n"
 "    let last = xs.pop();                      // removes + returns; traps if empty\n"
 "    let n = xs.len();\n"
 "    let total = 0;\n"
-"    for (let e of w) {                        // iteration\n"
-"        total += e;\n"
+"    for (let e of w) {                        // iteration — e binds ?i32\n"
+"        total += e!;\n"
 "    }\n"
 "    log.info(f\"x={x} last={last} len-after-pop={n} filled={v.len()} total={total}\");\n"
 "}\n"
@@ -4087,7 +4091,7 @@ msgid ""
 "    let fresh = counts.put(\"rut\", 1);          // answers true when the key was NEWLY added\n"
 "    let n = 0;\n"
 "    let hit = counts.get(\"rut\");   // ?i32 — nil means absent\n"
-"    if (hit != nil) { n = hit + 1; }\n"
+"    if (hit != nil) { n = hit! + 1; }   // the guard; inside it the assert cannot trap\n"
 "    let there = counts.has(\"rut\");             // membership\n"
 "    let gone = counts.remove(\"runs\");         // answers whether it was there\n"
 "    let size = counts.len();\n"
@@ -4138,7 +4142,7 @@ msgid ""
 "    src.into_flow().skip(1).for_each(fn(x: i32) -> nil {\n"
 "        joined.push(f\"{x}\");                    // a shared cell survives the closure\n"
 "    });\n"
-"    log.info(f\"total={total} n={joined.len()} first={joined[0]} last={joined[joined.as_array().len()-1]}\");\n"
+"    log.info(f\"total={total} n={joined.len()} first={joined[0]!} last={joined[joined.as_array().len()-1]!}\");\n"
 "}\n"
 "```"
 msgstr ""
@@ -4238,7 +4242,7 @@ msgid ""
 "    let (n, e) = decodeJson<JsonI64>(\"42\");           // (?JsonI64, ?E) — see errors\n"
 "    let (s, ee) = encodeJson(JsonArr([JsonI64(1), JsonI64(2), JsonI64(3)]));\n"
 "    if (e == nil && ee == nil) {\n"
-"        log.info(f\"n={n.get()} s={s}\");\n"
+"        log.info(f\"n={n!.get()} s={s!}\");\n"
 "    }\n"
 "}\n"
 "```"
@@ -4306,7 +4310,7 @@ msgid ""
 "    v.push(20);\n"
 "    v.push(30);\n"
 "    let last = v.pop();\n"
-"    log.info(f\"len={v.len()} last={last} first={v[0]}\");\n"
+"    log.info(f\"len={v.len()} last={last} first={v[0]!}\");\n"
 "\n"
 "    // fixed arrays + string_join from core\n"
 "    let parts: Vec<str> = Vec::from([\"rut\", \"runs\"]);\n"
@@ -4559,14 +4563,14 @@ msgid "`?T` — the nullable"
 msgstr "`?T` —— 可空类型"
 
 #: src/core-concepts/everything-is-a-value.md:66
-msgid "Absence is `nil` on a nullable type, spelled as a prefix on the type: `?T` is \"a `T` or `nil`\". `?` applies to the type term that follows, so `[?T]` is an array of nullables while `?[T]` is a nullable array, and `??T` chains (and unwraps transitively at use)."
-msgstr "缺失即可空类型上的 `nil`，写作类型上的前缀：`?T` 是\"一个 `T` 或 `nil`\"。`?` 作用于其后的类型项，因此 `[?T]` 是可空数组——元素可空——而 `?[T]` 是可空数组本身，`??T` 则可链式叠加（并在使用时传递式解包）。"
+msgid "Absence is `nil` on a nullable type, spelled as a prefix on the type: `?T` is \"a `T` or `nil`\". `?` applies to the type term that follows, so `[?T]` is an array of nullables while `?[T]` is a nullable array, and `??T` chains (one `?` layer per `!`)."
+msgstr "缺失即可空类型上的 `nil`，写作类型上的前缀：`?T` 是\"一个 `T` 或 `nil`\"。`?` 作用于其后的类型项，因此 `[?T]` 是可空数组——元素可空——而 `?[T]` 是可空数组本身，`??T` 则可链式叠加（每层 `!` 剥掉一层 `?`）。"
 
 #: src/core-concepts/everything-is-a-value.md:71
-msgid "The coercions are one line: **`T → ?T` boxes; `?T → T` derefs.** The box is a fresh one-slot cell that _aliases_ the value's cell — boxing a record shares it, boxing a primitive copies its bits. The deref is implicit at every value position: field access, method calls, indexing, iteration, arithmetic all read through the box."
-msgstr "这些转换一行就能说清：**`T → ?T` 装盒；`?T → T` 解引用。**盒是一个全新的一槽单元，_别名_值所在的单元——装盒一个记录就是共享它，装盒一个原始类型则复制其比特位。解引用在每个值位置都是隐式的：字段访问、方法调用、索引、迭代、算术，全都透过盒读取。"
+msgid "The coercions are asymmetric — **`T → ?T` boxes, implicit, cannot fail; `?T → T` happens ONLY through the postfix assert `e!`** — one `?` layer per `!`. The box is a fresh one-slot cell that _aliases_ the value's cell — boxing a record shares it, boxing a primitive copies its bits. The peel is never implicit: a nullable reads through the assert — `u!.name`, `u!.m(..)`, `u![i]` — and a `nil` operand traps `NilDeref` at the `!`'s own site."
+msgstr "转换是不对称的——**`T → ?T` 装盒，隐式，不会失败；`?T → T` 只能透过后缀断言 `e!` 发生**——每层 `!` 剥掉一层 `?`。盒是一个全新的一槽单元，_别名_值所在的单元——装盒一个记录就是共享它，装盒一个原始类型则复制其比特位。解包从不隐式：可空值透过断言读取——`u!.name`、`u!.m(..)`、`u![i]`——且 `nil` 操作数在 `!` 自己的位置触发 `NilDeref` 陷阱。"
 
-#: src/core-concepts/everything-is-a-value.md:77
+#: src/core-concepts/everything-is-a-value.md:79
 msgid ""
 "```rut\n"
 "use ink::{ Logger };\n"
@@ -4581,58 +4585,58 @@ msgid ""
 "entry fn main() {\n"
 "    let log = Logger(\"values\");\n"
 "    let u = lookup(7);                // ?User\n"
-"    log.info(f\"u.name = {u.name}\");   // auto-deref when non-nil\n"
+"    log.info(f\"u.name = {u!.name}\");  // the assert — traps HERE if nil\n"
 "    let missing = lookup(8);\n"
 "    log.info(f\"miss is nil: {missing == nil}\");   // guard where absence is expected\n"
 "}\n"
 "```"
 msgstr ""
 
-#: src/core-concepts/everything-is-a-value.md:101
-msgid "A `nil` reaching a value use traps (`NilDeref`) — never a silent read. Guard with `u == nil` where absence is expected; the trap is the bug-catcher, not the semantics. A miss is `nil` and nothing else: a lookup that finds nothing returns `?V`, and callers compare against `nil`."
-msgstr "抵达值用途的 `nil` 会触发陷阱（`NilDeref`）——绝不会悄悄读出一个值。在预期可能缺失之处用 `u == nil` 设守卫；陷阱是抓 bug 的工具，而不是语义本身。未命中就是 `nil`，别无他物：找不到结果的查找返回 `?V`，调用方与 `nil` 比较。"
+#: src/core-concepts/everything-is-a-value.md:103
+msgid "A `nil` reaching an assert traps (`NilDeref`) at the `!` — never a silent read, and the trap site is marked in the source: `grep '!'` over a program is the complete list of its nil-trap sites. Guard with `u == nil` where absence is expected — the guard idiom is `if (u != nil) { let user = u!; .. }`: inside a true guard the assert cannot trap, but the compiler does not prove it (no flow typing). A miss is `nil` and nothing else: a lookup that finds nothing returns `?V`, and callers compare against `nil`."
+msgstr "抵达断言的 `nil` 会在 `!` 处触发陷阱（`NilDeref`）——绝不会悄悄读出一个值，而且陷阱位置就标记在源码里：对整个程序 `grep '!'` 得到的就是它全部的 nil 陷阱点。在预期可能缺失之处用 `u == nil` 设守卫——守卫惯用法是 `if (u != nil) { let user = u!; .. }`：在为真的守卫内断言不会触发陷阱，但编译器并不证明这一点（没有流类型化）。未命中就是 `nil`，别无他物：找不到结果的查找返回 `?V`，调用方与 `nil` 比较。"
 
-#: src/core-concepts/everything-is-a-value.md:107
+#: src/core-concepts/everything-is-a-value.md:112
 msgid "`==` is honest about the regime"
 msgstr "`==` 对体制如实相告"
 
-#: src/core-concepts/everything-is-a-value.md:109
+#: src/core-concepts/everything-is-a-value.md:114
 msgid "Primitives compare **by value**."
 msgstr "原始类型**按值**比较。"
 
-#: src/core-concepts/everything-is-a-value.md:110
+#: src/core-concepts/everything-is-a-value.md:115
 msgid "`str` compares **by content** (codepoints); `bytes` by octets."
 msgstr "`str` 按**内容**（码点）比较；`bytes` 按字节（octet）比较。"
 
-#: src/core-concepts/everything-is-a-value.md:111
+#: src/core-concepts/everything-is-a-value.md:116
 msgid "Everything else compares **by identity** — two bindings are equal exactly when they name the same cell."
 msgstr "其余一切**按身份**比较——两个绑定相等，当且仅当它们指名同一个单元。"
 
-#: src/core-concepts/everything-is-a-value.md:114
+#: src/core-concepts/everything-is-a-value.md:119
 msgid "Identity is the only equality full sharing can defend: two separately built `[1, 2]` arrays are two cells, so `[1,2] == [1,2]` is `false`. Content comparison is a loop over fields, written where content is the contract. The one place identity quietly behaves like value equality: enum variants are immortal singletons, so `Flavor::Sour == Flavor::Sour` is `true`."
 msgstr "身份是完全共享唯一能捍卫的相等：两个分别构建的 `[1, 2]` 数组是两个单元，因此 `[1,2] == [1,2]` 是 `false`。内容比较是一个遍历字段的循环，写在内容才是契约的地方。身份唯一一处悄悄表现得像值相等的地方：枚举成员是不朽的单例，所以 `Flavor::Sour == Flavor::Sour` 是 `true`。"
 
-#: src/core-concepts/everything-is-a-value.md:121
+#: src/core-concepts/everything-is-a-value.md:126
 msgid "The answer channel: a pair"
 msgstr "应答通道：对偶"
 
-#: src/core-concepts/everything-is-a-value.md:123
+#: src/core-concepts/everything-is-a-value.md:128
 msgid "There is no exception type. Failures are data in the second element of a record — `(value, err)` — with one documented convention:"
 msgstr "没有异常类型。失败是对偶——`(value, err)`——第二个元素里的数据，配一条成文的约定："
 
-#: src/core-concepts/everything-is-a-value.md:127
+#: src/core-concepts/everything-is-a-value.md:132
 msgid "an **empty err plus a value** is success;"
 msgstr "**err 为空且带值**即成功；"
 
-#: src/core-concepts/everything-is-a-value.md:128
+#: src/core-concepts/everything-is-a-value.md:133
 msgid "an **empty err plus `nil`** means \"not found\";"
 msgstr "**err 为空且为 `nil`** 意为\"未找到\"；"
 
-#: src/core-concepts/everything-is-a-value.md:129
+#: src/core-concepts/everything-is-a-value.md:134
 msgid "a **non-empty err** means \"failed\"."
 msgstr "**err 非空**即为\"失败\"。"
 
-#: src/core-concepts/everything-is-a-value.md:131
+#: src/core-concepts/everything-is-a-value.md:136
 msgid ""
 "```rut\n"
 "use ink::{ Logger };\n"
@@ -4671,31 +4675,31 @@ msgid ""
 "```"
 msgstr ""
 
-#: src/core-concepts/everything-is-a-value.md:172
+#: src/core-concepts/everything-is-a-value.md:177
 msgid "The pair destructure in return position is free — the compiler fuses the mint away — so this shape costs nothing on hot paths. At the host boundary the same pair crosses field by field, which makes `entry fn -> (?T, err)` the standard answer a Rust embedder reads."
 msgstr "返回位置的对偶解构是免费的——编译器会把铸造融合掉——所以这种形状在热路径上分文不费。在宿主边界，同一个对偶逐字段跨越，这让 `entry fn -> (?T, err)` 成为 Rust 嵌入方一眼即懂的标准应答。"
 
-#: src/core-concepts/everything-is-a-value.md:177
+#: src/core-concepts/everything-is-a-value.md:182
 msgid "Consequences you feel day to day"
 msgstr "日常能感受到的后果"
 
-#: src/core-concepts/everything-is-a-value.md:179
+#: src/core-concepts/everything-is-a-value.md:184
 msgid "**Reassignment is cheap.** Moving containers around — returning them, storing them, restructuring them — is handle traffic, not payload traffic. Algorithms that churn records and arrays pay aliasing, not copying."
 msgstr "**重新赋值很便宜。**把容器搬来搬去——返回、存储、重组——是句柄流量，不是载荷流量。大量周转记录与数组的算法付出的是别名代价，而不是复制代价。"
 
-#: src/core-concepts/everything-is-a-value.md:183
+#: src/core-concepts/everything-is-a-value.md:188
 msgid "**Loop variables share elements; the binding is one variable.** A `for (let x of xs)` loop hands you the stored element: the loop variable is mutable like any `let`, and a `const` header opts out — refusing the body's reassignment of `x`, never the write-through. A `let` loop variable's writes mutate the sequence. The loop variable is ONE binding reassigned per iteration — `for..of` is sugar for a `while`\\-shaped loop, and the capture law treats it like any other ref-headed binding."
 msgstr "**循环变量共享元素；绑定是同一个变量。** `for (let x of xs)` 循环把存储的元素交给你：循环变量与任何 `let` 一样默认可变，写 `const` 的循环头则选择退出——拒绝循环体对 `x` 的重新赋值，绝不拒绝穿透写入。`let` 循环变量的写入会改动序列本身。循环变量是每一轮被重新赋值的同一个绑定——`for..of` 是 `while`\\-形循环的语法糖，捕获法则像对待其他以引用为头的绑定一样对待它。"
 
-#: src/core-concepts/everything-is-a-value.md:191
+#: src/core-concepts/everything-is-a-value.md:196
 msgid "**Containers of primitives stay flat.** A fixed `[i32]` is a packed `i32` buffer; growable sequences of primitives store raw payloads with a one-byte nil tag — no per-element heap box."
 msgstr "**原始类型容器保持扁平。**定长 `[i32]` 就是一块打包的 `i32` 缓冲区；可增长的原始类型序列直接存储裸载荷，外加一个字节的 nil 标签——没有逐元素的堆盒。"
 
-#: src/core-concepts/everything-is-a-value.md:194
+#: src/core-concepts/everything-is-a-value.md:199
 msgid "**Erasure is a box.** `opaque(v)` mints an erasure box; recovery is `opaque::downcast<T>(o)`, checked against the runtime type. See [reified types](reified-types.md) and the reference on [`opaque`](../reference/opaque.md)."
 msgstr "**擦除是一个盒。**`opaque(v)` 铸造一个擦除盒；恢复靠 `opaque::downcast<T>(o)`，对照运行时类型检查。参见[具体化类型](reified-types.md)以及关于 [`opaque`](../reference/opaque.md) 的参考章节。"
 
-#: src/core-concepts/everything-is-a-value.md:199
+#: src/core-concepts/everything-is-a-value.md:204
 msgid "The memory machinery under all of this — refcounts, deterministic destructors, weak references — is the next chapter's subject: [memory](memory.md). The exact rules live in the reference on [by-reference and nullable](../reference/by-reference-and-nullable.md)."
 msgstr "这一切底下的内存机制——引用计数、确定性析构、弱引用——是下一章的主题：[内存](memory.md)。精确规则见关于[按引用与可空](../reference/by-reference-and-nullable.md)的参考章节。"
 
@@ -5023,7 +5027,7 @@ msgid ""
 "    let mixed: Vec<Area> = Vec::new();   // heterogeneous storage\n"
 "    mixed.push(Circle { r: 1.0 });\n"
 "    mixed.push(UnitSquare { side: 2.0 });\n"
-"    for (let s of mixed) { blit(g, s); }\n"
+"    for (let s of mixed) { blit(g, s!); }\n"
 "}\n"
 "```"
 msgstr ""
@@ -5526,7 +5530,7 @@ msgid ""
 "    let v = View { model: nil, observer: Weak::new(m) };   // observe without owning\n"
 "    log.info(f\"holding {m.name}; the view holds only a weak edge\");\n"
 "    m = Model { name: \"next\" };   // the old cell's last strong reference dies here\n"
-"    log.info(f\"upgrade() answers nil: {v.observer.upgrade() == nil}\");\n"
+"    log.info(f\"upgrade() answers nil: {v.observer!.upgrade() == nil}\");\n"
 "}\n"
 "```"
 msgstr ""
@@ -6193,9 +6197,9 @@ msgid ""
 "        let kept: Vec<Todo> = Vec::new();\n"
 "        let removed = false;\n"
 "        for (let t of self.items) {\n"
-"            when (t.id == id) {\n"
+"            when (t!.id == id) {\n"
 "                true -> { removed = true; },   // drop the row\n"
-"                else -> { kept.push(t); },     // keep everything else\n"
+"                else -> { kept.push(t!); },    // keep everything else\n"
 "            }\n"
 "        }\n"
 "        if (removed) {\n"
@@ -6238,7 +6242,7 @@ msgid ""
 "\n"
 "fn at(c: opaque, h: u32) -> TodoList {\n"
 "    let lists = opaque::downcast<?Lists>(c);\n"
-"    return lists.lists[h as i32];\n"
+"    return lists!!.lists[h as i32]!;\n"
 "}\n"
 "\n"
 "entry fn createContainer() -> opaque {\n"
@@ -6248,8 +6252,8 @@ msgid ""
 "\n"
 "entry fn create(c: opaque) -> u32 {\n"
 "    let k = opaque::downcast<?Lists>(c);\n"
-"    k.lists.push(TodoList::new());\n"
-"    return (k.lists.len() - 1) as u32;\n"
+"    k!!.lists.push(TodoList::new());\n"
+"    return (k!!.lists.len() - 1) as u32;\n"
 "}\n"
 "```"
 msgstr ""
@@ -6260,7 +6264,7 @@ msgstr ""
 "\n"
 "fn at(c: opaque, h: u32) -> TodoList {\n"
 "    let lists = opaque::downcast<?Lists>(c);\n"
-"    return lists.lists[h as i32];\n"
+"    return lists!!.lists[h as i32]!;\n"
 "}\n"
 "\n"
 "entry fn createContainer() -> opaque {\n"
@@ -6270,8 +6274,8 @@ msgstr ""
 "\n"
 "entry fn create(c: opaque) -> u32 {\n"
 "    let k = opaque::downcast<?Lists>(c);\n"
-"    k.lists.push(TodoList::new());\n"
-"    return (k.lists.len() - 1) as u32;\n"
+"    k!!.lists.push(TodoList::new());\n"
+"    return (k!!.lists.len() - 1) as u32;\n"
 "}\n"
 "```"
 
@@ -6395,13 +6399,13 @@ msgid ""
 "\n"
 "entry fn serialize(c: opaque) -> str {\n"
 "    let b = opaque::downcast<?Bank>(c);\n"
-"    let xs = b.data;\n"
+"    let xs = b!!.data;\n"
 "    let out = \"[\";\n"
-"    for (let i = 0; i < xs.len(); i += 1) {\n"
+"    for (let i = 0; i < xs!.len(); i += 1) {\n"
 "        if (i > 0) {\n"
 "            out = f\"{out}, \";\n"
 "        }\n"
-"        out = f\"{out}{xs[i]}\";\n"
+"        out = f\"{out}{xs![i]!}\";\n"
 "    }\n"
 "    return f\"{out}]\";\n"
 "}\n"
@@ -6434,11 +6438,11 @@ msgid ""
 "    let b = opaque::downcast<?Bank>(c);\n"
 "    let unknown = false;\n"
 "    when (algo) {\n"
-"        \"insertion\" -> { insertion_sort(b.data); },\n"
-"        \"bubble\"    -> { bubble_sort(b.data); },\n"
-"        \"selection\" -> { selection_sort(b.data); },\n"
-"        \"quick\"     -> { quicksort(b.data, 0, b.data.len() - 1); },\n"
-"        \"merge\"     -> { merge_sort(b.data); },\n"
+"        \"insertion\" -> { insertion_sort(b!!.data); },\n"
+"        \"bubble\"    -> { bubble_sort(b!!.data); },\n"
+"        \"selection\" -> { selection_sort(b!!.data); },\n"
+"        \"quick\"     -> { quicksort(b!!.data, 0, b!!.data!.len() - 1); },\n"
+"        \"merge\"     -> { merge_sort(b!!.data); },\n"
 "        else        -> { unknown = true; },\n"
 "    }\n"
 "    if (unknown) {\n"
@@ -6477,7 +6481,7 @@ msgid ""
 "        x = (x.wrapping_mul(1664525)).wrapping_add(1013904223);\n"
 "        fresh.push((x % 1000) as i32);\n"
 "    }\n"
-"    b.data = fresh;\n"
+"    b!!.data = fresh;\n"
 "}\n"
 "\n"
 "entry fn main() {\n"
@@ -6486,10 +6490,10 @@ msgid ""
 "    let c = opaque(bank);\n"
 "    fill(c, 8, 42);\n"
 "    let b = opaque::downcast<?Bank>(c);\n"
-"    let xs = b.data;\n"
+"    let xs = b!!.data;\n"
 "    let out = \"\";\n"
-"    for (let x of xs) {\n"
-"        out = f\"{out} {x}\";\n"
+"    for (let x of xs!) {\n"
+"        out = f\"{out} {x!}\";\n"
 "    }\n"
 "    log.info(f\"fill(8, seed=42):{out}\");\n"
 "}\n"
@@ -7958,10 +7962,10 @@ msgid ""
 "}\n"
 "\n"
 "fn partition(xs: Vec<i32>, lo: i32, hi: i32) -> i32 {\n"
-"    let pivot = xs[hi];\n"
+"    let pivot = xs[hi]!;\n"
 "    let i = lo - 1;\n"
 "    for (let j = lo; j < hi; j += 1) {\n"
-"        if (xs[j] <= pivot) {\n"
+"        if (xs[j]! <= pivot) {\n"
 "            i += 1;\n"
 "            swap(xs, i, j);\n"
 "        }\n"
@@ -7984,7 +7988,7 @@ msgid ""
 "\n"
 "    let out = \"\";\n"
 "    for (let i = 0; i < xs.len(); i += 1) {\n"
-"        out = f\"{out}{xs[i]} \";      // rebinding `out`; the f-string form builds in place\n"
+"        out = f\"{out}{xs[i]!} \";      // rebinding `out`; the f-string form builds in place\n"
 "    }\n"
 "    log.info(f\"sorted: {out}\");\n"
 "}\n"
@@ -8023,7 +8027,7 @@ msgid ""
 "\n"
 "    let p = opaque::downcast<Point>(box1);       // ?Point — the nullable\n"
 "    when (p != nil) {\n"
-"        true -> { log.info(f\"point {p.x} {p.y}\"); },\n"
+"        true -> { log.info(f\"point {p!.x} {p!.y}\"); },\n"
 "        else  -> { log.info(\"point: nil\"); },\n"
 "    }\n"
 "    let wrong = opaque::downcast<i32>(box2);     // wrong type: nil, no trap\n"
@@ -8971,7 +8975,7 @@ msgid "There is **no character type**: `'x'` does not parse, and `str` iteration
 msgstr "**没有字符类型**：`'x'` 无法解析，`str` 的迭代产出单个码点的 `str`。码点用整数表示："
 
 #: src/reference/primitive-types.md:25
-#: src/reference/builtin-generic-types.md:96 src/reference/opaque.md:14
+#: src/reference/builtin-generic-types.md:98 src/reference/opaque.md:14
 #: src/reference/host-futures.md:34
 msgid "Member"
 msgstr "成员"
@@ -9226,155 +9230,155 @@ msgid "chained"
 msgstr "链式"
 
 #: src/reference/builtin-generic-types.md:59
-msgid "the same runtime box, unwrapped transitively at use sites"
-msgstr "同一个运行时盒，在使用点传递性地逐层解包"
+#: src/reference/by-reference-and-nullable.md:69
+msgid "the same runtime box — one `!` per layer"
+msgstr "同一个运行时盒——每层 `!` 剥掉一层"
 
 #: src/reference/builtin-generic-types.md:61
-msgid "Coercions: **`T → ?T` boxes** (the box _aliases_ the payload's cell — a share; primitives copy bits), **`?T → T` derefs** (a field-0 read plus nil check). Both are implicit at the expected-type position; the funnel is transitive through `??T`."
-msgstr "强制转换：**`T → ?T` 装盒**（盒 _别名_ 载荷的单元 —— 即共享；基本类型复制位），**`?T → T` 解引用**（一次字段 0 读取加 nil 检查）。两者在期望类型位置都是隐式的；这一漏斗经过 `??T` 传递。"
+msgid "Coercions are asymmetric: **`T → ?T` boxes** (the box _aliases_ the payload's cell — a share; primitives copy bits), implicit, cannot fail; **`?T → T` happens ONLY through the postfix assert `e!`** (a field-0 read plus nil check) — one `?` layer per `!`, and a `nil` operand traps `NilDeref` at the `!`'s own site."
+msgstr "转换是不对称的：**`T → ?T` 装盒**（盒 _别名_ 载荷所在的单元——共享；原始类型复制比特位），隐式，不会失败；**`?T → T` 只能透过后缀断言 `e!` 发生**（一次 field-0 读取加 nil 检查）——每层 `!` 剥掉一层 `?`，且 `nil` 操作数在 `!` 自己的位置触发 `NilDeref` 陷阱。"
 
-#: src/reference/builtin-generic-types.md:65
-#: src/reference/by-reference-and-nullable.md:83
-msgid "Auto-deref covers every value position: `p.x`, `p.m(..)`, `p[i]`, `for (x of p)`, arithmetic on `p`'s payload."
-msgstr "自动解引用覆盖所有值位置：`p.x`、`p.m(..)`、`p[i]`、`for (x of p)`、对 `p` 载荷的算术运算。"
+#: src/reference/builtin-generic-types.md:66
+msgid "Uses demand the assert: `p!.x`, `p!.m(..)`, `p![i]`, `for (x of p!)`, arithmetic on the payload."
+msgstr "使用处要求断言：`p!.x`、`p!.m(..)`、`p![i]`、`for (x of p!)`、对载荷的算术运算。"
 
-#: src/reference/builtin-generic-types.md:67
+#: src/reference/builtin-generic-types.md:68
 msgid "`p == nil` / `p != nil` compare against the null slot; `?T == ?T` is slot identity (see [Rc, dispose, and identity](rc-dispose-identity.md))."
 msgstr "`p == nil` / `p != nil` 与空槽比较；`?T == ?T` 是槽位同一性（参见[Rc、dispose 与同一性](rc-dispose-identity.md)）。"
 
-#: src/reference/builtin-generic-types.md:69
+#: src/reference/builtin-generic-types.md:70
 msgid "A `?T` binding IS the cell reference — writes through it hit the shared cell (gated only by the `const` opt-out, see [Modules and visibility](modules-and-visibility.md))."
 msgstr "`?T` 绑定本身就是单元引用——透过它写入会命中共享单元（只受 `const` 退出选择把关，参见[模块与可见性](modules-and-visibility.md)）。"
 
-#: src/reference/builtin-generic-types.md:72
+#: src/reference/builtin-generic-types.md:73
 msgid "When the cell's refcount reaches zero, the engine runs the type's `[disposal]` member (`<free>(self, cx)`) — the cell-death hook, not a per-value attach ([the Rc heap](rc-heap.md))."
 msgstr ""
 
-#: src/reference/builtin-generic-types.md:75
+#: src/reference/builtin-generic-types.md:76
 msgid "Across the host boundary `?T` crosses nil-flattened when its element crosses."
 msgstr "跨越宿主边界时，`?T` 的跨越方式是 nil 展平：元素跨越的同时它随之展平。"
 
-#: src/reference/builtin-generic-types.md:78
+#: src/reference/builtin-generic-types.md:79
 msgid "`Vec<T>` — the growable sequence"
 msgstr "`Vec<T>` —— 可增长序列"
 
-#: src/reference/builtin-generic-types.md:80
-msgid "`Vec<T>` is a library class (package `pouch`) over the non-growable `[T]`: a `buf: [?T]` backing plus a live `len`. Loads yield the `?T` (uses auto-deref), stores take the coerced handle — reads and writes alias the stored cells, and binding an element copies nothing."
-msgstr "`Vec<T>` 是构建在不可增长的 `[T]` 之上的库类（包 `pouch`）：一个 `buf: [?T]` 后备存储加上一个活跃的 `len`。读取产出 `?T`（使用自动解引用），写入接受强制转换后的句柄 —— 读写都是所存单元的别名，绑定一个元素不会复制任何东西。"
+#: src/reference/builtin-generic-types.md:81
+msgid "`Vec<T>` is a library class (package `pouch`) over the non-growable `[T]`: a `buf: [?T]` backing plus a live `len`. Loads yield the `?T` — uses demand the assert (`v[i]!`) — stores take the coerced handle: reads and writes alias the stored cells, and binding an element copies nothing."
+msgstr "`Vec<T>` 是构建在不可增长的 `[T]` 之上的库类（包 `pouch`）：一个 `buf: [?T]` 后备存储加上一个活跃的 `len`。读取产出 `?T`——使用处要求断言（`v[i]!`）——写入接受强制转换后的句柄：读写都是所存单元的别名，绑定一个元素不会复制任何东西。"
 
-#: src/reference/builtin-generic-types.md:85
+#: src/reference/builtin-generic-types.md:87
 msgid "Construction"
 msgstr "构造"
 
-#: src/reference/builtin-generic-types.md:87
+#: src/reference/builtin-generic-types.md:89
 msgid "`Vec::new()`"
 msgstr "`Vec::new()`"
 
-#: src/reference/builtin-generic-types.md:87
+#: src/reference/builtin-generic-types.md:89
 msgid "empty"
 msgstr "空"
 
-#: src/reference/builtin-generic-types.md:88
+#: src/reference/builtin-generic-types.md:90
 msgid "`Vec::with_capacity(n)`"
 msgstr "`Vec::with_capacity(n)`"
 
-#: src/reference/builtin-generic-types.md:88
+#: src/reference/builtin-generic-types.md:90
 msgid "reserve `n` slots"
 msgstr "预留 `n` 个槽"
 
-#: src/reference/builtin-generic-types.md:89
+#: src/reference/builtin-generic-types.md:91
 msgid "`Vec::filled(v, n)`"
 msgstr "`Vec::filled(v, n)`"
 
-#: src/reference/builtin-generic-types.md:89
+#: src/reference/builtin-generic-types.md:91
 msgid "`n` slots of `v`"
 msgstr "`n` 个槽都放 `v`"
 
-#: src/reference/builtin-generic-types.md:90
+#: src/reference/builtin-generic-types.md:92
 msgid "`Vec::from(arr)`"
 msgstr "`Vec::from(arr)`"
 
-#: src/reference/builtin-generic-types.md:90
+#: src/reference/builtin-generic-types.md:92
 msgid "copy a `[T]`"
 msgstr "复制一个 `[T]`"
 
-#: src/reference/builtin-generic-types.md:92
+#: src/reference/builtin-generic-types.md:94
 msgid "Explicit type arguments may be spelled at the call: `Vec<i32>::from([1, 2, 3])`. Construction is always a method call (see [Classes and constructors](classes.md))."
 msgstr "显式类型实参可以写在调用处：`Vec<i32>::from([1, 2, 3])`。构造总是方法调用（参见[类与构造器](classes.md)）。"
 
-#: src/reference/builtin-generic-types.md:98
+#: src/reference/builtin-generic-types.md:100
 msgid "`push(v)`"
 msgstr "`push(v)`"
 
-#: src/reference/builtin-generic-types.md:98
+#: src/reference/builtin-generic-types.md:100
 msgid "append; amortized O(1) growth"
 msgstr "追加；均摊 O(1) 增长"
 
-#: src/reference/builtin-generic-types.md:99
+#: src/reference/builtin-generic-types.md:101
 msgid "`pop() -> T`"
 msgstr "`pop() -> T`"
 
-#: src/reference/builtin-generic-types.md:99
+#: src/reference/builtin-generic-types.md:101
 msgid "remove and return the last element; traps on empty — guard with `len() > 0`"
 msgstr "移除并返回最后一个元素；空时陷阱 —— 用 `len() > 0` 守护"
 
-#: src/reference/builtin-generic-types.md:100
+#: src/reference/builtin-generic-types.md:102
 msgid "`v[i]`, `v[i] = x`"
 msgstr "`v[i]`, `v[i] = x`"
 
-#: src/reference/builtin-generic-types.md:100
+#: src/reference/builtin-generic-types.md:102
 msgid "element access; out-of-bounds traps"
 msgstr "元素访问；越界陷阱"
 
-#: src/reference/builtin-generic-types.md:101 src/reference/stdlib.md:412
+#: src/reference/builtin-generic-types.md:103 src/reference/stdlib.md:412
 msgid "`len() -> i32`"
 msgstr "`len() -> i32`"
 
-#: src/reference/builtin-generic-types.md:101
+#: src/reference/builtin-generic-types.md:103
 msgid "live length"
 msgstr "活跃长度"
 
-#: src/reference/builtin-generic-types.md:102
+#: src/reference/builtin-generic-types.md:104
 msgid "`for (x of v)`"
 msgstr "`for (x of v)`"
 
-#: src/reference/builtin-generic-types.md:102
+#: src/reference/builtin-generic-types.md:104
 msgid "iteration; `x` is the shared element"
 msgstr "迭代；`x` 是共享的元素"
 
-#: src/reference/builtin-generic-types.md:103 src/reference/stdlib.md:180
+#: src/reference/builtin-generic-types.md:105 src/reference/stdlib.md:180
 msgid "`slice(from, to) -> ?Vec<T>`"
 msgstr "`slice(from, to) -> ?Vec<T>`"
 
-#: src/reference/builtin-generic-types.md:103
+#: src/reference/builtin-generic-types.md:105
 msgid "fixed-length window (compiler-lowered) — writes through it hit the parent"
 msgstr "定长窗口（编译器降格）—— 透过它写入会命中父序列"
 
-#: src/reference/builtin-generic-types.md:104
+#: src/reference/builtin-generic-types.md:106
 msgid "`as_array() -> [T]`"
 msgstr "`as_array() -> [T]`"
 
-#: src/reference/builtin-generic-types.md:104
+#: src/reference/builtin-generic-types.md:106
 msgid "copy the live elements into a fresh, exactly-sized array"
 msgstr "把活跃元素复制到一个全新的、大小恰好的数组"
 
-#: src/reference/builtin-generic-types.md:106
+#: src/reference/builtin-generic-types.md:108
 msgid "`Vec<u8>` has no `freeze` member: the module-level `freeze_bytes(v)` copies the live octets into the immutable `bytes`."
 msgstr "`Vec<u8>` 没有 `freeze` 成员：模块级 `freeze_bytes(v)` 把存活的八位组复制进不可变的 `bytes`。"
 
-#: src/reference/builtin-generic-types.md:109
+#: src/reference/builtin-generic-types.md:111
 msgid "`Vec<u8>` is the mutable binary builder; `bytes` is the binary type that crosses the host boundary (see [Primitive types](primitive-types.md))."
 msgstr "`Vec<u8>` 是可变的二进制构建器；`bytes` 是跨越宿主边界的二进制类型（参见[基本类型](primitive-types.md)）。"
 
-#: src/reference/builtin-generic-types.md:113
+#: src/reference/builtin-generic-types.md:115
 msgid "`Weak<T>` — the weak reference"
 msgstr "`Weak<T>` —— 弱引用"
 
-#: src/reference/builtin-generic-types.md:115
+#: src/reference/builtin-generic-types.md:117
 msgid "`Weak<T>` is a builtin class whose box holds an _unretained_ word to a referent — a weak never keeps anything alive. The name is **import-gated**: spell `use core::{ Weak };` or the bare `Weak` diagnoses `` `Weak` is not in scope — `use core::{ Weak }` ``."
 msgstr "`Weak<T>` 是一个内置类，其盒持有一个指向被引用对象的 _未保留_（unretained）字 —— 弱引用绝不会让任何东西存活。名字是**导入把守**的：拼写 `use core::{ Weak };`，否则裸写的 `Weak` 会诊断 `` `Weak` is not in scope — `use core::{ Weak }` ``。"
 
-#: src/reference/builtin-generic-types.md:120
+#: src/reference/builtin-generic-types.md:122
 msgid ""
 "```rut\n"
 "use core::{ Weak };\n"
@@ -9387,36 +9391,36 @@ msgid ""
 "    let tile = Tile { v: 7 };\n"
 "    let w = Weak::new(tile);        // the class-method construction\n"
 "    let got: ?Tile = w.upgrade();  // the live referent, or nil once dead\n"
-"    log.info(f\"{got.v}\");\n"
+"    log.info(f\"{got!.v}\");\n"
 "}\n"
 "```"
 msgstr ""
 
-#: src/reference/builtin-generic-types.md:139
+#: src/reference/builtin-generic-types.md:141
 msgid "`Weak::new(v)` traps on a `nil` `v`; `T` must be a reference type (`Weak<i32>` diagnoses — primitives move by value). `Weak<?U>` is legal and `upgrade()` answers `??U`."
 msgstr "`Weak::new(v)` 在 `v` 为 `nil` 时陷阱；`T` 必须是引用类型（`Weak<i32>` 会被诊断报错 —— 基本类型按值移动）。`Weak<?U>` 合法，且 `upgrade()` 应答 `??U`。"
 
-#: src/reference/builtin-generic-types.md:142
+#: src/reference/builtin-generic-types.md:144
 msgid "The referent's death nulls every weak box before any user code runs; `upgrade()` answers `nil` deterministically from then on."
 msgstr "被引用对象的死亡会在任何用户代码运行之前把每个弱盒置为 nil；从那一刻起 `upgrade()` 确定性地应答 `nil`。"
 
-#: src/reference/builtin-generic-types.md:144
+#: src/reference/builtin-generic-types.md:146
 msgid "A weak edge closes no cycle: strong cycles still leak — see [Rc, dispose, and identity](rc-dispose-identity.md)."
 msgstr "弱边不闭合任何循环：强循环仍会泄漏 —— 参见[Rc、dispose 与同一性](rc-dispose-identity.md)。"
 
-#: src/reference/builtin-generic-types.md:147
+#: src/reference/builtin-generic-types.md:149
 msgid "Keyed collections"
 msgstr "键控集合"
 
-#: src/reference/builtin-generic-types.md:149
+#: src/reference/builtin-generic-types.md:151
 msgid "`HashMap<K, V>` and `HashSet<T>` (package `nmapset`) wrap a native key table. Admission is the compile-time **union bound** `K requires i8 | i16 | i32 | i64 | u8 | u16 | u32 | u64 | bool | str | bytes` — a key type outside the set fails at the instantiation (escape hatch: encode it canonically to `bytes`). Float keys are absent by design: floats have no stable equality contract. The API is `new`/`with_capacity`/`put`/`get`/`has`/`remove`/`len`; `get` answers `?V` — `nil` is absent, and a hit returns the **stored cell**, not a copy (the aliasing law)."
 msgstr "`HashMap<K, V>` 与 `HashSet<T>`（包 `nmapset`）包装了一个原生键表。准入条件是编译期**联合约束** `K requires i8 | i16 | i32 | i64 | u8 | u16 | u32 | u64 | bool | str | bytes` —— 集合之外的键类型在实例化时失败（逃生口：把它规范地编码成 `bytes`）。浮点键被有意排除：浮点数没有稳定的相等契约。API 是 `new`/`with_capacity`/`put`/`get`/`has`/`remove`/`len`；`get` 应答 `?V` —— `nil` 表示不存在，命中时返回**存储的单元**而非副本（别名法则）。"
 
-#: src/reference/builtin-generic-types.md:159
+#: src/reference/builtin-generic-types.md:161
 msgid "**Iteration.** Both classes mark the engine's `[iterable]` contract: `for (let k of m)` walks a map's **keys** and `for (let x of s)` a set's **elements** — the value rides the law it always has, `m.get(k)` answers the stored cell. The walk is the **snapshot** taken when the loop starts (puts/removes inside the body never touch it), in **birth order** — insertion order of live entries; a remove-then-reinsert moves the key to the end. A yielded key is a **fresh cell** of equal content, never the map's own (there is no stored key cell to hand out) — `get` stays the way to a stored cell. The loop body is the emit closure: scalars copy in, so accumulators are shared record cells (see [Control flow](control-flow.md))."
 msgstr "**迭代。** 两个类都标记了引擎的 `[iterable]` 契约：`for (let k of m)` 遍历映射的**键**，`for (let x of s)` 遍历集合的**元素**——而值依旧走它一贯的法则：`m.get(k)` 应答存储的单元。遍历走的是循环开始时拍下的**快照**（循环体内的 put/remove 永远影响不到它），顺序是**出生顺序**——存活条目的插入顺序；删除后重新插入会把该键挪到最后。被产出的键是一个内容相同的**新单元**，绝不是映射自己的那份（本就不存在可交出的存储键单元）——要拿存储的单元，仍然走 `get`。循环体就是 emit 闭包：标量按值拷入，因此累加器要用共享的记录单元（见[控制流](control-flow.md)）。"
 
-#: src/reference/builtin-generic-types.md:171
+#: src/reference/builtin-generic-types.md:173
 msgid ""
 "```rut\n"
 "use nmapset::{ HashMap };\n"
@@ -9433,30 +9437,30 @@ msgid ""
 "    // accumulator is a shared record cell\n"
 "    let acc: ?Sum = Sum { };\n"
 "    for (let name of ages) {\n"
-"        acc.total += ages.get(name);\n"
+"        acc!.total += ages.get(name)!;   // the assert peels each nullable use\n"
 "    }\n"
-"    log.info(f\"total={acc.total} count={ages.len()}\");\n"
+"    log.info(f\"total={acc!.total} count={ages.len()}\");\n"
 "}\n"
 "```"
 msgstr ""
 
-#: src/reference/builtin-generic-types.md:196
+#: src/reference/builtin-generic-types.md:198
 msgid "Absence and errors"
 msgstr "缺失与错误"
 
-#: src/reference/builtin-generic-types.md:198
+#: src/reference/builtin-generic-types.md:200
 msgid "**Absence** is `nil` on a nullable: a lookup returns `?V`, and `nil` means \"not found\"."
 msgstr "**缺失**是可空类型上的 `nil`：查找返回 `?V`，`nil` 表示“未找到”。"
 
-#: src/reference/builtin-generic-types.md:200
+#: src/reference/builtin-generic-types.md:202
 msgid "**Errors** are the answer channel: `(?T, err)` — see [Primitive types](primitive-types.md)."
 msgstr "**错误**走应答通道：`(?T, err)` —— 参见[基本类型](primitive-types.md)。"
 
-#: src/reference/builtin-generic-types.md:202
+#: src/reference/builtin-generic-types.md:204
 msgid "**Type-erased recovery** is `opaque::downcast<T>(o) -> ?T` — the checked lane, `nil` on a miss; `unopaque<T>(o) -> T` is the inverse, the bad-cast lane — see [opaque — erasure and downcast](opaque.md)."
 msgstr "- **类型擦除的恢复**是 `opaque::downcast<T>(o) -> ?T` —— 受检通道,未命中为 `nil`;`unopaque<T>(o) -> T` 是擦除的逆操作,错误转换通道 —— 见 [opaque —— 擦除与向下转型](opaque.md)。"
 
-#: src/reference/builtin-generic-types.md:206
+#: src/reference/builtin-generic-types.md:208
 msgid "A nullable/enum value is not compared structurally with `==` — test it with `when`, a `nil`/`!= nil` guard, or the payload."
 msgstr "可空值/枚举值不用 `==` 做结构化比较——用 `when`、`nil`/`!= nil` 守卫或其载荷来检验。"
 
@@ -10260,7 +10264,7 @@ msgid ""
 "    let log = Logger(\"t\");\n"
 "    let p: ?Point = Point { x: 7, y: 0 };\n"
 "    when (p != nil) {\n"
-"        true -> { log.info(f\"{p.x}\"); },\n"
+"        true -> { log.info(f\"{p!.x}\"); },\n"
 "        else -> { /* absent */ },\n"
 "    }\n"
 "}\n"
@@ -10945,7 +10949,7 @@ msgid ""
 "    let tile = Tile { v: 7 };\n"
 "    let w = Weak::new(tile);        // does NOT keep the cell alive\n"
 "    let got: ?Tile = w.upgrade();  // the live referent, or nil once dead\n"
-"    log.info(f\"{got.v}\");\n"
+"    log.info(f\"{got!.v}\");\n"
 "}\n"
 "```"
 msgstr ""
@@ -10963,22 +10967,22 @@ msgid "`a == b` is a builtin operator: no dispatch, no opting in, no element-wis
 msgstr "`a == b` 是内置运算符：没有分派，不能选择加入，没有逐元素的说法。`a != b` 是它的否定。"
 
 #: src/reference/rc-dispose-identity.md:121
-#: src/reference/by-reference-and-nullable.md:102
+#: src/reference/by-reference-and-nullable.md:132
 msgid "Operand type"
 msgstr "操作数类型"
 
 #: src/reference/rc-dispose-identity.md:121
-#: src/reference/by-reference-and-nullable.md:102
+#: src/reference/by-reference-and-nullable.md:132
 msgid "Lowering"
 msgstr "降格方式"
 
 #: src/reference/rc-dispose-identity.md:123
-#: src/reference/by-reference-and-nullable.md:104
+#: src/reference/by-reference-and-nullable.md:134
 msgid "numeric / `bool` primitives"
 msgstr "数字 / `bool` 基本类型"
 
 #: src/reference/rc-dispose-identity.md:123
-#: src/reference/by-reference-and-nullable.md:104
+#: src/reference/by-reference-and-nullable.md:134
 msgid "value"
 msgstr "值"
 
@@ -10987,19 +10991,19 @@ msgid "compare, IEEE 754 for floats (`NaN != NaN`, `-0.0 == 0.0`)"
 msgstr "数值比较，浮点遵循 IEEE 754（`NaN != NaN`、`-0.0 == 0.0`）"
 
 #: src/reference/rc-dispose-identity.md:124
-#: src/reference/by-reference-and-nullable.md:105
+#: src/reference/by-reference-and-nullable.md:135
 msgid "content (codepoints)"
 msgstr "内容（码点）"
 
 #: src/reference/rc-dispose-identity.md:124
 #: src/reference/rc-dispose-identity.md:125
-#: src/reference/by-reference-and-nullable.md:105
-#: src/reference/by-reference-and-nullable.md:106
+#: src/reference/by-reference-and-nullable.md:135
+#: src/reference/by-reference-and-nullable.md:136
 msgid "content compare"
 msgstr "内容比较"
 
 #: src/reference/rc-dispose-identity.md:125
-#: src/reference/by-reference-and-nullable.md:106
+#: src/reference/by-reference-and-nullable.md:136
 msgid "content (octets)"
 msgstr "内容（字节）"
 
@@ -11008,12 +11012,12 @@ msgid "everything else — records, arrays, `Vec`, enums, closures, interface ob
 msgstr ""
 
 #: src/reference/rc-dispose-identity.md:126
-#: src/reference/by-reference-and-nullable.md:107
+#: src/reference/by-reference-and-nullable.md:137
 msgid "**cell identity**"
 msgstr "**单元同一性**"
 
 #: src/reference/rc-dispose-identity.md:126
-#: src/reference/by-reference-and-nullable.md:107
+#: src/reference/by-reference-and-nullable.md:137
 msgid "the raw slot compare"
 msgstr "原始槽位比较"
 
@@ -11026,8 +11030,8 @@ msgid "Enum members are immortal singletons, so `Flavor::Sour == Flavor::Sour` i
 msgstr "枚举成员是不朽的单例，所以 `Flavor::Sour == Flavor::Sour` 是 `true` —— 这是同一性悄悄表现得像值的唯一场合。"
 
 #: src/reference/rc-dispose-identity.md:134
-msgid "`?T == ?T` is slot identity: two `nil`s are equal, a null and a box are not; `p == nil` derefs the nullable side and compares against the null slot."
-msgstr "`?T == ?T` 是槽位同一性：两个 `nil` 相等，空槽与盒不相等；`p == nil` 会对可空一侧解引用并与空槽比较。"
+msgid "`?T == ?T` is slot identity: two `nil`s are equal, a null and a box are not; `p == nil` compares against the null slot — the payload reads only through the assert (`p!`)."
+msgstr "`?T == ?T` 是槽位同一性：两个 `nil` 相等，空槽与盒不相等；`p == nil` 与空槽比较——载荷只能透过断言（`p!`）读取。"
 
 #: src/reference/rc-dispose-identity.md:137
 msgid "An **identity-compare lint** flags `==` between two obviously fresh composites (`Vec::from([..]) == Vec::from([..])`): \"always false — compare fields\". Asserting distinctness is legitimate and suppressible."
@@ -11321,7 +11325,7 @@ msgid ""
 "    shapes.push(Circle { r: 1.0 });\n"
 "    shapes.push(Square { side: 3.0 });\n"
 "    let total: f64 = 0.0;\n"
-"    for (let sh of shapes) { total += sh.area(); }\n"
+"    for (let sh of shapes) { total += sh!.area(); }\n"
 "    log.info(f\"total={total}\");\n"
 "}\n"
 "```"
@@ -11720,7 +11724,7 @@ msgid ""
 "    let box1 = opaque(Point { x: 1, y: 2 });   // erasure = call of the type name\n"
 "    let p = opaque::downcast<Point>(box1);      // ?Point — the nullable\n"
 "    when (p != nil) {\n"
-"        true -> { log.info(f\"point {p.x} {p.y}\"); },\n"
+"        true -> { log.info(f\"point {p!.x} {p!.y}\"); },\n"
 "        else  -> { log.info(\"point: nil\"); },\n"
 "    }\n"
 "    let wrong = opaque::downcast<i32>(opaque(Flavor::Sour));  // nil, no trap\n"
@@ -11743,7 +11747,7 @@ msgid ""
 "    let n = 5;\n"
 "    let b = opaque(n);    // a prim payload COPIES the bits\n"
 "    n = 9;                // ...so the source moving stays out\n"
-"    log.info(f\"{opaque::downcast<i32>(b)} vs {n}\");\n"
+"    log.info(f\"{opaque::downcast<i32>(b)!} vs {n}\");\n"
 "}\n"
 "```"
 msgstr ""
@@ -12147,8 +12151,8 @@ msgid "`v.slice(from, to)` on a `Vec<T>` (and on `[T]`) mints a fixed-length win
 msgstr "在 `Vec<T>`（以及 `[T]`）上的 `v.slice(from, to)` 会在后备数组上铸造一个定长窗口，装盒为 **`?Vec<T>`**（`T → ?T` 强制转换 —— 参见[内置泛型类型](builtin-generic-types.md)）。窗口**就是**共享单元："
 
 #: src/reference/string-views.md:100
-msgid "reads: `w[i]`, `w.len()`, `for (x of w)` — auto-deref the nullable and go through the window (element `i` is `parent[off + i]`, bounds are the window's);"
-msgstr "读取：`w[i]`、`w.len()`、`for (x of w)` —— 自动解引用可空并透过窗口进行（元素 `i` 是 `parent[off + i]`，边界是窗口的）；"
+msgid "reads: `w![i]`, `w!.len()`, `for (x of w!)` — the assert peels the nullable, then the window's law applies (element `i` is `parent[off + i]`, bounds are the window's);"
+msgstr "读取：`w![i]`、`w!.len()`、`for (x of w!)` —— 断言剥掉可空，然后窗口的法则照常适用（元素 `i` 是 `parent[off + i]`，边界是窗口的）；"
 
 #: src/reference/string-views.md:103
 msgid "writes: `w[i] = x` (and compound assignment) **hit the parent**;"
@@ -12402,10 +12406,6 @@ msgstr "`?T` 是可为 nil 的单元 —— 一个单槽盒。`nil` 是空字面
 msgid "Grammar — prefix only, binds tightest"
 msgstr "文法 —— 仅为前缀，结合最紧"
 
-#: src/reference/by-reference-and-nullable.md:69
-msgid "the same runtime box, unwrapped transitively"
-msgstr "同一个运行时盒，传递性地逐层解包"
-
 #: src/reference/by-reference-and-nullable.md:71
 msgid "There is no postfix `T?` and no `*T` — each falls to the ordinary error ladder (in type position, \"expected a type name\"); the nullable spells `?T`. In expression position, `*x`/`&x` are the ordinary expression error (\"expected an expression\") — bindings share by reference; pass the value itself (binary `*`/`&` operators are untouched)."
 msgstr "没有后缀 `T?`，也没有 `*T` —— 每个都落入普通错误阶梯（类型位置是\"expected a type name\"）；可空类型拼作 `?T`。在表达式位置，`*x`/`&x` 是普通表达式错误（\"expected an expression\"）——绑定按引用共享；直接传值本身（二元 `*`/`&` 运算符不受影响）。"
@@ -12415,55 +12415,83 @@ msgid "Coercions and uses"
 msgstr "强制转换与用法"
 
 #: src/reference/by-reference-and-nullable.md:80
-msgid "**`T → ?T` boxes; `?T → T` derefs** — both implicit at the expected-type position, transitive through `??T`:"
-msgstr "**`T → ?T` 装盒；`?T → T` 解引用** —— 两者在期望类型位置都是隐式的，经过 `??T` 传递："
-
-#: src/reference/by-reference-and-nullable.md:85
-msgid "`p == nil` / `p != nil` compare against the null slot; guard before use. The trap is the bug-catcher, not the semantics."
-msgstr "`p == nil` / `p != nil` 与空槽比较；使用前先守护。陷阱是抓 bug 的工具，不是语义。"
-
-#: src/reference/by-reference-and-nullable.md:87
-msgid "A `?T` binding IS the cell reference: writes through it hit the shared cell (a `nudge(pt: ?Point)` moves the caller's point)."
-msgstr "`?T` 绑定本身就是单元引用：透过它写入命中共享单元（`nudge(pt: ?Point)` 会移动调用方的点）。"
-
-#: src/reference/by-reference-and-nullable.md:89
-msgid "`nil` typing: a context-free `nil` has type `nil`; in an expected-`?T` position it types as that `?T` — so `let p: ?Node = nil` and a `left: nil` field in a literal just work. Absence reads plainly: a lookup returns `?V`, and `nil` means \"not found\"."
-msgstr "`nil` 的类型：无上下文的 `nil` 类型为 `nil`；在期望 `?T` 的位置它被定为该 `?T` —— 因此 `let p: ?Node = nil` 与字面量中的 `left: nil` 字段直接可用。缺失读起来直白：查找返回 `?V`，`nil` 表示“未找到”。"
-
-#: src/reference/by-reference-and-nullable.md:94
-msgid "When the cell's refcount reaches zero, the engine runs the type's `[disposal]` member — the cell-death hook (see [Rc, dispose, and identity](rc-dispose-identity.md))."
+msgid "**`T → ?T` boxes — implicit, cannot fail. `?T → T` happens ONLY through the postfix assert `e!`** — one `?` layer per `!`, and a `nil` operand traps `NilDeref` at the `!`'s own site. `f! = v` is not an assignable target (an assert is not a place). There is no implicit deref anywhere: `p.x`, `p.m(..)`, `p[i]`, `for (x of p)`, arithmetic on `p`'s payload — every use of a nullable demands the assert first, spelled `p!.x`, `p!.m(..)`, `p![i]`, `for (x of p!)`."
 msgstr ""
 
-#: src/reference/by-reference-and-nullable.md:97
-msgid "Across the host boundary `?T` crosses nil-flattened when its element crosses — an `entry fn -> (?T, err)` is a first-class host answer."
-msgstr "跨越宿主边界时，`?T` 的跨越方式是 nil 展平：元素跨越的同时它随之展平 —— `entry fn -> (?T, err)` 是一等公民的宿主应答。"
-
-#: src/reference/by-reference-and-nullable.md:100
-msgid "`==` — identity for cells, content for text"
-msgstr "`==` —— 单元用同一性，文本用内容"
-
-#: src/reference/by-reference-and-nullable.md:104
-msgid "IEEE 754 for floats (`NaN != NaN`, `-0.0 == 0.0`)"
-msgstr "浮点遵循 IEEE 754（`NaN != NaN`、`-0.0 == 0.0`）"
-
-#: src/reference/by-reference-and-nullable.md:107
-msgid "everything else — records, arrays, enums, closures, interface objects, `opaque`, `?T`"
+#: src/reference/by-reference-and-nullable.md:88
+msgid ""
+"```rut\n"
+"class Foo {}\n"
+"\n"
+"impl Foo {\n"
+"    pub fn mk() -> Self { return Foo {}; }\n"
+"    pub fn x(self) -> i32 { return 42; }\n"
+"}\n"
+"\n"
+"fn maybe(v: i32) -> ?Foo {\n"
+"    if (v > 0) { return Foo::mk(); }\n"
+"    return nil;\n"
+"}\n"
+"\n"
+"entry fn main() -> nil {\n"
+"    let _t: ?Foo = maybe(1);    // T -> ?T boxes — implicit, cannot fail\n"
+"    let t = _t!;                // ?Foo -> Foo — the assert; traps HERE if nil\n"
+"    let v = t.x();              // plain receiver — no deref anywhere in sight\n"
+"    if (v != 42) { panic(\"wrong\"); }\n"
+"}\n"
+"```"
 msgstr ""
 
 #: src/reference/by-reference-and-nullable.md:109
+msgid "`p == nil` / `p != nil` compare against the null slot — the guard; `?T == ?T` is slot identity (see [Rc, dispose, and identity](rc-dispose-identity.md)); a MIXED `?T`/`T` compare is a compile error — spell `p! == t`."
+msgstr "`p == nil` / `p != nil` 与空槽比较——这是守卫；`?T == ?T` 是槽位同一性（参见[Rc、dispose 与同一性](rc-dispose-identity.md)）；可空与不可空的混合比较是编译错误——写成 `p! == t`。"
+
+#: src/reference/by-reference-and-nullable.md:113
+msgid "The guard idiom: `if (f != nil) { let t = f!; t.x(); }` — inside a true guard the assert cannot trap, but the compiler does not prove it (no flow typing). The `!` is the author's mark: `grep '!'` over a program is the complete list of its nil-trap sites."
+msgstr ""
+
+#: src/reference/by-reference-and-nullable.md:117
+msgid "A `?T` binding IS the cell reference: writes through it hit the shared cell (a `nudge(pt: ?Point)` moves the caller's point)."
+msgstr "`?T` 绑定本身就是单元引用：透过它写入命中共享单元（`nudge(pt: ?Point)` 会移动调用方的点）。"
+
+#: src/reference/by-reference-and-nullable.md:119
+msgid "`nil` typing: a context-free `nil` has type `nil`; in an expected-`?T` position it types as that `?T` — so `let p: ?Node = nil` and a `left: nil` field in a literal just work. Absence reads plainly: a lookup returns `?V`, and `nil` means \"not found\"."
+msgstr "`nil` 的类型：无上下文的 `nil` 类型为 `nil`；在期望 `?T` 的位置它被定为该 `?T` —— 因此 `let p: ?Node = nil` 与字面量中的 `left: nil` 字段直接可用。缺失读起来直白：查找返回 `?V`，`nil` 表示“未找到”。"
+
+#: src/reference/by-reference-and-nullable.md:124
+msgid "When the cell's refcount reaches zero, the engine runs the type's `[disposal]` member — the cell-death hook (see [Rc, dispose, and identity](rc-dispose-identity.md))."
+msgstr ""
+
+#: src/reference/by-reference-and-nullable.md:127
+msgid "Across the host boundary `?T` crosses nil-flattened when its element crosses — an `entry fn -> (?T, err)` is a first-class host answer."
+msgstr "跨越宿主边界时，`?T` 的跨越方式是 nil 展平：元素跨越的同时它随之展平 —— `entry fn -> (?T, err)` 是一等公民的宿主应答。"
+
+#: src/reference/by-reference-and-nullable.md:130
+msgid "`==` — identity for cells, content for text"
+msgstr "`==` —— 单元用同一性，文本用内容"
+
+#: src/reference/by-reference-and-nullable.md:134
+msgid "IEEE 754 for floats (`NaN != NaN`, `-0.0 == 0.0`)"
+msgstr "浮点遵循 IEEE 754（`NaN != NaN`、`-0.0 == 0.0`）"
+
+#: src/reference/by-reference-and-nullable.md:137
+msgid "everything else — records, arrays, enums, closures, interface objects, `opaque`, `?T`"
+msgstr ""
+
+#: src/reference/by-reference-and-nullable.md:139
 msgid "`[1, 2] == [1, 2]` is **false** — two cells. Identity is O(1) with no deep walk; compare content where content is the contract (a loop, or a hash/eq interface contract for keys). `?T == ?T` is slot identity: two `nil`s are equal, a null and a box are not. See [Rc, dispose, and identity](rc-dispose-identity.md) for the full law and the lint on obviously-fresh composites."
 msgstr ""
 
-#: src/reference/by-reference-and-nullable.md:116
+#: src/reference/by-reference-and-nullable.md:146
 #: src/reference/typed-bytecode.md:121
 msgid "`bytes::clone()` — the one copy escape hatch"
 msgstr "`bytes::clone()` —— 唯一的复制逃生口"
 
-#: src/reference/by-reference-and-nullable.md:118
+#: src/reference/by-reference-and-nullable.md:148
 msgid "`b.clone() -> bytes` mints a fresh buffer with `b`'s octets — a one-shot deep copy, the **only copy syntax in the language**. `bytes::from(a)` also deep-copies. Every other type shares on binding, and a divergent value of any other type is unreachable — build a new one instead."
 msgstr "`b.clone() -> bytes` 铸造一个带 `b` 字节的新缓冲 —— 一次性深复制，是**这门语言唯一的复制语法**。`bytes::from(a)` 同样深复制。其他每个类型在绑定时都共享，任何其他类型的分歧值都不可达 —— 需要不同值就新建一个。"
 
-#: src/reference/by-reference-and-nullable.md:123
+#: src/reference/by-reference-and-nullable.md:153
 msgid ""
 "```rut\n"
 "use ink::{ Logger };\n"
@@ -12478,31 +12506,31 @@ msgid ""
 "```"
 msgstr ""
 
-#: src/reference/by-reference-and-nullable.md:139
+#: src/reference/by-reference-and-nullable.md:169
 msgid "Containers under sharing"
 msgstr "共享之下的容器"
 
-#: src/reference/by-reference-and-nullable.md:141
-msgid "`Vec<T>` backs on `buf: [?T]` — `[nil; cap]` is the generic zero (`nil` is the slot's zero); `push` takes the `T → ?T`\\-boxed handle; loads yield the `?T` (uses auto-deref). See [Builtin generic types](builtin-generic-types.md)."
-msgstr "`Vec<T>` 以 `buf: [?T]` 为后备 —— `[nil; cap]` 是泛型零值（`nil` 就是槽的零）；`push` 接受 `T → ?T`\\- 装盒后的句柄；加载产出 `?T`（使用自动解引用）。参见[内置泛型类型](builtin-generic-types.md)。"
+#: src/reference/by-reference-and-nullable.md:171
+msgid "`Vec<T>` backs on `buf: [?T]` — `[nil; cap]` is the generic zero (`nil` is the slot's zero); `push` takes the `T → ?T`\\-boxed handle; loads yield the `?T` — uses demand the assert (`v![0]`). See [Builtin generic types](builtin-generic-types.md)."
+msgstr "`Vec<T>` 以 `buf: [?T]` 为后备 —— `[nil; cap]` 是泛型零值（`nil` 就是槽的零）；`push` 接受 `T → ?T`\\- 装盒后的句柄；加载产出 `?T`——使用处要求断言（`v![0]`）。参见[内置泛型类型](builtin-generic-types.md)。"
 
-#: src/reference/by-reference-and-nullable.md:145
+#: src/reference/by-reference-and-nullable.md:175
 msgid "Keyed collections: `get(k) -> ?V` — `nil` = absent, a hit answers the **stored cell** (the aliasing law: two gets of one key name one cell until a replace re-stores)."
 msgstr "键控集合：`get(k) -> ?V` —— `nil` = 不存在，命中应答**存储的单元**（别名法则：对同一个键的两次 get 命名同一个单元，直到某次 replace 重新存储）。"
 
-#: src/reference/by-reference-and-nullable.md:148
+#: src/reference/by-reference-and-nullable.md:178
 msgid "Array windows (`v.slice(a, b) -> ?Vec<T>`) are the shared cell: writes through the window hit the parent (see [String slicing and views](string-views.md))."
 msgstr "数组窗口（`v.slice(a, b) -> ?Vec<T>`）就是共享单元：透过窗口写入命中父序列（参见[字符串切片与视图](string-views.md)）。"
 
-#: src/reference/by-reference-and-nullable.md:151
+#: src/reference/by-reference-and-nullable.md:181
 msgid "Erasure rides the same laws: `opaque(v)` aliases the payload's cell, and `opaque::downcast<T>(o)`'s match is the box's own inner cell (see [opaque — erasure and downcast](opaque.md))."
 msgstr "擦除遵循同样的法则：`opaque(v)` 别名载荷的单元，`opaque::downcast<T>(o)` 的匹配就是盒自己的内层单元（参见[opaque —— 擦除与向下转型](opaque.md)）。"
 
-#: src/reference/by-reference-and-nullable.md:155
+#: src/reference/by-reference-and-nullable.md:185
 msgid "The answer channel"
 msgstr "应答通道"
 
-#: src/reference/by-reference-and-nullable.md:157
+#: src/reference/by-reference-and-nullable.md:187
 msgid "**`(?T, err)` — concretely `(value, ok)` / `(T, str)` — is THE answer channel.** The convention is law: empty err + a value = success; empty err + `nil` = \"not found\"; non-empty err = \"failed\". The err channel disambiguates a legitimately-absent value from a failure. The exactly-one-non-nil invariant is the caller's convention — the engine types the components and decodes them; it does not police the combination. A return-position destructure (`let (v, ok) = f();`) is optimized so the pair mints no cell where it is used as a pair."
 msgstr "**`(?T, err)` —— 具体为 `(value, ok)` / `(T, str)` —— 唯一的应答通道。**这一约定就是法则：空 err + 一个值 = 成功；空 err + `nil` = “未找到”；非空 err = “失败”。err 通道把合理缺失的值与失败区分开。恰好一个非 nil 的不变量是调用方的约定 —— 引擎给组件定类型并解码它们；它不监督组合。返回位置的解构（`let (v, ok) = f();`）经过优化，当二元组仅作为二元组使用时不铸造单元。"
 
@@ -12835,7 +12863,7 @@ msgid ""
 "    let w = Weak::new(n);        // Weak<Node>; T infers from n\n"
 "    let b = w.upgrade();        // ?Node — a live handle\n"
 "    if (b != nil) {\n"
-"        use_node(b);\n"
+"        use_node(b!);           // the guard idiom — inside it, no trap\n"
 "    }\n"
 "}\n"
 "```"
@@ -16117,7 +16145,7 @@ msgstr "这个划分按名字进行：导入了一个被把守名字的单元依
 msgid "**`opaque` wraps native state; there is no host class.** rut wraps the handle in a class of its own — the wrapper-class pattern ([native containers API surface](native-containers.md)). Destructors still run deterministically: when a box's rc hits 0, the payload's finalize hook runs, then Rust `Drop` ([the Rc heap](rc-heap.md))."
 msgstr "**`opaque` 包装原生状态；没有宿主类。**rut 把句柄包装在自己的类里——包装类模式（[原生容器 API 表面](native-containers.md)）。析构器依然确定性地运行：当一个盒的 rc 降到 0，先运行载荷的 finalize 钩子，然后是 Rust `Drop`（[Rc 堆](rc-heap.md)）。"
 
-#: src/reference/host-fns.md:146 src/reference/frontend.md:168
+#: src/reference/host-fns.md:146 src/reference/frontend.md:170
 #: src/reference/cli.md:383
 msgid "Declaration mode"
 msgstr "声明模式"
@@ -17995,7 +18023,7 @@ msgstr "四条不变式对任何输入都成立，包括敌意输入："
 msgid "invariant"
 msgstr "不变式"
 
-#: src/reference/frontend.md:19 src/reference/frontend.md:132
+#: src/reference/frontend.md:19 src/reference/frontend.md:134
 msgid "mechanism"
 msgstr "机制"
 
@@ -18264,146 +18292,146 @@ msgid "14"
 msgstr "14"
 
 #: src/reference/frontend.md:120
-msgid "postfix: `.name`, `.name<..>(..)`, `(..)`, `[..]`"
-msgstr "后缀：`.name`、`.name<..>(..)`、`(..)`、`[..]`"
+msgid "postfix: `.name`, `.name<..>(..)`, `(..)`, `[..]`, `!` (the nil assert — tightest, chains freely: `f!.x()`, `f![i] = v`, one `?` layer per `!`)"
+msgstr ""
 
 #: src/reference/frontend.md:122
-msgid "Postfixes chain in one loop, so `p.value.x` and `arr[i].push(x)` compose without special cases. `is` (type test) is a keyword; `as` is the only cast."
-msgstr "后缀在一个循环里链式处理，因此 `p.value.x` 与 `arr[i].push(x)` 无需特例即可组合。`is`（类型测试）是关键字；`as` 是唯一的转换。"
+msgid "Postfixes chain in one loop, so `p.value.x` and `arr[i].push(x)` compose without special cases. The assert `!` rides the same loop — `f!.x()`, `f![i] = v`, `f\"{f!}\"`; one `!` peels one `?` layer. `is` (type test) is a keyword; `as` is the only cast."
+msgstr "后缀在一个循环里链式处理，因此 `p.value.x` 与 `arr[i].push(x)` 无需特例即可组合。断言 `!` 走同一个循环——`f!.x()`、`f![i] = v`、`f\"{f!}\"`；一个 `!` 剥掉一层 `?`。`is`（类型测试）是关键字；`as` 是唯一的转换。"
 
-#: src/reference/frontend.md:125
+#: src/reference/frontend.md:127
 msgid "Lookahead"
 msgstr "前瞻"
 
-#: src/reference/frontend.md:127
+#: src/reference/frontend.md:129
 msgid "rut's grammar makes shallow peeking enough: statements are keyword-led, `{` never starts an expression, imports are flat, and paths are `::`\\-separated (one `Colon2` token between segments, looped in the atom stage — no lookahead)."
 msgstr "rut 的文法让浅层窥探就足够：语句以关键字开头，`{` 绝不开启一个表达式，导入是扁平的，路径用 `::` 相连（段间一个 `Colon2` 记号，在原子阶段循环读取 —— 无需向前窥探）。"
 
-#: src/reference/frontend.md:132
+#: src/reference/frontend.md:134
 msgid "decision"
 msgstr "决策"
 
-#: src/reference/frontend.md:134
+#: src/reference/frontend.md:136
 msgid "item dispatch"
 msgstr "条目分派"
 
-#: src/reference/frontend.md:134
+#: src/reference/frontend.md:136
 msgid "peek 1 (`use` `let` `enum` `struct` `class` `interface` `impl` `fn`)"
 msgstr ""
 
-#: src/reference/frontend.md:135
+#: src/reference/frontend.md:137
 msgid "statement vs expression-statement"
 msgstr "语句 vs 表达式语句"
 
-#: src/reference/frontend.md:135
+#: src/reference/frontend.md:137
 msgid "peek 1 (leading keyword)"
 msgstr "窥探 1（起始关键字）"
 
-#: src/reference/frontend.md:136
+#: src/reference/frontend.md:138
 msgid "`for`\\-of vs C-style `for`"
 msgstr "`for`\\-of 与 C 风格 `for`"
 
-#: src/reference/frontend.md:136
+#: src/reference/frontend.md:138
 msgid "peek 4: `for ( let Ident <of or =>`"
 msgstr "窥探 4：`for ( let Ident <of or =>`"
 
-#: src/reference/frontend.md:137
+#: src/reference/frontend.md:139
 msgid "instance vs class method"
 msgstr "实例方法 vs 类方法"
 
-#: src/reference/frontend.md:137
+#: src/reference/frontend.md:139
 msgid "peek 4: `fn Ident ( <self? …>`"
 msgstr "窥探 4：`fn Ident ( <self? …>`"
 
-#: src/reference/frontend.md:138
+#: src/reference/frontend.md:140
 msgid "struct literal vs path expression"
 msgstr "结构体字面量 vs 路径表达式"
 
-#: src/reference/frontend.md:138
+#: src/reference/frontend.md:140
 msgid "peek 2: `Ident {` ⇒ literal (classes have no instance literal)"
 msgstr "窥探 2：`Ident {` ⇒ 字面量（类没有实例字面量）"
 
-#: src/reference/frontend.md:139
+#: src/reference/frontend.md:141
 msgid "`when`\\-arm body form"
 msgstr "`when`\\- 分支体形式"
 
-#: src/reference/frontend.md:139
+#: src/reference/frontend.md:141
 msgid "peek 1 after `->` (`{` ⇒ block arm, else expression arm)"
 msgstr "在 `->` 之后窥探 1（`{` ⇒ 块分支，否则表达式分支）"
 
-#: src/reference/frontend.md:140
+#: src/reference/frontend.md:142
 msgid "`if` atom vs statement"
 msgstr "`if` 原子 vs 语句"
 
-#: src/reference/frontend.md:140
+#: src/reference/frontend.md:142
 msgid "peek 2: `if (` in expression position ⇒ the if ATOM (statement-leading `if` is claimed by the statement grammar first)"
 msgstr "窥探 2：表达式位置中的 `if (` ⇒ `if` 原子（语句开头的 `if` 先由语句文法领取）"
 
-#: src/reference/frontend.md:141
+#: src/reference/frontend.md:143
 msgid "postfix loop step"
 msgstr "后缀循环步"
 
-#: src/reference/frontend.md:141
-msgid "peek 1 (`.` `(` `[`)"
-msgstr "窥探 1（`.` `(` `[`）"
+#: src/reference/frontend.md:143
+msgid "peek 1 (`.` `(` `[` `!`)"
+msgstr "窥探 1（`.` `(` `[` `!`）"
 
-#: src/reference/frontend.md:142
+#: src/reference/frontend.md:144
 msgid "assignment target"
 msgstr "赋值目标"
 
-#: src/reference/frontend.md:142
+#: src/reference/frontend.md:144
 msgid "no lookahead — parse, then validate"
 msgstr "无前瞻——先解析，再校验"
 
-#: src/reference/frontend.md:144
+#: src/reference/frontend.md:146
 msgid "Two decisions need more than 4 tokens and use **scans** — read-only, commit-once, never a guess:"
 msgstr "两个决策需要 4 个以上的记号，它们使用**扫描**——只读、一次性提交、绝不是猜测："
 
-#: src/reference/frontend.md:147
+#: src/reference/frontend.md:149
 msgid "**Lambda vs parenthesized expression.** Scan to the matching `)`; it is a lambda iff `=>` follows the matching `)` (an optional `-> Type` may sit between). Otherwise the parens group — `(a)` — or a comma makes the expression a tuple — `(a, b)`."
 msgstr "**lambda 与括号表达式之辨。**扫描到配对的 `)`；当且仅当配对的 `)` 之后跟着 `=>`（中间可以有一个可选的 `-> Type`），它才是 lambda。否则括号就是分组——`(a)`——而一个逗号会把表达式变成元组——`(a, b)`。"
 
-#: src/reference/frontend.md:151
+#: src/reference/frontend.md:153
 msgid "**Generic call vs `<` comparison** (`Vec<f32>(n)` vs `a < b > (c)`). Scan from the `<` tracking angle depth; a `>>`/`<<` consumed where a closer/opener is expected counts as two, so `Vec<Vec<i32>>` needs no re-lexing. Generic arguments commit iff depth returns to 0 on a `>` and the very next token is `(`. `a < b > (c)` is not expressible unparenthesized — write `(a < b) > (c)`."
 msgstr "**泛型调用与 `<` 比较之辨**（`Vec<f32>(n)` 与 `a < b > (c)`）。从 `<` 开始扫描并追踪尖括号深度；在期待闭合/开启符之处消费的 `>>`/`<<` 记作两个，因此 `Vec<Vec<i32>>` 无需重新做词法分析。当且仅当深度在某个 `>` 上回到 0 且紧随其后的记号是 `(`，泛型实参才提交。`a < b > (c)` 不加括号无法表达——请写 `(a < b) > (c)`。"
 
-#: src/reference/frontend.md:158
+#: src/reference/frontend.md:160
 msgid "Scans never mutate parser state. Peeking at arbitrary distance is allowed; checkpoint/rollback is not — the API does not exist, so the monotone-cursor invariant (debug-asserted) cannot be violated, even during error recovery."
 msgstr "扫描从不改变语法分析器状态。允许任意距离的窥探；检查点/回滚则不允许——这个 API 根本不存在，因此单调游标不变式（调试断言）不可能被违反，错误恢复期间也不例外。"
 
-#: src/reference/frontend.md:162
+#: src/reference/frontend.md:164
 msgid "Recovery"
 msgstr "恢复"
 
-#: src/reference/frontend.md:164
+#: src/reference/frontend.md:166
 msgid "Within a file the parser resynchronizes at `;`, `}`, or the token after a balanced block and keeps parsing — a file yields many diagnostics, not one. Resync only ever skips forward."
 msgstr "在单个文件内，语法分析器在 `;`、`}` 或一个配平块之后的记号处重新同步并继续解析——一个文件产出许多条诊断，而不是一条。重新同步只会向前跳。"
 
-#: src/reference/frontend.md:170
+#: src/reference/frontend.md:172
 msgid "The mode is chosen by file extension: `Mode::Impl` for `.rut`, `Mode::Decl` for `.d.rut`. Both share one grammar; declaration mode adds the surface declarations — `host fn`, `host struct`, and the builtin rows (`prelude builtin` / `pub builtin`, see [Host fns and declaration files](host-fns.md)) — and **forbids bodies**: any block, impl blocks included, is rejected with _implementation in a declaration file_. Implementation mode rejects `host`/`builtin` with the mirror message. The full surface and how bodies bind at load time live in [Host fns and declaration files](host-fns.md)."
 msgstr "模式由文件扩展名选择：`.rut` 用 `Mode::Impl`，`.d.rut` 用 `Mode::Decl`。两者共享同一语法；声明模式增加了表面声明——`host fn`、`host struct`，以及内建行（`prelude builtin` / `pub builtin`，参见[宿主函数与声明文件](host-fns.md)）——并**禁止函数体**：任何块（包括 impl 块）都会以_实现出现在声明文件中_被拒绝。实现模式以镜像消息拒绝 `host`/`builtin`。完整表面及函数体在加载时如何绑定见[宿主函数与声明文件](host-fns.md)。"
 
-#: src/reference/frontend.md:181
+#: src/reference/frontend.md:183
 msgid "Declarations-only module scope is enforced by the parser itself: a statement at module top level is a syntax error, not a semantic one. The grammar itself is specified in [Lexical structure](lexical-structure.md) and [Modules and visibility](modules-and-visibility.md)."
 msgstr "只含声明的模块作用域由语法分析器自己强制：模块顶层的语句是语法错误，不是语义错误。文法本身在[词法结构](lexical-structure.md)与[模块与可见性](modules-and-visibility.md)中规定。"
 
-#: src/reference/frontend.md:186
+#: src/reference/frontend.md:188
 msgid "The AST"
 msgstr "AST"
 
-#: src/reference/frontend.md:188
+#: src/reference/frontend.md:190
 msgid "Nodes are plain records in one arena; children are `NodeId`s into it. Spans sit on every node; there are no `String` keys — names are `IdentId`s into an interner that lives in `rut-core`, shared by the AST, the type table, and the module binary's name table. The interner pre-interns a fixed well-known table (`rut_core::sym`: `self`, `Self`, `nil`, `main`, `iterate`, the builtin members, the primitives, …), so ids below `well_known_len` mean the same name in every interner instance and special names compare as `IdentId` equality, never by text."
 msgstr "节点是同一个 arena 里的普通记录；子节点是指向它的 `NodeId`。每个节点都带 span；没有 `String` 键——名字是指入一个驻留器的 `IdentId`，该驻留器住在 `rut-core` 里，被 AST、类型表和模块二进制的名字表共享。驻留器预驻留一张固定的知名表（`rut_core::sym`：`self`、`Self`、`nil`、`main`、`iterate`、各内建成员、各基本类型……），因此低于 `well_known_len` 的 id 在每个驻留器实例中都意味着同一个名字，特殊名字以 `IdentId` 相等比较，绝不按文本比较。"
 
-#: src/reference/frontend.md:202
+#: src/reference/frontend.md:204
 msgid "// items\n"
 msgstr "// items\n"
 
-#: src/reference/frontend.md:206
+#: src/reference/frontend.md:208
 msgid "// fields only\n"
 msgstr "// fields only\n"
 
-#: src/reference/frontend.md:207
+#: src/reference/frontend.md:209
 msgid ""
 "// fields only —\n"
 "                                                           // methods live in impls\n"
@@ -18411,17 +18439,17 @@ msgstr ""
 "// fields only —\n"
 "                                                           // methods live in impls\n"
 
-#: src/reference/frontend.md:209
+#: src/reference/frontend.md:211
 msgid "// signatures only\n"
 msgstr ""
 
-#: src/reference/frontend.md:210
+#: src/reference/frontend.md:212
 msgid ""
 "// inherent only —\n"
 "              // no trait_ref: `impl I for T` does not parse\n"
 msgstr ""
 
-#: src/reference/frontend.md:213
+#: src/reference/frontend.md:215
 msgid ""
 "// .d.rut only\n"
 "    // statements\n"
@@ -18429,79 +18457,79 @@ msgstr ""
 "// .d.rut only\n"
 "    // statements\n"
 
-#: src/reference/frontend.md:216
+#: src/reference/frontend.md:218
 msgid "// expressions\n"
 msgstr "// expressions\n"
 
-#: src/reference/frontend.md:222
+#: src/reference/frontend.md:224
 msgid "// the block value; tail: Option\n"
 msgstr ""
 
-#: src/reference/frontend.md:224
+#: src/reference/frontend.md:226
 msgid "// the if ATOM (statement-if above)\n"
 msgstr ""
 
-#: src/reference/frontend.md:225
+#: src/reference/frontend.md:227
 msgid "// holes are NodeIds\n"
 msgstr "// holes are NodeIds\n"
 
-#: src/reference/frontend.md:227
+#: src/reference/frontend.md:229
 msgid "// `expr as ty` — the one cast\n"
 msgstr "// `expr as ty` — the one cast\n"
 
-#: src/reference/frontend.md:231
+#: src/reference/frontend.md:233
 msgid "Stable `NodeId`s are the rest of the pipeline's currency: the checker keys side tables by node id, diagnostics reach spans through them, and the LSP, formatter, and dumper hold copyable references with no reparenting."
 msgstr "稳定的 `NodeId` 是流水线其余部分的通货：检查器以节点 id 为旁表建键，诊断经由它们抵达 span，而 LSP、格式化器和转储器持有可复制的引用，无需重新挂靠父节点。"
 
-#: src/reference/frontend.md:235
+#: src/reference/frontend.md:237
 msgid "What the AST does **not** contain: no `new`, no `switch`/`case`, no `?.` or `??` — the grammar has no such forms (those words are ordinary identifiers, and a stray postfix `?` draws the ordinary error ladder). There are no paren nodes either: the parse's grouping _is_ the tree."
 msgstr "AST **不**包含的东西：没有 `new`，没有 `switch`/`case`，没有`?.` 或 `??`——文法没有这些形式（这些词是普通标识符，游离的后缀 `?` 走普通错误阶梯）。也没有括号节点：解析的分组_就是_树本身。"
 
-#: src/reference/frontend.md:240
+#: src/reference/frontend.md:242
 msgid "Diagnostics"
 msgstr "诊断"
 
-#: src/reference/frontend.md:246
+#: src/reference/frontend.md:248
 msgid "One renderer serves every frontend stage: a primary `error:` line, the rustc-style `--> file:line:col` arrow (1-based line and char column; the label is the module name — a pkg spec, a `spec/path` child, a real path from `rut fmt`), and the caret line under the span, all over byte offsets (`rut_lexer::diag::render_diags`). Rendering sorts by (file, span start) and groups by file, so multi-file output is stable; a diag with no file of its own spells the fallback `--> line L, column C`. Messages name their fixes: _expected `super` or `pkg` in pub(..)_ for an unknown visibility scope; _classes have no instance literal — construct through a class method (`Circle::new(..)`)_ for a struct literal on a class from a used package."
 msgstr "一个渲染器服务所有前端阶段：主 `error:` 行、rustc 风格的 `--> file:line:col` 箭头（行号与字符列均从 1 起计；标签是模块名——pkg 的 spec、`spec/path` 子模块，或 `rut fmt` 的真实路径）、span 之下的插入符行，全部基于字节偏移（`rut_lexer::diag::render_diags`）。渲染按（文件，span 起点）排序并按文件分组，因此多文件输出是稳定的；自身没有文件的诊断退回到 `--> line L, column C` 形式。消息会指明修法：未知可见性作用域提示 _expected `super` or `pkg` in pub(..)_；对来自被使用包的类写结构体字面量时提示 _classes have no instance literal — construct through a class method (`Circle::new(..)`)_。"
 
-#: src/reference/frontend.md:258
+#: src/reference/frontend.md:260
 msgid "The compile stops before IR if any diagnostic exists — a module with diagnostics never produces bytecode. See [Diagnostics, traces, and symbolication](diagnostics.md) for the runtime half of the story."
 msgstr "只要存在任何诊断，编译就在 IR 之前停止——带诊断的模块绝不产出字节码。运行时的那一半故事见[诊断、追踪与符号化](diagnostics.md)。"
 
-#: src/reference/frontend.md:263
+#: src/reference/frontend.md:265
 msgid "The formatter"
 msgstr "格式化器"
 
-#: src/reference/frontend.md:265
+#: src/reference/frontend.md:267
 msgid "`rut fmt` (crate `rut-fmt`, CLI subcommand) reprints a parsed-clean module from the AST:"
 msgstr "`rut fmt`（crate `rut-fmt`，CLI 子命令）从 AST 重排一个解析干净的模块："
 
-#: src/reference/frontend.md:268
+#: src/reference/frontend.md:270
 msgid "**Comment gap-scan** — comments live in the byte gaps between token spans, so the formatter recovers every `//` and block comment with zero lexer/parser changes: trailing runs go on their element's line, own-line runs at the enclosing indent."
 msgstr "**注释间隙扫描**——注释住在记号 span 之间的字节间隙里，因此格式化器在不改动词法/语法分析器的前提下找回每一条 `//` 与块注释：尾随的注释归到所属元素那一行，独占一行的注释按外围缩进放置。"
 
-#: src/reference/frontend.md:272
+#: src/reference/frontend.md:274
 msgid "**Literals print verbatim** — a paren is kept exactly where the bare spelling would not re-parse to the same node; literals (numbers, strings, raw strings, f-string template text) reprint VERBATIM from their source spans: `0xF8FAFCFFu64`, `1_000_000`, `2.50`, `\"\\u{41}\"`, and raw hash levels survive exactly. Only f-string hole expressions are re-formatted — the formatter re-derives nothing else."
 msgstr "**字面量逐字节原样打印**——括号恰好保留在裸拼写无法重新解析出同一节点的地方；字面量（数字、字符串、原始字符串、f-string 模板文本）从其源码 span 逐字节原样重排：`0xF8FAFCFFu64`、`1_000_000`、`2.50`、`\"\\u{41}\"` 与原始字符串的哈希级别都原样保留。只有 f-string 的插值洞表达式会被重新格式化——除此之外格式化器不重新推导任何东西。"
 
-#: src/reference/frontend.md:278
+#: src/reference/frontend.md:280
 msgid "**Tested invariants** — every corpus file formats, reparses clean, and is idempotent (`fmt(fmt(x)) == fmt(x)`); probe programs run through the full pipeline before and after formatting and log identical output."
 msgstr "**经受测试的不变式**——每个语料文件都能格式化、重新解析干净，并且幂等（`fmt(fmt(x)) == fmt(x)`）；探针程序在格式化前后各跑一遍完整流水线，并记录到相同的输出。"
 
-#: src/reference/frontend.md:281
+#: src/reference/frontend.md:283
 msgid "**Refusal law** — a source with diagnostics is refused: rendered diagnostics, exit 1, nothing rewritten. The formatter never guesses."
 msgstr "**拒绝法则**——带诊断的源码会被拒绝：渲染诊断、以 1 退出、不重写任何东西。格式化器从不猜测。"
 
-#: src/reference/frontend.md:283
+#: src/reference/frontend.md:285
 msgid "**Style is the package's** — the nearest ancestor `rut.jsonc`'s `style` block sets `indent_width` (1–8, default 4) and `max_width` (≥ 20, default 100); no manifest means defaults. See [Project structure and rut.jsonc](project-structure.md)."
 msgstr ""
 
-#: src/reference/frontend.md:288
+#: src/reference/frontend.md:290
 msgid "Testing"
 msgstr "测试"
 
-#: src/reference/frontend.md:290
+#: src/reference/frontend.md:292
 msgid "The corpus is the conformance suite: every `examples/**/*.rut`, `examples/**/*.d.rut`, and playground classic must parse with zero diagnostics. Parser invariant tests include 100k-deep `((((`, `[[[[`, `{{{{`, unary chains, and nested generic arguments — each yields exactly one _nesting too deep_ diagnostic — and fuzz targets assert no host stack overflow and no cursor rollback. Formatter tests pin the round-trip and idempotence laws above."
 msgstr "语料就是一致性套件：每个 `examples/**/*.rut`、`examples/**/*.d.rut` 和 Playground 经典用例都必须以零诊断解析。语法分析器不变式测试包括 10 万层深的 `((((`、`[[[[`、`{{{{`、一元链和嵌套泛型实参——每个恰好产出一条 _嵌套过深_ 诊断——模糊测试目标断言不溢出宿主栈、游标不回滚。格式化器测试钉住上述往返与幂等法则。"
 
@@ -18714,118 +18742,118 @@ msgid "Laws enforced here:"
 msgstr "在这里强制执行的法则："
 
 #: src/reference/compiler.md:71
-msgid "**The `==` law** — primitives and `str` compare by value; every other cell type compares by identity; nullable `?T` operands and tuple operands are a compile error (_pattern-match instead_ — destructure the pair). A lint flags `==` between two obviously fresh composites."
-msgstr "**`==` 法则**——基本类型和 `str` 按值比较；其余每个单元类型按同一性比较；可空的 `?T` 操作数与元组操作数是编译错误（_请改用模式匹配_——解构那个对偶）。lint 会标记两个明显崭新的复合值之间的 `==`。"
+msgid "**The `==` law** — primitives and `str` compare by value; every other cell type compares by identity; `?T == ?T` is slot identity and `p == nil` / `p != nil` compare against the null slot, while a MIXED nullable/plain compare is the demand-`!` error (spell `p! == t`); tuple operands are a compile error (_pattern-match instead_ — destructure the pair). A lint flags `==` between two obviously fresh composites."
+msgstr "**`==` 法则**——基本类型和 `str` 按值比较；其余每个单元类型按同一性比较；`?T == ?T` 是槽位同一性，`p == nil` / `p != nil` 与空槽比较，而可空与不可空的混合比较是要求 `!` 的错误（写成 `p! == t`）；元组操作数是编译错误（_请改用模式匹配_——解构那个对偶）。lint 会标记两个明显崭新的复合值之间的 `==`。"
 
-#: src/reference/compiler.md:75
+#: src/reference/compiler.md:78
 msgid "**`is` folding** — when the receiver's static type already answers the question (a concrete receiver, `d: I is I`), the expression folds to a constant and an always-true/false lint fires."
 msgstr "**`is` 折叠**——当接收者的静态类型已经能回答这个问题时（具体接收者、`d: I is I`），表达式折叠成一个常量，并触发一个恒真/恒假 lint。"
 
-#: src/reference/compiler.md:78
+#: src/reference/compiler.md:81
 msgid "**Union bounds** — a generic parameter's `requires T1 | T2` bound is checked at every site that completes the substitution ([Type aliases and union bounds](type-aliases.md))."
 msgstr "**并集约束**——泛型参数的 `requires T1 | T2` 约束在每个补全替换的位置检查（[类型别名与并集约束](type-aliases.md)）。"
 
-#: src/reference/compiler.md:81
+#: src/reference/compiler.md:84
 msgid "**Interface bounds** — a `T requires I` bound checks the interface's member set once, where `T` is chosen: at a generic call's instantiation and at a satisfying value's crossing. A type without the members is refused there, naming the first missing member ([Interfaces and dispatch](interfaces.md))."
 msgstr ""
 
-#: src/reference/compiler.md:86
+#: src/reference/compiler.md:89
 msgid "**The crossing rule** — an `entry fn`'s published signature may only use types that cross the host boundary: primitives, `str`, `bytes`, `opaque`, `?T` over a crossing type (nil-flattened), and tuples of crossing types. A violation is a compile error, so a bad surface never reaches the embedder at load time ([The host boundary](../core-concepts/host-boundary.md))."
 msgstr "**跨越规则**——`entry fn` 发布的签名只能使用能跨越宿主边界的类型：基本类型、`str`、`bytes`、`opaque`、跨越类型之上的 `?T`（nil 展平），以及跨越类型的元组。违例是编译错误，因此坏表面绝不会在加载时抵达嵌入方（[宿主边界](../core-concepts/host-boundary.md)）。"
 
-#: src/reference/compiler.md:92
+#: src/reference/compiler.md:95
 msgid "There is no orphan rule to enforce — nothing registers. Satisfaction is checked at boundaries only, so the checker's interface work is a per-call-site member-set match, never a program-wide search."
 msgstr ""
 
-#: src/reference/compiler.md:96
+#: src/reference/compiler.md:99
 msgid "Monomorphization"
 msgstr "单态化"
 
-#: src/reference/compiler.md:98
+#: src/reference/compiler.md:101
 msgid "Generic functions never reach a binary. The checker's instantiation queue compiles one concrete copy per substitution; the queue closes because instantiating a body can enqueue more. Instantiation names (`[i32]`, `Vec<f32>`) are synthesized into the shared interner, and `type_id<T>()` folds to a constant from the type table at this point — it never executes at runtime."
 msgstr "泛型函数绝不进入二进制。检查器的实例化队列为每个替换编译一份具体副本；队列会闭合，因为实例化一个函数体可能入队更多。实例化名字（`[i32]`、`Vec<f32>`）被合成进共享驻留器，而 `type_id<T>()` 在此刻就从类型表折叠成常量——它绝不在运行时执行。"
 
-#: src/reference/compiler.md:105
+#: src/reference/compiler.md:108
 msgid "The same law fixes WHERE an instantiation compiles: where the body lives. `Vec<i64>` is one type program-wide — the declaring package owns every instantiation of its generics, and consumers request them: a consumer's spelling lays out the concrete shape and routes the bodies to the declaring package's compile, so a linked library's `make() -> Vec<i64>` and the consumer's own `Vec<i64>` are one row, and the binary ships one copy of each instantiation's code."
 msgstr "同一条法则规定了实例化在哪里编译：在函数体所在之处。`Vec<i64>` 是全程序唯一的类型——声明包拥有其泛型的每一个实例化，消费方则发起请求：消费方的书写铺排出具体形状，并把函数体路由到声明包的编译里，因此被链接库的 `make() -> Vec<i64>` 与消费方自己的 `Vec<i64>` 是同一行，二进制里每个实例化的代码也只有一份。"
 
-#: src/reference/compiler.md:113
+#: src/reference/compiler.md:116
 msgid "There is no splice lane and no `inline` flag left: **every module links**. A class's methods cross on the surface's inherent rows (the ordinary call boundary — the `ink`\\-pattern packages over host rows compile like any other), and a generic export links owner-anchored, the way the section above describes. The swappable std packages (`ink`, `pouch`, `flow`, `nmapset`, `json`, `strbuild`, `futures`, `http`) are ordinary linked packages. See [Project structure and rut.jsonc](project-structure.md)."
 msgstr "拼接车道与 `inline` 开关都不在了：**每个模块都链接**。类的方法经表面的固有行跨越（普通调用边界——架在宿主行上的 `ink`模式包与任何包一样编译），泛型导出按拥有者锚定链接，如上一节所述。可替换的标准包（`ink`、`pouch`、`flow`、`nmapset`、`json`、`strbuild`、`futures`、`http`）都是普通链接包。见[Project structure and rut.jsonc](project-structure.md)。"
 
-#: src/reference/compiler.md:122
+#: src/reference/compiler.md:125
 msgid "The type lattice"
 msgstr "类型格"
 
-#: src/reference/compiler.md:124
+#: src/reference/compiler.md:127
 msgid "In a no-JIT VM, compile-time type knowledge is the only knowledge. The IR tracks a per-value lattice:"
 msgstr "在没有 JIT 的 VM 里，编译期类型知识是唯一的知识。IR 为每个值追踪一个格："
 
-#: src/reference/compiler.md:131
+#: src/reference/compiler.md:134
 msgid "**Exact types** compile to direct calls and known layouts."
 msgstr "**精确类型**编译成直接调用与已知布局。"
 
-#: src/reference/compiler.md:132
+#: src/reference/compiler.md:135
 msgid "**Interface-typed values** (`s: Drawable`) are unsized: the payload lives in a heap cell and the slot stores the cell handle. One indirect itable call per multi-origin use; fields are inaccessible; no inlining without evidence. The cost is per-call, never per-field — and when a call's receiver is statically concrete (a single tracked origin, a monomorphic body), the call devirtualizes at body-compile time and the dispatch overhead is zero."
 msgstr ""
 
-#: src/reference/compiler.md:140
+#: src/reference/compiler.md:143
 msgid "**Erasure sits off the lattice.** The `opaque` primitive is reached only through the type-call `opaque(v)`, and `opaque::downcast<T>(o)` is the refinement: the successful branch re-enters the _exact_ lattice position, so downstream code optimizes as if nothing was erased. Downcast checks are pure dataflow — repeated checks CSE, invariant ones hoist, and a chain over one cell folds to a type-id switch. What the compiler must **not** assume is the type inside a box at a given program point; speculative devirtualization through `opaque` is JIT behavior and does not exist."
 msgstr "**擦除位于格之外。**`opaque` 基本类型只能经由类型调用 `opaque(v)` 抵达，而 `opaque::downcast<T>(o)` 就是那个精化：成功的分支重新进入_精确_的格位置，因此下游代码优化起来就像什么都没被擦除。向下转型检查是纯粹的数据流——重复的检查被 CSE，不变的检查被外提，同一单元上的链折叠成一个类型 id 分支。编译器**绝不**能假设的是给定程序点上盒内的类型；经由 `opaque` 的投机性去虚化是 JIT 行为，并不存在。"
 
-#: src/reference/compiler.md:149
+#: src/reference/compiler.md:152
 msgid "**The slice tier** parallels interface widening: `Array<T, N> | Vec<T> (concrete)  >  Slice<T> view (unsized)`. `N` is part of the type's identity; slices are never boxed or erased."
 msgstr ""
 
-#: src/reference/compiler.md:153
+#: src/reference/compiler.md:156
 msgid "The intended program shape: exact types on the hot path, interface-typed values where polymorphism is real, `opaque` only inside heterogeneous storage. Lints flag `downcast` in loop bodies and erasure crossing non-storage function boundaries."
 msgstr ""
 
-#: src/reference/compiler.md:158
+#: src/reference/compiler.md:161
 msgid "Optimization"
 msgstr "优化"
 
-#: src/reference/compiler.md:160
+#: src/reference/compiler.md:163
 msgid "A fixed pipeline with no flags:"
 msgstr "一条无开关的固定流水线："
 
-#: src/reference/compiler.md:162
+#: src/reference/compiler.md:165
 msgid "**Folding** — constant arithmetic, `type_id<T>()`, `Array<T, N>.len()` → the constant `N` (with const-index bounds checks folded against it), statically-decided `is` probes, dead branches."
 msgstr "**折叠**——常量算术、`type_id<T>()`、`Array<T, N>.len()` → 常量 `N`（常量索引的边界检查对照它折叠）、静态可判的 `is` 探查、死分支。"
 
-#: src/reference/compiler.md:165
+#: src/reference/compiler.md:168
 msgid "**Inlining** — single-callee calls and small bodies (a callee op-count budget). Cross-module inlining after linking is future work; binaries carry no cross-function inlined code."
 msgstr "**内联**——单一被调用者的调用与小函数体（按被调用者的操作数预算）。链接后的跨模块内联是未来工作；二进制不携带跨函数内联代码。"
 
-#: src/reference/compiler.md:168
+#: src/reference/compiler.md:171
 msgid "**CSE / LICM** over pure operations — type-id loads, downcast checks, field loads on immutable records."
 msgstr "对纯操作做 **CSE / LICM**——类型 id 加载、向下转型检查、不可变记录的字段加载。"
 
-#: src/reference/compiler.md:170
+#: src/reference/compiler.md:173
 msgid "**Peephole + SROA** — the rewriters re-intern operand pools on register remap, so pool sharing stays consistent (see [Typed bytecode](typed-bytecode.md)). SROA declines a record whose class carries a `[disposal]` member: the cell's death is observable (it runs runs at refcount zero), so its mint is never deleted."
 msgstr ""
 
-#: src/reference/compiler.md:175
+#: src/reference/compiler.md:178
 msgid "**Pattern lowering** — downcast chains become one type-id load plus a jump table; `when` on enums lowers to `brtable` over the member slot."
 msgstr "**模式下降**——向下转型链变成一次类型 id 加载加一张跳转表；枚举上的 `when` 下降为对成员槽位的 `brtable`。"
 
-#: src/reference/compiler.md:178
+#: src/reference/compiler.md:181
 msgid "The pipeline is honest by construction: there is no tier-2 to fall back on, so the emitted code must be right the first time. Every gate measures against the example programs and the benchmark corpus."
 msgstr "这条流水线从构造上就是诚实的：没有 tier-2 可以退而求其次，因此发出的代码必须第一次就对。每道门禁都对照示例程序与基准语料测量。"
 
-#: src/reference/compiler.md:182 src/reference/typed-bytecode.md:170
+#: src/reference/compiler.md:185 src/reference/typed-bytecode.md:170
 msgid "Async lowering"
 msgstr "异步下降"
 
-#: src/reference/compiler.md:184
+#: src/reference/compiler.md:187
 msgid "`async fn` compiles to a state machine: each `await` is a checkpoint state in the hidden frame, resume dispatch is the existing jump-table op, locals become frame fields, and suspension is a plain return. The op set grows zero rows for this — the driven half is an ordinary itable call through the future's designated yield slot (the closed `Future` class's engine ABI). The full protocol lives in [Async and await](async.md) and [launched futures](launched-futures.md)."
 msgstr ""
 
-#: src/reference/compiler.md:192 src/reference/module-binary.md:133
+#: src/reference/compiler.md:195 src/reference/module-binary.md:133
 msgid "Determinism"
 msgstr "确定性"
 
-#: src/reference/compiler.md:194
+#: src/reference/compiler.md:197
 msgid "Same source + same dependency versions + same compiler version ⇒ byte-identical output. Serialization is ordered and little-endian everywhere, and the graph compiles dependencies in a fixed post-order before flattening. This is what makes compile caches content-addressable, bundles diffable, and trace restoration by recompilation possible ([Diagnostics, traces, and symbolication](diagnostics.md))."
 msgstr "相同源码 + 相同依赖版本 + 相同编译器版本 ⇒ 逐字节相同的输出。序列化处处有序且小端序，图在展平之前按固定后序编译依赖。正因为如此，编译缓存可以按内容寻址、捆绑包可以 diff、追踪可以靠重新编译还原（[诊断、追踪与符号化](diagnostics.md)）。"
 
@@ -22337,3 +22365,18 @@ msgstr "内部词汇"
 #: src/reference/glossary.md:59
 msgid "Engine internals — seeds, reseeding, the graph walk, dev tables — may appear in source comments and trace output. They are not part of the model, and the book avoids them."
 msgstr "引擎内部词汇——seeds、reseed、graph walk、dev 表——可能出现在源码注释与追踪输出里。它们不是模型的一部分，本书回避它们。"
+
+#~ msgid "Lookups answer `?T`: a hit is the value, a miss is `nil`. Deref is automatic at every use — `p.x`, `p[i]`, `for (let x of p)`, arithmetic — and dereferencing a `nil` **traps** `NilDeref`, so guard first:"
+#~ msgstr "查找以 `?T` 作答：命中是值，未命中是 `nil`。解引用在每次使用时自动发生——`p.x`、`p[i]`、`for (let x of p)`、算术——而对 `nil` 解引用会**触发陷阱** `NilDeref`，所以请先设守卫："
+
+#~ msgid "the same runtime box, unwrapped transitively at use sites"
+#~ msgstr "同一个运行时盒，在使用点传递性地逐层解包"
+
+#~ msgid "**`T → ?T` boxes; `?T → T` derefs** — both implicit at the expected-type position, transitive through `??T`:"
+#~ msgstr "**`T → ?T` 装盒；`?T → T` 解引用** —— 两者在期望类型位置都是隐式的，经过 `??T` 传递："
+
+#~ msgid "`p == nil` / `p != nil` compare against the null slot; guard before use. The trap is the bug-catcher, not the semantics."
+#~ msgstr "`p == nil` / `p != nil` 与空槽比较；使用前先守护。陷阱是抓 bug 的工具，不是语义。"
+
+#~ msgid "postfix: `.name`, `.name<..>(..)`, `(..)`, `[..]`"
+#~ msgstr "后缀：`.name`、`.name<..>(..)`、`(..)`、`[..]`"

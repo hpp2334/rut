@@ -136,7 +136,7 @@ entry fn main() {
     let v = View { model: nil, observer: Weak::new(m) };   // observe without owning
     log.info(f"holding {m.name}; the view holds only a weak edge");
     m = Model { name: "next" };   // the old cell's last strong reference dies here
-    log.info(f"upgrade() answers nil: {v.observer.upgrade() == nil}");
+    log.info(f"upgrade() answers nil: {v.observer!.upgrade() == nil}");
 }
 ```
 

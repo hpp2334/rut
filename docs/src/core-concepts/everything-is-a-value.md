@@ -66,13 +66,15 @@ makes aliasing something you can reason about locally.
 Absence is `nil` on a nullable type, spelled as a prefix on the type:
 `?T` is "a `T` or `nil`". `?` applies to the type term that follows, so
 `[?T]` is an array of nullables while `?[T]` is a nullable array, and
-`??T` chains (and unwraps transitively at use).
+`??T` chains (one `?` layer per `!`).
 
-The coercions are one line: **`T → ?T` boxes; `?T → T` derefs.** The
-box is a fresh one-slot cell that *aliases* the value's cell — boxing a
-record shares it, boxing a primitive copies its bits. The deref is
-implicit at every value position: field access, method calls, indexing,
-iteration, arithmetic all read through the box.
+The coercions are asymmetric — **`T → ?T` boxes, implicit, cannot
+fail; `?T → T` happens ONLY through the postfix assert `e!`** — one
+`?` layer per `!`. The box is a fresh one-slot cell that *aliases* the
+value's cell — boxing a record shares it, boxing a primitive copies
+its bits. The peel is never implicit: a nullable reads through the
+assert — `u!.name`, `u!.m(..)`, `u![i]` — and a `nil` operand traps
+`NilDeref` at the `!`'s own site.
 
 ```rut
 use ink::{ Logger };
@@ -87,7 +89,7 @@ fn lookup(id: i64) -> ?User {
 entry fn main() {
     let log = Logger("values");
     let u = lookup(7);                // ?User
-    log.info(f"u.name = {u.name}");   // auto-deref when non-nil
+    log.info(f"u.name = {u!.name}");  // the assert — traps HERE if nil
     let missing = lookup(8);
     log.info(f"miss is nil: {missing == nil}");   // guard where absence is expected
 }
@@ -98,11 +100,14 @@ u.name = ada
 miss is nil: true
 ```
 
-A `nil` reaching a value use traps (`NilDeref`) — never a silent read.
-Guard with `u == nil` where absence is expected; the trap is the
-bug-catcher, not the semantics. A miss is `nil` and nothing else: a
-lookup that finds nothing returns `?V`, and callers compare against
-`nil`.
+A `nil` reaching an assert traps (`NilDeref`) at the `!` — never a
+silent read, and the trap site is marked in the source: `grep '!'`
+over a program is the complete list of its nil-trap sites. Guard with
+`u == nil` where absence is expected — the guard idiom is
+`if (u != nil) { let user = u!; .. }`: inside a true guard the assert
+cannot trap, but the compiler does not prove it (no flow typing). A
+miss is `nil` and nothing else: a lookup that finds nothing returns
+`?V`, and callers compare against `nil`.
 
 ## `==` is honest about the regime
 

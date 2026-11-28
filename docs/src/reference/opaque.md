@@ -29,7 +29,7 @@ entry fn main() {
     let box1 = opaque(Point { x: 1, y: 2 });   // erasure = call of the type name
     let p = opaque::downcast<Point>(box1);      // ?Point — the nullable
     when (p != nil) {
-        true -> { log.info(f"point {p.x} {p.y}"); },
+        true -> { log.info(f"point {p!.x} {p!.y}"); },
         else  -> { log.info("point: nil"); },
     }
     let wrong = opaque::downcast<i32>(opaque(Flavor::Sour));  // nil, no trap
@@ -60,7 +60,7 @@ wrong == nil: true
       let n = 5;
       let b = opaque(n);    // a prim payload COPIES the bits
       n = 9;                // ...so the source moving stays out
-      log.info(f"{opaque::downcast<i32>(b)} vs {n}");
+      log.info(f"{opaque::downcast<i32>(b)!} vs {n}");
   }
   ```
 

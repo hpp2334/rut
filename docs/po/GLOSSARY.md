@@ -237,3 +237,7 @@ context; after that, use the zh-CN rendering alone.
 | hang guard | 挂起守卫 | a never-completing host worker hangs the run by law — no budget, no hang guard → 永不完成的宿主 worker 依法让运行挂起——没有预算，也没有挂起守卫 |
 | raw door | 原始门 | the raw doors under the protocol → 协议之下的原始门（door → 门，同 mount door → 挂载门）；hand-drive → 手工驱动 |
 | the ONE mint | 唯一的铸造入口 | mint → 铸造（见 mint (verb)）；`Completer::with_wake` stays code |
+| assert | 断言 | the postfix nil assert `e!` → 后缀断言（`e!` stays code）；one `?` layer per `!` → 每层 `!` 剥掉一层 `?`；the assert never traps inside a true guard → 为真的守卫内断言不会触发陷阱 |
+| peel | 剥掉一层 | `?T → T` peels one `?` layer → `?T → T` 剥掉一层 `?`；the peel is never implicit → 解包从不隐式（只有显式断言） |
+| deref | 解引用 | dereference → 解引用（既有译法）；auto-deref → 自动解引用（旧法已废——现在只有显式断言 `e!`） |
+| guard | 守卫 | the `f != nil` guard → `f != nil` 守卫；the guard idiom → 守卫惯用法；no flow typing → 没有流类型化 |

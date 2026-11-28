@@ -178,7 +178,7 @@ entry fn main() {
     let log = Logger("swap");
     let xs = Vec<i32>::from([1, 2, 3]);
     swap(xs, 0, 2);
-    log.info(f"first={xs[0]} last={xs[2]}");
+    log.info(f"first={xs[0]!} last={xs[2]!}");
 }
 ```
 
@@ -355,7 +355,7 @@ entry fn main() {
     let log = Logger("nullable");
     let p: ?Point = Point { x: 1, y: 2 };
     when (p != nil) {
-        true -> { log.info(f"point {p.x} {p.y}"); },
+        true -> { log.info(f"point {p!.x} {p!.y}"); },
         else -> { log.info("point: nil"); },
     }
 }

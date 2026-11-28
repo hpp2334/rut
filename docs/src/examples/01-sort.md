@@ -57,13 +57,13 @@ struct Bank {
 
 entry fn serialize(c: opaque) -> str {
     let b = opaque::downcast<?Bank>(c);
-    let xs = b.data;
+    let xs = b!!.data;
     let out = "[";
-    for (let i = 0; i < xs.len(); i += 1) {
+    for (let i = 0; i < xs!.len(); i += 1) {
         if (i > 0) {
             out = f"{out}, ";
         }
-        out = f"{out}{xs[i]}";
+        out = f"{out}{xs![i]!}";
     }
     return f"{out}]";
 }
@@ -95,11 +95,11 @@ entry fn sort(c: opaque, algo: str) -> str {
     let b = opaque::downcast<?Bank>(c);
     let unknown = false;
     when (algo) {
-        "insertion" -> { insertion_sort(b.data); },
-        "bubble"    -> { bubble_sort(b.data); },
-        "selection" -> { selection_sort(b.data); },
-        "quick"     -> { quicksort(b.data, 0, b.data.len() - 1); },
-        "merge"     -> { merge_sort(b.data); },
+        "insertion" -> { insertion_sort(b!!.data); },
+        "bubble"    -> { bubble_sort(b!!.data); },
+        "selection" -> { selection_sort(b!!.data); },
+        "quick"     -> { quicksort(b!!.data, 0, b!!.data!.len() - 1); },
+        "merge"     -> { merge_sort(b!!.data); },
         else        -> { unknown = true; },
     }
     if (unknown) {
@@ -135,7 +135,7 @@ entry fn fill(c: opaque, n: u32, seed: u32) {
         x = (x.wrapping_mul(1664525)).wrapping_add(1013904223);
         fresh.push((x % 1000) as i32);
     }
-    b.data = fresh;
+    b!!.data = fresh;
 }
 
 entry fn main() {
@@ -144,10 +144,10 @@ entry fn main() {
     let c = opaque(bank);
     fill(c, 8, 42);
     let b = opaque::downcast<?Bank>(c);
-    let xs = b.data;
+    let xs = b!!.data;
     let out = "";
-    for (let x of xs) {
-        out = f"{out} {x}";
+    for (let x of xs!) {
+        out = f"{out} {x!}";
     }
     log.info(f"fill(8, seed=42):{out}");
 }

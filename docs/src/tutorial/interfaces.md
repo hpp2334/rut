@@ -241,7 +241,7 @@ entry fn main() {
     shapes.push(Square { side: 3.0 });
     let total: f64 = 0.0;
     for (let s of shapes) {
-        total += s.area();       // dispatches per element
+        total += s!.area();       // dispatches per element
     }
     log.info(f"total={total} n={shapes.len()}");
 }
@@ -377,7 +377,7 @@ entry fn main() {
     for (let v of ups) {
         got.push(v);
     }
-    log.info(f"n={got.len()} first={got[0]} last={got[got.len()-1]}");
+    log.info(f"n={got.len()} first={got[0]!} last={got[got.len()-1]!}");
 }
 ```
 
@@ -439,7 +439,7 @@ entry fn main() {
     shapes.push(Square { side: 3.0 });
     let total: f64 = 0.0;
     for (let s of shapes) {
-        total += s.area();                    // itable per element
+        total += s!.area();                    // itable per element
     }
     log.info(f"total={total} n={shapes.len()}");
 }

@@ -250,7 +250,7 @@ entry fn main() {
     let log = Logger("t");
     let p: ?Point = Point { x: 7, y: 0 };
     when (p != nil) {
-        true -> { log.info(f"{p.x}"); },
+        true -> { log.info(f"{p!.x}"); },
         else -> { /* absent */ },
     }
 }

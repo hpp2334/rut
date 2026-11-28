@@ -275,7 +275,8 @@ The one copy escape hatch is `bytes::clone()` — a fresh buffer with the
 same octets. There is no generic copy for any other type; if you need a
 divergent value, build a new one.
 
-Absence is `nil` on a nullable `?T` — see
+Absence is `nil` on a nullable `?T` — a nullable peels only through
+the postfix assert `e!` — see
 [errors and optionality](errors.md).
 
 ## Tuples
@@ -355,7 +356,7 @@ fn literals(name: str) {
     let bin = bytes(64);             // 64 zeroed octets
     let p = Point { x: 1, y: 2 };    // struct literal: no `new`
 
-    log.info(f"a={a} e={e} d64={d64} ch={ch} p.x={p.x} zero[0]={zero[0]} len={grow.len()} bin={bin.len()}");
+    log.info(f"a={a} e={e} d64={d64} ch={ch} p.x={p.x} zero[0]={zero[0]!} len={grow.len()} bin={bin.len()}");
 }
 
 entry fn main() {

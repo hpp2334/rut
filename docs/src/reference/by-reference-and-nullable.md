@@ -66,7 +66,7 @@ dereferencing it traps `NilDeref` — never a silent read.
 | `?T` | `T \| nil` | the nullable |
 | `[?T]` | `[T \| nil]` | array of nullables |
 | `?[T]` | `[T] \| nil` | nullable array |
-| `??T` | chained | the same runtime box, unwrapped transitively |
+| `??T` | chained | the same runtime box — one `!` per layer |
 
 There is no postfix `T?` and no `*T` — each falls to the ordinary
 error ladder (in type position, "expected a type name"); the nullable
@@ -77,13 +77,43 @@ untouched).
 
 ### Coercions and uses
 
-**`T → ?T` boxes; `?T → T` derefs** — both implicit at the
-expected-type position, transitive through `??T`:
+**`T → ?T` boxes — implicit, cannot fail. `?T → T` happens ONLY
+through the postfix assert `e!`** — one `?` layer per `!`, and a `nil`
+operand traps `NilDeref` at the `!`'s own site. `f! = v` is not an
+assignable target (an assert is not a place). There is no implicit
+deref anywhere: `p.x`, `p.m(..)`, `p[i]`, `for (x of p)`, arithmetic
+on `p`'s payload — every use of a nullable demands the assert first,
+spelled `p!.x`, `p!.m(..)`, `p![i]`, `for (x of p!)`.
 
-- Auto-deref covers every value position: `p.x`, `p.m(..)`, `p[i]`,
-  `for (x of p)`, arithmetic on `p`'s payload.
-- `p == nil` / `p != nil` compare against the null slot; guard before
-  use. The trap is the bug-catcher, not the semantics.
+```rut
+class Foo {}
+
+impl Foo {
+    pub fn mk() -> Self { return Foo {}; }
+    pub fn x(self) -> i32 { return 42; }
+}
+
+fn maybe(v: i32) -> ?Foo {
+    if (v > 0) { return Foo::mk(); }
+    return nil;
+}
+
+entry fn main() -> nil {
+    let _t: ?Foo = maybe(1);    // T -> ?T boxes — implicit, cannot fail
+    let t = _t!;                // ?Foo -> Foo — the assert; traps HERE if nil
+    let v = t.x();              // plain receiver — no deref anywhere in sight
+    if (v != 42) { panic("wrong"); }
+}
+```
+
+- `p == nil` / `p != nil` compare against the null slot — the guard;
+  `?T == ?T` is slot identity (see
+  [Rc, dispose, and identity](rc-dispose-identity.md)); a MIXED
+  `?T`/`T` compare is a compile error — spell `p! == t`.
+- The guard idiom: `if (f != nil) { let t = f!; t.x(); }` — inside a
+  true guard the assert cannot trap, but the compiler does not prove
+  it (no flow typing). The `!` is the author's mark: `grep '!'` over a
+  program is the complete list of its nil-trap sites.
 - A `?T` binding IS the cell reference: writes through it hit the
   shared cell (a `nudge(pt: ?Point)` moves the caller's point).
 - `nil` typing: a context-free `nil` has type `nil`; in an
@@ -140,7 +170,7 @@ true true
 
 - `Vec<T>` backs on `buf: [?T]` — `[nil; cap]` is the generic zero
   (`nil` is the slot's zero); `push` takes the `T → ?T`-boxed handle;
-  loads yield the `?T` (uses auto-deref). See
+  loads yield the `?T` — uses demand the assert (`v![0]`). See
   [Builtin generic types](builtin-generic-types.md).
 - Keyed collections: `get(k) -> ?V` — `nil` = absent, a hit answers the
   **stored cell** (the aliasing law: two gets of one key name one cell

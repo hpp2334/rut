@@ -37,9 +37,12 @@ entry fn main() {
 left is nil: true
 ```
 
-Lookups answer `?T`: a hit is the value, a miss is `nil`. Deref is
-automatic at every use — `p.x`, `p[i]`, `for (let x of p)`, arithmetic
-— and dereferencing a `nil` **traps** `NilDeref`, so guard first:
+Lookups answer `?T`: a hit is the value, a miss is `nil`. A nullable
+peels ONLY through the postfix assert `e!` — one `?` layer per `!` —
+and a `nil` operand **traps** `NilDeref` at the `!`'s own site, so
+every trap point is marked in the source (`grep '!'` finds them all).
+Reads through a nullable spell it: `p!.x`, `p![i]`, `p!.m()`; guard
+first where absence is expected:
 
 ```rut
 use nmapset::{ HashMap };
@@ -52,7 +55,7 @@ entry fn main() {
     let n = 0;
     let hit = scores.get("rut");      // ?i32
     if (hit != nil) {
-        n = hit + 1;                  // a hit auto-unwraps for `+`
+        n = hit! + 1;                 // inside the guard the assert cannot trap
     }
     log.info(f"n={n}");
 }
@@ -62,13 +65,15 @@ entry fn main() {
 n=42
 ```
 
-`p == nil` compares against the null. There is no flow-typing: after
-the guard, hand the value to a typed binding when you want a plain `T`:
+`p == nil` compares against the null. There is no flow-typing: inside
+a true guard the assert cannot trap, but the compiler does not prove
+it — the `!` is the author's mark. Spell the assert to hand the value
+to a typed binding when you want a plain `T`:
 
 ```rut
 let err = map_response(resp, "no such repo or ref", "data.jsdelivr.com");
 if (err != nil) {
-    let why: str = err;           // the plain str behind the nullable
+    let why: str = err!;          // the assert — the plain str behind the nullable
     eprint(why);
     return 1;
 }
@@ -116,10 +121,10 @@ entry fn main() {
     let log = Logger("json");
     let (n, e) = decodeJson<JsonI64>("42");
     if (e == nil) {
-        log.info(f"n={n.get()}");
+        log.info(f"n={n!.get()}");
     } else {
         let why = e;
-        log.info(f"decode failed at {why.at}");
+        log.info(f"decode failed at {why!.at}");
     }
 }
 ```
@@ -162,7 +167,7 @@ entry fn main() {
     if (be != nil) {
         let why = be;
         // rejected at 0: got '[', wanted an i64
-        log.info(f"rejected at {why.at}: got '{why.got}', wanted {why.expected}");
+        log.info(f"rejected at {why!.at}: got '{why!.got}', wanted {why!.expected}");
     }
 }
 ```
@@ -216,7 +221,7 @@ entry fn main() {
     let box1 = opaque(Point { x: 1, y: 2 });
     let p = opaque::downcast<Point>(box1);   // ?Point
     when (p != nil) {
-        true -> { log.info(f"point {p.x} {p.y}"); },
+        true -> { log.info(f"point {p!.x} {p!.y}"); },
         else -> { log.info("point: nil"); },
     }
 }
@@ -242,17 +247,17 @@ entry fn main() {
     // a successful decode: (value, nil)
     let (n, e) = decodeJson<JsonI64>("42");
     if (e == nil) {
-        log.info(f"n={n.get()}");
+        log.info(f"n={n!.get()}");
     } else {
         let why = e;
-        log.info(f"decode failed at {why.at}: {why.expected}");
+        log.info(f"decode failed at {why!.at}: {why!.expected}");
     }
 
     // encode answers the same shape: (?str, ?EncodeJsonError) —
     // through the spelled wrapper: a bare [i64] never satisfies
     let (s, ee) = encodeJson(JsonArr([JsonI64(1), JsonI64(2), JsonI64(3)]));
     if (ee == nil) {
-        let text = s;
+        let text = s!;
         log.info(f"s={text}");
     } else {
         log.info("encode failed");
@@ -264,7 +269,7 @@ entry fn main() {
         log.info("unexpected success");
     } else {
         let why = be;
-        log.info(f"rejected at {why.at}: got '{why.got}', wanted {why.expected}");
+        log.info(f"rejected at {why!.at}: got '{why!.got}', wanted {why!.expected}");
     }
 }
 ```

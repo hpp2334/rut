@@ -117,10 +117,12 @@ powers, loosest to tightest:
 | 11 | left | `*` `/` `%` |
 | 12 | left | `as` — numeric cast; the RHS is a type-naming position |
 | 13 | right | unary `-` `!`; prefix `await` |
-| 14 | left | postfix: `.name`, `.name<..>(..)`, `(..)`, `[..]` |
+| 14 | left | postfix: `.name`, `.name<..>(..)`, `(..)`, `[..]`, `!` (the nil assert — tightest, chains freely: `f!.x()`, `f![i] = v`, one `?` layer per `!`) |
 
 Postfixes chain in one loop, so `p.value.x` and `arr[i].push(x)` compose
-without special cases. `is` (type test) is a keyword; `as` is the only cast.
+without special cases. The assert `!` rides the same loop — `f!.x()`,
+`f![i] = v`, `f"{f!}"`; one `!` peels one `?` layer. `is` (type test)
+is a keyword; `as` is the only cast.
 
 ### Lookahead
 
@@ -138,7 +140,7 @@ stage — no lookahead).
 | struct literal vs path expression | peek 2: `Ident {` ⇒ literal (classes have no instance literal) |
 | `when`-arm body form | peek 1 after `->` (`{` ⇒ block arm, else expression arm) |
 | `if` atom vs statement | peek 2: `if (` in expression position ⇒ the if ATOM (statement-leading `if` is claimed by the statement grammar first) |
-| postfix loop step | peek 1 (`.` `(` `[`) |
+| postfix loop step | peek 1 (`.` `(` `[` `!`) |
 | assignment target | no lookahead — parse, then validate |
 
 Two decisions need more than 4 tokens and use **scans** — read-only,

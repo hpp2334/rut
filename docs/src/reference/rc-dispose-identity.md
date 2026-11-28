@@ -100,7 +100,7 @@ entry fn main() {
     let tile = Tile { v: 7 };
     let w = Weak::new(tile);        // does NOT keep the cell alive
     let got: ?Tile = w.upgrade();  // the live referent, or nil once dead
-    log.info(f"{got.v}");
+    log.info(f"{got!.v}");
 }
 ```
 
@@ -132,8 +132,8 @@ element-wise story. `a != b` is its negation.
 - Enum members are immortal singletons, so `Flavor::Sour == Flavor::Sour`
   is `true` — the one place identity quietly behaves as value.
 - `?T == ?T` is slot identity: two `nil`s are equal, a null and a box
-  are not; `p == nil` derefs the nullable side and compares against the
-  null slot.
+  are not; `p == nil` compares against the null slot — the payload
+  reads only through the assert (`p!`).
 - An **identity-compare lint** flags `==` between two obviously fresh
   composites (`Vec::from([..]) == Vec::from([..])`): "always false —
   compare fields". Asserting distinctness is legitimate and

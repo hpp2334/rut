@@ -97,9 +97,9 @@ window over the backing array, boxed as **`?Vec<T>`** (the `T → ?T`
 coercion — see [Builtin generic types](builtin-generic-types.md)). The
 window **is** the shared cell:
 
-- reads: `w[i]`, `w.len()`, `for (x of w)` — auto-deref the nullable
-  and go through the window (element `i` is `parent[off + i]`, bounds
-  are the window's);
+- reads: `w![i]`, `w!.len()`, `for (x of w!)` — the assert peels the
+  nullable, then the window's law applies (element `i` is
+  `parent[off + i]`, bounds are the window's);
 - writes: `w[i] = x` (and compound assignment) **hit the parent**;
 - **fixed-length**: `push`/`pop` through a view trap — copy the
   elements out to grow (a `for`-push loop does it);

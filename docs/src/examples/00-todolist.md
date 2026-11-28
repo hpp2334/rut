@@ -80,9 +80,9 @@ impl TodoList {
         let kept: Vec<Todo> = Vec::new();
         let removed = false;
         for (let t of self.items) {
-            when (t.id == id) {
+            when (t!.id == id) {
                 true -> { removed = true; },   // drop the row
-                else -> { kept.push(t); },     // keep everything else
+                else -> { kept.push(t!); },    // keep everything else
             }
         }
         if (removed) {
@@ -132,7 +132,7 @@ struct Lists {
 
 fn at(c: opaque, h: u32) -> TodoList {
     let lists = opaque::downcast<?Lists>(c);
-    return lists.lists[h as i32];
+    return lists!!.lists[h as i32]!;
 }
 
 entry fn createContainer() -> opaque {
@@ -142,8 +142,8 @@ entry fn createContainer() -> opaque {
 
 entry fn create(c: opaque) -> u32 {
     let k = opaque::downcast<?Lists>(c);
-    k.lists.push(TodoList::new());
-    return (k.lists.len() - 1) as u32;
+    k!!.lists.push(TodoList::new());
+    return (k!!.lists.len() - 1) as u32;
 }
 ```
 

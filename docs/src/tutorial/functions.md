@@ -31,7 +31,7 @@ entry fn main() {
     let log = Logger("fns");
     let xs = Vec<i32>::from([1, 2, 3]);
     swap(xs, 0, 2);
-    log.info(f"first={xs[0]} length={length(Point { x: 3, y: 4 })}");
+    log.info(f"first={xs[0]!} length={length(Point { x: 3, y: 4 })}");
 }
 ```
 
@@ -255,7 +255,7 @@ fn first<T>(xs: [T], fallback: T) -> T {
 fn sum(xs: Vec<i32>) -> i32 {
     let total = 0;
     for (let x of xs) {
-        total += x;
+        total += x!;        // a Vec load yields ?i32 — the assert peels
     }
     return total;
 }

@@ -69,9 +69,12 @@ take it explicitly (`downcast<Point>(o)`).
 Laws enforced here:
 
 - **The `==` law** — primitives and `str` compare by value; every other
-  cell type compares by identity; nullable `?T` operands and tuple
-  operands are a compile error (*pattern-match instead* — destructure the
-  pair). A lint flags `==` between two obviously fresh composites.
+  cell type compares by identity; `?T == ?T` is slot identity and
+  `p == nil` / `p != nil` compare against the null slot, while a MIXED
+  nullable/plain compare is the demand-`!` error (spell `p! == t`);
+  tuple operands are a compile error (*pattern-match instead* —
+  destructure the pair). A lint flags `==` between two obviously fresh
+  composites.
 - **`is` folding** — when the receiver's static type already answers the
   question (a concrete receiver, `d: I is I`), the expression folds to a
   constant and an always-true/false lint fires.

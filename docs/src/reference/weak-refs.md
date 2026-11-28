@@ -57,7 +57,7 @@ entry fn main() {
     let w = Weak::new(n);        // Weak<Node>; T infers from n
     let b = w.upgrade();        // ?Node — a live handle
     if (b != nil) {
-        use_node(b);
+        use_node(b!);           // the guard idiom — inside it, no trap
     }
 }
 ```

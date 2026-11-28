@@ -22,7 +22,7 @@ fn sieve(limit: i32) -> Vec<i32> {
     let marks = Vec<u8>::filled(0, limit + 1);
     let primes: Vec<i32> = Vec::new();
     for (let i = 2; i <= limit; i += 1) {
-        if (marks[i] == 0) {
+        if (marks[i]! == 0) {
             primes.push(i);
             let m = i * i;
             while (m <= limit) {
@@ -37,7 +37,7 @@ fn sieve(limit: i32) -> Vec<i32> {
 entry fn main() {
     let log = Logger("sieve");
     let primes = sieve(100);
-    log.info(f"{primes.len()} primes up to 100, last={primes[primes.len() - 1]}");
+    log.info(f"{primes.len()} primes up to 100, last={primes[primes.len() - 1]!}");
 }
 ```
 

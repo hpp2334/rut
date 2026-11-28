@@ -56,14 +56,15 @@ type term that follows:
 | `?T` | `T \| nil` | the nullable |
 | `[?T]` | `[T \| nil]` | array of nullables |
 | `?[T]` | `[T] \| nil` | nullable array |
-| `??T` | chained | the same runtime box, unwrapped transitively at use sites |
+| `??T` | chained | the same runtime box — one `!` per layer |
 
-- Coercions: **`T → ?T` boxes** (the box *aliases* the payload's cell —
-  a share; primitives copy bits), **`?T → T` derefs** (a field-0 read
-  plus nil check). Both are implicit at the expected-type position; the
-  funnel is transitive through `??T`.
-- Auto-deref covers every value position: `p.x`, `p.m(..)`, `p[i]`,
-  `for (x of p)`, arithmetic on `p`'s payload.
+- Coercions are asymmetric: **`T → ?T` boxes** (the box *aliases* the
+  payload's cell — a share; primitives copy bits), implicit, cannot
+  fail; **`?T → T` happens ONLY through the postfix assert `e!`** (a
+  field-0 read plus nil check) — one `?` layer per `!`, and a `nil`
+  operand traps `NilDeref` at the `!`'s own site.
+- Uses demand the assert: `p!.x`, `p!.m(..)`, `p![i]`, `for (x of p!)`,
+  arithmetic on the payload.
 - `p == nil` / `p != nil` compare against the null slot; `?T == ?T` is
   slot identity (see [Rc, dispose, and identity](rc-dispose-identity.md)).
 - A `?T` binding IS the cell reference — writes through it hit the
@@ -79,8 +80,9 @@ type term that follows:
 
 `Vec<T>` is a library class (package `pouch`) over the non-growable
 `[T]`: a `buf: [?T]` backing plus a live `len`. Loads yield the `?T`
-(uses auto-deref), stores take the coerced handle — reads and writes
-alias the stored cells, and binding an element copies nothing.
+— uses demand the assert (`v[i]!`) — stores take the coerced handle:
+reads and writes alias the stored cells, and binding an element copies
+nothing.
 
 | Construction | Meaning |
 |---|---|
@@ -128,7 +130,7 @@ entry fn main() {
     let tile = Tile { v: 7 };
     let w = Weak::new(tile);        // the class-method construction
     let got: ?Tile = w.upgrade();  // the live referent, or nil once dead
-    log.info(f"{got.v}");
+    log.info(f"{got!.v}");
 }
 ```
 
@@ -183,9 +185,9 @@ entry fn main() {
     // accumulator is a shared record cell
     let acc: ?Sum = Sum { };
     for (let name of ages) {
-        acc.total += ages.get(name);
+        acc!.total += ages.get(name)!;   // the assert peels each nullable use
     }
-    log.info(f"total={acc.total} count={ages.len()}");
+    log.info(f"total={acc!.total} count={ages.len()}");
 }
 ```
 

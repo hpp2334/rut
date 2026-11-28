@@ -139,8 +139,8 @@ struct Node {
 
 fn count(n: ?Node) -> i32 {
     let c = 1;
-    if (n.left != nil) { c += count(n.left); }
-    if (n.right != nil) { c += count(n.right); }
+    if (n!.left != nil) { c += count(n!.left); }
+    if (n!.right != nil) { c += count(n!.right); }
     return c;
 }
 
@@ -158,6 +158,9 @@ entry fn main() {
 ```text
 count=2
 ```
+
+The guard decides absence; the `!` reads the field — the nullable's
+only peel is the assert, and inside a true guard it cannot trap.
 
 ## Classes — sealed records
 

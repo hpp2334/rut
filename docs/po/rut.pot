@@ -388,7 +388,7 @@ msgid ""
 "    let marks = Vec<u8>::filled(0, limit + 1);\n"
 "    let primes: Vec<i32> = Vec::new();\n"
 "    for (let i = 2; i <= limit; i += 1) {\n"
-"        if (marks[i] == 0) {\n"
+"        if (marks[i]! == 0) {\n"
 "            primes.push(i);\n"
 "            let m = i * i;\n"
 "            while (m <= limit) {\n"
@@ -404,7 +404,7 @@ msgid ""
 "    let log = Logger(\"sieve\");\n"
 "    let primes = sieve(100);\n"
 "    log.info(f\"{primes.len()} primes up to 100, last={primes[primes.len() - "
-"1]}\");\n"
+"1]!}\");\n"
 "}\n"
 "```"
 msgstr ""
@@ -1289,7 +1289,7 @@ msgstr ""
 #: src/tutorial/values-and-variables.md:19 src/reference/primitive-types.md:13
 #: src/reference/literals-and-inference.md:210
 #: src/reference/rc-dispose-identity.md:124
-#: src/reference/by-reference-and-nullable.md:105
+#: src/reference/by-reference-and-nullable.md:135
 #: src/reference/value-boundary.md:36 src/reference/value-boundary.md:37
 #: src/reference/templates.md:19
 msgid "`str`"
@@ -1305,7 +1305,7 @@ msgstr ""
 
 #: src/tutorial/values-and-variables.md:20 src/examples/playground-corpus.md:55
 #: src/reference/primitive-types.md:14 src/reference/rc-dispose-identity.md:125
-#: src/reference/by-reference-and-nullable.md:106
+#: src/reference/by-reference-and-nullable.md:136
 #: src/reference/value-boundary.md:38 src/reference/value-boundary.md:39
 msgid "`bytes`"
 msgstr ""
@@ -1638,7 +1638,7 @@ msgstr ""
 
 #: src/tutorial/values-and-variables.md:268
 #: src/reference/rc-dispose-identity.md:121
-#: src/reference/by-reference-and-nullable.md:102
+#: src/reference/by-reference-and-nullable.md:132
 msgid "`==` means"
 msgstr ""
 
@@ -1675,20 +1675,20 @@ msgstr ""
 
 #: src/tutorial/values-and-variables.md:278
 msgid ""
-"Absence is `nil` on a nullable `?T` — see [errors and "
-"optionality](errors.md)."
+"Absence is `nil` on a nullable `?T` — a nullable peels only through the "
+"postfix assert `e!` — see [errors and optionality](errors.md)."
 msgstr ""
 
-#: src/tutorial/values-and-variables.md:281
+#: src/tutorial/values-and-variables.md:282
 #: src/reference/literals-and-inference.md:97
 msgid "Tuples"
 msgstr ""
 
-#: src/tutorial/values-and-variables.md:283
+#: src/tutorial/values-and-variables.md:284
 msgid "Records `(A, B)` are first-class values with numeric fields:"
 msgstr ""
 
-#: src/tutorial/values-and-variables.md:285
+#: src/tutorial/values-and-variables.md:286
 msgid ""
 "```rut\n"
 "use ink::{ Logger };\n"
@@ -1706,27 +1706,27 @@ msgid ""
 "```"
 msgstr ""
 
-#: src/tutorial/values-and-variables.md:304
+#: src/tutorial/values-and-variables.md:305
 msgid ""
 "The pair is also rut's standard error channel — the next chapters use it "
 "constantly."
 msgstr ""
 
-#: src/tutorial/values-and-variables.md:307 src/tutorial/control-flow.md:400
-#: src/tutorial/functions.md:242 src/tutorial/types.md:284
-#: src/tutorial/interfaces.md:400 src/tutorial/errors.md:233
+#: src/tutorial/values-and-variables.md:308 src/tutorial/control-flow.md:400
+#: src/tutorial/functions.md:242 src/tutorial/types.md:287
+#: src/tutorial/interfaces.md:400 src/tutorial/errors.md:238
 #: src/tutorial/modules.md:300 src/tutorial/async.md:196
 #: src/tutorial/stdlib.md:409
 msgid "Put it together"
 msgstr ""
 
-#: src/tutorial/values-and-variables.md:309
+#: src/tutorial/values-and-variables.md:310
 msgid ""
 "Put this in a module directory and run it: `literals/rut.jsonc` names the "
 "two packages the program uses, and the program is `literals/src/mod.rut`:"
 msgstr ""
 
-#: src/tutorial/values-and-variables.md:313
+#: src/tutorial/values-and-variables.md:314
 msgid ""
 "```jsonc\n"
 "// literals/rut.jsonc\n"
@@ -1744,13 +1744,13 @@ msgid ""
 "```"
 msgstr ""
 
-#: src/tutorial/values-and-variables.md:326
+#: src/tutorial/values-and-variables.md:327
 msgid ""
 "Save the program as `literals/src/mod.rut`, then `rut install literals` "
 "(fetches the two url deps and writes `rut.lock`) and `rut run literals`:"
 msgstr ""
 
-#: src/tutorial/values-and-variables.md:330
+#: src/tutorial/values-and-variables.md:331
 msgid ""
 "```rut\n"
 "use pouch::{ Vec };\n"
@@ -1783,7 +1783,7 @@ msgid ""
 "    let bin = bytes(64);             // 64 zeroed octets\n"
 "    let p = Point { x: 1, y: 2 };    // struct literal: no `new`\n"
 "\n"
-"    log.info(f\"a={a} e={e} d64={d64} ch={ch} p.x={p.x} zero[0]={zero[0]} "
+"    log.info(f\"a={a} e={e} d64={d64} ch={ch} p.x={p.x} zero[0]={zero[0]!} "
 "len={grow.len()} bin={bin.len()}\");\n"
 "}\n"
 "\n"
@@ -1793,7 +1793,7 @@ msgid ""
 "```"
 msgstr ""
 
-#: src/tutorial/values-and-variables.md:370
+#: src/tutorial/values-and-variables.md:371
 msgid "Next: [control flow and `when`](control-flow.md)."
 msgstr ""
 
@@ -2007,7 +2007,7 @@ msgid ""
 "    let log = Logger(\"swap\");\n"
 "    let xs = Vec<i32>::from([1, 2, 3]);\n"
 "    swap(xs, 0, 2);\n"
-"    log.info(f\"first={xs[0]} last={xs[2]}\");\n"
+"    log.info(f\"first={xs[0]!} last={xs[2]!}\");\n"
 "}\n"
 "```"
 msgstr ""
@@ -2199,7 +2199,7 @@ msgid ""
 "    let log = Logger(\"nullable\");\n"
 "    let p: ?Point = Point { x: 1, y: 2 };\n"
 "    when (p != nil) {\n"
-"        true -> { log.info(f\"point {p.x} {p.y}\"); },\n"
+"        true -> { log.info(f\"point {p!.x} {p!.y}\"); },\n"
 "        else -> { log.info(\"point: nil\"); },\n"
 "    }\n"
 "}\n"
@@ -2337,7 +2337,7 @@ msgid ""
 "    let log = Logger(\"fns\");\n"
 "    let xs = Vec<i32>::from([1, 2, 3]);\n"
 "    swap(xs, 0, 2);\n"
-"    log.info(f\"first={xs[0]} length={length(Point { x: 3, y: 4 })}\");\n"
+"    log.info(f\"first={xs[0]!} length={length(Point { x: 3, y: 4 })}\");\n"
 "}\n"
 "```"
 msgstr ""
@@ -2600,7 +2600,7 @@ msgid ""
 "fn sum(xs: Vec<i32>) -> i32 {\n"
 "    let total = 0;\n"
 "    for (let x of xs) {\n"
-"        total += x;\n"
+"        total += x!;        // a Vec load yields ?i32 — the assert peels\n"
 "    }\n"
 "    return total;\n"
 "}\n"
@@ -2804,8 +2804,8 @@ msgid ""
 "\n"
 "fn count(n: ?Node) -> i32 {\n"
 "    let c = 1;\n"
-"    if (n.left != nil) { c += count(n.left); }\n"
-"    if (n.right != nil) { c += count(n.right); }\n"
+"    if (n!.left != nil) { c += count(n!.left); }\n"
+"    if (n!.right != nil) { c += count(n!.right); }\n"
 "    return c;\n"
 "}\n"
 "\n"
@@ -2822,10 +2822,16 @@ msgid ""
 msgstr ""
 
 #: src/tutorial/types.md:162
+msgid ""
+"The guard decides absence; the `!` reads the field — the nullable's only "
+"peel is the assert, and inside a true guard it cannot trap."
+msgstr ""
+
+#: src/tutorial/types.md:165
 msgid "Classes — sealed records"
 msgstr ""
 
-#: src/tutorial/types.md:164
+#: src/tutorial/types.md:167
 msgid ""
 "A class adds two things to a struct: module-private fields and construction "
 "gated through class methods. There is no outside literal — the only way to "
@@ -2835,7 +2841,7 @@ msgid ""
 "zero — see [Rc, dispose, and identity](../reference/rc-dispose-identity.md).)"
 msgstr ""
 
-#: src/tutorial/types.md:172
+#: src/tutorial/types.md:175
 msgid ""
 "```rut\n"
 "use ink::{ Logger };\n"
@@ -2866,37 +2872,37 @@ msgid ""
 "```"
 msgstr ""
 
-#: src/tutorial/types.md:204
+#: src/tutorial/types.md:207
 msgid "The pieces:"
 msgstr ""
 
-#: src/tutorial/types.md:206
+#: src/tutorial/types.md:209
 msgid ""
 "**A class method is just a function without `self`.** `Rect::new(w, h)`, "
 "`Version::parse(s)`, `Rect::from_square(s)` — any no-`self` method returning "
 "`Self` is a constructor. `new` is a convention, not syntax."
 msgstr ""
 
-#: src/tutorial/types.md:209
+#: src/tutorial/types.md:212
 msgid ""
 "**The `Self { .. }` literal is class-private** — legal anywhere in the "
 "class's own impl block, never outside. This is the seal."
 msgstr ""
 
-#: src/tutorial/types.md:211
+#: src/tutorial/types.md:214
 msgid ""
 "**Instance methods spell `self` explicitly** as the first parameter; every "
 "method may write (mutability is the default). A computed property is a "
 "method (`c.count()`)."
 msgstr ""
 
-#: src/tutorial/types.md:214
+#: src/tutorial/types.md:217
 msgid ""
 "**Construction is validation.** A constructor is an ordinary function — it "
 "can check arguments and refuse:"
 msgstr ""
 
-#: src/tutorial/types.md:217
+#: src/tutorial/types.md:220
 msgid ""
 "```rut\n"
 "use ink::{ Logger };\n"
@@ -2930,13 +2936,13 @@ msgid ""
 "```"
 msgstr ""
 
-#: src/tutorial/types.md:252
+#: src/tutorial/types.md:255
 msgid ""
 "A _try_\\-constructor answers the nullable — `nil` is a failed validation, "
 "not a crash:"
 msgstr ""
 
-#: src/tutorial/types.md:255
+#: src/tutorial/types.md:258
 msgid ""
 "```rut\n"
 "impl Version {\n"
@@ -2948,39 +2954,39 @@ msgid ""
 "```"
 msgstr ""
 
-#: src/tutorial/types.md:264
+#: src/tutorial/types.md:267
 msgid ""
 "**No inheritance.** There is no `extends`, no `super`, no overriding. Code "
 "sharing is composition (hold a helper in a field) or free functions; "
 "polymorphism is structural interfaces — the next chapter."
 msgstr ""
 
-#: src/tutorial/types.md:268
+#: src/tutorial/types.md:271
 msgid "Visibility recap"
 msgstr ""
 
-#: src/tutorial/types.md:270
+#: src/tutorial/types.md:273
 msgid "Struct members: public, always."
 msgstr ""
 
-#: src/tutorial/types.md:271
+#: src/tutorial/types.md:274
 msgid ""
 "Class members: unannotated is module-private; `pub` exposes to importers "
 "(also `pub(super)`, `pub(pkg)`)."
 msgstr ""
 
-#: src/tutorial/types.md:273
+#: src/tutorial/types.md:276
 msgid ""
 "The types themselves follow the same rule: `pub class Vec<T>` is importable, "
 "a bare `class Helper` stays in its module. See [modules and "
 "packages](modules.md)."
 msgstr ""
 
-#: src/tutorial/types.md:277
+#: src/tutorial/types.md:280
 msgid "Struct or class?"
 msgstr ""
 
-#: src/tutorial/types.md:279
+#: src/tutorial/types.md:282
 msgid ""
 "Default to a struct: data in, data out, shared like every other value. Reach "
 "for a class when the type has rules that construction must enforce, holds "
@@ -2988,7 +2994,7 @@ msgid ""
 "explicit cleanup."
 msgstr ""
 
-#: src/tutorial/types.md:286
+#: src/tutorial/types.md:289
 msgid ""
 "```rut\n"
 "use ink::{ Logger };\n"
@@ -3041,7 +3047,7 @@ msgid ""
 "```"
 msgstr ""
 
-#: src/tutorial/types.md:340
+#: src/tutorial/types.md:343
 msgid "Next: [interfaces and impl blocks](interfaces.md)."
 msgstr ""
 
@@ -3321,7 +3327,7 @@ msgid ""
 "    shapes.push(Square { side: 3.0 });\n"
 "    let total: f64 = 0.0;\n"
 "    for (let s of shapes) {\n"
-"        total += s.area();       // dispatches per element\n"
+"        total += s!.area();       // dispatches per element\n"
 "    }\n"
 "    log.info(f\"total={total} n={shapes.len()}\");\n"
 "}\n"
@@ -3483,7 +3489,7 @@ msgid ""
 "    for (let v of ups) {\n"
 "        got.push(v);\n"
 "    }\n"
-"    log.info(f\"n={got.len()} first={got[0]} last={got[got.len()-1]}\");\n"
+"    log.info(f\"n={got.len()} first={got[0]!} last={got[got.len()-1]!}\");\n"
 "}\n"
 "```"
 msgstr ""
@@ -3547,7 +3553,7 @@ msgid ""
 "    shapes.push(Square { side: 3.0 });\n"
 "    let total: f64 = 0.0;\n"
 "    for (let s of shapes) {\n"
-"        total += s.area();                    // itable per element\n"
+"        total += s!.area();                    // itable per element\n"
 "    }\n"
 "    log.info(f\"total={total} n={shapes.len()}\");\n"
 "}\n"
@@ -3615,12 +3621,14 @@ msgstr ""
 
 #: src/tutorial/errors.md:40
 msgid ""
-"Lookups answer `?T`: a hit is the value, a miss is `nil`. Deref is automatic "
-"at every use — `p.x`, `p[i]`, `for (let x of p)`, arithmetic — and "
-"dereferencing a `nil` **traps** `NilDeref`, so guard first:"
+"Lookups answer `?T`: a hit is the value, a miss is `nil`. A nullable peels "
+"ONLY through the postfix assert `e!` — one `?` layer per `!` — and a `nil` "
+"operand **traps** `NilDeref` at the `!`'s own site, so every trap point is "
+"marked in the source (`grep '!'` finds them all). Reads through a nullable "
+"spell it: `p!.x`, `p![i]`, `p!.m()`; guard first where absence is expected:"
 msgstr ""
 
-#: src/tutorial/errors.md:44
+#: src/tutorial/errors.md:47
 msgid ""
 "```rut\n"
 "use nmapset::{ HashMap };\n"
@@ -3633,63 +3641,67 @@ msgid ""
 "    let n = 0;\n"
 "    let hit = scores.get(\"rut\");      // ?i32\n"
 "    if (hit != nil) {\n"
-"        n = hit + 1;                  // a hit auto-unwraps for `+`\n"
+"        n = hit! + 1;                 // inside the guard the assert cannot "
+"trap\n"
 "    }\n"
 "    log.info(f\"n={n}\");\n"
 "}\n"
 "```"
 msgstr ""
 
-#: src/tutorial/errors.md:65
+#: src/tutorial/errors.md:68
 msgid ""
-"`p == nil` compares against the null. There is no flow-typing: after the "
-"guard, hand the value to a typed binding when you want a plain `T`:"
+"`p == nil` compares against the null. There is no flow-typing: inside a true "
+"guard the assert cannot trap, but the compiler does not prove it — the `!` "
+"is the author's mark. Spell the assert to hand the value to a typed binding "
+"when you want a plain `T`:"
 msgstr ""
 
-#: src/tutorial/errors.md:68
+#: src/tutorial/errors.md:73
 msgid ""
 "```rut\n"
 "let err = map_response(resp, \"no such repo or ref\", "
 "\"data.jsdelivr.com\");\n"
 "if (err != nil) {\n"
-"    let why: str = err;           // the plain str behind the nullable\n"
+"    let why: str = err!;          // the assert — the plain str behind the "
+"nullable\n"
 "    eprint(why);\n"
 "    return 1;\n"
 "}\n"
 "```"
 msgstr ""
 
-#: src/tutorial/errors.md:77
+#: src/tutorial/errors.md:82
 msgid ""
 "`nil` in an expected-`?T` position just works: `let p: ?Node = nil;`, or a "
 "`left: nil` field in a literal."
 msgstr ""
 
-#: src/tutorial/errors.md:80
+#: src/tutorial/errors.md:85
 msgid "The `(T, err)` answer channel"
 msgstr ""
 
-#: src/tutorial/errors.md:82
+#: src/tutorial/errors.md:87
 msgid "Functions that can fail return a pair. The convention is uniform:"
 msgstr ""
 
-#: src/tutorial/errors.md:84
+#: src/tutorial/errors.md:89
 msgid "**empty err + a value** — success;"
 msgstr ""
 
-#: src/tutorial/errors.md:85
+#: src/tutorial/errors.md:90
 msgid "**empty err + `nil`** — a legitimate \"not found\";"
 msgstr ""
 
-#: src/tutorial/errors.md:86
+#: src/tutorial/errors.md:91
 msgid "**non-empty err** — failure."
 msgstr ""
 
-#: src/tutorial/errors.md:88
+#: src/tutorial/errors.md:93
 msgid "The simplest err is a `str` message (empty string means success):"
 msgstr ""
 
-#: src/tutorial/errors.md:90
+#: src/tutorial/errors.md:95
 msgid ""
 "```rut\n"
 "fn hex_dec(s: str) -> (bytes, str) {\n"
@@ -3702,13 +3714,13 @@ msgid ""
 "```"
 msgstr ""
 
-#: src/tutorial/errors.md:100
+#: src/tutorial/errors.md:105
 msgid ""
 "Nullable halves make both slots explicit — this is the standard library's "
 "own shape, `(?T, ?E)`:"
 msgstr ""
 
-#: src/tutorial/errors.md:103
+#: src/tutorial/errors.md:108
 msgid ""
 "```rut\n"
 "// json's entry points\n"
@@ -3718,11 +3730,11 @@ msgid ""
 "```"
 msgstr ""
 
-#: src/tutorial/errors.md:109
+#: src/tutorial/errors.md:114
 msgid "The caller destructures and checks the err half first:"
 msgstr ""
 
-#: src/tutorial/errors.md:111
+#: src/tutorial/errors.md:116
 msgid ""
 "```rut\n"
 "use json::{ decodeJson, JsonI64 };\n"
@@ -3732,16 +3744,16 @@ msgid ""
 "    let log = Logger(\"json\");\n"
 "    let (n, e) = decodeJson<JsonI64>(\"42\");\n"
 "    if (e == nil) {\n"
-"        log.info(f\"n={n.get()}\");\n"
+"        log.info(f\"n={n!.get()}\");\n"
 "    } else {\n"
 "        let why = e;\n"
-"        log.info(f\"decode failed at {why.at}\");\n"
+"        log.info(f\"decode failed at {why!.at}\");\n"
 "    }\n"
 "}\n"
 "```"
 msgstr ""
 
-#: src/tutorial/errors.md:131
+#: src/tutorial/errors.md:136
 msgid ""
 "Integer arithmetic's checked ladder uses the same idea in miniature: "
 "`x.checked_add(y)` answers `(T, bool)` where `.1` is `false` exactly when "
@@ -3749,17 +3761,17 @@ msgid ""
 "variables](values-and-variables.md)."
 msgstr ""
 
-#: src/tutorial/errors.md:136
+#: src/tutorial/errors.md:141
 msgid "Building an error type"
 msgstr ""
 
-#: src/tutorial/errors.md:138
+#: src/tutorial/errors.md:143
 msgid ""
 "For errors a caller might want to _branch on_, pair a payloadless enum (the "
 "kind) with a fixed-field struct (the details). That is the shape `json` uses:"
 msgstr ""
 
-#: src/tutorial/errors.md:142
+#: src/tutorial/errors.md:147
 msgid ""
 "```rut\n"
 "pub enum DecodeErrorKind { Unexpected, Truncated, InvalidUtf8, WrongType, "
@@ -3774,11 +3786,11 @@ msgid ""
 "```"
 msgstr ""
 
-#: src/tutorial/errors.md:153
+#: src/tutorial/errors.md:158
 msgid "The caller picks: branch on `kind`, or just render the fields:"
 msgstr ""
 
-#: src/tutorial/errors.md:155
+#: src/tutorial/errors.md:160
 msgid ""
 "```rut\n"
 "use json::{ decodeJson, JsonI64 };\n"
@@ -3790,32 +3802,32 @@ msgid ""
 "    if (be != nil) {\n"
 "        let why = be;\n"
 "        // rejected at 0: got '[', wanted an i64\n"
-"        log.info(f\"rejected at {why.at}: got '{why.got}', wanted "
-"{why.expected}\");\n"
+"        log.info(f\"rejected at {why!.at}: got '{why!.got}', wanted "
+"{why!.expected}\");\n"
 "    }\n"
 "}\n"
 "```"
 msgstr ""
 
-#: src/tutorial/errors.md:174
+#: src/tutorial/errors.md:179
 msgid ""
 "Enums have no payloads — the struct carries the data. This split keeps every "
 "error a plain value: copy it, store it in a log, put a location next to it, "
 "test it."
 msgstr ""
 
-#: src/tutorial/errors.md:178
+#: src/tutorial/errors.md:183
 msgid "`panic`: for bugs, not for flow"
 msgstr ""
 
-#: src/tutorial/errors.md:180
+#: src/tutorial/errors.md:185
 msgid ""
 "```rut\n"
 "panic(\"Rect: negative extents\");        // abort with a message\n"
 "```"
 msgstr ""
 
-#: src/tutorial/errors.md:184
+#: src/tutorial/errors.md:189
 msgid ""
 "Use it when continuing would be a lie: a broken invariant, an impossible "
 "state, a caller error that is a programming mistake. Data problems — a bad "
@@ -3823,13 +3835,13 @@ msgid ""
 "the answer channel, so callers can recover."
 msgstr ""
 
-#: src/tutorial/errors.md:189
+#: src/tutorial/errors.md:194
 msgid ""
 "There is no builtin `assert`: if a package wants one, it writes the two-line "
 "helper over `panic` and owns it:"
 msgstr ""
 
-#: src/tutorial/errors.md:192
+#: src/tutorial/errors.md:197
 msgid ""
 "```rut\n"
 "fn assert(c: bool, m: str) { if (!c) { panic(m); } }\n"
@@ -3839,25 +3851,25 @@ msgid ""
 "```"
 msgstr ""
 
-#: src/tutorial/errors.md:198
+#: src/tutorial/errors.md:203
 msgid ""
 "A trap's message and a stack trace (opt-in via `capture_stacktrace()`) land "
 "in the host's diagnostics — see [diagnostics, traces, and "
 "symbolication](../reference/diagnostics.md)."
 msgstr ""
 
-#: src/tutorial/errors.md:202
+#: src/tutorial/errors.md:207
 msgid "Erasure when you truly need it"
 msgstr ""
 
-#: src/tutorial/errors.md:204
+#: src/tutorial/errors.md:209
 msgid ""
 "When a value must cross a boundary that cannot name its type — host handles, "
 "heterogeneous boxes — `opaque(v)` seals it and `opaque::downcast<T>(o) -> "
 "?T` recovers it (`nil` on a wrong type, never a trap):"
 msgstr ""
 
-#: src/tutorial/errors.md:209
+#: src/tutorial/errors.md:214
 msgid ""
 "```rut\n"
 "use ink::{ Logger };\n"
@@ -3869,21 +3881,21 @@ msgid ""
 "    let box1 = opaque(Point { x: 1, y: 2 });\n"
 "    let p = opaque::downcast<Point>(box1);   // ?Point\n"
 "    when (p != nil) {\n"
-"        true -> { log.info(f\"point {p.x} {p.y}\"); },\n"
+"        true -> { log.info(f\"point {p!.x} {p!.y}\"); },\n"
 "        else -> { log.info(\"point: nil\"); },\n"
 "    }\n"
 "}\n"
 "```"
 msgstr ""
 
-#: src/tutorial/errors.md:229
+#: src/tutorial/errors.md:234
 msgid ""
 "`x is T` probes the box without recovering it. This is rut's only "
 "`any`\\-shaped value, and it can do nothing until recovered — see [the "
 "reference on opaque](../reference/opaque.md)."
 msgstr ""
 
-#: src/tutorial/errors.md:235
+#: src/tutorial/errors.md:240
 msgid ""
 "```rut\n"
 "use json::{ decodeJson, encodeJson, JsonArr, JsonI64 };\n"
@@ -3895,10 +3907,10 @@ msgid ""
 "    // a successful decode: (value, nil)\n"
 "    let (n, e) = decodeJson<JsonI64>(\"42\");\n"
 "    if (e == nil) {\n"
-"        log.info(f\"n={n.get()}\");\n"
+"        log.info(f\"n={n!.get()}\");\n"
 "    } else {\n"
 "        let why = e;\n"
-"        log.info(f\"decode failed at {why.at}: {why.expected}\");\n"
+"        log.info(f\"decode failed at {why!.at}: {why!.expected}\");\n"
 "    }\n"
 "\n"
 "    // encode answers the same shape: (?str, ?EncodeJsonError) —\n"
@@ -3906,7 +3918,7 @@ msgid ""
 "    let (s, ee) = encodeJson(JsonArr([JsonI64(1), JsonI64(2), "
 "JsonI64(3)]));\n"
 "    if (ee == nil) {\n"
-"        let text = s;\n"
+"        let text = s!;\n"
 "        log.info(f\"s={text}\");\n"
 "    } else {\n"
 "        log.info(\"encode failed\");\n"
@@ -3918,14 +3930,14 @@ msgid ""
 "        log.info(\"unexpected success\");\n"
 "    } else {\n"
 "        let why = be;\n"
-"        log.info(f\"rejected at {why.at}: got '{why.got}', wanted "
-"{why.expected}\");\n"
+"        log.info(f\"rejected at {why!.at}: got '{why!.got}', wanted "
+"{why!.expected}\");\n"
 "    }\n"
 "}\n"
 "```"
 msgstr ""
 
-#: src/tutorial/errors.md:278
+#: src/tutorial/errors.md:283
 msgid "Next: [modules and packages](modules.md)."
 msgstr ""
 
@@ -3999,8 +4011,8 @@ msgstr ""
 
 #: src/tutorial/modules.md:52 src/reference/modules-and-visibility.md:422
 #: src/reference/primitive-types.md:25
-#: src/reference/builtin-generic-types.md:85
-#: src/reference/builtin-generic-types.md:96
+#: src/reference/builtin-generic-types.md:87
+#: src/reference/builtin-generic-types.md:98
 #: src/reference/literals-and-inference.md:129 src/reference/opaque.md:14
 #: src/reference/async.md:199 src/reference/host-futures.md:34
 #: src/reference/embedding.md:375 src/reference/embedding.md:393
@@ -4828,15 +4840,16 @@ msgid ""
 "    let v = Vec<f32>::filled(0.0, 1024);       // n slots of one value\n"
 "    let w = Vec<i32>::from([1, 2, 3]);         // from a fixed array "
 "(copies)\n"
-"    let x = xs[0];                            // indexing\n"
+"    let x = xs[0]!;                           // indexing — the load is "
+"?i32, the assert peels\n"
 "    xs[0] = 42;                               // a write through the "
 "binding\n"
 "    let last = xs.pop();                      // removes + returns; traps if "
 "empty\n"
 "    let n = xs.len();\n"
 "    let total = 0;\n"
-"    for (let e of w) {                        // iteration\n"
-"        total += e;\n"
+"    for (let e of w) {                        // iteration — e binds ?i32\n"
+"        total += e!;\n"
 "    }\n"
 "    log.info(f\"x={x} last={last} len-after-pop={n} filled={v.len()} "
 "total={total}\");\n"
@@ -4869,7 +4882,8 @@ msgid ""
 "key was NEWLY added\n"
 "    let n = 0;\n"
 "    let hit = counts.get(\"rut\");   // ?i32 — nil means absent\n"
-"    if (hit != nil) { n = hit + 1; }\n"
+"    if (hit != nil) { n = hit! + 1; }   // the guard; inside it the assert "
+"cannot trap\n"
 "    let there = counts.has(\"rut\");             // membership\n"
 "    let gone = counts.remove(\"runs\");         // answers whether it was "
 "there\n"
@@ -4936,8 +4950,8 @@ msgid ""
 "        joined.push(f\"{x}\");                    // a shared cell survives "
 "the closure\n"
 "    });\n"
-"    log.info(f\"total={total} n={joined.len()} first={joined[0]} "
-"last={joined[joined.as_array().len()-1]}\");\n"
+"    log.info(f\"total={total} n={joined.len()} first={joined[0]!} "
+"last={joined[joined.as_array().len()-1]!}\");\n"
 "}\n"
 "```"
 msgstr ""
@@ -5077,7 +5091,7 @@ msgid ""
 "    let (s, ee) = encodeJson(JsonArr([JsonI64(1), JsonI64(2), "
 "JsonI64(3)]));\n"
 "    if (e == nil && ee == nil) {\n"
-"        log.info(f\"n={n.get()} s={s}\");\n"
+"        log.info(f\"n={n!.get()} s={s!}\");\n"
 "    }\n"
 "}\n"
 "```"
@@ -5165,7 +5179,7 @@ msgid ""
 "    v.push(20);\n"
 "    v.push(30);\n"
 "    let last = v.pop();\n"
-"    log.info(f\"len={v.len()} last={last} first={v[0]}\");\n"
+"    log.info(f\"len={v.len()} last={last} first={v[0]!}\");\n"
 "\n"
 "    // fixed arrays + string_join from core\n"
 "    let parts: Vec<str> = Vec::from([\"rut\", \"runs\"]);\n"
@@ -5551,19 +5565,20 @@ msgid ""
 "Absence is `nil` on a nullable type, spelled as a prefix on the type: `?T` "
 "is \"a `T` or `nil`\". `?` applies to the type term that follows, so `[?T]` "
 "is an array of nullables while `?[T]` is a nullable array, and `??T` chains "
-"(and unwraps transitively at use)."
+"(one `?` layer per `!`)."
 msgstr ""
 
 #: src/core-concepts/everything-is-a-value.md:71
 msgid ""
-"The coercions are one line: **`T → ?T` boxes; `?T → T` derefs.** The box is "
-"a fresh one-slot cell that _aliases_ the value's cell — boxing a record "
-"shares it, boxing a primitive copies its bits. The deref is implicit at "
-"every value position: field access, method calls, indexing, iteration, "
-"arithmetic all read through the box."
+"The coercions are asymmetric — **`T → ?T` boxes, implicit, cannot fail; `?T "
+"→ T` happens ONLY through the postfix assert `e!`** — one `?` layer per `!`. "
+"The box is a fresh one-slot cell that _aliases_ the value's cell — boxing a "
+"record shares it, boxing a primitive copies its bits. The peel is never "
+"implicit: a nullable reads through the assert — `u!.name`, `u!.m(..)`, "
+"`u![i]` — and a `nil` operand traps `NilDeref` at the `!`'s own site."
 msgstr ""
 
-#: src/core-concepts/everything-is-a-value.md:77
+#: src/core-concepts/everything-is-a-value.md:79
 msgid ""
 "```rut\n"
 "use ink::{ Logger };\n"
@@ -5578,7 +5593,7 @@ msgid ""
 "entry fn main() {\n"
 "    let log = Logger(\"values\");\n"
 "    let u = lookup(7);                // ?User\n"
-"    log.info(f\"u.name = {u.name}\");   // auto-deref when non-nil\n"
+"    log.info(f\"u.name = {u!.name}\");  // the assert — traps HERE if nil\n"
 "    let missing = lookup(8);\n"
 "    log.info(f\"miss is nil: {missing == nil}\");   // guard where absence "
 "is expected\n"
@@ -5586,33 +5601,36 @@ msgid ""
 "```"
 msgstr ""
 
-#: src/core-concepts/everything-is-a-value.md:101
+#: src/core-concepts/everything-is-a-value.md:103
 msgid ""
-"A `nil` reaching a value use traps (`NilDeref`) — never a silent read. Guard "
-"with `u == nil` where absence is expected; the trap is the bug-catcher, not "
-"the semantics. A miss is `nil` and nothing else: a lookup that finds nothing "
-"returns `?V`, and callers compare against `nil`."
+"A `nil` reaching an assert traps (`NilDeref`) at the `!` — never a silent "
+"read, and the trap site is marked in the source: `grep '!'` over a program "
+"is the complete list of its nil-trap sites. Guard with `u == nil` where "
+"absence is expected — the guard idiom is `if (u != nil) { let user = u!; .. "
+"}`: inside a true guard the assert cannot trap, but the compiler does not "
+"prove it (no flow typing). A miss is `nil` and nothing else: a lookup that "
+"finds nothing returns `?V`, and callers compare against `nil`."
 msgstr ""
 
-#: src/core-concepts/everything-is-a-value.md:107
+#: src/core-concepts/everything-is-a-value.md:112
 msgid "`==` is honest about the regime"
 msgstr ""
 
-#: src/core-concepts/everything-is-a-value.md:109
+#: src/core-concepts/everything-is-a-value.md:114
 msgid "Primitives compare **by value**."
 msgstr ""
 
-#: src/core-concepts/everything-is-a-value.md:110
+#: src/core-concepts/everything-is-a-value.md:115
 msgid "`str` compares **by content** (codepoints); `bytes` by octets."
 msgstr ""
 
-#: src/core-concepts/everything-is-a-value.md:111
+#: src/core-concepts/everything-is-a-value.md:116
 msgid ""
 "Everything else compares **by identity** — two bindings are equal exactly "
 "when they name the same cell."
 msgstr ""
 
-#: src/core-concepts/everything-is-a-value.md:114
+#: src/core-concepts/everything-is-a-value.md:119
 msgid ""
 "Identity is the only equality full sharing can defend: two separately built "
 "`[1, 2]` arrays are two cells, so `[1,2] == [1,2]` is `false`. Content "
@@ -5621,29 +5639,29 @@ msgid ""
 "immortal singletons, so `Flavor::Sour == Flavor::Sour` is `true`."
 msgstr ""
 
-#: src/core-concepts/everything-is-a-value.md:121
+#: src/core-concepts/everything-is-a-value.md:126
 msgid "The answer channel: a pair"
 msgstr ""
 
-#: src/core-concepts/everything-is-a-value.md:123
+#: src/core-concepts/everything-is-a-value.md:128
 msgid ""
 "There is no exception type. Failures are data in the second element of a "
 "record — `(value, err)` — with one documented convention:"
 msgstr ""
 
-#: src/core-concepts/everything-is-a-value.md:127
+#: src/core-concepts/everything-is-a-value.md:132
 msgid "an **empty err plus a value** is success;"
 msgstr ""
 
-#: src/core-concepts/everything-is-a-value.md:128
+#: src/core-concepts/everything-is-a-value.md:133
 msgid "an **empty err plus `nil`** means \"not found\";"
 msgstr ""
 
-#: src/core-concepts/everything-is-a-value.md:129
+#: src/core-concepts/everything-is-a-value.md:134
 msgid "a **non-empty err** means \"failed\"."
 msgstr ""
 
-#: src/core-concepts/everything-is-a-value.md:131
+#: src/core-concepts/everything-is-a-value.md:136
 msgid ""
 "```rut\n"
 "use ink::{ Logger };\n"
@@ -5683,7 +5701,7 @@ msgid ""
 "```"
 msgstr ""
 
-#: src/core-concepts/everything-is-a-value.md:172
+#: src/core-concepts/everything-is-a-value.md:177
 msgid ""
 "The pair destructure in return position is free — the compiler fuses the "
 "mint away — so this shape costs nothing on hot paths. At the host boundary "
@@ -5691,18 +5709,18 @@ msgid ""
 "the standard answer a Rust embedder reads."
 msgstr ""
 
-#: src/core-concepts/everything-is-a-value.md:177
+#: src/core-concepts/everything-is-a-value.md:182
 msgid "Consequences you feel day to day"
 msgstr ""
 
-#: src/core-concepts/everything-is-a-value.md:179
+#: src/core-concepts/everything-is-a-value.md:184
 msgid ""
 "**Reassignment is cheap.** Moving containers around — returning them, "
 "storing them, restructuring them — is handle traffic, not payload traffic. "
 "Algorithms that churn records and arrays pay aliasing, not copying."
 msgstr ""
 
-#: src/core-concepts/everything-is-a-value.md:183
+#: src/core-concepts/everything-is-a-value.md:188
 msgid ""
 "**Loop variables share elements; the binding is one variable.** A `for (let "
 "x of xs)` loop hands you the stored element: the loop variable is mutable "
@@ -5713,14 +5731,14 @@ msgid ""
 "law treats it like any other ref-headed binding."
 msgstr ""
 
-#: src/core-concepts/everything-is-a-value.md:191
+#: src/core-concepts/everything-is-a-value.md:196
 msgid ""
 "**Containers of primitives stay flat.** A fixed `[i32]` is a packed `i32` "
 "buffer; growable sequences of primitives store raw payloads with a one-byte "
 "nil tag — no per-element heap box."
 msgstr ""
 
-#: src/core-concepts/everything-is-a-value.md:194
+#: src/core-concepts/everything-is-a-value.md:199
 msgid ""
 "**Erasure is a box.** `opaque(v)` mints an erasure box; recovery is "
 "`opaque::downcast<T>(o)`, checked against the runtime type. See [reified "
@@ -5728,7 +5746,7 @@ msgid ""
 "[`opaque`](../reference/opaque.md)."
 msgstr ""
 
-#: src/core-concepts/everything-is-a-value.md:199
+#: src/core-concepts/everything-is-a-value.md:204
 msgid ""
 "The memory machinery under all of this — refcounts, deterministic "
 "destructors, weak references — is the next chapter's subject: "
@@ -6202,7 +6220,7 @@ msgid ""
 "    let mixed: Vec<Area> = Vec::new();   // heterogeneous storage\n"
 "    mixed.push(Circle { r: 1.0 });\n"
 "    mixed.push(UnitSquare { side: 2.0 });\n"
-"    for (let s of mixed) { blit(g, s); }\n"
+"    for (let s of mixed) { blit(g, s!); }\n"
 "}\n"
 "```"
 msgstr ""
@@ -6923,7 +6941,7 @@ msgid ""
 "    log.info(f\"holding {m.name}; the view holds only a weak edge\");\n"
 "    m = Model { name: \"next\" };   // the old cell's last strong reference "
 "dies here\n"
-"    log.info(f\"upgrade() answers nil: {v.observer.upgrade() == nil}\");\n"
+"    log.info(f\"upgrade() answers nil: {v.observer!.upgrade() == nil}\");\n"
 "}\n"
 "```"
 msgstr ""
@@ -7893,9 +7911,9 @@ msgid ""
 "        let kept: Vec<Todo> = Vec::new();\n"
 "        let removed = false;\n"
 "        for (let t of self.items) {\n"
-"            when (t.id == id) {\n"
+"            when (t!.id == id) {\n"
 "                true -> { removed = true; },   // drop the row\n"
-"                else -> { kept.push(t); },     // keep everything else\n"
+"                else -> { kept.push(t!); },    // keep everything else\n"
 "            }\n"
 "        }\n"
 "        if (removed) {\n"
@@ -7953,7 +7971,7 @@ msgid ""
 "\n"
 "fn at(c: opaque, h: u32) -> TodoList {\n"
 "    let lists = opaque::downcast<?Lists>(c);\n"
-"    return lists.lists[h as i32];\n"
+"    return lists!!.lists[h as i32]!;\n"
 "}\n"
 "\n"
 "entry fn createContainer() -> opaque {\n"
@@ -7963,8 +7981,8 @@ msgid ""
 "\n"
 "entry fn create(c: opaque) -> u32 {\n"
 "    let k = opaque::downcast<?Lists>(c);\n"
-"    k.lists.push(TodoList::new());\n"
-"    return (k.lists.len() - 1) as u32;\n"
+"    k!!.lists.push(TodoList::new());\n"
+"    return (k!!.lists.len() - 1) as u32;\n"
 "}\n"
 "```"
 msgstr ""
@@ -8132,13 +8150,13 @@ msgid ""
 "\n"
 "entry fn serialize(c: opaque) -> str {\n"
 "    let b = opaque::downcast<?Bank>(c);\n"
-"    let xs = b.data;\n"
+"    let xs = b!!.data;\n"
 "    let out = \"[\";\n"
-"    for (let i = 0; i < xs.len(); i += 1) {\n"
+"    for (let i = 0; i < xs!.len(); i += 1) {\n"
 "        if (i > 0) {\n"
 "            out = f\"{out}, \";\n"
 "        }\n"
-"        out = f\"{out}{xs[i]}\";\n"
+"        out = f\"{out}{xs![i]!}\";\n"
 "    }\n"
 "    return f\"{out}]\";\n"
 "}\n"
@@ -8176,11 +8194,11 @@ msgid ""
 "    let b = opaque::downcast<?Bank>(c);\n"
 "    let unknown = false;\n"
 "    when (algo) {\n"
-"        \"insertion\" -> { insertion_sort(b.data); },\n"
-"        \"bubble\"    -> { bubble_sort(b.data); },\n"
-"        \"selection\" -> { selection_sort(b.data); },\n"
-"        \"quick\"     -> { quicksort(b.data, 0, b.data.len() - 1); },\n"
-"        \"merge\"     -> { merge_sort(b.data); },\n"
+"        \"insertion\" -> { insertion_sort(b!!.data); },\n"
+"        \"bubble\"    -> { bubble_sort(b!!.data); },\n"
+"        \"selection\" -> { selection_sort(b!!.data); },\n"
+"        \"quick\"     -> { quicksort(b!!.data, 0, b!!.data!.len() - 1); },\n"
+"        \"merge\"     -> { merge_sort(b!!.data); },\n"
 "        else        -> { unknown = true; },\n"
 "    }\n"
 "    if (unknown) {\n"
@@ -8228,7 +8246,7 @@ msgid ""
 "        x = (x.wrapping_mul(1664525)).wrapping_add(1013904223);\n"
 "        fresh.push((x % 1000) as i32);\n"
 "    }\n"
-"    b.data = fresh;\n"
+"    b!!.data = fresh;\n"
 "}\n"
 "\n"
 "entry fn main() {\n"
@@ -8237,10 +8255,10 @@ msgid ""
 "    let c = opaque(bank);\n"
 "    fill(c, 8, 42);\n"
 "    let b = opaque::downcast<?Bank>(c);\n"
-"    let xs = b.data;\n"
+"    let xs = b!!.data;\n"
 "    let out = \"\";\n"
-"    for (let x of xs) {\n"
-"        out = f\"{out} {x}\";\n"
+"    for (let x of xs!) {\n"
+"        out = f\"{out} {x!}\";\n"
 "    }\n"
 "    log.info(f\"fill(8, seed=42):{out}\");\n"
 "}\n"
@@ -10087,10 +10105,10 @@ msgid ""
 "}\n"
 "\n"
 "fn partition(xs: Vec<i32>, lo: i32, hi: i32) -> i32 {\n"
-"    let pivot = xs[hi];\n"
+"    let pivot = xs[hi]!;\n"
 "    let i = lo - 1;\n"
 "    for (let j = lo; j < hi; j += 1) {\n"
-"        if (xs[j] <= pivot) {\n"
+"        if (xs[j]! <= pivot) {\n"
 "            i += 1;\n"
 "            swap(xs, i, j);\n"
 "        }\n"
@@ -10114,8 +10132,8 @@ msgid ""
 "\n"
 "    let out = \"\";\n"
 "    for (let i = 0; i < xs.len(); i += 1) {\n"
-"        out = f\"{out}{xs[i]} \";      // rebinding `out`; the f-string form "
-"builds in place\n"
+"        out = f\"{out}{xs[i]!} \";      // rebinding `out`; the f-string "
+"form builds in place\n"
 "    }\n"
 "    log.info(f\"sorted: {out}\");\n"
 "}\n"
@@ -10164,7 +10182,7 @@ msgid ""
 "\n"
 "    let p = opaque::downcast<Point>(box1);       // ?Point — the nullable\n"
 "    when (p != nil) {\n"
-"        true -> { log.info(f\"point {p.x} {p.y}\"); },\n"
+"        true -> { log.info(f\"point {p!.x} {p!.y}\"); },\n"
 "        else  -> { log.info(\"point: nil\"); },\n"
 "    }\n"
 "    let wrong = opaque::downcast<i32>(box2);     // wrong type: nil, no "
@@ -11506,7 +11524,7 @@ msgid ""
 msgstr ""
 
 #: src/reference/primitive-types.md:25
-#: src/reference/builtin-generic-types.md:96 src/reference/opaque.md:14
+#: src/reference/builtin-generic-types.md:98 src/reference/opaque.md:14
 #: src/reference/host-futures.md:34
 msgid "Member"
 msgstr ""
@@ -11819,178 +11837,179 @@ msgid "chained"
 msgstr ""
 
 #: src/reference/builtin-generic-types.md:59
-msgid "the same runtime box, unwrapped transitively at use sites"
+#: src/reference/by-reference-and-nullable.md:69
+msgid "the same runtime box — one `!` per layer"
 msgstr ""
 
 #: src/reference/builtin-generic-types.md:61
 msgid ""
-"Coercions: **`T → ?T` boxes** (the box _aliases_ the payload's cell — a "
-"share; primitives copy bits), **`?T → T` derefs** (a field-0 read plus nil "
-"check). Both are implicit at the expected-type position; the funnel is "
-"transitive through `??T`."
+"Coercions are asymmetric: **`T → ?T` boxes** (the box _aliases_ the "
+"payload's cell — a share; primitives copy bits), implicit, cannot fail; "
+"**`?T → T` happens ONLY through the postfix assert `e!`** (a field-0 read "
+"plus nil check) — one `?` layer per `!`, and a `nil` operand traps "
+"`NilDeref` at the `!`'s own site."
 msgstr ""
 
-#: src/reference/builtin-generic-types.md:65
-#: src/reference/by-reference-and-nullable.md:83
+#: src/reference/builtin-generic-types.md:66
 msgid ""
-"Auto-deref covers every value position: `p.x`, `p.m(..)`, `p[i]`, `for (x of "
-"p)`, arithmetic on `p`'s payload."
+"Uses demand the assert: `p!.x`, `p!.m(..)`, `p![i]`, `for (x of p!)`, "
+"arithmetic on the payload."
 msgstr ""
 
-#: src/reference/builtin-generic-types.md:67
+#: src/reference/builtin-generic-types.md:68
 msgid ""
 "`p == nil` / `p != nil` compare against the null slot; `?T == ?T` is slot "
 "identity (see [Rc, dispose, and identity](rc-dispose-identity.md))."
 msgstr ""
 
-#: src/reference/builtin-generic-types.md:69
+#: src/reference/builtin-generic-types.md:70
 msgid ""
 "A `?T` binding IS the cell reference — writes through it hit the shared cell "
 "(gated only by the `const` opt-out, see [Modules and "
 "visibility](modules-and-visibility.md))."
 msgstr ""
 
-#: src/reference/builtin-generic-types.md:72
+#: src/reference/builtin-generic-types.md:73
 msgid ""
 "When the cell's refcount reaches zero, the engine runs the type's "
 "`[disposal]` member (`<free>(self, cx)`) — the cell-death hook, not a "
 "per-value attach ([the Rc heap](rc-heap.md))."
 msgstr ""
 
-#: src/reference/builtin-generic-types.md:75
+#: src/reference/builtin-generic-types.md:76
 msgid ""
 "Across the host boundary `?T` crosses nil-flattened when its element crosses."
 msgstr ""
 
-#: src/reference/builtin-generic-types.md:78
+#: src/reference/builtin-generic-types.md:79
 msgid "`Vec<T>` — the growable sequence"
 msgstr ""
 
-#: src/reference/builtin-generic-types.md:80
+#: src/reference/builtin-generic-types.md:81
 msgid ""
 "`Vec<T>` is a library class (package `pouch`) over the non-growable `[T]`: a "
-"`buf: [?T]` backing plus a live `len`. Loads yield the `?T` (uses "
-"auto-deref), stores take the coerced handle — reads and writes alias the "
-"stored cells, and binding an element copies nothing."
+"`buf: [?T]` backing plus a live `len`. Loads yield the `?T` — uses demand "
+"the assert (`v[i]!`) — stores take the coerced handle: reads and writes "
+"alias the stored cells, and binding an element copies nothing."
 msgstr ""
 
-#: src/reference/builtin-generic-types.md:85
+#: src/reference/builtin-generic-types.md:87
 msgid "Construction"
 msgstr ""
 
-#: src/reference/builtin-generic-types.md:87
+#: src/reference/builtin-generic-types.md:89
 msgid "`Vec::new()`"
 msgstr ""
 
-#: src/reference/builtin-generic-types.md:87
+#: src/reference/builtin-generic-types.md:89
 msgid "empty"
 msgstr ""
 
-#: src/reference/builtin-generic-types.md:88
+#: src/reference/builtin-generic-types.md:90
 msgid "`Vec::with_capacity(n)`"
 msgstr ""
 
-#: src/reference/builtin-generic-types.md:88
+#: src/reference/builtin-generic-types.md:90
 msgid "reserve `n` slots"
 msgstr ""
 
-#: src/reference/builtin-generic-types.md:89
+#: src/reference/builtin-generic-types.md:91
 msgid "`Vec::filled(v, n)`"
 msgstr ""
 
-#: src/reference/builtin-generic-types.md:89
+#: src/reference/builtin-generic-types.md:91
 msgid "`n` slots of `v`"
 msgstr ""
 
-#: src/reference/builtin-generic-types.md:90
+#: src/reference/builtin-generic-types.md:92
 msgid "`Vec::from(arr)`"
 msgstr ""
 
-#: src/reference/builtin-generic-types.md:90
+#: src/reference/builtin-generic-types.md:92
 msgid "copy a `[T]`"
 msgstr ""
 
-#: src/reference/builtin-generic-types.md:92
+#: src/reference/builtin-generic-types.md:94
 msgid ""
 "Explicit type arguments may be spelled at the call: `Vec<i32>::from([1, 2, "
 "3])`. Construction is always a method call (see [Classes and "
 "constructors](classes.md))."
 msgstr ""
 
-#: src/reference/builtin-generic-types.md:98
+#: src/reference/builtin-generic-types.md:100
 msgid "`push(v)`"
 msgstr ""
 
-#: src/reference/builtin-generic-types.md:98
+#: src/reference/builtin-generic-types.md:100
 msgid "append; amortized O(1) growth"
 msgstr ""
 
-#: src/reference/builtin-generic-types.md:99
+#: src/reference/builtin-generic-types.md:101
 msgid "`pop() -> T`"
 msgstr ""
 
-#: src/reference/builtin-generic-types.md:99
+#: src/reference/builtin-generic-types.md:101
 msgid ""
 "remove and return the last element; traps on empty — guard with `len() > 0`"
 msgstr ""
 
-#: src/reference/builtin-generic-types.md:100
+#: src/reference/builtin-generic-types.md:102
 msgid "`v[i]`, `v[i] = x`"
 msgstr ""
 
-#: src/reference/builtin-generic-types.md:100
+#: src/reference/builtin-generic-types.md:102
 msgid "element access; out-of-bounds traps"
 msgstr ""
 
-#: src/reference/builtin-generic-types.md:101 src/reference/stdlib.md:412
+#: src/reference/builtin-generic-types.md:103 src/reference/stdlib.md:412
 msgid "`len() -> i32`"
 msgstr ""
 
-#: src/reference/builtin-generic-types.md:101
+#: src/reference/builtin-generic-types.md:103
 msgid "live length"
 msgstr ""
 
-#: src/reference/builtin-generic-types.md:102
+#: src/reference/builtin-generic-types.md:104
 msgid "`for (x of v)`"
 msgstr ""
 
-#: src/reference/builtin-generic-types.md:102
+#: src/reference/builtin-generic-types.md:104
 msgid "iteration; `x` is the shared element"
 msgstr ""
 
-#: src/reference/builtin-generic-types.md:103 src/reference/stdlib.md:180
+#: src/reference/builtin-generic-types.md:105 src/reference/stdlib.md:180
 msgid "`slice(from, to) -> ?Vec<T>`"
 msgstr ""
 
-#: src/reference/builtin-generic-types.md:103
+#: src/reference/builtin-generic-types.md:105
 msgid "fixed-length window (compiler-lowered) — writes through it hit the parent"
 msgstr ""
 
-#: src/reference/builtin-generic-types.md:104
+#: src/reference/builtin-generic-types.md:106
 msgid "`as_array() -> [T]`"
 msgstr ""
 
-#: src/reference/builtin-generic-types.md:104
+#: src/reference/builtin-generic-types.md:106
 msgid "copy the live elements into a fresh, exactly-sized array"
 msgstr ""
 
-#: src/reference/builtin-generic-types.md:106
+#: src/reference/builtin-generic-types.md:108
 msgid ""
 "`Vec<u8>` has no `freeze` member: the module-level `freeze_bytes(v)` copies "
 "the live octets into the immutable `bytes`."
 msgstr ""
 
-#: src/reference/builtin-generic-types.md:109
+#: src/reference/builtin-generic-types.md:111
 msgid ""
 "`Vec<u8>` is the mutable binary builder; `bytes` is the binary type that "
 "crosses the host boundary (see [Primitive types](primitive-types.md))."
 msgstr ""
 
-#: src/reference/builtin-generic-types.md:113
+#: src/reference/builtin-generic-types.md:115
 msgid "`Weak<T>` — the weak reference"
 msgstr ""
 
-#: src/reference/builtin-generic-types.md:115
+#: src/reference/builtin-generic-types.md:117
 msgid ""
 "`Weak<T>` is a builtin class whose box holds an _unretained_ word to a "
 "referent — a weak never keeps anything alive. The name is **import-gated**: "
@@ -11998,7 +12017,7 @@ msgid ""
 "scope — `use core::{ Weak }` ``."
 msgstr ""
 
-#: src/reference/builtin-generic-types.md:120
+#: src/reference/builtin-generic-types.md:122
 msgid ""
 "```rut\n"
 "use core::{ Weak };\n"
@@ -12011,35 +12030,35 @@ msgid ""
 "    let tile = Tile { v: 7 };\n"
 "    let w = Weak::new(tile);        // the class-method construction\n"
 "    let got: ?Tile = w.upgrade();  // the live referent, or nil once dead\n"
-"    log.info(f\"{got.v}\");\n"
+"    log.info(f\"{got!.v}\");\n"
 "}\n"
 "```"
 msgstr ""
 
-#: src/reference/builtin-generic-types.md:139
+#: src/reference/builtin-generic-types.md:141
 msgid ""
 "`Weak::new(v)` traps on a `nil` `v`; `T` must be a reference type "
 "(`Weak<i32>` diagnoses — primitives move by value). `Weak<?U>` is legal and "
 "`upgrade()` answers `??U`."
 msgstr ""
 
-#: src/reference/builtin-generic-types.md:142
+#: src/reference/builtin-generic-types.md:144
 msgid ""
 "The referent's death nulls every weak box before any user code runs; "
 "`upgrade()` answers `nil` deterministically from then on."
 msgstr ""
 
-#: src/reference/builtin-generic-types.md:144
+#: src/reference/builtin-generic-types.md:146
 msgid ""
 "A weak edge closes no cycle: strong cycles still leak — see [Rc, dispose, "
 "and identity](rc-dispose-identity.md)."
 msgstr ""
 
-#: src/reference/builtin-generic-types.md:147
+#: src/reference/builtin-generic-types.md:149
 msgid "Keyed collections"
 msgstr ""
 
-#: src/reference/builtin-generic-types.md:149
+#: src/reference/builtin-generic-types.md:151
 msgid ""
 "`HashMap<K, V>` and `HashSet<T>` (package `nmapset`) wrap a native key "
 "table. Admission is the compile-time **union bound** `K requires i8 | i16 | "
@@ -12051,7 +12070,7 @@ msgid ""
 "not a copy (the aliasing law)."
 msgstr ""
 
-#: src/reference/builtin-generic-types.md:159
+#: src/reference/builtin-generic-types.md:161
 msgid ""
 "**Iteration.** Both classes mark the engine's `[iterable]` contract: `for "
 "(let k of m)` walks a map's **keys** and `for (let x of s)` a set's "
@@ -12065,7 +12084,7 @@ msgid ""
 "are shared record cells (see [Control flow](control-flow.md))."
 msgstr ""
 
-#: src/reference/builtin-generic-types.md:171
+#: src/reference/builtin-generic-types.md:173
 msgid ""
 "```rut\n"
 "use nmapset::{ HashMap };\n"
@@ -12082,37 +12101,38 @@ msgid ""
 "    // accumulator is a shared record cell\n"
 "    let acc: ?Sum = Sum { };\n"
 "    for (let name of ages) {\n"
-"        acc.total += ages.get(name);\n"
+"        acc!.total += ages.get(name)!;   // the assert peels each nullable "
+"use\n"
 "    }\n"
-"    log.info(f\"total={acc.total} count={ages.len()}\");\n"
+"    log.info(f\"total={acc!.total} count={ages.len()}\");\n"
 "}\n"
 "```"
 msgstr ""
 
-#: src/reference/builtin-generic-types.md:196
+#: src/reference/builtin-generic-types.md:198
 msgid "Absence and errors"
 msgstr ""
 
-#: src/reference/builtin-generic-types.md:198
+#: src/reference/builtin-generic-types.md:200
 msgid ""
 "**Absence** is `nil` on a nullable: a lookup returns `?V`, and `nil` means "
 "\"not found\"."
 msgstr ""
 
-#: src/reference/builtin-generic-types.md:200
+#: src/reference/builtin-generic-types.md:202
 msgid ""
 "**Errors** are the answer channel: `(?T, err)` — see [Primitive "
 "types](primitive-types.md)."
 msgstr ""
 
-#: src/reference/builtin-generic-types.md:202
+#: src/reference/builtin-generic-types.md:204
 msgid ""
 "**Type-erased recovery** is `opaque::downcast<T>(o) -> ?T` — the checked "
 "lane, `nil` on a miss; `unopaque<T>(o) -> T` is the inverse, the bad-cast "
 "lane — see [opaque — erasure and downcast](opaque.md)."
 msgstr ""
 
-#: src/reference/builtin-generic-types.md:206
+#: src/reference/builtin-generic-types.md:208
 msgid ""
 "A nullable/enum value is not compared structurally with `==` — test it with "
 "`when`, a `nil`/`!= nil` guard, or the payload."
@@ -13104,7 +13124,7 @@ msgid ""
 "    let log = Logger(\"t\");\n"
 "    let p: ?Point = Point { x: 7, y: 0 };\n"
 "    when (p != nil) {\n"
-"        true -> { log.info(f\"{p.x}\"); },\n"
+"        true -> { log.info(f\"{p!.x}\"); },\n"
 "        else -> { /* absent */ },\n"
 "    }\n"
 "}\n"
@@ -14053,7 +14073,7 @@ msgid ""
 "    let tile = Tile { v: 7 };\n"
 "    let w = Weak::new(tile);        // does NOT keep the cell alive\n"
 "    let got: ?Tile = w.upgrade();  // the live referent, or nil once dead\n"
-"    log.info(f\"{got.v}\");\n"
+"    log.info(f\"{got!.v}\");\n"
 "}\n"
 "```"
 msgstr ""
@@ -14077,22 +14097,22 @@ msgid ""
 msgstr ""
 
 #: src/reference/rc-dispose-identity.md:121
-#: src/reference/by-reference-and-nullable.md:102
+#: src/reference/by-reference-and-nullable.md:132
 msgid "Operand type"
 msgstr ""
 
 #: src/reference/rc-dispose-identity.md:121
-#: src/reference/by-reference-and-nullable.md:102
+#: src/reference/by-reference-and-nullable.md:132
 msgid "Lowering"
 msgstr ""
 
 #: src/reference/rc-dispose-identity.md:123
-#: src/reference/by-reference-and-nullable.md:104
+#: src/reference/by-reference-and-nullable.md:134
 msgid "numeric / `bool` primitives"
 msgstr ""
 
 #: src/reference/rc-dispose-identity.md:123
-#: src/reference/by-reference-and-nullable.md:104
+#: src/reference/by-reference-and-nullable.md:134
 msgid "value"
 msgstr ""
 
@@ -14101,19 +14121,19 @@ msgid "compare, IEEE 754 for floats (`NaN != NaN`, `-0.0 == 0.0`)"
 msgstr ""
 
 #: src/reference/rc-dispose-identity.md:124
-#: src/reference/by-reference-and-nullable.md:105
+#: src/reference/by-reference-and-nullable.md:135
 msgid "content (codepoints)"
 msgstr ""
 
 #: src/reference/rc-dispose-identity.md:124
 #: src/reference/rc-dispose-identity.md:125
-#: src/reference/by-reference-and-nullable.md:105
-#: src/reference/by-reference-and-nullable.md:106
+#: src/reference/by-reference-and-nullable.md:135
+#: src/reference/by-reference-and-nullable.md:136
 msgid "content compare"
 msgstr ""
 
 #: src/reference/rc-dispose-identity.md:125
-#: src/reference/by-reference-and-nullable.md:106
+#: src/reference/by-reference-and-nullable.md:136
 msgid "content (octets)"
 msgstr ""
 
@@ -14124,12 +14144,12 @@ msgid ""
 msgstr ""
 
 #: src/reference/rc-dispose-identity.md:126
-#: src/reference/by-reference-and-nullable.md:107
+#: src/reference/by-reference-and-nullable.md:137
 msgid "**cell identity**"
 msgstr ""
 
 #: src/reference/rc-dispose-identity.md:126
-#: src/reference/by-reference-and-nullable.md:107
+#: src/reference/by-reference-and-nullable.md:137
 msgid "the raw slot compare"
 msgstr ""
 
@@ -14150,7 +14170,8 @@ msgstr ""
 #: src/reference/rc-dispose-identity.md:134
 msgid ""
 "`?T == ?T` is slot identity: two `nil`s are equal, a null and a box are not; "
-"`p == nil` derefs the nullable side and compares against the null slot."
+"`p == nil` compares against the null slot — the payload reads only through "
+"the assert (`p!`)."
 msgstr ""
 
 #: src/reference/rc-dispose-identity.md:137
@@ -14548,7 +14569,7 @@ msgid ""
 "    shapes.push(Circle { r: 1.0 });\n"
 "    shapes.push(Square { side: 3.0 });\n"
 "    let total: f64 = 0.0;\n"
-"    for (let sh of shapes) { total += sh.area(); }\n"
+"    for (let sh of shapes) { total += sh!.area(); }\n"
 "    log.info(f\"total={total}\");\n"
 "}\n"
 "```"
@@ -15150,7 +15171,7 @@ msgid ""
 "name\n"
 "    let p = opaque::downcast<Point>(box1);      // ?Point — the nullable\n"
 "    when (p != nil) {\n"
-"        true -> { log.info(f\"point {p.x} {p.y}\"); },\n"
+"        true -> { log.info(f\"point {p!.x} {p!.y}\"); },\n"
 "        else  -> { log.info(\"point: nil\"); },\n"
 "    }\n"
 "    let wrong = opaque::downcast<i32>(opaque(Flavor::Sour));  // nil, no "
@@ -15180,7 +15201,7 @@ msgid ""
 "    let n = 5;\n"
 "    let b = opaque(n);    // a prim payload COPIES the bits\n"
 "    n = 9;                // ...so the source moving stays out\n"
-"    log.info(f\"{opaque::downcast<i32>(b)} vs {n}\");\n"
+"    log.info(f\"{opaque::downcast<i32>(b)!} vs {n}\");\n"
 "}\n"
 "```"
 msgstr ""
@@ -15740,9 +15761,9 @@ msgstr ""
 
 #: src/reference/string-views.md:100
 msgid ""
-"reads: `w[i]`, `w.len()`, `for (x of w)` — auto-deref the nullable and go "
-"through the window (element `i` is `parent[off + i]`, bounds are the "
-"window's);"
+"reads: `w![i]`, `w!.len()`, `for (x of w!)` — the assert peels the nullable, "
+"then the window's law applies (element `i` is `parent[off + i]`, bounds are "
+"the window's);"
 msgstr ""
 
 #: src/reference/string-views.md:103
@@ -16102,10 +16123,6 @@ msgstr ""
 msgid "Grammar — prefix only, binds tightest"
 msgstr ""
 
-#: src/reference/by-reference-and-nullable.md:69
-msgid "the same runtime box, unwrapped transitively"
-msgstr ""
-
 #: src/reference/by-reference-and-nullable.md:71
 msgid ""
 "There is no postfix `T?` and no `*T` — each falls to the ordinary error "
@@ -16121,23 +16138,64 @@ msgstr ""
 
 #: src/reference/by-reference-and-nullable.md:80
 msgid ""
-"**`T → ?T` boxes; `?T → T` derefs** — both implicit at the expected-type "
-"position, transitive through `??T`:"
+"**`T → ?T` boxes — implicit, cannot fail. `?T → T` happens ONLY through the "
+"postfix assert `e!`** — one `?` layer per `!`, and a `nil` operand traps "
+"`NilDeref` at the `!`'s own site. `f! = v` is not an assignable target (an "
+"assert is not a place). There is no implicit deref anywhere: `p.x`, "
+"`p.m(..)`, `p[i]`, `for (x of p)`, arithmetic on `p`'s payload — every use "
+"of a nullable demands the assert first, spelled `p!.x`, `p!.m(..)`, `p![i]`, "
+"`for (x of p!)`."
 msgstr ""
 
-#: src/reference/by-reference-and-nullable.md:85
+#: src/reference/by-reference-and-nullable.md:88
 msgid ""
-"`p == nil` / `p != nil` compare against the null slot; guard before use. The "
-"trap is the bug-catcher, not the semantics."
+"```rut\n"
+"class Foo {}\n"
+"\n"
+"impl Foo {\n"
+"    pub fn mk() -> Self { return Foo {}; }\n"
+"    pub fn x(self) -> i32 { return 42; }\n"
+"}\n"
+"\n"
+"fn maybe(v: i32) -> ?Foo {\n"
+"    if (v > 0) { return Foo::mk(); }\n"
+"    return nil;\n"
+"}\n"
+"\n"
+"entry fn main() -> nil {\n"
+"    let _t: ?Foo = maybe(1);    // T -> ?T boxes — implicit, cannot fail\n"
+"    let t = _t!;                // ?Foo -> Foo — the assert; traps HERE if "
+"nil\n"
+"    let v = t.x();              // plain receiver — no deref anywhere in "
+"sight\n"
+"    if (v != 42) { panic(\"wrong\"); }\n"
+"}\n"
+"```"
 msgstr ""
 
-#: src/reference/by-reference-and-nullable.md:87
+#: src/reference/by-reference-and-nullable.md:109
+msgid ""
+"`p == nil` / `p != nil` compare against the null slot — the guard; `?T == "
+"?T` is slot identity (see [Rc, dispose, and "
+"identity](rc-dispose-identity.md)); a MIXED `?T`/`T` compare is a compile "
+"error — spell `p! == t`."
+msgstr ""
+
+#: src/reference/by-reference-and-nullable.md:113
+msgid ""
+"The guard idiom: `if (f != nil) { let t = f!; t.x(); }` — inside a true "
+"guard the assert cannot trap, but the compiler does not prove it (no flow "
+"typing). The `!` is the author's mark: `grep '!'` over a program is the "
+"complete list of its nil-trap sites."
+msgstr ""
+
+#: src/reference/by-reference-and-nullable.md:117
 msgid ""
 "A `?T` binding IS the cell reference: writes through it hit the shared cell "
 "(a `nudge(pt: ?Point)` moves the caller's point)."
 msgstr ""
 
-#: src/reference/by-reference-and-nullable.md:89
+#: src/reference/by-reference-and-nullable.md:119
 msgid ""
 "`nil` typing: a context-free `nil` has type `nil`; in an expected-`?T` "
 "position it types as that `?T` — so `let p: ?Node = nil` and a `left: nil` "
@@ -16145,34 +16203,34 @@ msgid ""
 "and `nil` means \"not found\"."
 msgstr ""
 
-#: src/reference/by-reference-and-nullable.md:94
+#: src/reference/by-reference-and-nullable.md:124
 msgid ""
 "When the cell's refcount reaches zero, the engine runs the type's "
 "`[disposal]` member — the cell-death hook (see [Rc, dispose, and "
 "identity](rc-dispose-identity.md))."
 msgstr ""
 
-#: src/reference/by-reference-and-nullable.md:97
+#: src/reference/by-reference-and-nullable.md:127
 msgid ""
 "Across the host boundary `?T` crosses nil-flattened when its element crosses "
 "— an `entry fn -> (?T, err)` is a first-class host answer."
 msgstr ""
 
-#: src/reference/by-reference-and-nullable.md:100
+#: src/reference/by-reference-and-nullable.md:130
 msgid "`==` — identity for cells, content for text"
 msgstr ""
 
-#: src/reference/by-reference-and-nullable.md:104
+#: src/reference/by-reference-and-nullable.md:134
 msgid "IEEE 754 for floats (`NaN != NaN`, `-0.0 == 0.0`)"
 msgstr ""
 
-#: src/reference/by-reference-and-nullable.md:107
+#: src/reference/by-reference-and-nullable.md:137
 msgid ""
 "everything else — records, arrays, enums, closures, interface objects, "
 "`opaque`, `?T`"
 msgstr ""
 
-#: src/reference/by-reference-and-nullable.md:109
+#: src/reference/by-reference-and-nullable.md:139
 msgid ""
 "`[1, 2] == [1, 2]` is **false** — two cells. Identity is O(1) with no deep "
 "walk; compare content where content is the contract (a loop, or a hash/eq "
@@ -16182,12 +16240,12 @@ msgid ""
 "obviously-fresh composites."
 msgstr ""
 
-#: src/reference/by-reference-and-nullable.md:116
+#: src/reference/by-reference-and-nullable.md:146
 #: src/reference/typed-bytecode.md:121
 msgid "`bytes::clone()` — the one copy escape hatch"
 msgstr ""
 
-#: src/reference/by-reference-and-nullable.md:118
+#: src/reference/by-reference-and-nullable.md:148
 msgid ""
 "`b.clone() -> bytes` mints a fresh buffer with `b`'s octets — a one-shot "
 "deep copy, the **only copy syntax in the language**. `bytes::from(a)` also "
@@ -16195,7 +16253,7 @@ msgid ""
 "any other type is unreachable — build a new one instead."
 msgstr ""
 
-#: src/reference/by-reference-and-nullable.md:123
+#: src/reference/by-reference-and-nullable.md:153
 msgid ""
 "```rut\n"
 "use ink::{ Logger };\n"
@@ -16210,44 +16268,44 @@ msgid ""
 "```"
 msgstr ""
 
-#: src/reference/by-reference-and-nullable.md:139
+#: src/reference/by-reference-and-nullable.md:169
 msgid "Containers under sharing"
 msgstr ""
 
-#: src/reference/by-reference-and-nullable.md:141
+#: src/reference/by-reference-and-nullable.md:171
 msgid ""
 "`Vec<T>` backs on `buf: [?T]` — `[nil; cap]` is the generic zero (`nil` is "
 "the slot's zero); `push` takes the `T → ?T`\\-boxed handle; loads yield the "
-"`?T` (uses auto-deref). See [Builtin generic "
+"`?T` — uses demand the assert (`v![0]`). See [Builtin generic "
 "types](builtin-generic-types.md)."
 msgstr ""
 
-#: src/reference/by-reference-and-nullable.md:145
+#: src/reference/by-reference-and-nullable.md:175
 msgid ""
 "Keyed collections: `get(k) -> ?V` — `nil` = absent, a hit answers the "
 "**stored cell** (the aliasing law: two gets of one key name one cell until a "
 "replace re-stores)."
 msgstr ""
 
-#: src/reference/by-reference-and-nullable.md:148
+#: src/reference/by-reference-and-nullable.md:178
 msgid ""
 "Array windows (`v.slice(a, b) -> ?Vec<T>`) are the shared cell: writes "
 "through the window hit the parent (see [String slicing and "
 "views](string-views.md))."
 msgstr ""
 
-#: src/reference/by-reference-and-nullable.md:151
+#: src/reference/by-reference-and-nullable.md:181
 msgid ""
 "Erasure rides the same laws: `opaque(v)` aliases the payload's cell, and "
 "`opaque::downcast<T>(o)`'s match is the box's own inner cell (see [opaque — "
 "erasure and downcast](opaque.md))."
 msgstr ""
 
-#: src/reference/by-reference-and-nullable.md:155
+#: src/reference/by-reference-and-nullable.md:185
 msgid "The answer channel"
 msgstr ""
 
-#: src/reference/by-reference-and-nullable.md:157
+#: src/reference/by-reference-and-nullable.md:187
 msgid ""
 "**`(?T, err)` — concretely `(value, ok)` / `(T, str)` — is THE answer "
 "channel.** The convention is law: empty err + a value = success; empty err + "
@@ -16699,7 +16757,7 @@ msgid ""
 "    let w = Weak::new(n);        // Weak<Node>; T infers from n\n"
 "    let b = w.upgrade();        // ?Node — a live handle\n"
 "    if (b != nil) {\n"
-"        use_node(b);\n"
+"        use_node(b!);           // the guard idiom — inside it, no trap\n"
 "    }\n"
 "}\n"
 "```"
@@ -20902,7 +20960,7 @@ msgid ""
 "then Rust `Drop` ([the Rc heap](rc-heap.md))."
 msgstr ""
 
-#: src/reference/host-fns.md:146 src/reference/frontend.md:168
+#: src/reference/host-fns.md:146 src/reference/frontend.md:170
 #: src/reference/cli.md:383
 msgid "Declaration mode"
 msgstr ""
@@ -23307,7 +23365,7 @@ msgstr ""
 msgid "invariant"
 msgstr ""
 
-#: src/reference/frontend.md:19 src/reference/frontend.md:132
+#: src/reference/frontend.md:19 src/reference/frontend.md:134
 msgid "mechanism"
 msgstr ""
 
@@ -23639,20 +23697,24 @@ msgid "14"
 msgstr ""
 
 #: src/reference/frontend.md:120
-msgid "postfix: `.name`, `.name<..>(..)`, `(..)`, `[..]`"
+msgid ""
+"postfix: `.name`, `.name<..>(..)`, `(..)`, `[..]`, `!` (the nil assert — "
+"tightest, chains freely: `f!.x()`, `f![i] = v`, one `?` layer per `!`)"
 msgstr ""
 
 #: src/reference/frontend.md:122
 msgid ""
 "Postfixes chain in one loop, so `p.value.x` and `arr[i].push(x)` compose "
-"without special cases. `is` (type test) is a keyword; `as` is the only cast."
-msgstr ""
-
-#: src/reference/frontend.md:125
-msgid "Lookahead"
+"without special cases. The assert `!` rides the same loop — `f!.x()`, `f![i] "
+"= v`, `f\"{f!}\"`; one `!` peels one `?` layer. `is` (type test) is a "
+"keyword; `as` is the only cast."
 msgstr ""
 
 #: src/reference/frontend.md:127
+msgid "Lookahead"
+msgstr ""
+
+#: src/reference/frontend.md:129
 msgid ""
 "rut's grammar makes shallow peeking enough: statements are keyword-led, `{` "
 "never starts an expression, imports are flat, and paths are `::`\\-separated "
@@ -23660,91 +23722,91 @@ msgid ""
 "lookahead)."
 msgstr ""
 
-#: src/reference/frontend.md:132
+#: src/reference/frontend.md:134
 msgid "decision"
 msgstr ""
 
-#: src/reference/frontend.md:134
+#: src/reference/frontend.md:136
 msgid "item dispatch"
 msgstr ""
 
-#: src/reference/frontend.md:134
+#: src/reference/frontend.md:136
 msgid "peek 1 (`use` `let` `enum` `struct` `class` `interface` `impl` `fn`)"
 msgstr ""
 
-#: src/reference/frontend.md:135
+#: src/reference/frontend.md:137
 msgid "statement vs expression-statement"
 msgstr ""
 
-#: src/reference/frontend.md:135
+#: src/reference/frontend.md:137
 msgid "peek 1 (leading keyword)"
 msgstr ""
 
-#: src/reference/frontend.md:136
+#: src/reference/frontend.md:138
 msgid "`for`\\-of vs C-style `for`"
 msgstr ""
 
-#: src/reference/frontend.md:136
+#: src/reference/frontend.md:138
 msgid "peek 4: `for ( let Ident <of or =>`"
 msgstr ""
 
-#: src/reference/frontend.md:137
+#: src/reference/frontend.md:139
 msgid "instance vs class method"
 msgstr ""
 
-#: src/reference/frontend.md:137
+#: src/reference/frontend.md:139
 msgid "peek 4: `fn Ident ( <self? …>`"
 msgstr ""
 
-#: src/reference/frontend.md:138
+#: src/reference/frontend.md:140
 msgid "struct literal vs path expression"
 msgstr ""
 
-#: src/reference/frontend.md:138
+#: src/reference/frontend.md:140
 msgid "peek 2: `Ident {` ⇒ literal (classes have no instance literal)"
 msgstr ""
 
-#: src/reference/frontend.md:139
+#: src/reference/frontend.md:141
 msgid "`when`\\-arm body form"
 msgstr ""
 
-#: src/reference/frontend.md:139
+#: src/reference/frontend.md:141
 msgid "peek 1 after `->` (`{` ⇒ block arm, else expression arm)"
 msgstr ""
 
-#: src/reference/frontend.md:140
+#: src/reference/frontend.md:142
 msgid "`if` atom vs statement"
 msgstr ""
 
-#: src/reference/frontend.md:140
+#: src/reference/frontend.md:142
 msgid ""
 "peek 2: `if (` in expression position ⇒ the if ATOM (statement-leading `if` "
 "is claimed by the statement grammar first)"
 msgstr ""
 
-#: src/reference/frontend.md:141
+#: src/reference/frontend.md:143
 msgid "postfix loop step"
 msgstr ""
 
-#: src/reference/frontend.md:141
-msgid "peek 1 (`.` `(` `[`)"
-msgstr ""
-
-#: src/reference/frontend.md:142
-msgid "assignment target"
-msgstr ""
-
-#: src/reference/frontend.md:142
-msgid "no lookahead — parse, then validate"
+#: src/reference/frontend.md:143
+msgid "peek 1 (`.` `(` `[` `!`)"
 msgstr ""
 
 #: src/reference/frontend.md:144
+msgid "assignment target"
+msgstr ""
+
+#: src/reference/frontend.md:144
+msgid "no lookahead — parse, then validate"
+msgstr ""
+
+#: src/reference/frontend.md:146
 msgid ""
 "Two decisions need more than 4 tokens and use **scans** — read-only, "
 "commit-once, never a guess:"
 msgstr ""
 
-#: src/reference/frontend.md:147
+#: src/reference/frontend.md:149
 msgid ""
 "**Lambda vs parenthesized expression.** Scan to the matching `)`; it is a "
 "lambda iff `=>` follows the matching `)` (an optional `-> Type` may sit "
@@ -23752,7 +23814,7 @@ msgid ""
 "expression a tuple — `(a, b)`."
 msgstr ""
 
-#: src/reference/frontend.md:151
+#: src/reference/frontend.md:153
 msgid ""
 "**Generic call vs `<` comparison** (`Vec<f32>(n)` vs `a < b > (c)`). Scan "
 "from the `<` tracking angle depth; a `>>`/`<<` consumed where a "
@@ -23762,25 +23824,25 @@ msgid ""
 "write `(a < b) > (c)`."
 msgstr ""
 
-#: src/reference/frontend.md:158
+#: src/reference/frontend.md:160
 msgid ""
 "Scans never mutate parser state. Peeking at arbitrary distance is allowed; "
 "checkpoint/rollback is not — the API does not exist, so the monotone-cursor "
 "invariant (debug-asserted) cannot be violated, even during error recovery."
 msgstr ""
 
-#: src/reference/frontend.md:162
+#: src/reference/frontend.md:164
 msgid "Recovery"
 msgstr ""
 
-#: src/reference/frontend.md:164
+#: src/reference/frontend.md:166
 msgid ""
 "Within a file the parser resynchronizes at `;`, `}`, or the token after a "
 "balanced block and keeps parsing — a file yields many diagnostics, not one. "
 "Resync only ever skips forward."
 msgstr ""
 
-#: src/reference/frontend.md:170
+#: src/reference/frontend.md:172
 msgid ""
 "The mode is chosen by file extension: `Mode::Impl` for `.rut`, `Mode::Decl` "
 "for `.d.rut`. Both share one grammar; declaration mode adds the surface "
@@ -23792,7 +23854,7 @@ msgid ""
 "bind at load time live in [Host fns and declaration files](host-fns.md)."
 msgstr ""
 
-#: src/reference/frontend.md:181
+#: src/reference/frontend.md:183
 msgid ""
 "Declarations-only module scope is enforced by the parser itself: a statement "
 "at module top level is a syntax error, not a semantic one. The grammar "
@@ -23800,11 +23862,11 @@ msgid ""
 "[Modules and visibility](modules-and-visibility.md)."
 msgstr ""
 
-#: src/reference/frontend.md:186
+#: src/reference/frontend.md:188
 msgid "The AST"
 msgstr ""
 
-#: src/reference/frontend.md:188
+#: src/reference/frontend.md:190
 msgid ""
 "Nodes are plain records in one arena; children are `NodeId`s into it. Spans "
 "sit on every node; there are no `String` keys — names are `IdentId`s into an "
@@ -23816,65 +23878,65 @@ msgid ""
 "equality, never by text."
 msgstr ""
 
-#: src/reference/frontend.md:202
+#: src/reference/frontend.md:204
 msgid "// items\n"
 msgstr ""
 
-#: src/reference/frontend.md:206
+#: src/reference/frontend.md:208
 msgid "// fields only\n"
 msgstr ""
 
-#: src/reference/frontend.md:207
+#: src/reference/frontend.md:209
 msgid ""
 "// fields only —\n"
 "                                                           // methods live "
 "in impls\n"
 msgstr ""
 
-#: src/reference/frontend.md:209
+#: src/reference/frontend.md:211
 msgid "// signatures only\n"
 msgstr ""
 
-#: src/reference/frontend.md:210
+#: src/reference/frontend.md:212
 msgid ""
 "// inherent only —\n"
 "              // no trait_ref: `impl I for T` does not parse\n"
 msgstr ""
 
-#: src/reference/frontend.md:213
+#: src/reference/frontend.md:215
 msgid ""
 "// .d.rut only\n"
 "    // statements\n"
 msgstr ""
 
-#: src/reference/frontend.md:216
+#: src/reference/frontend.md:218
 msgid "// expressions\n"
 msgstr ""
 
-#: src/reference/frontend.md:222
+#: src/reference/frontend.md:224
 msgid "// the block value; tail: Option\n"
 msgstr ""
 
-#: src/reference/frontend.md:224
+#: src/reference/frontend.md:226
 msgid "// the if ATOM (statement-if above)\n"
 msgstr ""
 
-#: src/reference/frontend.md:225
+#: src/reference/frontend.md:227
 msgid "// holes are NodeIds\n"
 msgstr ""
 
-#: src/reference/frontend.md:227
+#: src/reference/frontend.md:229
 msgid "// `expr as ty` — the one cast\n"
 msgstr ""
 
-#: src/reference/frontend.md:231
+#: src/reference/frontend.md:233
 msgid ""
 "Stable `NodeId`s are the rest of the pipeline's currency: the checker keys "
 "side tables by node id, diagnostics reach spans through them, and the LSP, "
 "formatter, and dumper hold copyable references with no reparenting."
 msgstr ""
 
-#: src/reference/frontend.md:235
+#: src/reference/frontend.md:237
 msgid ""
 "What the AST does **not** contain: no `new`, no `switch`/`case`, no `?.` or "
 "`??` — the grammar has no such forms (those words are ordinary identifiers, "
@@ -23882,11 +23944,11 @@ msgid ""
 "nodes either: the parse's grouping _is_ the tree."
 msgstr ""
 
-#: src/reference/frontend.md:240
+#: src/reference/frontend.md:242
 msgid "Diagnostics"
 msgstr ""
 
-#: src/reference/frontend.md:246
+#: src/reference/frontend.md:248
 msgid ""
 "One renderer serves every frontend stage: a primary `error:` line, the "
 "rustc-style `--> file:line:col` arrow (1-based line and char column; the "
@@ -23900,24 +23962,24 @@ msgid ""
 "(`Circle::new(..)`)_ for a struct literal on a class from a used package."
 msgstr ""
 
-#: src/reference/frontend.md:258
+#: src/reference/frontend.md:260
 msgid ""
 "The compile stops before IR if any diagnostic exists — a module with "
 "diagnostics never produces bytecode. See [Diagnostics, traces, and "
 "symbolication](diagnostics.md) for the runtime half of the story."
 msgstr ""
 
-#: src/reference/frontend.md:263
+#: src/reference/frontend.md:265
 msgid "The formatter"
 msgstr ""
 
-#: src/reference/frontend.md:265
+#: src/reference/frontend.md:267
 msgid ""
 "`rut fmt` (crate `rut-fmt`, CLI subcommand) reprints a parsed-clean module "
 "from the AST:"
 msgstr ""
 
-#: src/reference/frontend.md:268
+#: src/reference/frontend.md:270
 msgid ""
 "**Comment gap-scan** — comments live in the byte gaps between token spans, "
 "so the formatter recovers every `//` and block comment with zero "
@@ -23925,7 +23987,7 @@ msgid ""
 "runs at the enclosing indent."
 msgstr ""
 
-#: src/reference/frontend.md:272
+#: src/reference/frontend.md:274
 msgid ""
 "**Literals print verbatim** — a paren is kept exactly where the bare "
 "spelling would not re-parse to the same node; literals (numbers, strings, "
@@ -23935,20 +23997,20 @@ msgid ""
 "the formatter re-derives nothing else."
 msgstr ""
 
-#: src/reference/frontend.md:278
+#: src/reference/frontend.md:280
 msgid ""
 "**Tested invariants** — every corpus file formats, reparses clean, and is "
 "idempotent (`fmt(fmt(x)) == fmt(x)`); probe programs run through the full "
 "pipeline before and after formatting and log identical output."
 msgstr ""
 
-#: src/reference/frontend.md:281
+#: src/reference/frontend.md:283
 msgid ""
 "**Refusal law** — a source with diagnostics is refused: rendered "
 "diagnostics, exit 1, nothing rewritten. The formatter never guesses."
 msgstr ""
 
-#: src/reference/frontend.md:283
+#: src/reference/frontend.md:285
 msgid ""
 "**Style is the package's** — the nearest ancestor `rut.jsonc`'s `style` "
 "block sets `indent_width` (1–8, default 4) and `max_width` (≥ 20, default "
@@ -23956,11 +24018,11 @@ msgid ""
 "rut.jsonc](project-structure.md)."
 msgstr ""
 
-#: src/reference/frontend.md:288
+#: src/reference/frontend.md:290
 msgid "Testing"
 msgstr ""
 
-#: src/reference/frontend.md:290
+#: src/reference/frontend.md:292
 msgid ""
 "The corpus is the conformance suite: every `examples/**/*.rut`, "
 "`examples/**/*.d.rut`, and playground classic must parse with zero "
@@ -24213,26 +24275,28 @@ msgstr ""
 #: src/reference/compiler.md:71
 msgid ""
 "**The `==` law** — primitives and `str` compare by value; every other cell "
-"type compares by identity; nullable `?T` operands and tuple operands are a "
-"compile error (_pattern-match instead_ — destructure the pair). A lint flags "
-"`==` between two obviously fresh composites."
+"type compares by identity; `?T == ?T` is slot identity and `p == nil` / `p "
+"!= nil` compare against the null slot, while a MIXED nullable/plain compare "
+"is the demand-`!` error (spell `p! == t`); tuple operands are a compile "
+"error (_pattern-match instead_ — destructure the pair). A lint flags `==` "
+"between two obviously fresh composites."
 msgstr ""
 
-#: src/reference/compiler.md:75
+#: src/reference/compiler.md:78
 msgid ""
 "**`is` folding** — when the receiver's static type already answers the "
 "question (a concrete receiver, `d: I is I`), the expression folds to a "
 "constant and an always-true/false lint fires."
 msgstr ""
 
-#: src/reference/compiler.md:78
+#: src/reference/compiler.md:81
 msgid ""
 "**Union bounds** — a generic parameter's `requires T1 | T2` bound is checked "
 "at every site that completes the substitution ([Type aliases and union "
 "bounds](type-aliases.md))."
 msgstr ""
 
-#: src/reference/compiler.md:81
+#: src/reference/compiler.md:84
 msgid ""
 "**Interface bounds** — a `T requires I` bound checks the interface's member "
 "set once, where `T` is chosen: at a generic call's instantiation and at a "
@@ -24240,7 +24304,7 @@ msgid ""
 "naming the first missing member ([Interfaces and dispatch](interfaces.md))."
 msgstr ""
 
-#: src/reference/compiler.md:86
+#: src/reference/compiler.md:89
 msgid ""
 "**The crossing rule** — an `entry fn`'s published signature may only use "
 "types that cross the host boundary: primitives, `str`, `bytes`, `opaque`, "
@@ -24249,18 +24313,18 @@ msgid ""
 "load time ([The host boundary](../core-concepts/host-boundary.md))."
 msgstr ""
 
-#: src/reference/compiler.md:92
+#: src/reference/compiler.md:95
 msgid ""
 "There is no orphan rule to enforce — nothing registers. Satisfaction is "
 "checked at boundaries only, so the checker's interface work is a "
 "per-call-site member-set match, never a program-wide search."
 msgstr ""
 
-#: src/reference/compiler.md:96
+#: src/reference/compiler.md:99
 msgid "Monomorphization"
 msgstr ""
 
-#: src/reference/compiler.md:98
+#: src/reference/compiler.md:101
 msgid ""
 "Generic functions never reach a binary. The checker's instantiation queue "
 "compiles one concrete copy per substitution; the queue closes because "
@@ -24270,7 +24334,7 @@ msgid ""
 "runtime."
 msgstr ""
 
-#: src/reference/compiler.md:105
+#: src/reference/compiler.md:108
 msgid ""
 "The same law fixes WHERE an instantiation compiles: where the body lives. "
 "`Vec<i64>` is one type program-wide — the declaring package owns every "
@@ -24281,7 +24345,7 @@ msgid ""
 "instantiation's code."
 msgstr ""
 
-#: src/reference/compiler.md:113
+#: src/reference/compiler.md:116
 msgid ""
 "There is no splice lane and no `inline` flag left: **every module links**. A "
 "class's methods cross on the surface's inherent rows (the ordinary call "
@@ -24292,21 +24356,21 @@ msgid ""
 "[Project structure and rut.jsonc](project-structure.md)."
 msgstr ""
 
-#: src/reference/compiler.md:122
+#: src/reference/compiler.md:125
 msgid "The type lattice"
 msgstr ""
 
-#: src/reference/compiler.md:124
+#: src/reference/compiler.md:127
 msgid ""
 "In a no-JIT VM, compile-time type knowledge is the only knowledge. The IR "
 "tracks a per-value lattice:"
 msgstr ""
 
-#: src/reference/compiler.md:131
+#: src/reference/compiler.md:134
 msgid "**Exact types** compile to direct calls and known layouts."
 msgstr ""
 
-#: src/reference/compiler.md:132
+#: src/reference/compiler.md:135
 msgid ""
 "**Interface-typed values** (`s: Drawable`) are unsized: the payload lives in "
 "a heap cell and the slot stores the cell handle. One indirect itable call "
@@ -24316,7 +24380,7 @@ msgid ""
 "devirtualizes at body-compile time and the dispatch overhead is zero."
 msgstr ""
 
-#: src/reference/compiler.md:140
+#: src/reference/compiler.md:143
 msgid ""
 "**Erasure sits off the lattice.** The `opaque` primitive is reached only "
 "through the type-call `opaque(v)`, and `opaque::downcast<T>(o)` is the "
@@ -24328,14 +24392,14 @@ msgid ""
 "through `opaque` is JIT behavior and does not exist."
 msgstr ""
 
-#: src/reference/compiler.md:149
+#: src/reference/compiler.md:152
 msgid ""
 "**The slice tier** parallels interface widening: `Array<T, N> | Vec<T> "
 "(concrete)  >  Slice<T> view (unsized)`. `N` is part of the type's identity; "
 "slices are never boxed or erased."
 msgstr ""
 
-#: src/reference/compiler.md:153
+#: src/reference/compiler.md:156
 msgid ""
 "The intended program shape: exact types on the hot path, interface-typed "
 "values where polymorphism is real, `opaque` only inside heterogeneous "
@@ -24343,35 +24407,35 @@ msgid ""
 "non-storage function boundaries."
 msgstr ""
 
-#: src/reference/compiler.md:158
+#: src/reference/compiler.md:161
 msgid "Optimization"
 msgstr ""
 
-#: src/reference/compiler.md:160
+#: src/reference/compiler.md:163
 msgid "A fixed pipeline with no flags:"
 msgstr ""
 
-#: src/reference/compiler.md:162
+#: src/reference/compiler.md:165
 msgid ""
 "**Folding** — constant arithmetic, `type_id<T>()`, `Array<T, N>.len()` → the "
 "constant `N` (with const-index bounds checks folded against it), "
 "statically-decided `is` probes, dead branches."
 msgstr ""
 
-#: src/reference/compiler.md:165
+#: src/reference/compiler.md:168
 msgid ""
 "**Inlining** — single-callee calls and small bodies (a callee op-count "
 "budget). Cross-module inlining after linking is future work; binaries carry "
 "no cross-function inlined code."
 msgstr ""
 
-#: src/reference/compiler.md:168
+#: src/reference/compiler.md:171
 msgid ""
 "**CSE / LICM** over pure operations — type-id loads, downcast checks, field "
 "loads on immutable records."
 msgstr ""
 
-#: src/reference/compiler.md:170
+#: src/reference/compiler.md:173
 msgid ""
 "**Peephole + SROA** — the rewriters re-intern operand pools on register "
 "remap, so pool sharing stays consistent (see [Typed "
@@ -24380,24 +24444,24 @@ msgid ""
 "refcount zero), so its mint is never deleted."
 msgstr ""
 
-#: src/reference/compiler.md:175
+#: src/reference/compiler.md:178
 msgid ""
 "**Pattern lowering** — downcast chains become one type-id load plus a jump "
 "table; `when` on enums lowers to `brtable` over the member slot."
 msgstr ""
 
-#: src/reference/compiler.md:178
+#: src/reference/compiler.md:181
 msgid ""
 "The pipeline is honest by construction: there is no tier-2 to fall back on, "
 "so the emitted code must be right the first time. Every gate measures "
 "against the example programs and the benchmark corpus."
 msgstr ""
 
-#: src/reference/compiler.md:182 src/reference/typed-bytecode.md:170
+#: src/reference/compiler.md:185 src/reference/typed-bytecode.md:170
 msgid "Async lowering"
 msgstr ""
 
-#: src/reference/compiler.md:184
+#: src/reference/compiler.md:187
 msgid ""
 "`async fn` compiles to a state machine: each `await` is a checkpoint state "
 "in the hidden frame, resume dispatch is the existing jump-table op, locals "
@@ -24408,11 +24472,11 @@ msgid ""
 "futures](launched-futures.md)."
 msgstr ""
 
-#: src/reference/compiler.md:192 src/reference/module-binary.md:133
+#: src/reference/compiler.md:195 src/reference/module-binary.md:133
 msgid "Determinism"
 msgstr ""
 
-#: src/reference/compiler.md:194
+#: src/reference/compiler.md:197
 msgid ""
 "Same source + same dependency versions + same compiler version ⇒ "
 "byte-identical output. Serialization is ordered and little-endian "

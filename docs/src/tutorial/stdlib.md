@@ -146,13 +146,13 @@ entry fn main() {
     xs.push(10);                              // amortized O(1)
     let v = Vec<f32>::filled(0.0, 1024);       // n slots of one value
     let w = Vec<i32>::from([1, 2, 3]);         // from a fixed array (copies)
-    let x = xs[0];                            // indexing
+    let x = xs[0]!;                           // indexing — the load is ?i32, the assert peels
     xs[0] = 42;                               // a write through the binding
     let last = xs.pop();                      // removes + returns; traps if empty
     let n = xs.len();
     let total = 0;
-    for (let e of w) {                        // iteration
-        total += e;
+    for (let e of w) {                        // iteration — e binds ?i32
+        total += e!;
     }
     log.info(f"x={x} last={last} len-after-pop={n} filled={v.len()} total={total}");
 }
@@ -180,7 +180,7 @@ entry fn main() {
     let fresh = counts.put("rut", 1);          // answers true when the key was NEWLY added
     let n = 0;
     let hit = counts.get("rut");   // ?i32 — nil means absent
-    if (hit != nil) { n = hit + 1; }
+    if (hit != nil) { n = hit! + 1; }   // the guard; inside it the assert cannot trap
     let there = counts.has("rut");             // membership
     let gone = counts.remove("runs");         // answers whether it was there
     let size = counts.len();
@@ -239,7 +239,7 @@ entry fn main() -> nil {
     src.into_flow().skip(1).for_each(fn(x: i32) -> nil {
         joined.push(f"{x}");                    // a shared cell survives the closure
     });
-    log.info(f"total={total} n={joined.len()} first={joined[0]} last={joined[joined.as_array().len()-1]}");
+    log.info(f"total={total} n={joined.len()} first={joined[0]!} last={joined[joined.as_array().len()-1]!}");
 }
 ```
 
@@ -347,7 +347,7 @@ entry fn main() {
     let (n, e) = decodeJson<JsonI64>("42");           // (?JsonI64, ?E) — see errors
     let (s, ee) = encodeJson(JsonArr([JsonI64(1), JsonI64(2), JsonI64(3)]));
     if (e == nil && ee == nil) {
-        log.info(f"n={n.get()} s={s}");
+        log.info(f"n={n!.get()} s={s!}");
     }
 }
 ```
@@ -426,7 +426,7 @@ entry fn main() {
     v.push(20);
     v.push(30);
     let last = v.pop();
-    log.info(f"len={v.len()} last={last} first={v[0]}");
+    log.info(f"len={v.len()} last={last} first={v[0]!}");
 
     // fixed arrays + string_join from core
     let parts: Vec<str> = Vec::from(["rut", "runs"]);

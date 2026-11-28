@@ -132,7 +132,7 @@ entry fn main() {
     let mixed: Vec<Area> = Vec::new();   // heterogeneous storage
     mixed.push(Circle { r: 1.0 });
     mixed.push(UnitSquare { side: 2.0 });
-    for (let s of mixed) { blit(g, s); }
+    for (let s of mixed) { blit(g, s!); }
 }
 ```
 

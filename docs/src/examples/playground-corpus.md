@@ -89,10 +89,10 @@ fn swap(xs: Vec<i32>, a: i32, b: i32) {
 }
 
 fn partition(xs: Vec<i32>, lo: i32, hi: i32) -> i32 {
-    let pivot = xs[hi];
+    let pivot = xs[hi]!;
     let i = lo - 1;
     for (let j = lo; j < hi; j += 1) {
-        if (xs[j] <= pivot) {
+        if (xs[j]! <= pivot) {
             i += 1;
             swap(xs, i, j);
         }
@@ -115,7 +115,7 @@ entry fn main() {
 
     let out = "";
     for (let i = 0; i < xs.len(); i += 1) {
-        out = f"{out}{xs[i]} ";      // rebinding `out`; the f-string form builds in place
+        out = f"{out}{xs[i]!} ";      // rebinding `out`; the f-string form builds in place
     }
     log.info(f"sorted: {out}");
 }
@@ -154,7 +154,7 @@ fn erase_and_recover() {
 
     let p = opaque::downcast<Point>(box1);       // ?Point — the nullable
     when (p != nil) {
-        true -> { log.info(f"point {p.x} {p.y}"); },
+        true -> { log.info(f"point {p!.x} {p!.y}"); },
         else  -> { log.info("point: nil"); },
     }
     let wrong = opaque::downcast<i32>(box2);     // wrong type: nil, no trap
