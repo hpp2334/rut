@@ -2363,7 +2363,7 @@ msgstr ""
 
 #: src/tutorial/types.md:162
 msgid "The guard decides absence; the `!` reads the field — the nullable's only peel is the assert, and inside a true guard it cannot trap."
-msgstr ""
+msgstr "守卫判定缺失；`!` 负责读取字段——可空值唯一的剥层手段就是断言，并且在为真的守卫内它绝不会触发陷阱。"
 
 #: src/tutorial/types.md:165
 msgid "Classes — sealed records"
@@ -3034,7 +3034,7 @@ msgstr ""
 
 #: src/tutorial/errors.md:40
 msgid "Lookups answer `?T`: a hit is the value, a miss is `nil`. A nullable peels ONLY through the postfix assert `e!` — one `?` layer per `!` — and a `nil` operand **traps** `NilDeref` at the `!`'s own site, so every trap point is marked in the source (`grep '!'` finds them all). Reads through a nullable spell it: `p!.x`, `p![i]`, `p!.m()`; guard first where absence is expected:"
-msgstr ""
+msgstr "查找以 `?T` 作答：命中是值，未命中是 `nil`。可空值只能透过后缀断言 `e!` 剥层——每层 `!` 剥掉一层 `?`——且 `nil` 操作数会在 `!` 自己的位置**触发** `NilDeref` 陷阱，因此每个陷阱点都标记在源码里（`grep '!'` 能把它们全部找出来）。透过可空值的读取都把它拼出来：`p!.x`、`p![i]`、`p!.m()`；在预期可能缺失之处先设守卫："
 
 #: src/tutorial/errors.md:47
 msgid ""
@@ -12416,7 +12416,7 @@ msgstr "强制转换与用法"
 
 #: src/reference/by-reference-and-nullable.md:80
 msgid "**`T → ?T` boxes — implicit, cannot fail. `?T → T` happens ONLY through the postfix assert `e!`** — one `?` layer per `!`, and a `nil` operand traps `NilDeref` at the `!`'s own site. `f! = v` is not an assignable target (an assert is not a place). There is no implicit deref anywhere: `p.x`, `p.m(..)`, `p[i]`, `for (x of p)`, arithmetic on `p`'s payload — every use of a nullable demands the assert first, spelled `p!.x`, `p!.m(..)`, `p![i]`, `for (x of p!)`."
-msgstr ""
+msgstr "**`T → ?T` 装盒——隐式，不会失败。`?T → T` 只能透过后缀断言 `e!` 发生**——每层 `!` 剥掉一层 `?`，且 `nil` 操作数在 `!` 自己的位置触发 `NilDeref` 陷阱。`f! = v` 不是可赋值的目标（断言不是一个位置）。任何地方都没有隐式解引用：`p.x`、`p.m(..)`、`p[i]`、`for (x of p)`、对 `p` 载荷的算术运算——可空值的每个使用处都先要求断言，拼作 `p!.x`、`p!.m(..)`、`p![i]`、`for (x of p!)`。"
 
 #: src/reference/by-reference-and-nullable.md:88
 msgid ""
@@ -12448,7 +12448,7 @@ msgstr "`p == nil` / `p != nil` 与空槽比较——这是守卫；`?T == ?T` �
 
 #: src/reference/by-reference-and-nullable.md:113
 msgid "The guard idiom: `if (f != nil) { let t = f!; t.x(); }` — inside a true guard the assert cannot trap, but the compiler does not prove it (no flow typing). The `!` is the author's mark: `grep '!'` over a program is the complete list of its nil-trap sites."
-msgstr ""
+msgstr "守卫惯用法：`if (f != nil) { let t = f!; t.x(); }`——在为真的守卫内断言不会触发陷阱，但编译器并不证明这一点（没有流类型化）。`!` 是作者亲手留下的标记：对整个程序 `grep '!'` 得到的就是它全部的 nil 陷阱点。"
 
 #: src/reference/by-reference-and-nullable.md:117
 msgid "A `?T` binding IS the cell reference: writes through it hit the shared cell (a `nudge(pt: ?Point)` moves the caller's point)."
@@ -18293,7 +18293,7 @@ msgstr "14"
 
 #: src/reference/frontend.md:120
 msgid "postfix: `.name`, `.name<..>(..)`, `(..)`, `[..]`, `!` (the nil assert — tightest, chains freely: `f!.x()`, `f![i] = v`, one `?` layer per `!`)"
-msgstr ""
+msgstr "后缀：`.name`、`.name<..>(..)`、`(..)`、`[..]`、`!`（nil 断言——结合最紧，自由链式：`f!.x()`、`f![i] = v`，每层 `!` 剥掉一层 `?`）"
 
 #: src/reference/frontend.md:122
 msgid "Postfixes chain in one loop, so `p.value.x` and `arr[i].push(x)` compose without special cases. The assert `!` rides the same loop — `f!.x()`, `f![i] = v`, `f\"{f!}\"`; one `!` peels one `?` layer. `is` (type test) is a keyword; `as` is the only cast."
