@@ -4,6 +4,6 @@
   "format": "rutlock",
   "format_version": 1,
   "deps": [
-    { "pkg": "pouch", "url": "https://cdn.jsdelivr.net/gh/hpp2334/rut@std-v19/dist/std/pouch.zip", "sha256": "ce5f554cdf6f6dbfe758281e598e18b46158db7be26277b662c9ed3c1a5c71a7" }
+    { "pkg": "pouch", "url": "https://cdn.jsdelivr.net/gh/hpp2334/rut@std-v20/dist/std/pouch.zip", "sha256": "bd823a4903c93f72ac48723f5249fd5592590ffffdd15faf9da6de4821bd510a" }
   ]
 }

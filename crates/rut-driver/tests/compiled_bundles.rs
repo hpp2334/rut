@@ -460,9 +460,9 @@ use pouch::{ Vec };
 entry fn go() -> i32 {
     let items: Vec<i32> = Vec<i32>::new();
     items.push(20);
-    items.push(items[0] * 2);
+    items.push(items[0]! * 2);
     let n = items.len();
-    return n * 100 + items[0] + items[1];
+    return n * 100 + items[0]! + items[1]!;
 }
 "#;
 
@@ -596,7 +596,7 @@ impl<T> Cell<T> {
         return Self { v: v };
     }
     pub fn get(self) -> T {
-        return self.v;
+        return self.v!;
     }
 }
 "#;
@@ -843,7 +843,7 @@ impl<T> Slot<T> {
         return self.n;
     }
     pub fn last(self) -> T {
-        return self.buf[self.n - 1];
+        return self.buf[self.n - 1]!;
     }
 }
 
@@ -884,7 +884,7 @@ impl<T> Slot<T> {
         return self.n;
     }
     pub fn last(self) -> T {
-        return self.buf[self.n - 1];
+        return self.buf[self.n - 1]!;
     }
 }
 
@@ -925,7 +925,7 @@ impl<T> Slot<T> {
         return self.n;
     }
     pub fn last(self) -> T {
-        return self.buf[self.n - 1];
+        return self.buf[self.n - 1]!;
     }
 }
 
@@ -1181,7 +1181,7 @@ entry fn main() -> i32 {
     if (r == nil) {
         return -1;
     }
-    return r.get() + 100;
+    return r!.get() + 100;
 }
 "#,
         expect: 105,
@@ -1345,7 +1345,7 @@ entry fn main() -> i32 {
     if (r == nil) {
         return -1;
     }
-    return consume<i32>(Holder<i32>::of(r.get()));
+    return consume<i32>(Holder<i32>::of(r!.get()));
 }
 "#;
     let dir = scratch("iface-det");

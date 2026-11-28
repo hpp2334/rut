@@ -4,7 +4,7 @@
   "format": "rutlock",
   "format_version": 1,
   "deps": [
-    { "pkg": "nmapset", "url": "https://cdn.jsdelivr.net/gh/hpp2334/rut@std-v19/dist/std/nmapset.zip", "sha256": "959ae7cc249b4b5ccb953487a917edf96b282c29c5a53943c2d060c361421eb5" },
-    { "pkg": "pouch",   "url": "https://cdn.jsdelivr.net/gh/hpp2334/rut@std-v19/dist/std/pouch.zip",   "sha256": "ce5f554cdf6f6dbfe758281e598e18b46158db7be26277b662c9ed3c1a5c71a7" }
+    { "pkg": "nmapset", "url": "https://cdn.jsdelivr.net/gh/hpp2334/rut@std-v20/dist/std/nmapset.zip", "sha256": "b9c7b81e520e7d2f39e60dfd64fe303669ddc870e18dae55609aa635cf373472" },
+    { "pkg": "pouch",   "url": "https://cdn.jsdelivr.net/gh/hpp2334/rut@std-v20/dist/std/pouch.zip",   "sha256": "bd823a4903c93f72ac48723f5249fd5592590ffffdd15faf9da6de4821bd510a" }
   ]
 }

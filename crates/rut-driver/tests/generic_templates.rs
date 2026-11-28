@@ -439,7 +439,7 @@ entry fn main() -> str {
     let (o, e2) = decodeJson<SOpt<JsonI64>>("null");
     if (e2 != nil) { return "err-opt"; }
     if (o == nil) { return "opt-gone"; }
-    let inner: ?JsonI64 = o.get();
+    let inner: ?JsonI64 = o!.get();
     if (inner != nil) { return "bad-null"; }
     let (p, e3) = decodeJson<SOpt<JsonI64>>("5");
     if (e3 != nil) { return "err-five"; }

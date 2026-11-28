@@ -18,11 +18,11 @@ entry fn store_new() -> opaque {
 }
 
 fn wt(c: opaque) -> ?World {
-    let w = opaque::downcast<?World>(c)!;
+    let w = opaque::downcast<?World>(c);
     if (w == nil) {
         panic("probe: the store container is not a World — host drift");
     }
-    return w;
+    return w!;
 }
 
 /// Books an add; answers the tag to hand `tim_after`.
