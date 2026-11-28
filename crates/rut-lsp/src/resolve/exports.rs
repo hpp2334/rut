@@ -122,10 +122,11 @@ pub(crate) fn members_for<'a>(
     // import pkgs the fallback ([`type_via_imports`])
     let ty = type_decl(w, file, &ty_name).or_else(|| type_via_imports(w, file, &ty_name))?;
     // the member-vis gate (the compiler's law mirrored): CLASS
-    // fields + own-surface methods gate, impl fns by owner gate;
-    // struct + host-struct fields carry no dial, enum variants are
-    // the enum lane's rows, and the builtin/primitive surfaces are
-    // compiler-lowered (core's plain-`fn` rows keep completing)
+    // fields + methods declared in the type's own body gate, impl
+    // fns by owner gate; struct + host-struct fields carry no dial,
+    // enum variants are the enum lane's rows, and the
+    // builtin/primitive surfaces are compiler-lowered (core's
+    // plain-`fn` rows keep completing)
     let class = ty.form() == TyForm::Class;
     let mut rows: Vec<MemberRow<'a>> = Vec::new();
     for m in ty.fields() {

@@ -659,7 +659,7 @@ fn render_member_or_name(
         let di = w.file(*df);
         let ast = di.doc.ast();
         if node.is::<rut_ast::MethodDeclNode>() {
-            // the member law's own-surface shapes — the method's
+            // the member law's body-member shapes — the method's
             // parent TYPE BODY renders it (`in \`Circle\`` /
             // `declared in \`Greeter\``); an inherent impl fn renders
             // its signature. The parent kind is the discriminator:

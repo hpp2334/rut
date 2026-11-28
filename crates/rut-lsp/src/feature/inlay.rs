@@ -17,8 +17,9 @@
 //!   `expr_ty` (literals → primitives, paths → the bindings
 //!   read internally and module lets, calls → the callee's written
 //!   ret, member chains → the member lanes) for receivers and
-//!   `impl_method_fn` for the method rule (own-surface hits
-//!   are FINAL — no hints, never wrong names).
+//!   `member_callee` for the method rule — a member declared in the
+//!   type's own body answers with ITS param names, final over the
+//!   impl sweep (never a same-named impl fn's names).
 //!
 //! The consistency law: a type hint's text is the SAME string hover
 //! shows for the binding — one source (the declared annotation's span
@@ -365,15 +366,14 @@ impl<'a> CallCx<'a> {
         self.arg_hints(&params, args);
     }
 
-    /// the callee's parameter names, `self` excluded — inherent
-    /// impl-block methods only, via the shared door (own-surface
-    /// methods are FINAL with no hints, never wrong names)
+    /// the callee's parameter names, `self` excluded — the shared
+    /// callee door answers the verdict and every callee arm prices
+    /// from its own view (a member declared in the type's own body
+    /// answers with ITS params — final over the impl sweep, never a
+    /// same-named impl fn's names)
     fn method_params(&self, ty_name: &str, member: &str) -> Option<Vec<String>> {
-        let f = crate::resolve::impl_method_fn(self.w, self.file, ty_name, member)?;
-        let Some(crate::resolve::View::Fn(f)) = f.view(self.w) else {
-            return None;
-        };
-        Some(f.params())
+        let t = crate::resolve::member_callee(self.w, self.file, ty_name, member)?;
+        Some(crate::resolve::callee_fn_view(t)?.params())
     }
 
     /// one PARAMETER hint per arg, at the arg's first byte — only on

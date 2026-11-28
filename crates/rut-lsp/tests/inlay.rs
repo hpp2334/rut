@@ -2,7 +2,7 @@
 //! PARAMETER hints at exact-arity call sites, through the `inlay`
 //! envelope (full LSP values: position, label, kind, tooltip). Pins:
 //! the hover-consistency law (one source), the never-wrong guards
-//! (arity mismatch, ambiguity, own-surface members), and the viewport
+//! (arity mismatch, ambiguity), and the viewport
 //! range filter.
 
 mod common;
@@ -469,13 +469,68 @@ fn the_doc_own_callee_wins_over_a_same_named_foreign_fn() {
 
 #[test]
 fn own_surface_method_beats_a_same_named_impl_fn() {
-    // an interface-body `m` is the receiver's own surface: the FINAL
-    // answer carries no recorded params, so no hints — the impl fn's
-    // params must not leak through (never wrong hints)
+    // a member declared in the type's own body (the interface's
+    // declared signature) prices the call — FINAL over the impl
+    // sweep: the interface's own param name answers (`k:`), never
+    // the same-named impl fn's (`q:`)
     let mut s = S::boot();
-    let src = "struct P {\n    x: i32;\n}\ninterface Draw {\n    fn m(self, k: i32) -> i32;\n}\nimpl P {\n    pub fn m(self, k: i32) -> i32 { return k; }\n}\nfn go(d: Draw) -> i32 {\n    return d.m(1);\n}\n";
+    let src = "struct P {\n    x: i32;\n}\ninterface Draw {\n    fn m(self, k: i32) -> i32;\n}\nimpl P {\n    pub fn m(self, q: i32) -> i32 { return q; }\n}\nfn go(d: Draw) -> i32 {\n    return d.m(1);\n}\n";
     let hs = s.inlay_all("file:///t/main.rut", src);
-    assert!(hs.is_empty(), "{:?}", labels(&hs));
+    assert_eq!(labels(&hs), ["k:"], "{hs:?}");
+}
+
+#[test]
+fn body_members_price_their_calls() {
+    // a member declared in the type's own body prices the call with
+    // its DECLARED signature — the prelude's primitive rows answer
+    // over any file window: `bytes.decode()` -> str and
+    // `str.encode()` -> bytes
+    let mut s = S::boot();
+    let src = "fn go(b: bytes) -> str {\n    const s = b.decode();\n    return s;\n}\n";
+    let hs = s.inlay_all("file:///t/main.rut", src);
+    assert_eq!(labels(&hs), [": str"], "{hs:?}");
+    assert_eq!(pos(&hs[0]), end_of(src, "const s", 1));
+    let src = "entry fn main() -> nil {\n    const e = \"\".encode();\n}\n";
+    let hs = s.inlay_all("file:///t/main.rut", src);
+    assert_eq!(labels(&hs), [": bytes"], "{hs:?}");
+}
+
+#[test]
+fn the_http_chain_prices_through_the_real_members() {
+    // the regression lock for the report: the REAL std http lane
+    // mounted as the dep (the completion tier's mount precedent), the
+    // reporter's statement in its POST-SEND-FACE form (the pair
+    // destructure, the explicit `resp!` deref) inside an async fn.
+    // The builder rung prices (`: Request` through the impl fns) and
+    // the send face answers the pair — as the WHOLE tuple per row:
+    // the display lane's destructured-row peel rides a literal tuple
+    // init only (`binding_ty`, a pre-existing shape this phase does
+    // not change), so `resp!` and everything downstream of it prices
+    // nothing in THIS spelling. The downstream rungs pin through the
+    // same real module with the response value arriving typed: the
+    // awaited `bytes` (`body()`'s Future face), then the last rung —
+    // `b.decode()` -> str through the primitive's own body
+    let mut s = S::boot();
+    s.index_mod_at(
+        "rut/http/src/mod.rut",
+        "http",
+        "",
+        include_str!("../../../rut/http/src/mod.rut"),
+    );
+    let src = "use http::HttpClient;\nasync fn go(client: HttpClient, url: str) -> str {\n    const req = client.get(url).build();\n    let (resp, err) = await req.send();\n    if (err != nil) { return \"\"; }\n    const r = resp!;\n    const b = await resp!.body();\n    const s = b.decode();\n    return s;\n}\nasync fn drain(r: Response) -> str {\n    const b = await r.body();\n    const s = b.decode();\n    return s;\n}\n";
+    let hs = s.inlay_all("file:///t/main.rut", src);
+    assert_eq!(
+        labels(&hs),
+        [
+            ": Request",
+            "url:",
+            ": (?Response, ?SendError)",
+            ": (?Response, ?SendError)",
+            ": bytes",
+            ": str",
+        ],
+        "{hs:?}"
+    );
 }
 
 #[test]

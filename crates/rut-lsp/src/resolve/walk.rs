@@ -407,13 +407,15 @@ fn refusal_defs(w: &World, file: FileId, name: &str) -> Option<Vec<Def>> {
 }
 
 /// a resolved member target as [`Def`]s — the target's declaring node
-/// in its own file (the member/enum-member views carry the owning
-/// type beside the node)
+/// in its own file (every arm's view carries the owning type beside
+/// the node)
 fn target_defs(w: &World, target: &MemberTarget) -> Vec<Def> {
     let def = match target {
-        MemberTarget::Member(m) | MemberTarget::EnumMember(m) | MemberTarget::IfaceMember(m) => {
-            node_def(w, m.file, m.h)
-        }
+        MemberTarget::ClassMember(m)
+        | MemberTarget::StructMember(m)
+        | MemberTarget::PrimitiveMember(m)
+        | MemberTarget::EnumMember(m)
+        | MemberTarget::IfaceMember(m) => node_def(w, m.file, m.h),
         MemberTarget::ImplFn(f) => node_def(w, f.file, f.h),
     };
     vec![def]

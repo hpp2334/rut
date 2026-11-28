@@ -172,7 +172,7 @@ fn method_call_through_a_binding_receiver() {
     assert_eq!(lbl, "fn grown(self, k: f64) -> Circle");
     assert_eq!(slot, Some(0), "self never surfaces as a slot");
     assert_eq!(pieces, ["k: f64"]);
-    // `new` has no recorded impl fn here (and no own-surface body to
+    // `new` has no recorded impl fn here (and no body member to
     // read params from) — no help, never a guess
     let h = s.sig_at(uri, src, "1.0);", 1);
     assert!(h.is_null(), "{h}");
@@ -180,13 +180,29 @@ fn method_call_through_a_binding_receiver() {
 
 #[test]
 fn own_surface_method_means_no_help() {
-    // the interface-body `m` is the receiver's own surface: FINAL
-    // with no recorded params — the impl fn's signature must not
-    // leak through
+    // a member declared in the type's own body (the interface's
+    // declared signature) answers the call — FINAL over the impl
+    // sweep: the interface's own signature renders (`k: i32`), never
+    // the same-named impl fn's (`q: f64` would leak the impl)
     let mut s = S::boot();
-    let src = "struct P {\n    x: i32;\n}\ninterface Draw {\n    fn m(self, k: i32) -> i32;\n}\nimpl P {\n    pub fn m(self, k: i32) -> i32 { return k; }\n}\nfn go(d: Draw) -> i32 {\n    return d.m(1);\n}\n";
-    let h = s.sig_in("file:///t/main.rut", src, "d.m(1)", 1, 5);
-    assert!(h.is_null(), "{h}");
+    let src = "struct P {\n    x: i32;\n}\ninterface Draw {\n    fn m(self, k: i32) -> i32;\n}\nimpl P {\n    pub fn m(self, q: f64) -> i32 { return 0; }\n}\nfn go(d: Draw) -> i32 {\n    return d.m(1);\n}\n";
+    let (lbl, slot, pieces) = slot_of(&s.sig_in("file:///t/main.rut", src, "d.m(1)", 1, 5));
+    assert_eq!(lbl, "fn m(self, k: i32) -> i32");
+    assert_eq!(slot, Some(0), "the interface's own k slot");
+    assert_eq!(pieces, ["k: i32"]);
+}
+
+#[test]
+fn a_primitive_body_member_answers_its_signature() {
+    // a member declared in the primitive's own body answers the call:
+    // `b.decode(` renders the prelude's declared signature — `self`
+    // never surfaces, and no parameter slots ride
+    let mut s = S::boot();
+    let src = "fn go(b: bytes) -> str {\n    return b.decode();\n}\n";
+    let (lbl, slot, pieces) = slot_of(&s.sig_in("file:///t/main.rut", src, "b.decode(", 1, 9));
+    assert_eq!(lbl, "fn decode(self) -> str");
+    assert_eq!(slot, None);
+    assert!(pieces.is_empty());
 }
 
 #[test]

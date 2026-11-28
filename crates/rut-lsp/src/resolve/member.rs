@@ -1,8 +1,8 @@
 //! The member law's resolver family — where a member of a receiver
 //! actually declares. One rule for every host: hover, definition, and
 //! completion share [`member`] and the doors beneath it (the receiver
-//! resolver, the bindings read internally, the own-surface → enum →
-//! inherent-impl → interface gates with the use-both rule).
+//! resolver, the bindings read internally, the type's own body →
+//! enum → inherent-impl → interface gates with the use-both rule).
 //! [`MemberHit`] is the verdict shape every consumer matches on.
 
 use std::collections::HashSet;
@@ -25,13 +25,14 @@ use crate::world::{File, FileId, World};
 /// member_pos`]'s one body — the receiver's type resolves INSIDE
 /// (self → the enclosing type, literals → primitives, paths → the
 /// bindings — read internally, never a caller-run pass — then module
-/// lets), and the member law (own surface → enum members → inherent
-/// impl methods → interface signatures) with every gate (the
+/// lets), and the member law (the type's own body → enum members →
+/// inherent impl methods → interface signatures) with every gate (the
 /// use-both rule, then the member-vis dial against the queried file —
 /// the site context) lives here. One rule for every host — hover,
-/// definition, and completion share it. The signature-help lane rides
-/// [`impl_method_fn`] UNGATED: a
-/// call site spelling a refused member is already a panel error.
+/// definition, and completion share it. The display family (type
+/// inlay, param hints, signature help) rides [`member_callee`]
+/// UNGATED: a call site spelling a refused member is already a panel
+/// error; the panel owns refusals.
 pub(crate) fn member<'a>(w: &'a World, file: FileId, pos: u32, node: AnyHandle) -> MemberHit<'a> {
     member_gated(
         w,
@@ -121,9 +122,10 @@ fn member_derived<'a>(
         Some(t) => t,
         None => return MemberHit::UnknownReceiver,
     };
-    // own surface first
-    if let Some(m) = ty.methods().into_iter().find(|m| m.name() == member_text) {
-        return MemberHit::Found(MemberTarget::Member(m));
+    // a member declared in the type's own body first — the form-keyed
+    // answer is FINAL over the impl sweep
+    if let Some(hit) = body_member(ty, member_text) {
+        return MemberHit::Found(hit);
     }
     if ty.form() == TyForm::Enum {
         // `Color::Red` — the member IS an enum member; hover shows the enum
@@ -132,8 +134,13 @@ fn member_derived<'a>(
         }
         return MemberHit::None;
     }
+    // fields — only class/struct/host-struct bodies carry them; the
+    // declaring form keys the arm
     if let Some(m) = ty.fields().into_iter().find(|f| f.name() == member_text) {
-        return MemberHit::Found(MemberTarget::Member(m));
+        return MemberHit::Found(match ty.form() {
+            TyForm::Class => MemberTarget::ClassMember(m),
+            _ => MemberTarget::StructMember(m),
+        });
     }
     // inherent impl-block methods — where methods live since type
     // bodies went fields-only; the owner string IS the target
@@ -179,19 +186,20 @@ fn member_derived<'a>(
 }
 
 /// the resolved target's half of the member-vis gate — the same
-/// law the completion tier applies per row: enum variants are the
-/// enum lane's rows (the compiler never dials them) and interface
-/// signatures already answered behind the use-both gate; struct +
-/// host-struct fields and the builtin/primitive surfaces carry no
-/// dial (the compiler's field law has no struct dial; the surfaces
-/// are compiler-lowered). Class members and impl fns gate.
+/// law the completion tier applies per row: the verdict names the
+/// declaring form and the gate reads the arm. A class's members and
+/// impl fns dial (the compiler's member vis); struct + host-struct
+/// members carry no dial, enum variants are the enum lane's rows,
+/// interface signatures already answered behind the use-both gate,
+/// and the primitive rows are compiler-lowered (no dial — the
+/// engine's own contract).
 fn target_visible(w: &World, file: FileId, target: &MemberTarget<'_>) -> bool {
     match target {
-        MemberTarget::EnumMember(..) | MemberTarget::IfaceMember(..) => true,
-        MemberTarget::Member(m) => match m.ty.form() {
-            TyForm::Class => member_dial_allows(w, file, m.file, m.vis()),
-            _ => true,
-        },
+        MemberTarget::ClassMember(m) => member_dial_allows(w, file, m.file, m.vis()),
+        MemberTarget::StructMember(_)
+        | MemberTarget::PrimitiveMember(_)
+        | MemberTarget::EnumMember(_)
+        | MemberTarget::IfaceMember(_) => true,
         MemberTarget::ImplFn(f) => member_dial_allows(w, file, f.file, f.vis()),
     }
 }
@@ -372,41 +380,85 @@ pub(crate) fn expr_ty<'a>(w: &'a World, file: FileId, e: ExprRef) -> Option<Ty> 
     crate::resolve::ty_infer::expr_ty(w.file(file), &files, e, &qual)
 }
 
-/// the inherent impl-block fn `impl ty_name { fn member(..) }` —
-/// the callee door's method half, over ANY file window (the chain
-/// door below and the inference pass's slice share the body — the
-/// [`enclosing_type`] precedent: one law, two shapes). Per file, a
-/// same-named own-surface member answers FINAL with no fn (the
-/// known-receiver-is-final law — never a same-named impl fn from
-/// another file leaks through), then the impl fn whose owner is the
-/// target type's name.
-pub(crate) fn impl_method_fn_in<'a, I>(files: I, ty_name: &str, member: &str) -> Option<FnView<'a>>
+/// the type's own body, keyed by declaring form — the ONE
+/// form-keying home: the type node's own member list
+/// ([`TyView::methods`]) read once, the declaring form naming the
+/// verdict arm. Methods only — a field is not a callee (the fields
+/// pass keys the form inline).
+fn body_member<'a>(ty: TyView<'a>, member: &str) -> Option<MemberTarget<'a>> {
+    let m = ty.methods().into_iter().find(|m| m.name() == member)?;
+    Some(match ty.form() {
+        TyForm::Class | TyForm::Builtin => MemberTarget::ClassMember(m),
+        TyForm::Struct | TyForm::HostStruct => MemberTarget::StructMember(m),
+        TyForm::Primitive => MemberTarget::PrimitiveMember(m),
+        TyForm::Interface => MemberTarget::IfaceMember(m),
+        // an enum's members are variants and an alias transparent —
+        // neither carries a method list, so `find` never answers for
+        // them
+        TyForm::Enum | TyForm::Alias => return None,
+    })
+}
+
+/// THE CALLEE DOOR — where the member named `member` on `ty_name`
+/// declares, over ANY file window (the chain door below and the
+/// inference pass's slice share the body — the [`enclosing_type`]
+/// precedent: one law, two shapes). Per file in window order: a
+/// member declared in the type's own body answers FINAL (never a
+/// same-named impl fn from another file leaks past it — the
+/// known-receiver-is-final law), else the impl fn whose owner is the
+/// target type's name. UNGATED by design — the panel owns refusals;
+/// the display family (type inlay, param hints, signature help)
+/// prices what the door answers.
+pub(crate) fn member_callee_in<'a, I>(
+    files: I,
+    ty_name: &str,
+    member: &str,
+) -> Option<MemberTarget<'a>>
 where
     I: IntoIterator<Item = &'a File>,
 {
     for i in files.into_iter() {
-        if let Some(t) = i.ty(ty_name) {
-            if t.methods().iter().any(|m| m.name() == member) {
-                return None;
-            }
+        if let Some(hit) = i.ty(ty_name).and_then(|t| body_member(t, member)) {
+            return Some(hit);
         }
         for f in i.fns() {
             if f.name() == member && f.owner().as_deref() == Some(ty_name) {
-                return Some(f);
+                return Some(MemberTarget::ImplFn(f));
             }
         }
     }
     None
 }
 
-/// THE inherent-impl door — [`impl_method_fn_in`] over
-/// `w.chain(file)`, the typed answer ([`Def`]): the feature classifies
-/// and resolves, the view is rendering's business.
-pub(crate) fn impl_method_fn(w: &World, file: FileId, ty_name: &str, member: &str) -> Option<Def> {
-    impl_method_fn_in(w.chain(file).map(|id| w.file(id)), ty_name, member).map(|f| Def::Node {
-        file: w.id_of(f.file),
-        node: f.h,
-    })
+/// THE callee door over the world — [`member_callee_in`] over
+/// `w.chain(file)`: the feature names the receiver's type head, the
+/// verdict prices the call.
+pub(crate) fn member_callee<'a>(
+    w: &'a World,
+    file: FileId,
+    ty_name: &str,
+    member: &str,
+) -> Option<MemberTarget<'a>> {
+    member_callee_in(w.chain(file).map(|id| w.file(id)), ty_name, member)
+}
+
+/// the callee verdict's fn view — a body member wraps into the
+/// [`FnView`] over its own node (the `MethodDeclNode` downcast is
+/// infallible by the door's contract: [`body_member`] answers method
+/// rows only), an impl fn rides as recorded; an enum variant is no
+/// callee — nothing prices
+pub(crate) fn callee_fn_view(t: MemberTarget<'_>) -> Option<FnView<'_>> {
+    match t {
+        MemberTarget::ImplFn(f) => Some(f),
+        MemberTarget::ClassMember(m)
+        | MemberTarget::StructMember(m)
+        | MemberTarget::PrimitiveMember(m)
+        | MemberTarget::IfaceMember(m) => Some(FnView {
+            file: m.file,
+            h: m.h,
+        }),
+        MemberTarget::EnumMember(_) => None,
+    }
 }
 
 /// the unique free fn by name over ANY file window — the `call_ty`
@@ -542,18 +594,24 @@ pub(crate) enum MemberHit<'a> {
     UnknownReceiver,
 }
 
-/// where a member of `recv` actually declares — the shared resolver
-/// behind hover AND definition (the member/enum-member views carry
-/// the owning type; the vis gate reads it off the view)
+/// where a member of `recv` actually declares — one arm per declaring
+/// form: the verdict the member door answers (hover, definition,
+/// completion) and the callee door prices (type inlay, param hints,
+/// signature help). The views carry the owning type beside the node;
+/// the vis gate reads the arm.
 pub(crate) enum MemberTarget<'a> {
-    /// a method/field of the type's own surface
-    Member(MemberView<'a>),
-    /// an enum member — hover shows the whole enum's block
+    /// a CLASS's own-body member — user `class` + engine `builtin class`;
+    /// carries the vis dial
+    ClassMember(MemberView<'a>),
+    /// a STRUCT's field — user `struct` + embedder `host struct`; no dial
+    StructMember(MemberView<'a>),
+    /// a PRIMITIVE's member — `builtin primitive`: compiler-lowered contract
+    PrimitiveMember(MemberView<'a>),
+    /// an enum member
     EnumMember(MemberView<'a>),
-    /// an impl-block method (`impl T { fn m(self) ... }`)
+    /// an impl-block method
     ImplFn(FnView<'a>),
-    /// an interface's declared member, observed through the interface
-    /// (the receiver's static type IS the interface)
+    /// an interface's declared member
     IfaceMember(MemberView<'a>),
 }
 

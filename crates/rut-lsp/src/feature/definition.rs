@@ -126,7 +126,9 @@ pub fn get_type_definition(w: &World, file: FileId, pos: u32) -> Vec<DefLocation
         match crate::resolve::member(w, file, pos, h) {
             MemberHit::Found(target) => {
                 let ty_text = match &target {
-                    MemberTarget::Member(m)
+                    MemberTarget::ClassMember(m)
+                    | MemberTarget::StructMember(m)
+                    | MemberTarget::PrimitiveMember(m)
                     | MemberTarget::EnumMember(m)
                     | MemberTarget::IfaceMember(m) => m.ty(),
                     MemberTarget::ImplFn(f) => f.ret(),

@@ -9,12 +9,13 @@
 //!
 //! * free calls by unique-name match over the recorded index params
 //!   (the `call_ty` law — ambiguity is a miss, never a wrong signature);
-//! * methods through the receiver's type head (a plain-ident receiver
-//!   only — the chained-receiver law's honest miss stays), then the
-//!   inherent impl fn via the shared `impl_method_fn` rule;
-//!   own-surface hits (interface bodies, builtin/primitive surfaces) are
-//!   FINAL with no recorded params → no help, so a same-named impl fn's
-//!   signature can never leak through (the known-receiver-is-final law);
+//! * methods through the callee door (`member_callee`): the
+//!   receiver's type head (a plain-ident receiver only — the
+//!   chained-receiver law's honest miss stays), then the verdict — a
+//!   member declared in the type's own body answers with its DECLARED
+//!   signature, FINAL over the impl sweep (a same-named impl fn's
+//!   signature can never leak through: the known-receiver-is-final
+//!   law), an inherent impl fn with its own;
 //! * a capitalized single-seg callee misses the free-fn lane into the
 //!   CTOR fallback, gated by the FILE SCOPE (`type_decl` — an unbound
 //!   or ambiguous name answers nothing, never wrong help from a
@@ -28,9 +29,9 @@
 //!
 //! The signature renders verbatim (the fn view's own slice — the fn
 //! name and params as written, the hover render's source). The
-//! never-wrong guard is phase 3's: ambiguity, unknown receiver,
-//! own-surface finality, or MORE arguments than the signature has
-//! parameters — no help, never wrong help. The LIFECYCLE: a call still
+//! never-wrong guard is phase 3's: ambiguity, unknown receiver, a
+//! member the door cannot price, or MORE arguments than the signature
+//! has parameters — no help, never wrong help. The LIFECYCLE: a call still
 //! being typed (fewer args than parameters) is the help's whole point
 //! and shows the signature with the arg under the cursor highlighted —
 //! through the closer's END too (the just-typed or type-overed `)`
@@ -123,12 +124,16 @@ pub fn signature_help(w: &World, file: FileId, pos: u32) -> Option<SignatureHelp
             return None;
         }
         let ty_name = crate::resolve::named_recv(w, file, pos, recv_id)?;
-        // own-surface finality: `None` here is FINAL — no help, never
-        // a same-named impl fn's signature
-        let fndef = fn_view(
+        // the callee door answers the verdict — a member declared in
+        // the type's own body prices with ITS signature (FINAL over
+        // the impl sweep — never a same-named impl fn's signature),
+        // an impl fn with its own
+        let fndef = crate::resolve::callee_fn_view(crate::resolve::member_callee(
             w,
-            crate::resolve::impl_method_fn(w, file, &ty_name, ast.name(name))?,
-        )?;
+            file,
+            &ty_name,
+            ast.name(name),
+        )?)?;
         (
             fndef.src(),
             fndef.params(),
@@ -275,9 +280,12 @@ fn signature_help_at_decl(
         }
         let name_text = ast.name(name);
         let (view, is_method) = if is_method {
-            // the impl fn's view — the owner derives from the parent
-            // impl's target (an interface decl surfaces FINAL: no
-            // recorded params, no help)
+            // the owner derives from the parent impl's target; an
+            // interface decl rides the interface itself — the callee
+            // door answers both (the interface's declared signature
+            // is the answer there: FINAL over the impl sweep; the
+            // MethodDeclNode downcast is infallible by the door's
+            // contract)
             let owner = ast.parent(a).and_then(|p| {
                 if let Some(t) = p.downcast::<rut_ast::ImplNode>() {
                     let td = t.get(ast);
@@ -286,11 +294,10 @@ fn signature_help_at_decl(
                 p.downcast::<rut_ast::InterfaceNode>()
                     .map(|t| ast.name(t.get(ast).name.ident).to_string())
             })?;
-            (
-                crate::resolve::impl_method_fn(w, file, &owner, name_text)
-                    .and_then(|dd| fn_view(w, dd))?,
-                true,
-            )
+            let view = crate::resolve::callee_fn_view(crate::resolve::member_callee(
+                w, file, &owner, name_text,
+            )?)?;
+            (view, true)
         } else {
             let one =
                 crate::resolve::unique_free_fn(w, file, name_text).and_then(|dd| fn_view(w, dd))?;

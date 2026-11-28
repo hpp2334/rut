@@ -27,9 +27,9 @@ pub(crate) use exports::{
     bare, members, members_for, use_exports, ExportRow, MemberRow, UseExports,
 };
 pub(crate) use member::{
-    binding_ty, constructor_of, enclosing_type, expr_ty, iface_decl, impl_method_fn,
-    impl_method_fn_in, member, member_dial_allows, member_gated, named_recv, qualified_ty_name,
-    recv_ty, unique_free_fn, unique_free_fn_in, MemberHit, MemberTarget,
+    binding_ty, callee_fn_view, constructor_of, enclosing_type, expr_ty, iface_decl, member,
+    member_callee, member_callee_in, member_dial_allows, member_gated, named_recv,
+    qualified_ty_name, recv_ty, unique_free_fn, unique_free_fn_in, MemberHit, MemberTarget,
 };
 pub(crate) use scope::{
     ambiguous_scope, bound_has, file_scope, functions, module_let_ty, one_name_refused,

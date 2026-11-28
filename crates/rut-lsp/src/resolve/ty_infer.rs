@@ -33,6 +33,7 @@ use rut_ast::{
 };
 
 use crate::resolve::prefer_mounted;
+use crate::resolve::MemberTarget;
 use crate::world::ty::{bind_var, Shape, Ty, TyForm};
 use crate::world::views::FnView;
 use crate::world::File;
@@ -301,13 +302,31 @@ fn call_ty<'a>(
             // — the flat unique-match below is the hook-less callers'
             // window only
             if let Some(QualHit::Fn(fv)) = qual(&[name.to_string()], false) {
-                return call_ret(home, idxs, ast, &fv, &segs[0].generics, args, qual);
+                return call_ret(
+                    home,
+                    idxs,
+                    ast,
+                    &fv,
+                    fv.ret(),
+                    &segs[0].generics,
+                    args,
+                    qual,
+                );
             }
             // the unique free fn by name over the inference window (the
             // one law beside the member law, the window-shaped adapter):
             // ambiguity is a miss, never a wrong type
             if let Some(fv) = super::unique_free_fn_in(idxs.iter().copied(), name) {
-                return call_ret(home, idxs, ast, &fv, &segs[0].generics, args, qual);
+                return call_ret(
+                    home,
+                    idxs,
+                    ast,
+                    &fv,
+                    fv.ret(),
+                    &segs[0].generics,
+                    args,
+                    qual,
+                );
             }
             // `Logger(..)` — the constructor call. Only an INDEXED
             // class/struct answers: a capitalized name with no type
@@ -364,6 +383,7 @@ fn call_ty<'a>(
                 idxs,
                 ast,
                 &fv,
+                fv.ret(),
                 &segs.last().expect("path has segments").generics,
                 args,
                 qual,
@@ -395,13 +415,14 @@ fn written_arg_ty(home: &File, ast: &Ast, name: &str, args: &[TyRef]) -> Ty {
     }
 }
 
-/// a member call's ret on `ty_name` — the impl-fn lane over the
-/// window: the inherent-impl door's window-shaped adapter
-/// ([`super::impl_method_fn_in`]) priced by [`call_ret`]
-/// (the substitution, then the async wrap). `None` when no impl fn
-/// answers — an own-surface member is FINAL with no recorded fn
-/// (never a same-named impl fn from another file leaks through: the
-/// member law's gate)
+/// a member call's ret on `ty_name` — the callee door's window-shaped
+/// adapter ([`super::member_callee_in`]) priced per arm: a member
+/// declared in the type's own body answers with its DECLARED
+/// signature (the ret from the owning view — `-> Self` already
+/// resolved — and the substitution machinery over the `FnView` wrap),
+/// an impl fn by [`call_ret`] (the substitution, then the async
+/// wrap). The door's answer is FINAL over the impl sweep — never a
+/// same-named impl fn from another file leaks through.
 #[allow(clippy::too_many_arguments)] // the arity IS the resolver's shape — plumbing, not an API to nest
 fn member_ret<'a>(
     home: &File,
@@ -413,8 +434,21 @@ fn member_ret<'a>(
     args: &[ExprRef],
     qual: &impl Fn(&[String], bool) -> Option<QualHit<'a>>,
 ) -> Option<Ty> {
-    super::impl_method_fn_in(idxs.iter().copied(), ty_name, member)
-        .and_then(|f| call_ret(home, idxs, ast, &f, written, args, qual))
+    match super::member_callee_in(idxs.iter().copied(), ty_name, member)? {
+        MemberTarget::ClassMember(m)
+        | MemberTarget::StructMember(m)
+        | MemberTarget::PrimitiveMember(m)
+        | MemberTarget::IfaceMember(m) => {
+            let f = FnView {
+                file: m.file,
+                h: m.h,
+            };
+            call_ret(home, idxs, ast, &f, m.ty(), written, args, qual)
+        }
+        MemberTarget::ImplFn(f) => call_ret(home, idxs, ast, &f, f.ret(), written, args, qual),
+        // an enum variant is no callee — nothing to price
+        MemberTarget::EnumMember(_) => None,
+    }
 }
 
 /// a callee fn view's ret at a call site — the written ret priced for
@@ -433,11 +467,19 @@ fn member_ret<'a>(
 /// async wrap: a call to an `async` fn answers `Future<R>` with `R`
 /// the written ret, `nil` unwritten (the engine's sugar law); a plain
 /// callee answers `R` (unwritten = a miss, nothing derives)
+///
+/// The ret is HANDED IN: an impl fn hands its written ret, a member
+/// declared in the type's own body the OWNING VIEW's answer
+/// ([`MemberView::ty`](crate::world::views::MemberView::ty) — `-> Self`
+/// already resolved to the declaring type, where the `FnView` wrap
+/// alone would read a parent impl that is not there).
+#[allow(clippy::too_many_arguments)] // the arity IS the resolver's shape — plumbing, not an API to nest
 fn call_ret<'a>(
     home: &File,
     idxs: &[&'a File],
     ast: &Ast,
     f: &FnView,
+    ret: Option<Ty>,
     written: &[TyRef],
     args: &[ExprRef],
     qual: &impl Fn(&[String], bool) -> Option<QualHit<'a>>,
@@ -468,7 +510,7 @@ fn call_ret<'a>(
         };
         declared.unify(&inferred, &vars, &mut map);
     }
-    let Some(ret) = f.ret() else {
+    let Some(ret) = ret else {
         // unwritten = `nil` (the engine's law) — only an async callee
         // answers it
         return f.is_async().then(|| future_ty(Ty::named("nil")));

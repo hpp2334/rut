@@ -124,8 +124,8 @@ let c = Ctx::open(1);
 #[test]
 fn satisfied_member_resolves_to_the_inherent_impl() {
     // the satisfaction shape: an interface + the inherent impl that
-    // carries the members — a CONCRETE receiver resolves to the impl
-    // fn (the type's own surface), never to the interface's signature
+    // carries the members — a CONCRETE receiver resolves to the
+    // inherent impl fn, never to the interface's signature
     let mut s = S::boot();
     let src = "\
 interface Get {
