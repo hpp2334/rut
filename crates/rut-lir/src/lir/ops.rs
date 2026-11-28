@@ -30,56 +30,53 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
         // seeding an operand with it would funnel a `?bool` lhs into its
         // payload before the null-test sees the nullable (`if (b == nil)`,
         // the store's lane probes) — the operands type by the shapes at
-        // hand, the pointer-vs-pointee law below decides.
+        // hand, the pointer-vs-pointee law below decides. The seed sees
+        // through one nullable layer (numeric_hint): a `?T` store hint
+        // seeds the PAYLOAD — the operand's own peel law decides (the
+        // demand), never a silent box-then-peel around the operator.
         let seed = if matches!(op, Eq | Ne) {
             None
         } else {
-            expected
+            self.numeric_hint(expected)
         };
         let lt = self.compile_expr(lhs, seed)?;
         let lhs_reg = self.last_reg;
-        // arithmetic/ordinal: a scalar-pointee pointer on the left reads
-        // its pointee; the right side derefs through the
-        // compile_expr funnel. `==`/`!=` keep pointer identity and decide
-        // after both sides are typed.
-        let (lt, lhs_reg) = if !matches!(op, Eq | Ne) {
-            self.deref_ptr(lt, lhs_reg, sp.lo)
-        } else {
-            (lt, lhs_reg)
-        };
-        let mut lt = lt;
-        let mut lhs_reg = lhs_reg;
+        // arithmetic/ordinal: a nullable lhs demands the assert —
+        // the law, one site (`m + 1` on `m: ?i32` spells `m! + 1`).
+        // The rhs demands through the funnel's own arm. `==`/`!=`
+        // keep the pointer-vs-pointee law below.
+        if !matches!(op, Eq | Ne) {
+            self.demand_assert(lt, sp)?;
+        }
         // the rhs hint: an expected `?T` boxes values at let/arg/return/
-        // field-store positions, but a `==` operand is NOT such a position
-        // (pointer-vs-pointee compares stay). Against a
-        // nullable lhs the rhs takes the PAYLEE type (the lhs derefs in
-        // the mirror below); only the `nil` literal takes the nullable
-        // hint, typing as `?T` for the identity null-slot compare.
+        // field-store positions, but a `==` operand is NOT such a position.
+        // The null-slot compare keeps its hint — the `nil` literal types
+        // as the nullable itself (`f == nil`, THE guard). Every other
+        // `==` rhs compiles WITHOUT a hint: the old paylee hint peeled a
+        // nullable rhs through the funnel (the `?T == ?T` compare must
+        // stay) or would now demand there; the mixed verdict below
+        // decides the paylee rhs honestly.
         let rhs_hint = match (op, self.ctx.types.kind(lt).clone()) {
-            (Eq | Ne, TyKind::Opt { elem }) => {
+            (Eq | Ne, TyKind::Opt { .. }) => {
                 let rhs_is_nil = match rhs {
                     ExprRef::Lit(lh) => matches!(lh.get(self.ctx.ast).lit, Lit::Nil),
                     _ => false,
                 };
-                if rhs_is_nil {
-                    Some(lt)
-                } else {
-                    Some(elem)
-                }
+                rhs_is_nil.then_some(lt)
             }
             _ => Some(lt),
         };
         let rt_ = self.compile_expr(rhs, rhs_hint)?;
         let rhs_reg = self.last_reg;
-        // `==`/`!=`: a pointer against its own pointee type compares the
-        // VALUE (the funnel already deref'd the right-hand side); pointer-
-        // vs-pointer — including `nil` — stays identity
+        // `==`/`!=`: a paylee rhs against a nullable lhs is the MIXED
+        // compare — the law: the lhs never peels, the assert is the
+        // author's to spell (`f! == t`). A nullable rhs (the shared-cell
+        // compare, `?T == ?T`) and the nil literal (the null-slot
+        // compare) equal the lhs type and pass untouched.
         if matches!(op, Eq | Ne) && rt_ != lt {
             if let TyKind::Opt { elem } = self.ctx.types.kind(lt).clone() {
                 if rt_ == elem {
-                    let (t2, r2) = self.deref_ptr(lt, lhs_reg, sp.lo);
-                    lt = t2;
-                    lhs_reg = r2;
+                    self.demand_assert(lt, sp)?;
                 }
             }
         }
@@ -349,18 +346,14 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                             l.reg
                         };
                         let mut cur_ty = l.ty;
-                        if matches!(self.ctx.types.kind(cur_ty).clone(), TyKind::Opt { .. }) {
-                            let (t, d) = self.deref_for_use(cur_ty, cur, sp.lo);
-                            cur = d;
-                            cur_ty = t;
-                        }
+                        // the law: the chain never peels — a nullable
+                        // head demands the assert (`f!.x = 4`; the
+                        // assert rides the chain head)
+                        self.demand_assert(cur_ty, sp)?;
                         for seg in &segs[1..segs.len() - 1] {
-                            // a pointer mid-chain derefs before the next field
-                            if matches!(self.ctx.types.kind(cur_ty).clone(), TyKind::Opt { .. }) {
-                                let (t, d) = self.deref_for_use(cur_ty, cur, sp.lo);
-                                cur = d;
-                                cur_ty = t;
-                            }
+                            // the law: a nullable mid-chain demands the
+                            // assert at its own layer (`p!.next!.f = v`)
+                            self.demand_assert(cur_ty, sp)?;
                             let TyKind::Data { fields } = self.ctx.types.kind(cur_ty).clone()
                             else {
                                 // the quiet-audit law: a poison chain
@@ -463,9 +456,11 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                                     },
                                     sp.lo,
                                 );
-                                // a `?T` field computes at T: the
-                                // accumulator derefs, the result re-boxes
-                                let (cty, cur_v) = self.deref_for_use(fty, cur_v, sp.lo);
+                                // the law: the accumulator never
+                                // peels — a `?T` field's compound
+                                // assign demands the assert first
+                                self.demand_assert(fty, sp)?;
+                                let cty = fty;
                                 let t = self.compile_expr(value, Some(cty))?;
                                 // the quiet-audit law: a poison field
                                 // (or a poison value) skips the verdict
@@ -609,9 +604,10 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
             };
             let rt = self.compile_expr(recv, None)?;
             let rreg = self.last_reg;
-            // `p.f = ..` through a nullable auto-derefs —
-            // so does `arr[i].f = ..` when the elements are `?T`
-            let (rt, rreg) = self.deref_for_use(rt, rreg, sp.lo);
+            // the law: the write never peels — `p.f = ..` through a
+            // nullable demands the assert (`p!.f = ..`, the assert
+            // rides the chain head)
+            self.demand_assert(rt, sp)?;
             // the quiet-audit law (receiver silence): a field WRITE on
             // the poison row resolves nothing, diagnoses nothing
             if self.ctx.ty_is_err(rt) {
@@ -669,9 +665,11 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                         },
                         sp.lo,
                     );
-                    // a `?T` field computes at T: the
-                    // accumulator derefs, the result re-boxes
-                    let (cty, cur) = self.deref_for_use(fty, cur, sp.lo);
+                    // the law: the accumulator never peels — a
+                    // `?T` field's compound assign demands the
+                    // assert first
+                    self.demand_assert(fty, sp)?;
+                    let cty = fty;
                     let t = self.compile_expr(value, Some(cty))?;
                     // the quiet-audit law: a poison field (or a poison
                     // value) skips the verdict
@@ -701,8 +699,9 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
             };
             let rt = self.compile_expr(recv, None)?;
             let rreg = self.last_reg;
-            // `xs[i] = ..` through a pointer auto-derefs
-            let (rt, rreg) = self.deref_for_use(rt, rreg, sp.lo);
+            // the law: the indexee never peels — `xs[i] = ..` through
+            // a nullable demands the assert (`xs![i] = ..`)
+            self.demand_assert(rt, sp)?;
             // the quiet-audit law: a poison indexee already diagnosed at
             // its own failure — the sequence verdict stays silent
             if self.ctx.ty_is_err(rt) {
@@ -732,9 +731,11 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                 }
                 Some(bin) => {
                     let cur = self.emit_slice_get(rreg, ireg, &info, sp.lo)?;
-                    // a `?T` element computes at T: the
-                    // accumulator derefs, the result re-boxes
-                    let (cty, cur) = self.deref_for_use(elem, cur, sp.lo);
+                    // the law: the accumulator never peels — a
+                    // `?T` element's compound assign demands the
+                    // assert first
+                    self.demand_assert(elem, sp)?;
+                    let cty = elem;
                     let t = self.compile_expr(value, Some(cty))?;
                     // the quiet-audit law: a poison element skips the verdict
                     if !self.same_ty(t, cty) && !self.ctx.ty_is_err(t) && !self.ctx.ty_is_err(cty) {

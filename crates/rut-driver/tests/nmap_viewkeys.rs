@@ -159,7 +159,7 @@ fn churn_range(p: str, n: i32) -> i64 {
         let q = m.get_range(p, i * 6, 6);
         if (q != nil) {
             hits += 1;
-            sum = sum.wrapping_add(q as i64);
+            sum = sum.wrapping_add(q! as i64);
         }
     }
     let misses: i64 = 0;
@@ -207,7 +207,7 @@ fn churn_slice(p: str, n: i32) -> i64 {
         let q = m.get(p.slice(i * 6, i * 6 + 6));
         if (q != nil) {
             hits += 1;
-            sum = sum.wrapping_add(q as i64);
+            sum = sum.wrapping_add(q! as i64);
         }
     }
     let misses: i64 = 0;
@@ -274,15 +274,15 @@ entry fn main() -> i64 {
     // range inserts, slice reads
     if (!m.put_range(seq, 0, 3, 1)) { f += 1; }      // "ACG"
     if (!m.put_range(seq, 3, 3, 2)) { f += 2; }      // "TTC"
-    if (m.get(seq.slice(0, 3)) != 1) { f += 4; }
+    if (m.get(seq.slice(0, 3))! != 1) { f += 4; }
     if (!m.has(seq.slice(3, 6))) { f += 8; }
     // slice put over a range key: replace, not a second entry
     if (m.put(seq.slice(0, 3), 10)) { f += 16; }
     if (m.len() != 2) { f += 32; }
-    if (m.get_range(seq, 0, 3) != 10) { f += 64; }
+    if (m.get_range(seq, 0, 3)! != 10) { f += 64; }
     // a window key off the slot grid: range stores, slice finds
     if (!m.put_range(seq, 5, 4, 3)) { f += 128; }    // "CAGG"
-    if (m.get(seq.slice(5, 9)) != 3) { f += 256; }
+    if (m.get(seq.slice(5, 9))! != 3) { f += 256; }
     if (!m.has_range(seq, 5, 4)) { f += 512; }
     // cross-lane removes, both directions
     if (!m.remove(seq.slice(0, 3))) { f += 1024; }
@@ -295,8 +295,8 @@ entry fn main() -> i64 {
     // the surviving range key: this is a REPLACE (answers false)
     let win = seq.slice(0, 9);
     if (m.put_range(win, 3, 3, 99) != false) { f += 32768; }
-    if (m.get_range(seq, 3, 3) != 99) { f += 65536; }
-    if (m.get(seq.slice(3, 6)) != 99) { f += 131072; }
+    if (m.get_range(seq, 3, 3)! != 99) { f += 65536; }
+    if (m.get(seq.slice(3, 6))! != 99) { f += 131072; }
     if (m.len() != 1) { f += 262144; }
     return f;
 }
@@ -341,11 +341,11 @@ entry fn main() -> i64 {
     for (let i = 0; i < n; i += 1) {
         let q = m.get_range(p, i * 4, 4);
         if (q == nil) { fails += 8; }
-        if (q != i * 7 + 1) { fails += 16; }
+        if (q! != i * 7 + 1) { fails += 16; }
     }
     // the plain lanes see the same entries
     for (let i = 0; i < n; i += 97) {
-        if (m.get(p.slice(i * 4, i * 4 + 4)) != i * 7 + 1) { fails += 32; }
+        if (m.get(p.slice(i * 4, i * 4 + 4))! != i * 7 + 1) { fails += 32; }
     }
     return fails;
 }
@@ -373,10 +373,10 @@ entry fn main() -> i64 {
     let b: HashMap<str, i32> = HashMap::new();
     let f: i64 = 0;
     if (!a.put_range(s, 3, 0, 7)) { f += 1; }
-    if (a.get("") != 7) { f += 2; }
+    if (a.get("")! != 7) { f += 2; }
     if (!b.put("", 9)) { f += 4; }
-    if (b.get_range(s, 0, 0) != 9) { f += 8; }
-    if (b.get_range(s, 3, 0) != 9) { f += 16; }  // any boundary window of len 0
+    if (b.get_range(s, 0, 0)! != 9) { f += 8; }
+    if (b.get_range(s, 3, 0)! != 9) { f += 16; }  // any boundary window of len 0
     if (a.len() != 1 || b.len() != 1) { f += 32; }
     return f;
 }

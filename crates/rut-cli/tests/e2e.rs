@@ -260,7 +260,7 @@ entry fn main() -> nil {
     Logger::new("app").info(f"box1 is Hashable: {box1 is Hashable}");
     let p = opaque::downcast<Point>(box1);
     if (p != nil) {
-        Logger::new("app").info(f"recovered {p.x} {p.y}");
+        Logger::new("app").info(f"recovered {p!.x} {p!.y}");
     }
     Logger::new("app").info(f"miss is nil: {opaque::downcast<Point>(box2) == nil}");
 }
@@ -301,15 +301,15 @@ entry fn main() -> nil {
     let b = opaque(pt);
     let p = opaque::downcast<Point>(b);
     let q = opaque::downcast<Point>(b);
-    p.x = 9;                       // through the recovery...
-    q.y = 7;                       // ...through a second holder...
+    p!.x = 9;                      // through the recovery...
+    q!.y = 7;                      // ...through a second holder...
     pt.y = 5;                      // ...and back the other way
-    log.info(f"alias law: {pt.x} {pt.y} {p.y} {q.x}");
+    log.info(f"alias law: {pt.x} {pt.y} {p!.y} {q!.x}");
     // nil propagation: the mismatch flows through calls and guards
     let miss = find(opaque("nope"));
     log.info(f"miss is nil: {miss == nil}");
     if (p != nil) {
-        log.info(f"guarded read: {p.x}");
+        log.info(f"guarded read: {p!.x}");
     }
 }
 "#;
@@ -335,10 +335,10 @@ entry fn main() -> i32 {
     n = 9;
     let v = opaque::downcast<i32>(b);
     if (v == nil) { return 1; }
-    if (v != 5) { return 2; }
+    if (v! != 5) { return 2; }
     if (opaque::downcast<str>(b) != nil) { return 3; }
     let miss = opaque::downcast<Point>(opaque("s"));
-    return miss.x;
+    return miss!.x;
 }
 "#;
     let (lines, trap, _) = run_case(src, 1_000_000);
@@ -354,7 +354,7 @@ fn sieve(limit: i32) -> Vec<i32> {
     let marks = Vec<u8>::filled(0, limit + 1);
     let primes: Vec<i32> = Vec::new();
     for (let i = 2; i <= limit; i += 1) {
-        if (marks[i] == 0) {
+        if (marks[i]! == 0u8) {
             primes.push(i);
             let m = i * i;
             while (m <= limit) {
@@ -367,7 +367,7 @@ fn sieve(limit: i32) -> Vec<i32> {
 }
 entry fn main() -> nil {
     let primes = sieve(100);
-    Logger::new("app").info(f"{primes.len()} primes up to 100, last={primes[primes.len() - 1]}");
+    Logger::new("app").info(f"{primes.len()} primes up to 100, last={primes[primes.len() - 1]!}");
 }
 "#;
     let (lines, trap, _) = run_case(src, 10_000_000);
@@ -454,7 +454,7 @@ entry fn main() -> nil {
         Square { s: 2 },
     ]);
     for (let s of shapes) {
-        Logger::new("app").info(f"{s.name()} area={s.area()}");
+        Logger::new("app").info(f"{s!.name()} area={s!.area()}");
     }
     let c = Circle { r: 1 };
     Logger::new("app").info(f"c is Shape: {c is Shape}");
@@ -474,14 +474,14 @@ fn case7_closures_generics() {
 use pouch::{ Vec };
 fn map<T, U>(v: Vec<T>, f: fn(T) -> U) -> Vec<U> {
     let out: Vec<U> = Vec<U>::new();
-    for (let x of v) { out.push(f(x)); }
+    for (let x of v) { out.push(f(x!)); }
     return out;
 }
 entry fn main() -> nil {
     let xs = Vec<i32>::from([1, 2, 3, 4]);
     let k = 10;
     let ys = map<i32, i32>(xs, (x) => x * k);
-    Logger::new("app").info(f"{ys[0]} {ys[1]} {ys[2]} {ys[3]}");
+    Logger::new("app").info(f"{ys[0]!} {ys[1]!} {ys[2]!} {ys[3]!}");
 }
 "#;
     let (lines, trap, _) = run_case(src, 1_000_000);
@@ -610,13 +610,13 @@ fn bare_vec_filled_with_a_value_reads_back() {
 use pouch::{ Vec };
 entry fn main() -> nil {
     let k: Vec<u32> = Vec::filled(0, 4);
-    Logger::new("app").info(f"a len={k.len()} k3={k[3]}");
+    Logger::new("app").info(f"a len={k.len()} k3={k[3]!}");
     k[0] = 7;
     k[3] = 9;
-    Logger::new("app").info(f"b k0={k[0]} k3={k[3]} len={k.len()}");
+    Logger::new("app").info(f"b k0={k[0]!} k3={k[3]!} len={k.len()}");
     let j: Vec<u8> = Vec::filled(0, 3);
     j.push(1);
-    Logger::new("app").info(f"c len={j.len()} j0={j[0]} j3={j[3]}");
+    Logger::new("app").info(f"c len={j.len()} j0={j[0]!} j3={j[3]!}");
     let e: Vec<u32> = Vec::filled(0, 0);
     let b: Vec<u32> = Vec::new();
     Logger::new("app").info(f"d {e.len()} {b.len()}");
@@ -649,7 +649,7 @@ entry fn main() -> nil {
     let b = Vec<u32>::from([4, 5]);
     let c = Vec<u8>::from([250, 251]);
     let d: Vec<u32> = Vec::from([6, 7]);   // bare form, annotation-driven
-    Logger::new("app").info(f"a={a[0] + a[1] + a[2]} b={b[0]} c={c[1]} d={d[1]} n={d.len()}");
+    Logger::new("app").info(f"a={a[0]! + a[1]! + a[2]!} b={b[0]!} c={c[1]!} d={d[1]!} n={d.len()}");
 }
 "#;
     let (lines, trap, _) = run_case(src, 1_000_000);
@@ -986,8 +986,8 @@ struct Box { rows: Vec<Row>; }
 entry fn make() -> opaque { let b: ?Box = Box { rows: Vec::new() }; return opaque(b); }
 entry fn put(c: opaque) -> u32 {
     let b = opaque::downcast<?Box>(c);
-    b.rows.push(Row { id: 1 });
-    return b.rows.len() as u32;
+    b!!.rows.push(Row { id: 1 });
+    return b!!.rows.len() as u32;
 }
 entry fn echo_bytes(v: bytes) -> bytes { return v; }
 entry fn maybe(v: i32) -> (i32, bool) {
@@ -1340,8 +1340,8 @@ fn make(depth: i32, v: i32) -> Node {
 }
 fn count(n: Node) -> i32 {
     let c = 1;
-    if (n.left != nil) { c += count(n.left); }
-    if (n.right != nil) { c += count(n.right); }
+    if (n.left != nil) { c += count(n.left!); }
+    if (n.right != nil) { c += count(n.right!); }
     return c;
 }
 entry fn main() -> nil {
@@ -1432,12 +1432,12 @@ impl<T> Vec<T> {
         self.buf[self.len] = v;
         self.len += 1;
     }
-    fn get(self, i: i32) -> T { return self.buf[i]; }
+    fn get(self, i: i32) -> T { return self.buf[i]!; }
     // v1.1: pop returns the value; an empty pop is the caller's contract
     // breach (guard with `len()`), not an error value
     fn pop(self) -> T {
         self.len -= 1;
-        return self.buf[self.len];
+        return self.buf[self.len]!;
     }
 }
 entry fn main() -> nil {
@@ -1468,10 +1468,10 @@ entry fn main() -> nil {
     v.push(1); v.push(2); v.push(3);
     v[0] = 10;
     let sum = 0;
-    for (let x of v) { sum += x; }
+    for (let x of v) { sum += x!; }
     let w: Vec<i32> = Vec::from([7, 8]);
     let z: Vec<u8> = Vec::filled(0, 3);
-    Logger::new("app").info(f"{v[0]} {v.len()} {sum} {w[1]} {z.len()}");
+    Logger::new("app").info(f"{v[0]!} {v.len()} {sum} {w[1]!} {z.len()}");
 }
 "#;
     let (lines, trap, _) = run_case(src, 1_000_000);
@@ -2128,8 +2128,8 @@ impl CountUp {
 
 fn total(it: CountUp) -> i32 {
     let acc: ?Acc = Acc { };
-    it.iterate(fn (v: i32) -> bool { acc.total = acc.total + v; return true; });
-    return acc.total;
+    it.iterate(fn (v: i32) -> bool { acc!.total = acc!.total + v; return true; });
+    return acc!.total;
 }
 
 entry fn main() -> nil {
@@ -2138,9 +2138,9 @@ entry fn main() -> nil {
     for (let v of CountUp::new(9)) {
         if (v % 2 == 0) { continue; }
         if (v > 6) { break; }
-        acc.total = acc.total + v;
+        acc!.total = acc!.total + v;
     }
-    log.info(f"sum={acc.total}");
+    log.info(f"sum={acc!.total}");
     log.info(f"total={total(CountUp::new(4))}");
 }
 "#;
@@ -2165,18 +2165,18 @@ entry fn main() -> nil {
     let xs: Vec<i32> = Vec::new();
     xs.push(1); xs.push(2); xs.push(3);
     let sum = 0;
-    for (let v of xs) { sum += v; }
+    for (let v of xs) { sum += v!; }
     log.info(f"sum={sum}");
     let m: Vec<Vec<i32>> = Vec::new();
     let r0: Vec<i32> = Vec::new(); r0.push(10); m.push(r0);
-    for (let row of m) { row.push(20); }
-    log.info(f"rowlen={m[0].len()}");
+    for (let row of m) { row!.push(20); }
+    log.info(f"rowlen={m[0]!.len()}");
     let rs: Vec<Row> = Vec::new();
     rs.push(Row { v: 5 });
-    for (let r of rs) { r.v = 7; }
-    log.info(f"v={rs[0].v}");
+    for (let r of rs) { r!.v = 7; }
+    log.info(f"v={rs[0]!.v}");
     let hits = 0;
-    for (let v of xs) { if (v == 2) { hits += 1; } }
+    for (let v of xs) { if (v! == 2) { hits += 1; } }
     log.info(f"hits={hits}");
 }
 "#;
@@ -2264,13 +2264,13 @@ entry fn main() -> nil {
     let ps: [?P] = [nil; 2];
     let p0 = P { x: 4 };
     ps[0] = p0;
-    Logger::new("t").info(f"p0={ps[0].x} p1nil={ps[1] == nil}");
+    Logger::new("t").info(f"p0={ps[0]!.x} p1nil={ps[1] == nil}");
     let all: Vec<i32> = Vec::filled(9, 3);
-    Logger::new("t").info(f"all={all[0]} {all[1]} {all[2]}");
+    Logger::new("t").info(f"all={all[0]!} {all[1]!} {all[2]!}");
     let shared = P { x: 5 };
     let both: [?P] = [shared; 2];
-    both[1].x = 6;
-    Logger::new("t").info(f"shared={both[0].x}");
+    both[1]!.x = 6;
+    Logger::new("t").info(f"shared={both[0]!.x}");
     let n: i32 = 3;
     let sized: [i32] = [2; n * 2];
     Logger::new("t").info(f"sized={sized.len()} last={sized[5]}");
@@ -2296,7 +2296,7 @@ fn a1_addr_of_deref_and_nil() {
 struct P { x: i32 = 0; }
 entry fn main() -> nil {
     let p: ?P = P { x: 5 };
-    Logger::new("t").info(f"x={p.x} nil={p == nil}");
+    Logger::new("t").info(f"x={p!.x} nil={p == nil}");
     let n: ?P = nil;
     Logger::new("t").info(f"n nil={n == nil}");
 }
@@ -2308,14 +2308,36 @@ entry fn main() -> nil {
 
 #[test]
 fn a1_nil_deref_traps() {
-    let src = r#"
+    // FLIPPED with the law: the un-asserted field read is the demand
+    // diagnostic; the honest spelling `n!.x` traps NilDeref AT the
+    // assert. (Old expectation: `n.x` compiled and trapped at the read.)
+    let out = compile_out(
+        r#"
 struct P { x: i32 = 0; }
 entry fn main() -> nil {
     let n: ?P = nil;
     let _ = n.x;
 }
-"#;
-    let (_, trap, _) = run_case(src, 100_000);
+"#,
+        "main",
+    );
+    assert!(
+        out.diags
+            .iter()
+            .any(|d| d.msg.contains("`?P` derefs only through `!`")),
+        "the un-asserted read demands: {:?}",
+        out.diags
+    );
+    let (_, trap, _) = run_case(
+        r#"
+struct P { x: i32 = 0; }
+entry fn main() -> nil {
+    let n: ?P = nil;
+    let _ = n!.x;
+}
+"#,
+        100_000,
+    );
     assert_eq!(trap.as_deref(), Some("NilDeref"));
 }
 
@@ -2675,8 +2697,8 @@ struct Box { rows: Vec<Row>; }
 entry fn make() -> opaque { let b: ?Box = Box { rows: Vec::new() }; return opaque(b); }
 entry fn put(c: opaque) -> u32 {
     let b = opaque::downcast<?Box>(c);
-    b.rows.push(Row { id: 1 });
-    return b.rows.len() as u32;
+    b!!.rows.push(Row { id: 1 });
+    return b!!.rows.len() as u32;
 }
 "#;
     let out = compile(src, "m");
@@ -2724,7 +2746,7 @@ fn table() -> Vec<str> {
 }
 entry fn main() -> nil {
     let t = table();
-    Logger::new("t").info(f"len={t.len()} first={t[0]}");
+    Logger::new("t").info(f"len={t.len()} first={t[0]!}");
 }
 "#;
     let out = compile(src, "main");
@@ -2753,7 +2775,7 @@ entry fn main() -> nil {
     o.nums.push(8);
     o.tag = "y";
     Logger::new("t").info(f"snap inner={snap.inner.v} tag=[{snap.tag}]");
-    Logger::new("t").info(f"o inner={o.inner.v} tag=[{o.tag}] n0={o.nums[0]} n1={o.nums[1]}");
+    Logger::new("t").info(f"o inner={o.inner.v} tag=[{o.tag}] n0={o.nums[0]!} n1={o.nums[1]!}");
     Logger::new("t").info(f"snap n={snap.nums.len()}");
 }
 "#;
@@ -2778,7 +2800,7 @@ entry fn main() -> nil {
     let t: Vec<str> = Vec::new();
     t.push("a");
     t.push("b");
-    Logger::new("t").info(f"len={t.len()} first={t[0]}");
+    Logger::new("t").info(f"len={t.len()} first={t[0]!}");
 }
 "#;
     let (lines, trap, _) = run_case(src, 100_000);
@@ -2846,10 +2868,10 @@ entry fn main() -> nil {
     let parts: Vec<str> = Vec::new();
     parts.push(s.slice(0, 5));
     parts.push(u.slice(6, 11));
-    log.info(f"[{parts[0]}][{parts[1]}]");
-    let joined = parts[0];
+    log.info(f"[{parts[0]!}][{parts[1]!}]");
+    let joined = parts[0]!;
     joined = f"{joined}!";
-    log.info(f"[{joined}] base=[{parts[0]}]");
+    log.info(f"[{joined}] base=[{parts[0]!}]");
     let n = 0;
     for (let c of w) { n += 1; }
     log.info(f"n={n}");
@@ -2900,17 +2922,17 @@ entry fn main() -> nil {
     let v: Vec<i32> = Vec::new();
     v.push(1); v.push(2); v.push(3); v.push(4);
     let w = v.slice(1, 3);
-    log.info(f"[{w[0]} {w[1]}] len={w.len()}");
-    w[0] = 20;
-    log.info(f"v1={v[1]} w0={w[0]}");
-    let w2 = w.slice(0, 1);
-    w2[0] = 99;
-    log.info(f"v1={v[1]}");
+    log.info(f"[{w![0]!} {w![1]!}] len={w!.len()}");
+    w![0] = 20;
+    log.info(f"v1={v[1]!} w0={w![0]!}");
+    let w2 = w!.slice(0, 1);
+    w2![0] = 99;
+    log.info(f"v1={v[1]!}");
     let s = 0;
-    for (let x of w) { s += x; }
+    for (let x of w!) { s += x!; }
     log.info(f"s={s}");
     v.push(5);
-    log.info(f"wlen={w.len()} vlen={v.len()} v1={v[1]}");
+    log.info(f"wlen={w!.len()} vlen={v.len()} v1={v[1]!}");
 }
 "#;
     let (lines, trap, _) = run_case(src, 1_000_000);
@@ -2938,7 +2960,7 @@ entry fn main() -> nil {
     let v: Vec<i32> = Vec::new();
     v.push(1); v.push(2);
     let w = v.slice(0, 2);
-    w.push(3);
+    w!.push(3);
     Logger::new("win").info("unreachable");
 }
 "#;
@@ -2952,7 +2974,7 @@ entry fn main() -> nil {
     let v: Vec<i32> = Vec::new();
     v.push(1); v.push(2);
     let w = v.slice(0, 2);
-    let x = w[5];
+    let x = w![5]!;
     Logger::new("win").info(f"{x}");
 }
 "#;
@@ -3071,7 +3093,7 @@ entry fn main() -> nil {
     zs.push(5);
     let set = fn() -> bool { zs = Vec::new(); zs.push(7); return true; };
     set();
-    log.info(f"len={zs.len()} first={zs[0]}");
+    log.info(f"len={zs.len()} first={zs[0]!}");
 }
 "#;
     let (lines, trap, _) = run_case(src, 1_000_000);
@@ -3112,7 +3134,7 @@ entry fn main() -> nil {
     let ws: Vec<i32> = Vec::new();
     let add = fn(v: i32) -> bool { ws.push(v); return true; };
     add(1); add(2);
-    log.info(f"len={ws.len()} first={ws[0]}");
+    log.info(f"len={ws.len()} first={ws[0]!}");
 }
 "#;
     let (lines, trap, _) = run_case(src, 1_000_000);
@@ -3162,7 +3184,7 @@ entry fn main() -> nil {
             shared.push(a * 10 + b);
         }
     }
-    log.info(f"len={shared.len()} last={shared[shared.len()-1]}");
+    log.info(f"len={shared.len()} last={shared[shared.len()-1]!}");
 }
 "#;
     let (lines, trap, _) = run_case(src, 2_000_000);
@@ -3197,12 +3219,12 @@ entry fn main() -> nil {
     for (let x of src) {
         grab = fn() -> i32 { return x; };
     }
-    let fused = grab();
+    let fused = grab!();
     let grab2: ?(fn() -> i32) = nil;
     for (let y of Count3::new()) {
         grab2 = fn() -> i32 { return y; };
     }
-    let desug = grab2();
+    let desug = grab2!();
     log.info(f"fused={fused} desug={desug}");
 }
 "#;
@@ -3370,13 +3392,13 @@ impl TodoList {
     fn new() -> Self { return Self { tasks: Vec::new() }; }
     fn add(self, title: str) -> nil { self.tasks.push(Task { title: title, completed: false }); }
     fn toggle_task(self) -> nil {
-        for (let task of self.tasks) { task.completed = !task.completed; }
+        for (let task of self.tasks) { task!.completed = !task!.completed; }
     }
     fn format_list(self) -> str {
         let out = "";
         for (let task of self.tasks) {
-            let mark = if (task.completed) { "[x] " } else { "[ ] " };
-            out = f"{out}{mark}{task.title}";
+            let mark = if (task!.completed) { "[x] " } else { "[ ] " };
+            out = f"{out}{mark}{task!.title}";
         }
         return out;
     }

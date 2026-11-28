@@ -140,7 +140,7 @@ entry fn main() -> nil {
         .map(fn(x: i32) -> i32 { return x * 2; })
         .filter(fn(x: i32) -> bool { return x > 3; })
         .take(4)).collected();
-    log.info(f"picked={picked.as_array().len()} first={picked[0]} last={picked[picked.as_array().len()-1]}");
+    log.info(f"picked={picked.as_array().len()} first={picked[0]!} last={picked[picked.as_array().len()-1]!}");
 }
 "#);
     assert_eq!(lines.len(), 1, "{lines:?}");
@@ -164,14 +164,14 @@ entry fn main() -> nil {
     let i = 0;
     while (i < 10) { nums.push(i); i += 1; }
     let page: Vec<i32> = VecFlow<i32>::from_flow(VecFlow<i32>(nums).into_flow().skip(2).take(3)).collected();
-    log.info(f"page n={page.as_array().len()} first={page[0]} last={page[page.as_array().len()-1]}");
+    log.info(f"page n={page.as_array().len()} first={page[0]!} last={page[page.as_array().len()-1]!}");
     let total: i32 = VecFlow<i32>(nums).into_flow().filter(fn(x: i32) -> bool { return x % 2 == 0; }).count();
     log.info(f"evens={total}");
     let grabbed: Vec<i32> = Vec::new();
     for (let x of VecFlow<i32>(nums).into_flow().take(4)) {
         grabbed.push(x);
     }
-    log.info(f"for_of n={grabbed.as_array().len()} first={grabbed[0]} last={grabbed[grabbed.as_array().len()-1]}");
+    log.info(f"for_of n={grabbed.as_array().len()} first={grabbed[0]!} last={grabbed[grabbed.as_array().len()-1]!}");
 }
 "#);
     assert_eq!(lines.len(), 3, "{lines:?}");

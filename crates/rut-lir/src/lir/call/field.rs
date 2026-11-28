@@ -15,11 +15,9 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
         // path, `compile_qualified_value`)
         let rt = self.compile_expr(recv, None)?;
         let rreg = self.last_reg;
-        // `p.x` auto-derefs: load the pointee cell first, then
-        // the field reads from it — TRANSITIVE (`??T` chains),
-        // exactly the receiver law (`deref_for_use`); the postfix
-        // `.` builds Field nodes now, so every `p.x` lands here
-        let (rt, rreg) = self.deref_for_use(rt, rreg, sp.lo);
+        // `p.x` never peels — the law: the receiver's assert is the
+        // author's to spell (`p!.x`, ONE layer per `!`)
+        self.demand_assert(rt, sp)?;
         // receiver silence (the quiet-audit law): a member read on the
         // poison row resolves NOTHING and diagnoses NOTHING — the
         // annotation failure already diagnosed, and `"<err>` has no

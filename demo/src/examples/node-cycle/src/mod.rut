@@ -26,15 +26,15 @@ impl Node {
 fn make_cycle() -> ?Node {                  // a -> b -> a : strong cycle
     let a: ?Node = Node::new();
     let b: ?Node = Node::new();
-    a.link(b);
-    b.link(a);
+    a!.link(b);
+    b!.link(a);
     return a;
 }
 
 entry fn main() {
     let log = Logger("cycle");
     let head = make_cycle();
-    log.info(f"head.next alive: {head.next != nil}");
+    log.info(f"head.next alive: {head!.next != nil}");
     // the cycle stays live to the end of scope: both cells free only
     // when the retained handles do. `Weak<T>` is the weak-edge answer,
     // not a collector — this example keeps the strong shape and shows

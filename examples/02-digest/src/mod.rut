@@ -41,7 +41,7 @@ entry fn hex_enc(data: bytes) -> str {
     for (let b of data) {
         let hi = (b as u32 >> 4) as i32;
         let lo = (b as u32 & 15) as i32;
-        out = f"{out}{d[hi]}{d[lo]}";
+        out = f"{out}{d[hi]!}{d[lo]!}";
     }
     return out;
 }
@@ -123,11 +123,11 @@ entry fn b64_enc(data: bytes, url: bool) -> str {
             have2 = true;
         }
         let w: u32 = b0 << 16 | b1 << 8 | b2;
-        out = f"{out}{t[(w >> 18 & 63) as i32]}{t[(w >> 12 & 63) as i32]}";
+        out = f"{out}{t[(w >> 18 & 63) as i32]!}{t[(w >> 12 & 63) as i32]!}";
         if (have2) {
-            out = f"{out}{t[(w >> 6 & 63) as i32]}{t[(w & 63) as i32]}";
+            out = f"{out}{t[(w >> 6 & 63) as i32]!}{t[(w & 63) as i32]!}";
         } else if (have1) {
-            out = f"{out}{t[(w >> 6 & 63) as i32]}=";
+            out = f"{out}{t[(w >> 6 & 63) as i32]!}=";
         } else {
             out = f"{out}==";
         }
@@ -149,7 +149,7 @@ entry fn b64_dec(s: str, url: bool) -> (bytes, str) {
             }
             let v: u32 = 256;
             for (let i = 0; i < t.len(); i += 1) {
-                if (t[i] == cs) {
+                if (t[i]! == cs) {
                     v = i as u32;
                 }
             }
@@ -169,12 +169,12 @@ entry fn b64_dec(s: str, url: bool) -> (bytes, str) {
         if (rem > 4) {
             rem = 4;
         }
-        let w = vals[i] << 18 | vals[i + 1] << 12;
+        let w = vals[i]! << 18 | vals[i + 1]! << 12;
         if (rem >= 3) {
-            w = w | vals[i + 2] << 6;
+            w = w | vals[i + 2]! << 6;
         }
         if (rem == 4) {
-            w = w | vals[i + 3];
+            w = w | vals[i + 3]!;
         }
         out.push((w >> 16) as u8);
         if (rem >= 3) {
@@ -439,7 +439,7 @@ fn md5_impl(msg: bytes) -> bytes {
         for (let j = 0; j < 16; j += 1) {
             let o = blk * 64 + j * 4;
             x.push(
-                m[o] as u32 | m[o + 1] as u32 << 8 | m[o + 2] as u32 << 16 | m[o + 3] as u32 << 24,
+                m[o]! as u32 | m[o + 1]! as u32 << 8 | m[o + 2]! as u32 << 16 | m[o + 3]! as u32 << 24,
             );
         }
         let a = a0;
@@ -465,8 +465,8 @@ fn md5_impl(msg: bytes) -> bytes {
             let tmp = d;
             d = c;
             c = b;
-            let sum = a.wrapping_add(f).wrapping_add(k[i].wrapping_add(x[g]));
-            b = b.wrapping_add(rotl32(sum, s[i]));
+            let sum = a.wrapping_add(f).wrapping_add(k[i]!.wrapping_add(x[g]!));
+            b = b.wrapping_add(rotl32(sum, s[i]!));
             a = tmp;
         }
         a0 = a0.wrapping_add(a);
@@ -497,26 +497,24 @@ fn md5_impl(msg: bytes) -> bytes {
 /// SHA-1/SHA-2 padding: 0x80, zeros to n%{mod}=={res}, then the message
 /// length in bits as a big-endian 64-bit word.
 fn sha_tail(m: ?Vec<u8>, msg_len: i32) {
-    m.push(0x80);
-    while (m.len() % 64 != 56) {
-        m.push(0);
+    m!.push(0x80);
+    while (m!.len() % 64 != 56) {
+        m!.push(0);
     }
     let bits = msg_len as u64 * 8;
-    m.push((bits >> 56 & 0xFF) as u8);
-    m.push((bits >> 48 & 0xFF) as u8);
-    m.push((bits >> 40 & 0xFF) as u8);
-    m.push((bits >> 32 & 0xFF) as u8);
-    m.push((bits >> 24 & 0xFF) as u8);
-    m.push((bits >> 16 & 0xFF) as u8);
-    m.push((bits >> 8 & 0xFF) as u8);
-    m.push((bits & 0xFF) as u8);
+    m!.push((bits >> 56 & 0xFF) as u8);
+    m!.push((bits >> 48 & 0xFF) as u8);
+    m!.push((bits >> 40 & 0xFF) as u8);
+    m!.push((bits >> 32 & 0xFF) as u8);
+    m!.push((bits >> 24 & 0xFF) as u8);
+    m!.push((bits >> 16 & 0xFF) as u8);
+    m!.push((bits >> 8 & 0xFF) as u8);
+    m!.push((bits & 0xFF) as u8);
 }
 
 fn sha1_impl(msg: bytes) -> bytes {
     let m = copy_bytes(msg);
-    let mp: ?Vec<u8> = m;
-    sha_tail(mp, msg.len());
-    m = mp;
+    sha_tail(m, msg.len());
     let h0: u32 = 0x67452301;
     let h1: u32 = 0xEFCDAB89u32;
     let h2: u32 = 0x98BADCFEu32;
@@ -528,11 +526,11 @@ fn sha1_impl(msg: bytes) -> bytes {
         for (let j = 0; j < 16; j += 1) {
             let o = blk * 64 + j * 4;
             w.push(
-                m[o] as u32 << 24 | m[o + 1] as u32 << 16 | m[o + 2] as u32 << 8 | m[o + 3] as u32,
+                m[o]! as u32 << 24 | m[o + 1]! as u32 << 16 | m[o + 2]! as u32 << 8 | m[o + 3]! as u32,
             );
         }
         for (let i = 16; i < 80; i += 1) {
-            w.push(rotl32(w[i - 3] ^ w[i - 8] ^ w[i - 14] ^ w[i - 16], 1));
+            w.push(rotl32(w[i - 3]! ^ w[i - 8]! ^ w[i - 14]! ^ w[i - 16]!, 1));
         }
         let a = h0;
         let b = h1;
@@ -556,7 +554,7 @@ fn sha1_impl(msg: bytes) -> bytes {
                 kk = 0xCA62C1D6u32;
             }
             let tmp =
-                rotl32(a, 5).wrapping_add(f.wrapping_add(e)).wrapping_add(kk.wrapping_add(w[i]));
+                rotl32(a, 5).wrapping_add(f.wrapping_add(e)).wrapping_add(kk.wrapping_add(w[i]!));
             e = d;
             d = c;
             c = rotl32(b, 30);
@@ -577,10 +575,10 @@ fn sha1_impl(msg: bytes) -> bytes {
     ws.push(h3);
     ws.push(h4);
     for (let j = 0; j < 5; j += 1) {
-        out.push((ws[j] >> 24 & 0xFF) as u8);
-        out.push((ws[j] >> 16 & 0xFF) as u8);
-        out.push((ws[j] >> 8 & 0xFF) as u8);
-        out.push((ws[j] & 0xFF) as u8);
+        out.push((ws[j]! >> 24 & 0xFF) as u8);
+        out.push((ws[j]! >> 16 & 0xFF) as u8);
+        out.push((ws[j]! >> 8 & 0xFF) as u8);
+        out.push((ws[j]! & 0xFF) as u8);
     }
     return freeze_bytes(out);
 }
@@ -660,14 +658,12 @@ fn sha256_k() -> Vec<u32> {
 
 fn sha256_impl(msg: bytes) -> bytes {
     let m = copy_bytes(msg);
-    let mp: ?Vec<u8> = m;
-    sha_tail(mp, msg.len());
-    m = mp;
+    sha_tail(m, msg.len());
     let h = sha256_h();
     let k = sha256_k();
     let st: Vec<u32> = Vec::new();
     for (let i = 0; i < 8; i += 1) {
-        st.push(h[i]);
+        st.push(h[i]!);
     }
     let blocks = m.len() / 64;
     for (let blk = 0; blk < blocks; blk += 1) {
@@ -675,26 +671,26 @@ fn sha256_impl(msg: bytes) -> bytes {
         for (let j = 0; j < 16; j += 1) {
             let o = blk * 64 + j * 4;
             w.push(
-                m[o] as u32 << 24 | m[o + 1] as u32 << 16 | m[o + 2] as u32 << 8 | m[o + 3] as u32,
+                m[o]! as u32 << 24 | m[o + 1]! as u32 << 16 | m[o + 2]! as u32 << 8 | m[o + 3]! as u32,
             );
         }
         for (let i = 16; i < 64; i += 1) {
-            let s0 = rotr32(w[i - 15], 7) ^ rotr32(w[i - 15], 18) ^ w[i - 15] >> 3;
-            let s1 = rotr32(w[i - 2], 17) ^ rotr32(w[i - 2], 19) ^ w[i - 2] >> 10;
-            w.push(w[i - 16].wrapping_add(s0).wrapping_add(w[i - 7]).wrapping_add(s1));
+            let s0 = rotr32(w[i - 15]!, 7) ^ rotr32(w[i - 15]!, 18) ^ w[i - 15]! >> 3;
+            let s1 = rotr32(w[i - 2]!, 17) ^ rotr32(w[i - 2]!, 19) ^ w[i - 2]! >> 10;
+            w.push(w[i - 16]!.wrapping_add(s0).wrapping_add(w[i - 7]!).wrapping_add(s1));
         }
-        let a = st[0];
-        let b = st[1];
-        let c = st[2];
-        let d = st[3];
-        let e = st[4];
-        let f = st[5];
-        let g = st[6];
-        let hh = st[7];
+        let a = st[0]!;
+        let b = st[1]!;
+        let c = st[2]!;
+        let d = st[3]!;
+        let e = st[4]!;
+        let f = st[5]!;
+        let g = st[6]!;
+        let hh = st[7]!;
         for (let i = 0; i < 64; i += 1) {
             let big1 = rotr32(e, 6) ^ rotr32(e, 11) ^ rotr32(e, 25);
             let ch = e & f ^ (e ^ 4294967295u32) & g;
-            let t1 = hh.wrapping_add(big1).wrapping_add(ch.wrapping_add(k[i].wrapping_add(w[i])));
+            let t1 = hh.wrapping_add(big1).wrapping_add(ch.wrapping_add(k[i]!.wrapping_add(w[i]!)));
             let big0 = rotr32(a, 2) ^ rotr32(a, 13) ^ rotr32(a, 22);
             let maj = a & b ^ a & c ^ b & c;
             let t2 = big0.wrapping_add(maj);
@@ -707,21 +703,21 @@ fn sha256_impl(msg: bytes) -> bytes {
             b = a;
             a = t1.wrapping_add(t2);
         }
-        st[0] = st[0].wrapping_add(a);
-        st[1] = st[1].wrapping_add(b);
-        st[2] = st[2].wrapping_add(c);
-        st[3] = st[3].wrapping_add(d);
-        st[4] = st[4].wrapping_add(e);
-        st[5] = st[5].wrapping_add(f);
-        st[6] = st[6].wrapping_add(g);
-        st[7] = st[7].wrapping_add(hh);
+        st[0] = st[0]!.wrapping_add(a);
+        st[1] = st[1]!.wrapping_add(b);
+        st[2] = st[2]!.wrapping_add(c);
+        st[3] = st[3]!.wrapping_add(d);
+        st[4] = st[4]!.wrapping_add(e);
+        st[5] = st[5]!.wrapping_add(f);
+        st[6] = st[6]!.wrapping_add(g);
+        st[7] = st[7]!.wrapping_add(hh);
     }
     let out: Vec<u8> = Vec::new();
     for (let j = 0; j < 8; j += 1) {
-        out.push((st[j] >> 24 & 0xFF) as u8);
-        out.push((st[j] >> 16 & 0xFF) as u8);
-        out.push((st[j] >> 8 & 0xFF) as u8);
-        out.push((st[j] & 0xFF) as u8);
+        out.push((st[j]! >> 24 & 0xFF) as u8);
+        out.push((st[j]! >> 16 & 0xFF) as u8);
+        out.push((st[j]! >> 8 & 0xFF) as u8);
+        out.push((st[j]! & 0xFF) as u8);
     }
     return freeze_bytes(out);
 }
@@ -839,7 +835,7 @@ fn sha512_impl(msg: bytes) -> bytes {
     let k = sha512_k();
     let st: Vec<u64> = Vec::new();
     for (let i = 0; i < 8; i += 1) {
-        st.push(h[i]);
+        st.push(h[i]!);
     }
     let blocks = m.len() / 128;
     for (let blk = 0; blk < blocks; blk += 1) {
@@ -848,27 +844,27 @@ fn sha512_impl(msg: bytes) -> bytes {
             let o = blk * 128 + j * 8;
             let word: u64 = 0;
             for (let t = 0; t < 8; t += 1) {
-                word = word << 8 | m[o + t] as u64;
+                word = word << 8 | m[o + t]! as u64;
             }
             w.push(word);
         }
         for (let i = 16; i < 80; i += 1) {
-            let s0 = rotr64(w[i - 15], 1) ^ rotr64(w[i - 15], 8) ^ w[i - 15] >> 7;
-            let s1 = rotr64(w[i - 2], 19) ^ rotr64(w[i - 2], 61) ^ w[i - 2] >> 6;
-            w.push(w[i - 16].wrapping_add(s0).wrapping_add(w[i - 7]).wrapping_add(s1));
+            let s0 = rotr64(w[i - 15]!, 1) ^ rotr64(w[i - 15]!, 8) ^ w[i - 15]! >> 7;
+            let s1 = rotr64(w[i - 2]!, 19) ^ rotr64(w[i - 2]!, 61) ^ w[i - 2]! >> 6;
+            w.push(w[i - 16]!.wrapping_add(s0).wrapping_add(w[i - 7]!).wrapping_add(s1));
         }
-        let a = st[0];
-        let b = st[1];
-        let c = st[2];
-        let d = st[3];
-        let e = st[4];
-        let f = st[5];
-        let g = st[6];
-        let hh = st[7];
+        let a = st[0]!;
+        let b = st[1]!;
+        let c = st[2]!;
+        let d = st[3]!;
+        let e = st[4]!;
+        let f = st[5]!;
+        let g = st[6]!;
+        let hh = st[7]!;
         for (let i = 0; i < 80; i += 1) {
             let big1 = rotr64(e, 14) ^ rotr64(e, 18) ^ rotr64(e, 41);
             let ch = e & f ^ (e ^ 18446744073709551615u64) & g;
-            let t1 = hh.wrapping_add(big1).wrapping_add(ch.wrapping_add(k[i].wrapping_add(w[i])));
+            let t1 = hh.wrapping_add(big1).wrapping_add(ch.wrapping_add(k[i]!.wrapping_add(w[i]!)));
             let big0 = rotr64(a, 28) ^ rotr64(a, 34) ^ rotr64(a, 39);
             let maj = a & b ^ a & c ^ b & c;
             let t2 = big0.wrapping_add(maj);
@@ -881,25 +877,25 @@ fn sha512_impl(msg: bytes) -> bytes {
             b = a;
             a = t1.wrapping_add(t2);
         }
-        st[0] = st[0].wrapping_add(a);
-        st[1] = st[1].wrapping_add(b);
-        st[2] = st[2].wrapping_add(c);
-        st[3] = st[3].wrapping_add(d);
-        st[4] = st[4].wrapping_add(e);
-        st[5] = st[5].wrapping_add(f);
-        st[6] = st[6].wrapping_add(g);
-        st[7] = st[7].wrapping_add(hh);
+        st[0] = st[0]!.wrapping_add(a);
+        st[1] = st[1]!.wrapping_add(b);
+        st[2] = st[2]!.wrapping_add(c);
+        st[3] = st[3]!.wrapping_add(d);
+        st[4] = st[4]!.wrapping_add(e);
+        st[5] = st[5]!.wrapping_add(f);
+        st[6] = st[6]!.wrapping_add(g);
+        st[7] = st[7]!.wrapping_add(hh);
     }
     let out: Vec<u8> = Vec::new();
     for (let j = 0; j < 8; j += 1) {
-        out.push((st[j] >> 56 & 0xFF) as u8);
-        out.push((st[j] >> 48 & 0xFF) as u8);
-        out.push((st[j] >> 40 & 0xFF) as u8);
-        out.push((st[j] >> 32 & 0xFF) as u8);
-        out.push((st[j] >> 24 & 0xFF) as u8);
-        out.push((st[j] >> 16 & 0xFF) as u8);
-        out.push((st[j] >> 8 & 0xFF) as u8);
-        out.push((st[j] & 0xFF) as u8);
+        out.push((st[j]! >> 56 & 0xFF) as u8);
+        out.push((st[j]! >> 48 & 0xFF) as u8);
+        out.push((st[j]! >> 40 & 0xFF) as u8);
+        out.push((st[j]! >> 32 & 0xFF) as u8);
+        out.push((st[j]! >> 24 & 0xFF) as u8);
+        out.push((st[j]! >> 16 & 0xFF) as u8);
+        out.push((st[j]! >> 8 & 0xFF) as u8);
+        out.push((st[j]! & 0xFF) as u8);
     }
     return freeze_bytes(out);
 }
@@ -1063,8 +1059,8 @@ fn split_chars(s: str) -> Vec<str> {
 }
 
 fn jpeek(cur: ?Cur) -> str {
-    if (cur.pos < cur.cs.len()) {
-        return cur.cs[cur.pos];
+    if (cur!.pos < cur!.cs.len()) {
+        return cur!.cs[cur!.pos]!;
     }
     return "";
 }
@@ -1075,7 +1071,7 @@ fn jskip(cur: ?Cur) {
         let c = jpeek(cur);
         again = c == " " || c == "\t" || c == "\n" || c == "\r";
         if (again) {
-            cur.pos = cur.pos + 1;
+            cur!.pos = cur!.pos + 1;
         }
     }
 }
@@ -1090,7 +1086,7 @@ fn is_digit(c: str) -> bool {
 fn join_chars(cs: Vec<str>) -> str {
     let out = "";
     for (let i = 0; i < cs.len(); i += 1) {
-        out = f"{out}{cs[i]}";
+        out = f"{out}{cs[i]!}";
     }
     return out;
 }
@@ -1103,21 +1099,21 @@ fn valid_number(cs: Vec<str>) -> bool {
         return false;
     }
     let i = 0;
-    if (cs[0] == "-") {
+    if (cs[0]! == "-") {
         i = 1;
     }
     let intd = 0;
-    while (i < n && is_digit(cs[i])) {
+    while (i < n && is_digit(cs[i]!)) {
         i = i + 1;
         intd = intd + 1;
     }
     if (intd == 0) {
         return false;
     }
-    if (i < n && cs[i] == ".") {
+    if (i < n && cs[i]! == ".") {
         i = i + 1;
         let fracd = 0;
-        while (i < n && is_digit(cs[i])) {
+        while (i < n && is_digit(cs[i]!)) {
             i = i + 1;
             fracd = fracd + 1;
         }
@@ -1125,13 +1121,13 @@ fn valid_number(cs: Vec<str>) -> bool {
             return false;
         }
     }
-    if (i < n && (cs[i] == "e" || cs[i] == "E")) {
+    if (i < n && (cs[i]! == "e" || cs[i]! == "E")) {
         i = i + 1;
-        if (i < n && (cs[i] == "+" || cs[i] == "-")) {
+        if (i < n && (cs[i]! == "+" || cs[i]! == "-")) {
             i = i + 1;
         }
         let exd = 0;
-        while (i < n && is_digit(cs[i])) {
+        while (i < n && is_digit(cs[i]!)) {
             i = i + 1;
             exd = exd + 1;
         }
@@ -1169,17 +1165,17 @@ fn jparse_value(cur: ?Cur) -> (opaque, str) {
     if (c == "{") {
         return jparse_object(cur);
     }
-    return (noopaque(), f"json: unexpected `{c}` at index {cur.pos}");
+    return (noopaque(), f"json: unexpected `{c}` at index {cur!.pos}");
 }
 
 fn jparse_lit(cur: ?Cur, word: str, v: Json) -> (opaque, str) {
-    let start = cur.pos;
+    let start = cur!.pos;
     let ok = true;
     for (let wch of word) {
         if (jpeek(cur) != f"{wch}") {
             ok = false;
         }
-        cur.pos = cur.pos + 1;
+        cur!.pos = cur!.pos + 1;
     }
     if (ok == false) {
         return (noopaque(), f"json: bad literal at index {start}");
@@ -1188,23 +1184,23 @@ fn jparse_lit(cur: ?Cur, word: str, v: Json) -> (opaque, str) {
 }
 
 fn jparse_string(cur: ?Cur) -> (opaque, str) {
-    let start = cur.pos;
-    cur.pos = cur.pos + 1; // opening quote
+    let start = cur!.pos;
+    cur!.pos = cur!.pos + 1; // opening quote
     let out: Vec<str> = Vec::new();
     let closed = false;
     let open = true;
-    while (open && cur.pos < cur.cs.len()) {
-        let c = cur.cs[cur.pos];
-        cur.pos = cur.pos + 1;
+    while (open && cur!.pos < cur!.cs.len()) {
+        let c = cur!.cs[cur!.pos]!;
+        cur!.pos = cur!.pos + 1;
         if (c == "\"") {
             closed = true;
             open = false;
         } else if (c == "\\") {
-            if (cur.pos >= cur.cs.len()) {
-                return (noopaque(), f"json: unterminated escape at index {cur.pos}");
+            if (cur!.pos >= cur!.cs.len()) {
+                return (noopaque(), f"json: unterminated escape at index {cur!.pos}");
             }
-            let e = cur.cs[cur.pos];
-            cur.pos = cur.pos + 1;
+            let e = cur!.cs[cur!.pos]!;
+            cur!.pos = cur!.pos + 1;
             if (e == "n") {
                 out.push("\n");
             } else if (e == "t") {
@@ -1224,7 +1220,7 @@ fn jparse_string(cur: ?Cur) -> (opaque, str) {
             } else if (e == "u") {
                 return (noopaque(), "json: \\u escapes are not supported in this build");
             } else {
-                return (noopaque(), f"json: bad escape at index {cur.pos - 1}");
+                return (noopaque(), f"json: bad escape at index {cur!.pos - 1}");
             }
         } else {
             out.push(c);
@@ -1237,7 +1233,7 @@ fn jparse_string(cur: ?Cur) -> (opaque, str) {
 }
 
 fn jparse_number(cur: ?Cur) -> (opaque, str) {
-    let start = cur.pos;
+    let start = cur!.pos;
     let chars: Vec<str> = Vec::new();
     let again = true;
     while (again) {
@@ -1245,7 +1241,7 @@ fn jparse_number(cur: ?Cur) -> (opaque, str) {
         again = is_digit(c) || c == "-" || c == "+" || c == "." || c == "e" || c == "E";
         if (again) {
             chars.push(c);
-            cur.pos = cur.pos + 1;
+            cur!.pos = cur!.pos + 1;
         }
     }
     if (valid_number(chars) == false) {
@@ -1255,15 +1251,15 @@ fn jparse_number(cur: ?Cur) -> (opaque, str) {
 }
 
 fn jparse_array(cur: ?Cur) -> (opaque, str) {
-    cur.depth = cur.depth + 1;
-    if (cur.depth > 64) {
+    cur!.depth = cur!.depth + 1;
+    if (cur!.depth > 64) {
         return (noopaque(), "json: nesting deeper than 64");
     }
-    cur.pos = cur.pos + 1; // '['
+    cur!.pos = cur!.pos + 1; // '['
     let v = jarr();
     jskip(cur);
     if (jpeek(cur) == "]") {
-        cur.pos = cur.pos + 1;
+        cur!.pos = cur!.pos + 1;
         return (opaque(v), "");
     }
     let again = true;
@@ -1277,47 +1273,47 @@ fn jparse_array(cur: ?Cur) -> (opaque, str) {
         jskip(cur);
         let c = jpeek(cur);
         if (c == ",") {
-            cur.pos = cur.pos + 1;
+            cur!.pos = cur!.pos + 1;
         } else if (c == "]") {
-            cur.pos = cur.pos + 1;
+            cur!.pos = cur!.pos + 1;
             again = false;
         } else {
-            return (noopaque(), f"json: expected `,` or `]` at index {cur.pos}");
+            return (noopaque(), f"json: expected `,` or `]` at index {cur!.pos}");
         }
     }
-    cur.depth = cur.depth - 1;
+    cur!.depth = cur!.depth - 1;
     return (opaque(v), "");
 }
 
 fn jparse_object(cur: ?Cur) -> (opaque, str) {
-    cur.depth = cur.depth + 1;
-    if (cur.depth > 64) {
+    cur!.depth = cur!.depth + 1;
+    if (cur!.depth > 64) {
         return (noopaque(), "json: nesting deeper than 64");
     }
-    cur.pos = cur.pos + 1; // '{'
+    cur!.pos = cur!.pos + 1; // '{'
     let v = jobj();
     jskip(cur);
     if (jpeek(cur) == "}") {
-        cur.pos = cur.pos + 1;
+        cur!.pos = cur!.pos + 1;
         return (opaque(v), "");
     }
     let again = true;
     while (again) {
         jskip(cur);
         if (jpeek(cur) != "\"") {
-            return (noopaque(), f"json: expected a key string at index {cur.pos}");
+            return (noopaque(), f"json: expected a key string at index {cur!.pos}");
         }
         let key = jparse_string(cur);
         if (key.1 != "") {
             return (noopaque(), key.1);
         }
         let kdoc = opaque::downcast<Json>(unwrap_box(key));
-        let kstr = kdoc.str;
+        let kstr = kdoc!.str;
         jskip(cur);
         if (jpeek(cur) != ":") {
-            return (noopaque(), f"json: expected `:` at index {cur.pos}");
+            return (noopaque(), f"json: expected `:` at index {cur!.pos}");
         }
-        cur.pos = cur.pos + 1;
+        cur!.pos = cur!.pos + 1;
         let val = jparse_value(cur);
         if (val.1 != "") {
             return (noopaque(), val.1);
@@ -1327,15 +1323,15 @@ fn jparse_object(cur: ?Cur) -> (opaque, str) {
         jskip(cur);
         let c = jpeek(cur);
         if (c == ",") {
-            cur.pos = cur.pos + 1;
+            cur!.pos = cur!.pos + 1;
         } else if (c == "}") {
-            cur.pos = cur.pos + 1;
+            cur!.pos = cur!.pos + 1;
             again = false;
         } else {
-            return (noopaque(), f"json: expected a comma or close-brace at index {cur.pos}");
+            return (noopaque(), f"json: expected a comma or close-brace at index {cur!.pos}");
         }
     }
-    cur.depth = cur.depth - 1;
+    cur!.depth = cur!.depth - 1;
     return (opaque(v), "");
 }
 
@@ -1377,7 +1373,7 @@ impl Json {
                     // coerced binding the box's inner cell (a method
                     // call ON the ?Json form is "CallM to a non-method"
                     // in the verifier — coerce first, then dispatch)
-                    let ae: Json = opaque::downcast<Json>(self.arr[i]);
+                    let ae: Json = opaque::downcast<Json>(self.arr[i]!)!;
                     let e = ae.encode(w);
                     if (e != nil) {
                         return e;
@@ -1388,8 +1384,8 @@ impl Json {
             JTag::Obj -> {
                 w.begin_object();
                 for (let i = 0; i < self.keys.len(); i += 1) {
-                    w.key(self.keys[i]);
-                    let ve: Json = opaque::downcast<Json>(self.vals[i]);
+                    w.key(self.keys[i]!);
+                    let ve: Json = opaque::downcast<Json>(self.vals[i]!)!;
                     let e = ve.encode(w);
                     if (e != nil) {
                         return e;
@@ -1425,8 +1421,8 @@ fn json_parse(s: str) -> (opaque, str) {
         return (noopaque(), v.1);
     }
     jskip(cur);
-    if (cur.pos != cur.cs.len()) {
-        return (noopaque(), f"json: trailing data at index {cur.pos}");
+    if (cur!.pos != cur!.cs.len()) {
+        return (noopaque(), f"json: trailing data at index {cur!.pos}");
     }
     return v;
 }
@@ -1440,7 +1436,7 @@ entry fn json_enc(o: opaque) -> str {
     // `j.encode(w)` binds Json's own inherent member). Same semantics
     // as the `encodeJson` wrapper it replaces.
     let w = JsonWriter::new();
-    let e = j.encode(w);
+    let e = j!.encode(w);
     if (e != nil) {
         // unreachable for any tree this file builds (the private
         // decoder caps depth at 64; the writer's cap is 128) — and the
@@ -1461,9 +1457,9 @@ entry fn json_roundtrip(s: str) -> (str, str) {
     // the member+writer route — see json_enc's note (the CDN-bundle
     // law); same semantics as the `encodeJson` wrapper it replaces
     let w = JsonWriter::new();
-    let e = vv.encode(w);
+    let e = vv!.encode(w);
     if (e != nil) {
-        let err: EncodeJsonError = e;
+        let err: EncodeJsonError = e!;
         return ("", f"json: encode failed at {err.at}");
     }
     let text: str = w.finish();

@@ -71,12 +71,17 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
         };
         if let Some((_ty, _reg)) = recv_opt_raw {}
         let (rt, rreg) = match recv_raw {
-            Some((ty, reg)) => self.deref_for_use(ty, reg, sp.lo),
+            Some((ty, reg)) => {
+                // the law: the receiver never peels — `p.m(..)` on a
+                // nullable demands the assert (`p!.m(..)`)
+                self.demand_assert(ty, sp)?;
+                (ty, reg)
+            }
             None => {
                 let rt = self.compile_expr(recv, None)?;
                 let rreg = self.last_reg;
-                // `p.m(..)` auto-derefs
-                self.deref_for_use(rt, rreg, sp.lo)
+                self.demand_assert(rt, sp)?;
+                (rt, rreg)
             }
         };
         // receiver silence (the quiet-audit law): a method call on the

@@ -78,7 +78,7 @@ impl<T> Vec<T> {
     /// error value).
     pub fn pop(self) -> T {
         self.len -= 1;
-        return self.buf[self.len];
+        return self.buf[self.len]!;
     }
 
     pub fn from(arr: [T]) -> Self {
@@ -103,9 +103,9 @@ impl<T> Vec<T> {
             let empty: [T] = [];
             return empty;
         }
-        let a: [T] = [self.buf[0]; n];
+        let a: [T] = [self.buf[0]!; n];
         for (let i = 0; i < n; i += 1) {
-            a[i] = self.buf[i];
+            a[i] = self.buf[i]!;
         }
         return a;
     }
@@ -122,7 +122,7 @@ pub fn freeze_bytes(v: Vec<u8>) -> bytes {
     let n = v.len;
     let a: [u8] = [0u8; n];
     for (let i = 0; i < n; i += 1) {
-        a[i] = v.buf[i];
+        a[i] = v.buf[i]!;
     }
     return bytes::from(a);
 }

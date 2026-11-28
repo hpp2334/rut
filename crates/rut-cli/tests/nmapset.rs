@@ -94,15 +94,15 @@ entry fn map_walk() -> i64 {
     let fails: i64 = 0;
     let w: ?W = W { order: [0, 0, 0] };
     for (let k of m) {
-        w.total += m.get(k);
-        if (k == "ada") { w.order[w.n] = 1; }
-        else if (k == "linus") { w.order[w.n] = 2; }
-        else { w.order[w.n] = 3; }
-        w.n += 1;
+        w!.total += m.get(k)!;
+        if (k == "ada") { w!.order[w!.n] = 1; }
+        else if (k == "linus") { w!.order[w!.n] = 2; }
+        else { w!.order[w!.n] = 3; }
+        w!.n += 1;
     }
-    if (w.n != 3) { fails += 1; }
-    if (w.order[0] != 1 || w.order[1] != 2 || w.order[2] != 3) { fails += 2; }
-    if (w.total != 136) { fails += 4; }
+    if (w!.n != 3) { fails += 1; }
+    if (w!.order[0] != 1 || w!.order[1] != 2 || w!.order[2] != 3) { fails += 2; }
+    if (w!.total != 136) { fails += 4; }
     return fails;
 }
 
@@ -113,10 +113,10 @@ entry fn map_break() -> i64 {
     while (i < 100) { m.put(i, i); i += 1; }
     let w: ?W = W { order: [0, 0, 0] };
     for (let k of m) {
-        w.n += 1;
+        w!.n += 1;
         if (k == 2) { break; }
     }
-    if (w.n != 3) { return 1; }
+    if (w!.n != 3) { return 1; }
     if (m.len() != 100) { return 2; }
     return 0;
 }
@@ -131,9 +131,9 @@ entry fn snapshot_walk() -> i64 {
     for (let k of m) {
         m.remove(k);
         m.put(100 + k, k);
-        w.n += 1;
+        w!.n += 1;
     }
-    if (w.n != 5) { return 1; }
+    if (w!.n != 5) { return 1; }
     if (m.len() != 5) { return 2; }
     return 0;
 }
@@ -147,11 +147,11 @@ entry fn set_walk() -> i64 {
     let fails: i64 = 0;
     let w: ?S = S { };
     for (let e of s) {
-        if (w.n == 0) { w.first = e; }
-        w.n += 1;
+        if (w!.n == 0) { w!.first = e; }
+        w!.n += 1;
     }
-    if (w.n != 2) { fails += 1; }
-    if (w.first != "x") { fails += 2; }
+    if (w!.n != 2) { fails += 1; }
+    if (w!.first != "x") { fails += 2; }
     return fails;
 }
 
@@ -164,25 +164,25 @@ entry fn key_widths() -> i64 {
     m8.put(7, 2);
     let w: ?F = F { };
     for (let k of m8) {
-        if (k < 0) { w.neg = k; }
-        w.n += 1;
+        if (k < 0) { w!.neg = k; }
+        w!.n += 1;
     }
-    if (w.n != 2 || w.neg != -5) { fails += 1; }
+    if (w!.n != 2 || w!.neg != -5) { fails += 1; }
     let big: u64 = 18446744073709551615u64;
     let mu = HashMap<u64, bool>::new();
     mu.put(big, true);
     mu.put(0, false);
     for (let k of mu) {
-        if (k == big) { w.hi = true; }
-        w.sum += 1;
+        if (k == big) { w!.hi = true; }
+        w!.sum += 1;
     }
-    if (!w.hi || w.sum != 2) { fails += 2; }
+    if (!w!.hi || w!.sum != 2) { fails += 2; }
     let mb = HashSet<bytes>::new();
     mb.put(bytes::from([1, 2, 3]));
     for (let k of mb) {
-        if (k == bytes::from([1, 2, 3])) { w.got += 1; }
+        if (k == bytes::from([1, 2, 3])) { w!.got += 1; }
     }
-    if (w.got != 1) { fails += 4; }
+    if (w!.got != 1) { fails += 4; }
     return fails;
 }
 
@@ -209,11 +209,11 @@ entry fn reinsert_order() -> i64 {
     let fails: i64 = 0;
     let w: ?W = W { order: [0, 0, 0] };
     for (let k of m) {
-        w.order[w.n] = k;
-        w.n += 1;
+        w!.order[w!.n] = k;
+        w!.n += 1;
     }
-    if (w.n != 3 || w.order[0] != 1 || w.order[1] != 3 || w.order[2] != 2) { fails += 1; }
-    if (m.get(2) != 22) { fails += 2; }
+    if (w!.n != 3 || w!.order[0] != 1 || w!.order[1] != 3 || w!.order[2] != 2) { fails += 1; }
+    if (m.get(2)! != 22) { fails += 2; }
     return fails;
 }
 
@@ -224,9 +224,9 @@ entry fn loop_var_reassign() -> i64 {
     let w: ?S = S { };
     for (let x of s) {
         x = 9;
-        w.n += 1;
+        w!.n += 1;
     }
-    if (w.n != 1) { return 1; }
+    if (w!.n != 1) { return 1; }
     return 0;
 }
 
@@ -238,10 +238,10 @@ entry fn get_aliasing() -> i64 {
     let p = P { v: 1 };
     m.put("k", p);
     for (let k of m) {
-        let g = m.get(k);
+        let g = m.get(k)!;
         g.v = 42;
     }
-    return m.get("k").v as i64;
+    return m.get("k")!.v as i64;
 }
 
 // probes: is it the member or the desugar? (records share, prims copy —

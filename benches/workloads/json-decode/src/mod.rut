@@ -99,7 +99,7 @@ fn gen_doc(rows: i32, vals_n: i32, alpha: Vec<str>) -> str {
         let rev = (((x >> 7) % 9000) as i32) + 1000;
         let ka = ((x >> 3) % 24) as i32;
         let kb = ((x >> 9) % 24) as i32;
-        let row = f"{{\"id\":{id},\"name\":\"mm-{alpha[na]}{alpha[nb]}\",\"active\":{b2s(ok)},\"score\":{si}.{sf},\"vals\":[{v0},{v1},{v2},{v3},{v4},{v5}],\"tags\":[\"{alpha[ta1]}{alpha[tb1]}\",\"{alpha[ta2]}{alpha[tb2]}\",\"{alpha[ta3]}{alpha[tb3]}\"],\"note\":null,\"meta\":{{\"rev\":{rev},\"kind\":\"{alpha[ka]}{alpha[kb]}\"}}}}";
+        let row = f"{{\"id\":{id},\"name\":\"mm-{alpha[na]!}{alpha[nb]!}\",\"active\":{b2s(ok)},\"score\":{si}.{sf},\"vals\":[{v0},{v1},{v2},{v3},{v4},{v5}],\"tags\":[\"{alpha[ta1]!}{alpha[tb1]!}\",\"{alpha[ta2]!}{alpha[tb2]!}\",\"{alpha[ta3]!}{alpha[tb3]!}\"],\"note\":null,\"meta\":{{\"rev\":{rev},\"kind\":\"{alpha[ka]!}{alpha[kb]!}\"}}}}";
         parts.push(row);
     }
     return f"[{string_join(parts.as_array())}]";
@@ -156,7 +156,7 @@ fn split_chars(s: str) -> Vec<str> {
 }
 
 fn jpeek(cur: ?Cur) -> str {
-    if (cur.pos < cur.cs.len()) { return cur.cs[cur.pos]; }
+    if (cur!.pos < cur!.cs.len()) { return cur!.cs[cur!.pos]!; }
     return "";
 }
 
@@ -165,7 +165,7 @@ fn jskip(cur: ?Cur) {
     while (again) {
         let c = jpeek(cur);
         again = c == " " || c == "\t" || c == "\n" || c == "\r";
-        if (again) { cur.pos = cur.pos + 1; }
+        if (again) { cur!.pos = cur!.pos + 1; }
     }
 }
 
@@ -177,7 +177,7 @@ fn is_digit(c: str) -> bool {
 fn join_chars(cs: Vec<str>) -> str {
     let out = "";
     for (let i = 0; i < cs.len(); i += 1) {
-        out = f"{out}{cs[i]}";
+        out = f"{out}{cs[i]!}";
     }
     return out;
 }
@@ -188,21 +188,21 @@ fn valid_number(cs: Vec<str>) -> bool {
     let n = cs.len();
     if (n == 0) { return false; }
     let i = 0;
-    if (cs[0] == "-") { i = 1; }
+    if (cs[0]! == "-") { i = 1; }
     let intd = 0;
-    while (i < n && is_digit(cs[i])) { i = i + 1; intd = intd + 1; }
+    while (i < n && is_digit(cs[i]!)) { i = i + 1; intd = intd + 1; }
     if (intd == 0) { return false; }
-    if (i < n && cs[i] == ".") {
+    if (i < n && cs[i]! == ".") {
         i = i + 1;
         let fracd = 0;
-        while (i < n && is_digit(cs[i])) { i = i + 1; fracd = fracd + 1; }
+        while (i < n && is_digit(cs[i]!)) { i = i + 1; fracd = fracd + 1; }
         if (fracd == 0) { return false; }
     }
-    if (i < n && (cs[i] == "e" || cs[i] == "E")) {
+    if (i < n && (cs[i]! == "e" || cs[i]! == "E")) {
         i = i + 1;
-        if (i < n && (cs[i] == "+" || cs[i] == "-")) { i = i + 1; }
+        if (i < n && (cs[i]! == "+" || cs[i]! == "-")) { i = i + 1; }
         let exd = 0;
-        while (i < n && is_digit(cs[i])) { i = i + 1; exd = exd + 1; }
+        while (i < n && is_digit(cs[i]!)) { i = i + 1; exd = exd + 1; }
         if (exd == 0) { return false; }
     }
     return i == n;
@@ -219,15 +219,15 @@ fn jparse_value(cur: ?Cur) -> (opaque, str) {
     if (c == "-" || is_digit(c)) { return jparse_number(cur); }
     if (c == "[") { return jparse_array(cur); }
     if (c == "{") { return jparse_object(cur); }
-    return (noopaque(), f"json: unexpected `{c}` at index {cur.pos}");
+    return (noopaque(), f"json: unexpected `{c}` at index {cur!.pos}");
 }
 
 fn jparse_lit(cur: ?Cur, word: str, v: Json) -> (opaque, str) {
-    let start = cur.pos;
+    let start = cur!.pos;
     let ok = true;
     for (let wch of word) {
         if (jpeek(cur) != f"{wch}") { ok = false; }
-        cur.pos = cur.pos + 1;
+        cur!.pos = cur!.pos + 1;
     }
     if (ok == false) {
         return (noopaque(), f"json: bad literal at index {start}");
@@ -236,23 +236,23 @@ fn jparse_lit(cur: ?Cur, word: str, v: Json) -> (opaque, str) {
 }
 
 fn jparse_string(cur: ?Cur) -> (opaque, str) {
-    let start = cur.pos;
-    cur.pos = cur.pos + 1;   // opening quote
+    let start = cur!.pos;
+    cur!.pos = cur!.pos + 1;   // opening quote
     let out: Vec<str> = Vec::new();
     let closed = false;
     let open = true;
-    while (open && cur.pos < cur.cs.len()) {
-        let c = cur.cs[cur.pos];
-        cur.pos = cur.pos + 1;
+    while (open && cur!.pos < cur!.cs.len()) {
+        let c = cur!.cs[cur!.pos]!;
+        cur!.pos = cur!.pos + 1;
         if (c == "\"") {
             closed = true;
             open = false;
         } else if (c == "\\") {
-            if (cur.pos >= cur.cs.len()) {
-                return (noopaque(), f"json: unterminated escape at index {cur.pos}");
+            if (cur!.pos >= cur!.cs.len()) {
+                return (noopaque(), f"json: unterminated escape at index {cur!.pos}");
             }
-            let e = cur.cs[cur.pos];
-            cur.pos = cur.pos + 1;
+            let e = cur!.cs[cur!.pos]!;
+            cur!.pos = cur!.pos + 1;
             if (e == "n") { out.push("\n"); }
             else if (e == "t") { out.push("\t"); }
             else if (e == "r") { out.push("\r"); }
@@ -264,7 +264,7 @@ fn jparse_string(cur: ?Cur) -> (opaque, str) {
             else if (e == "u") {
                 return (noopaque(), "json: \\u escapes are not supported in this build");
             } else {
-                return (noopaque(), f"json: bad escape at index {cur.pos - 1}");
+                return (noopaque(), f"json: bad escape at index {cur!.pos - 1}");
             }
         } else {
             out.push(c);
@@ -277,7 +277,7 @@ fn jparse_string(cur: ?Cur) -> (opaque, str) {
 }
 
 fn jparse_number(cur: ?Cur) -> (opaque, str) {
-    let start = cur.pos;
+    let start = cur!.pos;
     let chars: Vec<str> = Vec::new();
     let again = true;
     while (again) {
@@ -285,7 +285,7 @@ fn jparse_number(cur: ?Cur) -> (opaque, str) {
         again = is_digit(c) || c == "-" || c == "+" || c == "." || c == "e" || c == "E";
         if (again) {
             chars.push(c);
-            cur.pos = cur.pos + 1;
+            cur!.pos = cur!.pos + 1;
         }
     }
     if (valid_number(chars) == false) {
@@ -295,15 +295,15 @@ fn jparse_number(cur: ?Cur) -> (opaque, str) {
 }
 
 fn jparse_array(cur: ?Cur) -> (opaque, str) {
-    cur.depth = cur.depth + 1;
-    if (cur.depth > 64) {
+    cur!.depth = cur!.depth + 1;
+    if (cur!.depth > 64) {
         return (noopaque(), "json: nesting deeper than 64");
     }
-    cur.pos = cur.pos + 1;   // '['
+    cur!.pos = cur!.pos + 1;   // '['
     let v = jarr();
     jskip(cur);
     if (jpeek(cur) == "]") {
-        cur.pos = cur.pos + 1;
+        cur!.pos = cur!.pos + 1;
         return (opaque(v), "");
     }
     let again = true;
@@ -315,45 +315,45 @@ fn jparse_array(cur: ?Cur) -> (opaque, str) {
         jskip(cur);
         let c = jpeek(cur);
         if (c == ",") {
-            cur.pos = cur.pos + 1;
+            cur!.pos = cur!.pos + 1;
         } else if (c == "]") {
-            cur.pos = cur.pos + 1;
+            cur!.pos = cur!.pos + 1;
             again = false;
         } else {
-            return (noopaque(), f"json: expected `,` or `]` at index {cur.pos}");
+            return (noopaque(), f"json: expected `,` or `]` at index {cur!.pos}");
         }
     }
-    cur.depth = cur.depth - 1;
+    cur!.depth = cur!.depth - 1;
     return (opaque(v), "");
 }
 
 fn jparse_object(cur: ?Cur) -> (opaque, str) {
-    cur.depth = cur.depth + 1;
-    if (cur.depth > 64) {
+    cur!.depth = cur!.depth + 1;
+    if (cur!.depth > 64) {
         return (noopaque(), "json: nesting deeper than 64");
     }
-    cur.pos = cur.pos + 1;   // '{'
+    cur!.pos = cur!.pos + 1;   // '{'
     let v = jobj();
     jskip(cur);
     if (jpeek(cur) == "}") {
-        cur.pos = cur.pos + 1;
+        cur!.pos = cur!.pos + 1;
         return (opaque(v), "");
     }
     let again = true;
     while (again) {
         jskip(cur);
         if (jpeek(cur) != "\"") {
-            return (noopaque(), f"json: expected a key string at index {cur.pos}");
+            return (noopaque(), f"json: expected a key string at index {cur!.pos}");
         }
         let key = jparse_string(cur);
         if (key.1 != "") { return (noopaque(), key.1); }
         let kdoc = opaque::downcast<Json>(unwrap_box(key));
-        let kstr = kdoc.str;
+        let kstr = kdoc!.str;
         jskip(cur);
         if (jpeek(cur) != ":") {
-            return (noopaque(), f"json: expected `:` at index {cur.pos}");
+            return (noopaque(), f"json: expected `:` at index {cur!.pos}");
         }
-        cur.pos = cur.pos + 1;
+        cur!.pos = cur!.pos + 1;
         let val = jparse_value(cur);
         if (val.1 != "") { return (noopaque(), val.1); }
         v.keys.push(kstr);
@@ -361,15 +361,15 @@ fn jparse_object(cur: ?Cur) -> (opaque, str) {
         jskip(cur);
         let c = jpeek(cur);
         if (c == ",") {
-            cur.pos = cur.pos + 1;
+            cur!.pos = cur!.pos + 1;
         } else if (c == "}") {
-            cur.pos = cur.pos + 1;
+            cur!.pos = cur!.pos + 1;
             again = false;
         } else {
-            return (noopaque(), f"json: expected a comma or close-brace at index {cur.pos}");
+            return (noopaque(), f"json: expected a comma or close-brace at index {cur!.pos}");
         }
     }
-    cur.depth = cur.depth - 1;
+    cur!.depth = cur!.depth - 1;
     return (opaque(v), "");
 }
 
@@ -421,28 +421,28 @@ fn jdoc_sum(o: opaque) -> i64 {
     let j = opaque::downcast<Json>(o);
     assert(j != nil, "json-decode: downcast failed in the fold pass");
     let s: i64 = 0;
-    when (j.tag) {
+    when (j!.tag) {
         JTag::Null -> { s = 1; },
         JTag::False -> { s = 2; },
         JTag::True -> { s = 3; },
-        JTag::Num -> { s = lex_int(j.num); },
+        JTag::Num -> { s = lex_int(j!.num); },
         JTag::Str -> {
             let t: i64 = 4;
-            t = fold_str(t, j.str);
+            t = fold_str(t, j!.str);
             s = t;
         },
         JTag::Arr -> {
             let t: i64 = 5;
-            for (let i = 0; i < j.arr.len(); i += 1) {
-                t = t.wrapping_mul(11 as i64).wrapping_add(jdoc_sum(j.arr[i]));
+            for (let i = 0; i < j!.arr.len(); i += 1) {
+                t = t.wrapping_mul(11 as i64).wrapping_add(jdoc_sum(j!.arr[i]!));
             }
             s = t;
         },
         JTag::Obj -> {
             let t: i64 = 6;
-            for (let i = 0; i < j.keys.len(); i += 1) {
-                t = fold_str(t, j.keys[i]);
-                t = t.wrapping_mul(11 as i64).wrapping_add(jdoc_sum(j.vals[i]));
+            for (let i = 0; i < j!.keys.len(); i += 1) {
+                t = fold_str(t, j!.keys[i]!);
+                t = t.wrapping_mul(11 as i64).wrapping_add(jdoc_sum(j!.vals[i]!));
             }
             s = t;
         },
@@ -473,7 +473,7 @@ entry fn main() -> nil {
         let v = jparse_value(cur);
         if (v.1 != "") { panic(v.1); }
         jskip(cur);
-        if (cur.pos != cur.cs.len()) { panic("json: trailing data"); }
+        if (cur!.pos != cur!.cs.len()) { panic("json: trailing data"); }
         let s = jdoc_sum(v.0);
         if (r == 0) {
             first = s;

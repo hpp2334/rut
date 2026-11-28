@@ -24,43 +24,36 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
         }
         let mut r = self.compile_expr_inner(node, expected);
         self.leave();
-        // nullable coercion: the mirror pair at value positions —
-        // a `?T` where `T` is expected reads its payload (field 0, the old
-        // `*p` deref), a `T` where `?T` is expected boxes into a fresh
-        // one-slot cell (the old `&v`). The pair is TRANSITIVE: nesting is
-        // a real type (`??T` is spellable, and a `Vec<?T>`'s backing slot
-        // is `??T`), so the funnel steps until the expected type is met.
+        // nullable coercion at value positions — ONE direction only:
+        // a `T` where `?T` is expected boxes into a fresh one-slot
+        // cell (the old `&v`), TRANSITIVELY for `??T` slots. The
+        // mirror arm is GONE — the explicit-deref law flipped: a `?T`
+        // where `T` is expected is the demand diagnostic (one site,
+        // `demand_assert`), the assert `e!` the one spelling.
         // Arguments, returns, lets, assignments all flow through here.
         // Positions without an expected type (receivers, `==` operands,
-        // `let w = p`) keep the nullable: identity, aliasing and field/
-        // method deref are native.
+        // `let w = p`) keep the nullable: identity, aliasing and the
+        // asserted forms are the author's to spell.
         if let Ok(mut t) = r {
             if let Some(e) = expected {
                 if !self.ctx.spells_same(e, t) {
-                    let lo = node.span(self.ctx.ast).lo;
+                    let sp = node.span(self.ctx.ast);
                     while !self.ctx.spells_same(t, e) {
                         let step = match (
                             self.ctx.types.kind(t).clone(),
                             self.ctx.types.kind(e).clone(),
                         ) {
                             (TyKind::Opt { elem }, _) if self.ctx.spells_same(elem, e) => {
-                                let src = self.last_reg;
-                                let d = self.new_reg(elem);
-                                self.emit(
-                                    Op::GetF {
-                                        dst: d,
-                                        obj: src,
-                                        field: 0,
-                                        repr: self.ctx.types.repr_of(elem),
-                                    },
-                                    lo,
-                                );
-                                Some(elem)
+                                // the law: the implicit peel is dead —
+                                // the payload the position expects is
+                                // the author's assert to spell (`v!`)
+                                self.demand_assert(t, sp)?;
+                                None
                             }
                             (_, TyKind::Opt { elem }) if self.ctx.spells_same(elem, t) => {
                                 let src = self.last_reg;
                                 let dst = self.new_reg(e);
-                                self.emit(Op::MakeOpt { dst, src, ty: e }, lo);
+                                self.emit(Op::MakeOpt { dst, src, ty: e }, sp.lo);
                                 Some(e)
                             }
                             _ => None,
@@ -186,10 +179,11 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                 };
                 let rt = self.compile_expr(recv, None)?;
                 let rreg = self.last_reg;
-                // `p[i]` auto-derefs. The quiet-audit law: a poison
-                // indexee already diagnosed at its own failure — the
-                // sequence/index verdicts stay silent
-                let (rt, rreg) = self.deref_for_use(rt, rreg, sp.lo);
+                // `p[i]` never peels — the law: the indexee's assert
+                // is the author's to spell (`p![i]`). The quiet-audit
+                // law: a poison indexee already diagnosed at its own
+                // failure — the sequence/index verdicts stay silent
+                self.demand_assert(rt, sp)?;
                 if self.ctx.ty_is_err(rt) {
                     return Err(());
                 }
@@ -358,6 +352,13 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                     (n.expr, n.ty)
                 };
                 let rt = self.compile_expr(expr, None)?;
+                // the law: `is` probes the value's OWN cell — a
+                // nullable operand demands the assert (`f! is Foo`
+                // probes the payload cell and folds honest); the
+                // un-asserted form used to answer silently FALSE even
+                // on a real payload (the probe read the optional box's
+                // cell) — the footgun the flip kills
+                self.demand_assert(rt, sp)?;
                 let recv = self.last_reg;
                 let dst = self.new_reg(TY_BOOL);
                 // resolve the RHS (a naming position) — a single-segment
@@ -540,28 +541,11 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                 // `expr as T`: the numeric cast — truncating,
                 // C/Rust semantics, one `Op::Conv`. The RHS is a naming
                 // position restricted to the numeric primitives.
-                let mut from = self.compile_expr(expr, None)?;
-                let mut src = self.last_reg;
-                // a `?T` operand reads its payload first (the
-                // old `*x` deref, now implicit at this value position)
-                if let TyKind::Opt { elem } = self.ctx.types.kind(from).clone() {
-                    if let TyKind::Prim(p) = self.ctx.types.kind(elem) {
-                        if numeric_prim(*p) {
-                            let d = self.new_reg(elem);
-                            self.emit(
-                                Op::GetF {
-                                    dst: d,
-                                    obj: src,
-                                    field: 0,
-                                    repr: self.ctx.types.repr_of(elem),
-                                },
-                                sp.lo,
-                            );
-                            src = d;
-                            from = elem;
-                        }
-                    }
-                }
+                let from = self.compile_expr(expr, None)?;
+                // the law: the cast operand never peels — `m as i64`
+                // on `m: ?i32` demands the assert (`m! as i64`)
+                self.demand_assert(from, sp)?;
+                let src = self.last_reg;
                 let want = self.resolve_type_now(ty);
                 // the quiet-audit law: a poison cast side already
                 // diagnosed at its own failure — the numeric-prim
@@ -629,7 +613,7 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
     /// Bidirectional inference sees through one nullable
     /// layer: in an expected `?T` position an unsuffixed numeric literal
     /// adapts to `T`, and the funnel's `T → ?T` coercion boxes it.
-    fn numeric_hint(&self, expected: Option<TypeId>) -> Option<TypeId> {
+    pub(crate) fn numeric_hint(&self, expected: Option<TypeId>) -> Option<TypeId> {
         match expected {
             Some(e) => match self.ctx.types.kind(e).clone() {
                 TyKind::Opt { elem } if matches!(self.ctx.types.kind(elem), TyKind::Prim(_)) => {
@@ -943,12 +927,9 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                         self.ctx.err(sp, "type arguments are not valid on a field");
                         return Err(());
                     }
-                    // `p.x` auto-deref through a nullable: the
-                    // payload slot at the payload's own repr, transitively
-                    // for `??T`
-                    let (dty, dreg) = self.deref_for_use(cur_ty, cur, sp.lo);
-                    cur = dreg;
-                    cur_ty = dty;
+                    // the law: the chain never peels — `p.x` through
+                    // a nullable demands the assert (`p!.x`)
+                    self.demand_assert(cur_ty, sp)?;
                     let TyKind::Data { fields } = self.ctx.types.kind(cur_ty).clone() else {
                         self.ctx.err(
                             sp,

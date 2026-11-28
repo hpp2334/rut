@@ -1362,8 +1362,8 @@ fn for_of_gates_the_iterable_member() {
              pub fn sum_to(n: i32) -> i32 {{\n\
              \x20   let acc: ?Acc = Acc {{ }};\n\
              \x20   let c = Count::new(n);\n\
-             \x20   for (let v of c) {{ acc.hits += 1; }}\n\
-             \x20   return acc.hits;\n\
+             \x20   for (let v of c) {{ acc!.hits += 1; }}\n\
+             \x20   return acc!.hits;\n\
              }}\n"
         )
     };

@@ -48,14 +48,14 @@ async fn probe(log: opaque, url: str) -> nil {
     if (terr == nil) {
         logger_log(log, 2, "err=nil");
     } else {
-        let t: str = terr;
+        let t: str = terr!;
         logger_log(log, 2, f"err={t}");
     }
     let rerr = resp.read_error();
     if (rerr == nil) {
         logger_log(log, 2, "read-err=nil");
     } else {
-        let t: str = rerr;
+        let t: str = rerr!;
         logger_log(log, 2, f"read-err={t}");
     }
     let b = await resp.body();
@@ -75,7 +75,7 @@ async fn streamed(log: opaque, url: str) -> nil {
             if (e != nil) { failed = true; }
             break;
         }
-        let chunk: bytes = c;
+        let chunk: bytes = c!;
         total += chunk.len();
     }
     logger_log(log, 2, f"stream-total={total}");
@@ -106,7 +106,7 @@ async fn flooded(log: opaque, url: str) -> nil {
         if (c == nil) {
             break;
         }
-        let chunk: bytes = c;
+        let chunk: bytes = c!;
         total += chunk.len();
     }
     logger_log(log, 2, f"stream-total={total}");
@@ -165,7 +165,7 @@ async fn flood_abort(log: opaque, url: str) -> nil {
     if (re == nil) {
         logger_log(log, 2, "read-err=nil");
     } else {
-        let t: str = re;
+        let t: str = re!;
         logger_log(log, 2, f"read-err={t}");
     }
 }
@@ -180,7 +180,7 @@ async fn read_loser(log: opaque, url: str) -> nil {
     let first = await http_stream_next(s);
     let n: i32 = -1;
     if (first != nil) {
-        let v: bytes = first;
+        let v: bytes = first!;
         n = v.len();
     }
     logger_log(log, 2, f"first={n}");
@@ -196,7 +196,7 @@ async fn read_loser(log: opaque, url: str) -> nil {
     if (re == nil) {
         logger_log(log, 2, "read-err=nil");
     } else {
-        let t: str = re;
+        let t: str = re!;
         logger_log(log, 2, f"read-err={t}");
     }
 }
@@ -219,7 +219,7 @@ async fn drain_abort(log: opaque, url: str) -> nil {
     if (re == nil) {
         logger_log(log, 2, "read-err=nil");
     } else {
-        let t: str = re;
+        let t: str = re!;
         logger_log(log, 2, f"read-err={t}");
     }
 }

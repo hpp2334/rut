@@ -26,7 +26,7 @@ fn mul_av(v: Vec<f64>, out: Vec<f64>, n: i32) -> nil {
     for (let i = 0; i < n; i += 1) {
         let s: f64 = 0.0;
         for (let j = 0; j < n; j += 1) {
-            s += a(i, j) * v[j];
+            s += a(i, j) * v[j]!;
         }
         out[i] = s;
     }
@@ -36,7 +36,7 @@ fn mul_atv(v: Vec<f64>, out: Vec<f64>, n: i32) -> nil {
     for (let i = 0; i < n; i += 1) {
         let s: f64 = 0.0;
         for (let j = 0; j < n; j += 1) {
-            s += a(j, i) * v[j];
+            s += a(j, i) * v[j]!;
         }
         out[i] = s;
     }
@@ -59,8 +59,8 @@ entry fn main() -> nil {
     let vbv: f64 = 0.0;
     let vv: f64 = 0.0;
     for (let i = 0; i < n; i += 1) {
-        vbv += u[i] * v[i];
-        vv += v[i] * v[i];
+        vbv += u[i]! * v[i]!;
+        vv += v[i]! * v[i]!;
     }
     let norm = fsqrt(vbv / vv);
     Logger("app").info(f"CHECKSUM {norm}");

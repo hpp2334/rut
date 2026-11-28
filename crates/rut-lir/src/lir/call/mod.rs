@@ -40,10 +40,10 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
             let segs = cph.get(self.ctx.ast).segs.clone();
             if segs.len() == 1 && self.lookup(segs[0].name.ident).is_some() {
                 let ft = self.compile_expr(callee, None)?;
-                // the callee derefs: `let f =
-                // opaque.downcast<fn(..)>(..)` lands `?fn` — the erased
-                // program calls through its payload
-                let (ft, _) = self.deref_for_use(ft, self.last_reg, sp.lo);
+                // the callee never peels: `f(x)` on a `?fn` demands
+                // the assert (`f!(x)`) — the erased-program lane
+                // spells it at the call
+                self.demand_assert(ft, sp)?;
                 match self.ctx.types.kind(ft).clone() {
                     TyKind::Fn { .. } => {
                         let freg = self.last_reg;
@@ -64,10 +64,10 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
             }
             return self.compile_path_call(segs, args, expected, sp);
         }
-        // fn-typed value call: `f(x)` where f: fn(T) -> U — the callee
-        // derefs first (see the local arm above)
+        // fn-typed value call: `f(x)` where f: fn(T) -> U — the same
+        // law: a `?fn` callee demands the assert (`f!(x)`)
         let ft = self.compile_expr(callee, None)?;
-        let (ft, _) = self.deref_for_use(ft, self.last_reg, sp.lo);
+        self.demand_assert(ft, sp)?;
         match self.ctx.types.kind(ft).clone() {
             TyKind::Fn { .. } => {
                 let freg = self.last_reg;

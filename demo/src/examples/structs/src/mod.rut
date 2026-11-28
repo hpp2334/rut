@@ -24,7 +24,7 @@ struct Style {
 }
 
 fn nudge(pt: ?Point) {     // nullable param: mutation is shared —
-    pt.x += 1;                 // writes through hit the caller's Point
+    pt!.x += 1;                // writes through hit the caller's Point
 }
 
 fn nudged(pt: Point) -> Point {    // no mutation: builds a NEW record
@@ -44,7 +44,7 @@ fn structs() {
 
     // a write through a `?T` head writes the SHARED record:
     let rp: ?Point = p;             // rp: ?Point — shares p's cell
-    rp.x = 9;                           // p.x is now 9 too
+    rp!.x = 9;                          // p.x is now 9 too
 
     // `==` on records is CELL IDENTITY: bindings of one cell
     // are equal; separately-built records are not, whatever their fields

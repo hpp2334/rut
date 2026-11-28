@@ -28,12 +28,12 @@ fn fannkuch(n: i32) -> i32 {
             perm[i] = perm1[i];
         }
         let flips = 0;
-        while (perm[0] != 0) {
-            let k = perm[0] + 1;
+        while (perm[0]! != 0) {
+            let k = perm[0]! + 1;
             let i = 0;
             let j = k - 1;
             while (i < j) {
-                let t = perm[i];
+                let t = perm[i]!;
                 perm[i] = perm[j];
                 perm[j] = t;
                 i += 1;
@@ -50,13 +50,14 @@ fn fannkuch(n: i32) -> i32 {
             checksum -= flips;
         }
         while (r != n) {
-            let first = perm1[0];
+            let first = perm1[0]!;
             for (let i = 0; i < r; i += 1) {
                 perm1[i] = perm1[i + 1];
             }
             perm1[r] = first;
-            count[r] -= 1;
-            if (count[r] > 0) {
+            let c = count[r]! - 1;
+            count[r] = c;
+            if (c > 0) {
                 break;
             }
             r += 1;

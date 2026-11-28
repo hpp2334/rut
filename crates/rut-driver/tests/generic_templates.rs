@@ -34,8 +34,8 @@ entry fn main() -> i32 {
     items.push(8);
     items.push(9);
     let n = items.len();
-    let first = items[0];
-    return n * 100 + first + items[1] + items[2];
+    let first = items[0]!;
+    return n * 100 + first + items[1]! + items[2]!;
 }
 "#;
 
@@ -435,7 +435,7 @@ use json::{ JsonArr, JsonI64, SOpt, decodeJson };
 entry fn main() -> str {
     let (v, e) = decodeJson<JsonArr<JsonI64>>("[7,8,9]");
     if (e != nil) { return "err-arr"; }
-    let a: [JsonI64] = v.to_arr();
+    let a: [JsonI64] = v!.to_arr();
     let (o, e2) = decodeJson<SOpt<JsonI64>>("null");
     if (e2 != nil) { return "err-opt"; }
     if (o == nil) { return "opt-gone"; }
@@ -443,7 +443,7 @@ entry fn main() -> str {
     if (inner != nil) { return "bad-null"; }
     let (p, e3) = decodeJson<SOpt<JsonI64>>("5");
     if (e3 != nil) { return "err-five"; }
-    let five = if (p != nil && p.get() != nil) { 1 } else { 0 };
+    let five = if (p != nil && p!.get() != nil) { 1 } else { 0 };
     return f"n={a.len()}:{five}";
 }
 "#;

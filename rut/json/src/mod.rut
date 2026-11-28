@@ -167,7 +167,7 @@ impl JsonWriter {
     // the sticky failure as the error struct, once, on demand
     pub fn error(self) -> ?EncodeJsonError {
         if (self.k == nil) { return nil; }
-        let kd: EncodeErrorKind = self.k;
+        let kd: EncodeErrorKind = self.k!;
         return EncodeJsonError { kind: kd, at: self.at, path: self.path };
     }
 
@@ -191,7 +191,7 @@ impl JsonWriter {
                 if (kk == nil) {
                     p = f"{p}.?";
                 } else {
-                    let kn: str = kk;
+                    let kn: str = kk!;
                     p = f"{p}.{kn}";
                 }
             } else {
@@ -438,7 +438,7 @@ impl JsonReader {
     // entry assembles its pair here and never on the happy path
     pub fn error(self) -> ?DecodeJsonError {
         if (self.k == nil) { return nil; }
-        let kd: DecodeErrorKind = self.k;
+        let kd: DecodeErrorKind = self.k!;
         return DecodeJsonError { kind: kd, at: self.at as i64, got: self.got, expected: self.expected };
     }
 
@@ -1379,7 +1379,7 @@ impl JsonU64 {
                 expected: "a u64",
             });
         }
-        return (JsonU64(v), nil);
+        return (JsonU64(v!), nil);
     }
     pub fn get(self) -> u64 { return self.inner; }
 }
@@ -1418,7 +1418,7 @@ impl<T> SOpt<T> {
             w.write_raw("null");
             return nil;
         }
-        let v: T = self.inner;
+        let v: T = self.inner!;
         return v.encode(w);
     }
     pub fn decode(r: JsonReader) -> (?Self, ?DecodeJsonError) {
@@ -1490,11 +1490,11 @@ impl<T> JsonArr<T> {
         }
         // materialize the fixed array — the first element seeds it
         // (pouch's `as_array` construction law, generic T has no zero)
-        let seed: T = first;
+        let seed: T = first!;
         let a: [T] = [seed; count];
         let j: i32 = 0;
         while (j < count) {
-            a[j] = buf[j];
+            a[j] = buf[j]!;
             j += 1;
         }
         let ok: ?Self = JsonArr(a);
@@ -1639,7 +1639,7 @@ impl<T> JsonVec<T> {
     pub fn encode(self, w: JsonWriter) -> ?EncodeJsonError {
         w.begin_array();
         for (let x of self.inner) {
-            let e = x.encode(w);
+            let e = x!.encode(w);
             if (e != nil) { return e; }
         }
         w.end_array();
@@ -1652,7 +1652,7 @@ impl<T> JsonVec<T> {
         while (r.more()) {
             let (x, e) = T::decode(r);
             if (e != nil) { return (nil, e); }
-            v.push(x);
+            v.push(x!);
         }
         r.end_array();
         if (r.failed()) { return (nil, r.error()); }
@@ -1763,7 +1763,7 @@ impl<V> JMapStr<V> {
             let kk: str = kt;
             let (v, e) = V::decode(r);
             if (e != nil) { return (nil, e); }
-            let _ = m.put(kk, v);
+            let _ = m.put(kk, v!);
         }
         r.end_object();
         if (r.failed()) { return (nil, r.error()); }
@@ -1783,10 +1783,10 @@ impl<V> JMapI64<V> {
             if (r.failed()) { return (nil, r.error()); }
             let k = key_i64(kt);
             if (k == nil) { return (nil, map_err(r.here() as i64, kt, "a key this map's key type can parse")); }
-            let kk: i64 = k;
+            let kk: i64 = k!;
             let (v, e) = V::decode(r);
             if (e != nil) { return (nil, e); }
-            let _ = m.put(kk, v);
+            let _ = m.put(kk, v!);
         }
         r.end_object();
         if (r.failed()) { return (nil, r.error()); }
@@ -1806,10 +1806,10 @@ impl<V> JMapBool<V> {
             if (r.failed()) { return (nil, r.error()); }
             let k = key_bool(kt);
             if (k == nil) { return (nil, map_err(r.here() as i64, kt, "a key this map's key type can parse")); }
-            let kk: bool = k;
+            let kk: bool = k!;
             let (v, e) = V::decode(r);
             if (e != nil) { return (nil, e); }
-            let _ = m.put(kk, v);
+            let _ = m.put(kk, v!);
         }
         r.end_object();
         if (r.failed()) { return (nil, r.error()); }
@@ -1829,10 +1829,10 @@ impl<V> JMapU64<V> {
             if (r.failed()) { return (nil, r.error()); }
             let k = key_u64(kt);
             if (k == nil) { return (nil, map_err(r.here() as i64, kt, "a key this map's key type can parse")); }
-            let kk: u64 = k;
+            let kk: u64 = k!;
             let (v, e) = V::decode(r);
             if (e != nil) { return (nil, e); }
-            let _ = m.put(kk, v);
+            let _ = m.put(kk, v!);
         }
         r.end_object();
         if (r.failed()) { return (nil, r.error()); }
@@ -1862,7 +1862,7 @@ impl<T> JSet<T> {
         while (r.more()) {
             let (x, e) = T::decode(r);
             if (e != nil) { return (nil, e); }
-            let _ = s.put(x);
+            let _ = s.put(x!);
         }
         r.end_array();
         if (r.failed()) { return (nil, r.error()); }

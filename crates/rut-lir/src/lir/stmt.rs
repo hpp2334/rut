@@ -1191,8 +1191,9 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
     ) -> TcResult<()> {
         let it = self.compile_expr(iter, None)?;
         let iter_reg = self.last_reg;
-        // `for (v of p)` auto-derefs a pointer
-        let (it, iter_reg) = self.deref_for_use(it, iter_reg, sp.lo);
+        // the law: the iterable never peels — `for (x of opt)` on a
+        // `?[T]` demands the assert (`for (x of opt!)`)
+        self.demand_assert(it, sp)?;
         // the quiet-audit law: a poison iterable already diagnosed at
         // its own failure — the sequence verdict on `<err>` stays
         // silent (the loop cannot lower; the loop var poisons for the

@@ -771,16 +771,16 @@ fn iterable_member_drives_for_break_continue() {
                \x20   // so the accumulator is a shared cell\n\
                \x20   let acc: ?Acc = Acc { };\n\
                \x20   for (let v of Lights::new()) {\n\
-               \x20       acc.hits += 1;\n\
-               \x20       if (acc.hits == 2) { break; }\n\
+               \x20       acc!.hits += 1;\n\
+               \x20       if (acc!.hits == 2) { break; }\n\
                \x20   }\n\
-               \x20   if (acc.hits != 2) { return -1; }\n\
+               \x20   if (acc!.hits != 2) { return -1; }\n\
                \x20   let all: ?Acc = Acc { };\n\
                \x20   for (let v of Lights::new()) {\n\
-               \x20       all.hits += 1;\n\
+               \x20       all!.hits += 1;\n\
                \x20       continue;\n\
                \x20   }\n\
-               \x20   if (all.hits != 3) { return -2; }\n\
+               \x20   if (all!.hits != 3) { return -2; }\n\
                \x20   return 9;\n\
                }\n";
     assert_eq!(run_main(src), 9);
@@ -831,9 +831,9 @@ fn disposal_stays_data_only_for_enums() {
              let acc: ?Acc = Acc { };\n\
              for (let l of Light::Red) {\n\
                  let x = when (l) { Light::Green -> 1, Light::Red -> 2 };\n\
-                 acc.n = acc.n + x;\n\
+                 acc!.n = acc!.n + x;\n\
              }\n\
-             return acc.n;\n\
+             return acc!.n;\n\
          }\n",
     );
     assert_eq!(v, 3, "the enum's marked member drives the for-of");

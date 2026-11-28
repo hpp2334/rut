@@ -159,24 +159,12 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                     part_regs.push(reg);
                 }
                 FPartAst::Hole(e) => {
-                    let mut t = self.compile_expr(*e, None)?;
-                    // `{p}` formats the pointee: deref the
-                    // box before formatting — any element type
-                    let lo = e.span(self.ctx.ast).lo;
-                    if let TyKind::Opt { elem } = self.ctx.types.kind(t).clone() {
-                        let src = self.last_reg;
-                        let d = self.new_reg(elem);
-                        self.emit(
-                            Op::GetF {
-                                dst: d,
-                                obj: src,
-                                field: 0,
-                                repr: self.ctx.types.repr_of(elem),
-                            },
-                            lo,
-                        );
-                        t = elem;
-                    }
+                    // the law: the hole never peels — `{p}` on a
+                    // `?T` demands the assert (`f"{p!}"` formats the
+                    // payload; the nil trap lands at the hole's own
+                    // `!`, not inside the format)
+                    let t = self.compile_expr(*e, None)?;
+                    self.demand_assert(t, e.span(self.ctx.ast))?;
                     self.check_formattable(t, e.span(self.ctx.ast))?;
                     let src = self.last_reg;
                     if t == TY_STR {

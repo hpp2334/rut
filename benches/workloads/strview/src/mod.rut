@@ -49,7 +49,7 @@ fn churn(p: str, n: i32) -> i32 {
         let q = m.get_range(p, i * 6, 6);
         if (q != nil) {
             hits += 1;
-            sum = sum.wrapping_add(q);
+            sum = sum.wrapping_add(q!);
         }
     }
     // miss lookups — slots n..2n are never inserted

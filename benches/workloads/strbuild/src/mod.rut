@@ -84,7 +84,7 @@ fn round(fr: Vec<str>) -> i64 {
     for (let i = 0; i < n; i += 1) {
         x = lcg(x);
         let cls = ((x >> 16) % 5) as i32;
-        let frag = fr[cls];
+        let frag = fr[cls]!;
         b.append(frag);
         cps += 2 * cls + 1;
         // the sample grid: 32 fragments evenly across the churn — the
@@ -104,7 +104,7 @@ fn round(fr: Vec<str>) -> i64 {
     for (let s = 0; s < ns; s += 1) {
         let len = 2 * scls[s] + 1;
         let piece = doc.slice(poss[s], poss[s] + len);
-        if (piece != fr[scls[s]]) {
+        if (piece != fr[scls[s]]!) {
             panic("strbuild: sample content diverged");
         }
         for (let c of piece) {
@@ -122,9 +122,9 @@ fn round(fr: Vec<str>) -> i64 {
         x = lcg(x);
         let cls = ((x >> 16) % 5) as i32;
         let sb = StringBuilder::with_cap(hint);
-        sb.append(fr[cls]);
+        sb.append(fr[cls]!);
         let built = sb.build();
-        if (built != fr[cls]) {
+        if (built != fr[cls]!) {
             panic("strbuild: built content diverged");
         }
         hb = hb.wrapping_mul(31 as i64).wrapping_add(cls as i64);

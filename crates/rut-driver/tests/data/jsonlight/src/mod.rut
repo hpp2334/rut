@@ -11,28 +11,28 @@ use json::{JsonI64, JsonStr, JsonBool, JsonF64, JsonArr, SOpt};
 entry fn enc_i(v: i64) -> str {
     let (s, e) = encodeJson(JsonI64(v));
     if (e != nil) { return "ERR"; }
-    let doc: str = s;
+    let doc: str = s!;
     return doc;
 }
 
 entry fn dec_i(s: str) -> str {
     let (v, e) = decodeJson<JsonI64>(s);
     if (e != nil) { return "ERR"; }
-    let w: JsonI64 = v;
+    let w: JsonI64 = v!;
     return f"OK:{w.get()}";
 }
 
 entry fn dec_o(s: str) -> str {
     let (v, e) = decodeJson<JsonStr>(s);
     if (e != nil) { return "ERR"; }
-    let w: JsonStr = v;
+    let w: JsonStr = v!;
     return f"OK:{w.get()}";
 }
 
 entry fn dec_b(s: str) -> str {
     let (v, e) = decodeJson<JsonBool>(s);
     if (e != nil) { return "ERR"; }
-    let w: JsonBool = v;
+    let w: JsonBool = v!;
     if (w.get()) { return "OK:true"; }
     return "OK:false";
 }
@@ -40,7 +40,7 @@ entry fn dec_b(s: str) -> str {
 entry fn dec_f(s: str) -> str {
     let (v, e) = decodeJson<JsonF64>(s);
     if (e != nil) { return "ERR"; }
-    let w: JsonF64 = v;
+    let w: JsonF64 = v!;
     return f"OK:{w.get()}";
 }
 
@@ -57,7 +57,7 @@ entry fn enc_a() -> ?str {
 entry fn dec_a(s: str) -> str {
     let (v, e) = decodeJson<JsonArr<JsonI64>>(s);
     if (e != nil) { return "ERR"; }
-    let w: JsonArr<JsonI64> = v;
+    let w: JsonArr<JsonI64> = v!;
     let a: [JsonI64] = w.to_arr();
     let n = a.len();
     let acc = f"OK:len={n}";
@@ -73,7 +73,7 @@ entry fn dec_a(s: str) -> str {
 entry fn dec_q(s: str) -> str {
     let (v, e) = decodeJson<SOpt<JsonI64>>(s);
     if (e != nil) { return "ERR"; }
-    let w: SOpt<JsonI64> = v;
+    let w: SOpt<JsonI64> = v!;
     let inner: ?JsonI64 = w.get();
     if (inner == nil) { return "nil"; }
     return "set";

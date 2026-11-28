@@ -363,7 +363,7 @@ fn boxed_opt_mint_unchanged() {
             let x: ?i64 = 5;
             let s: i64 = 0;
             if (x != nil) {
-                s = s.wrapping_add(x);
+                s = s.wrapping_add(x!);
             }
             let y: ?i64 = nil;
             if (y != nil) {

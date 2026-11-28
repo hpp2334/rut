@@ -21,9 +21,9 @@ impl Tile {
 // the cache's whole job today: hold entries, evict on demand.
 // The hit returns the STORED cell — it shares the cache's element.
 fn evict(cache: ?Vec<?Tile>, id: i32) -> ?Tile {
-    for (let i = 0; i < cache.len(); i += 1) {
-        if (cache[i].id() == id) {
-            return cache[i];
+    for (let i = 0; i < cache!.len(); i += 1) {
+        if (cache![i]!!.id() == id) {
+            return cache![i]!;
         }
     }
     return nil;
@@ -36,7 +36,7 @@ entry fn main() {
     let alive = Tile::new(1);
     cache.push(alive);   // the cache now keeps the cell alive too
     let got = evict(cache, 1);
-    log.info(f"held: {got != nil} id={got.id()}");
+    log.info(f"held: {got != nil} id={got!.id()}");
     // `alive` is still a strong handle, and the cache holds a second:
     // dropping one would NOT free the cell — the other still retains it.
     // The weak-edge spelling is `Weak<T>` (import-gated: `use core::{

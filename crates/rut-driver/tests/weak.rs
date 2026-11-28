@@ -211,7 +211,7 @@ entry fn main() -> i32 {{
     let w = Weak::new(t);
     let b = w.upgrade();
     if (b == nil) {{ return 0; }}   // the referent is alive: the answer is not nil
-    return b.n + 1;                 // the SAME cell: field reads see the value
+    return b!.n + 1;                // the SAME cell: field reads see the value
 }}
 "#
     );
@@ -250,7 +250,7 @@ use core::{{ Weak }};
 fn alive_n(w: Weak<Tile>) -> i32 {{
     let b = w.upgrade();
     if (b == nil) {{ return 0; }}
-    return b.n;
+    return b!.n;
 }}
 entry fn main() -> i32 {{
     let a = Tile::new(10);
@@ -291,7 +291,7 @@ impl Node {
     fn new(name: str) -> Self { return Self { name: name, other: nil, back: nil }; }
     [disposal] fn dispose_node(self, cx: DisposalContext) {
         if (self.back != nil) {
-            let b = self.back.upgrade();   // INSIDE dispose: the parent's box died first —
+            let b = self.back!.upgrade();  // INSIDE dispose: the parent's box died first —
             if (b != nil) { panic("cycle resurrected"); }   // the nulling preceded user code
         }
         Logger::new("w").info(f"{self.name} gone");
@@ -301,9 +301,9 @@ fn build() -> ?Node {
     let p: ?Node = Node::new("p");
     let c: ?Node = Node::new("c");
     let oc: ?Node = c;
-    p.other = oc;                  // the STRONG edge
+    p!.other = oc;                 // the STRONG edge
     let wp: ?Weak<?Node> = Weak::new(p);
-    c.back = wp;                   // the WEAK edge — the cycle cannot close
+    c!.back = wp;                   // the WEAK edge — the cycle cannot close
     return p;                      // the parent handle crosses; the child rides p.other
 }
 entry fn main() -> nil {
@@ -477,7 +477,7 @@ entry fn main() -> i32 {{
     let w = watch(t);          // Weak<Tile> at this instantiation
     let b = w.upgrade();
     if (b == nil) {{ return 0; }}
-    return b.n;
+    return b!.n;
 }}
 "#
     );
@@ -661,7 +661,7 @@ entry fn main() -> i32 {
     let w2 = Weak::new(v);           // a fresh weak over the new binding
     let b2 = w2.upgrade();
     if (b2 == nil) { return 2; }    // alive — the new binding keeps it
-    return b2.n + 33;               // 10 + 33
+    return b2!.n + 33;              // 10 + 33
 }
 "#
     .to_string();

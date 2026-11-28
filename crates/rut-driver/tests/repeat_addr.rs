@@ -111,12 +111,12 @@ fn address_of_boxes_the_operand() {
     // the box the deref-position read consumes
     let out = compile(
         "struct P { x: i32 = 0 }\n\
-         fn poke(p: ?P) -> i32 { return p.x; }\n\
+         fn poke(p: ?P) -> i32 { return p!.x; }\n\
          entry fn main() -> i32 {\n\
              let v = P { x: 9 };\n\
              let p: ?P = v;\n\
              let q: ?i32 = 7;\n\
-             return poke(p) + q;\n\
+             return poke(p) + q!;\n\
          }\n",
     );
     assert!(out.diags.is_empty(), "{:?}", out.diags);
@@ -161,14 +161,14 @@ fn nullable_backed_vec_shape_is_an_ordinary_ref_elem_array() {
          impl<T> Box2<T> {\n\
              fn new() -> Self { return Self { buf: [nil; 4], len: 0 }; }\n\
              fn push(self, v: T) -> nil { self.buf[self.len] = v; self.len += 1; }\n\
-             fn get(self, i: i32) -> T { return self.buf[i]; }\n\
+             fn get(self, i: i32) -> T { return self.buf[i]!; }\n\
          }\n\
          entry fn main() -> i32 {\n\
              let b: Box2<i32> = Box2::new();\n\
              b.push(5);\n\
              b.push(7);\n\
              b[0] = 6;\n\
-             return b[0] + b[1];\n\
+             return b[0]! + b[1]!;\n\
          }\n",
     );
     assert!(out.diags.is_empty(), "{:?}", out.diags);
@@ -176,22 +176,37 @@ fn nullable_backed_vec_shape_is_an_ordinary_ref_elem_array() {
 
 #[test]
 fn nullable_widen_narrow_and_nil_typing() {
-    // coercions: `T → ?T` boxes (the old `&v`), `?T → T` reads
-    // the payload (the old `*p`) — at let, argument, and return positions;
-    // `nil` types as the expected `?T`, and a nil-vs-primitive let is the
-    // mismatch diagnostic
+    // coercions: `T → ?T` boxes (implicit, cannot fail) — at let,
+    // argument, and return positions; `?T → T` is the ASSERT (`e!`) —
+    // the let peel demands it (one diagnostic); `nil` types as the
+    // expected `?T`, and a nil-vs-primitive let is the mismatch
+    // diagnostic. The `== nil` compare stays the guard.
     let out = compile(
         "struct P { x: i32 = 0 }\n\
-         fn poke(p: ?P) -> i32 { return p.x; }\n\
+         fn poke(p: ?P) -> i32 { return p!.x; }\n\
          entry fn main() -> i32 {\n\
              let v = P { x: 8 };\n\
              let p: ?P = v;\n\
              let q: ?i32 = nil;\n\
-             let n: i32 = q;\n\
-             return poke(v) + n * 0 + p.x * 0 + (q == nil) as i32;\n\
+             let n: i32 = q!;\n\
+             return poke(v) + n * 0 + p!.x * 0 + (q == nil) as i32;\n\
          }\n",
     );
     assert!(out.diags.is_empty(), "{:?}", out.diags);
+    // the flipped half: the UN-asserted let peel is the demand error
+    let ds = diags_of(
+        "struct P { x: i32 = 0 }\n\
+         entry fn main() -> i32 {\n\
+             let q: ?i32 = nil;\n\
+             let n: i32 = q;\n\
+             return n;\n\
+         }\n",
+    );
+    assert!(
+        ds.iter()
+            .any(|d| d.contains("`?i32` derefs only through `!`")),
+        "the un-asserted payload let demands the assert: {ds:?}"
+    );
     let ir = out.ir_dump;
     assert!(ir.contains("makeopt"), "the T → ?T widen must box: {ir}");
     // a nil literal against a primitive annotation is a type mismatch
@@ -225,7 +240,7 @@ fn prefix_question_binds_the_following_type_term() {
              let plain: [i32] = [1; 2];\n\
              let b: ?[i32] = plain;\n\
              let n: ?[i32] = nil;\n\
-             return count(a) + (b == nil) as i32 + (n == nil) as i32 + e;\n\
+             return count(a) + (b == nil) as i32 + (n == nil) as i32 + e!;\n\
          }\n",
     );
     assert!(out.diags.is_empty(), "{:?}", out.diags);

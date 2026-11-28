@@ -37,7 +37,7 @@ fn ek_name(k: EncodeErrorKind) -> str {
 }
 
 fn dec_err(e: ?DecodeJsonError) -> str {
-    let err: DecodeJsonError = e;
+    let err: DecodeJsonError = e!;
     let kn = dk_name(err.kind);
     let at = err.at;
     let got = err.got;
@@ -46,7 +46,7 @@ fn dec_err(e: ?DecodeJsonError) -> str {
 }
 
 fn enc_err(e: ?EncodeJsonError) -> str {
-    let err: EncodeJsonError = e;
+    let err: EncodeJsonError = e!;
     let kn = ek_name(err.kind);
     let at = err.at;
     let path = err.path;
@@ -92,14 +92,14 @@ entry fn pair_enc_cycle() -> str {
 entry fn enc_i64(v: i64) -> str {
     let (s, e) = encodeJson(JsonI64(v));
     if (e != nil) { return enc_err(e); }
-    let doc: str = s;
+    let doc: str = s!;
     return doc;
 }
 
 entry fn dec_i64(s: str) -> str {
     let (v, e) = decodeJson<JsonI64>(s);
     if (e != nil) { return dec_err(e); }
-    let w: JsonI64 = v;
+    let w: JsonI64 = v!;
     return f"OK:{w.get()}";
 }
 
@@ -108,14 +108,14 @@ entry fn dec_i64(s: str) -> str {
 entry fn enc_f64(v: f64) -> str {
     let (s, e) = encodeJson(JsonF64(v));
     if (e != nil) { return enc_err(e); }
-    let doc: str = s;
+    let doc: str = s!;
     return doc;
 }
 
 entry fn dec_f64(s: str) -> str {
     let (v, e) = decodeJson<JsonF64>(s);
     if (e != nil) { return dec_err(e); }
-    let w: JsonF64 = v;
+    let w: JsonF64 = v!;
     return f"OK:{w.get()}";
 }
 
@@ -123,14 +123,14 @@ entry fn dec_f64(s: str) -> str {
 entry fn f64_rt(c: str) -> str {
     let (v, e) = decodeJson<JsonF64>(c);
     if (e != nil) { return dec_err(e); }
-    let w: JsonF64 = v;
+    let w: JsonF64 = v!;
     let x: f64 = w.get();
     let (s, ee) = encodeJson(JsonF64(x));
     if (ee != nil) { return enc_err(ee); }
-    let doc: str = s;
+    let doc: str = s!;
     let (v2, e2) = decodeJson<JsonF64>(doc);
     if (e2 != nil) { return dec_err(e2); }
-    let w2: JsonF64 = v2;
+    let w2: JsonF64 = v2!;
     if (w2.get() == x) { return "STABLE"; }
     return "DRIFTED";
 }
@@ -140,14 +140,14 @@ entry fn f64_rt(c: str) -> str {
 entry fn enc_bool(b: bool) -> str {
     let (s, e) = encodeJson(JsonBool(b));
     if (e != nil) { return enc_err(e); }
-    let doc: str = s;
+    let doc: str = s!;
     return doc;
 }
 
 entry fn dec_bool(s: str) -> str {
     let (v, e) = decodeJson<JsonBool>(s);
     if (e != nil) { return dec_err(e); }
-    let w: JsonBool = v;
+    let w: JsonBool = v!;
     if (w.get()) { return "OK:true"; }
     return "OK:false";
 }
@@ -157,14 +157,14 @@ entry fn dec_bool(s: str) -> str {
 entry fn enc_str(s: str) -> str {
     let (doc, e) = encodeJson(JsonStr(s));
     if (e != nil) { return enc_err(e); }
-    let d: str = doc;
+    let d: str = doc!;
     return d;
 }
 
 entry fn dec_str(s: str) -> str {
     let (v, e) = decodeJson<JsonStr>(s);
     if (e != nil) { return dec_err(e); }
-    let w: JsonStr = v;
+    let w: JsonStr = v!;
     return f"OK:{w.get()}";
 }
 
@@ -175,10 +175,10 @@ entry fn dec_str(s: str) -> str {
 entry fn str_rt(s: str) -> str {
     let (d, e) = encodeJson(JsonStr(s));
     if (e != nil) { return enc_err(e); }
-    let doc: str = d;
+    let doc: str = d!;
     let (v, e2) = decodeJson<JsonStr>(doc);
     if (e2 != nil) { return dec_err(e2); }
-    let w: JsonStr = v;
+    let w: JsonStr = v!;
     if (w.get() == s) { return "RT"; }
     return f"DRIFT:{w.get()}";
 }
@@ -188,7 +188,7 @@ entry fn str_rt(s: str) -> str {
 entry fn dec_arr(s: str) -> str {
     let (v, e) = decodeJson<JsonArr<JsonI64>>(s);
     if (e != nil) { return dec_err(e); }
-    let w: JsonArr<JsonI64> = v;
+    let w: JsonArr<JsonI64> = v!;
     let a: [JsonI64] = w.to_arr();
     let n = a.len();
     let acc = f"OK:len={n}";
@@ -206,10 +206,10 @@ entry fn dec_q_i64(s: str) -> str {
     let (v, e) = decodeJson<SOpt<JsonI64>>(s);
     if (e != nil) { return dec_err(e); }
     // the null case: SOpt decodes null to the absent wrapper
-    let w: SOpt<JsonI64> = v;
+    let w: SOpt<JsonI64> = v!;
     let inner: ?JsonI64 = w.get();
     if (inner == nil) { return "OK:nil"; }
-    let ji: JsonI64 = inner;
+    let ji: JsonI64 = inner!;
     return f"OK:{ji.get()}";
 }
 
@@ -217,7 +217,7 @@ entry fn enc_q_nil() -> str {
     let q: ?JsonI64 = nil;
     let (s, e) = encodeJson(SOpt(q));
     if (e != nil) { return enc_err(e); }
-    let doc: str = s;
+    let doc: str = s!;
     return doc;
 }
 
@@ -225,7 +225,7 @@ entry fn enc_q_val(v: i64) -> str {
     let q: ?JsonI64 = JsonI64(v);
     let (s, e) = encodeJson(SOpt(q));
     if (e != nil) { return enc_err(e); }
-    let doc: str = s;
+    let doc: str = s!;
     return doc;
 }
 
@@ -279,7 +279,7 @@ impl DocRow {
 entry fn dec_row(s: str) -> str {
     let (v, e) = decodeJson<DocRow>(s);
     if (e != nil) { return dec_err(e); }
-    let row: DocRow = v;
+    let row: DocRow = v!;
     return f"OK:{row.id}:{row.name}";
 }
 
@@ -397,14 +397,14 @@ entry fn reader_walk(s: str) -> str {
 entry fn dec_bytes(b: bytes) -> str {
     let (v, e) = decodeJsonBytes<JsonI64>(b);
     if (e != nil) { return dec_err(e); }
-    let w: JsonI64 = v;
+    let w: JsonI64 = v!;
     return f"OK:{w.get()}";
 }
 
 entry fn dec_bytes_str(b: bytes) -> str {
     let (v, e) = decodeJsonBytes<JsonStr>(b);
     if (e != nil) { return dec_err(e); }
-    let w: JsonStr = v;
+    let w: JsonStr = v!;
     return f"OK:{w.get()}";
 }
 
@@ -415,7 +415,7 @@ entry fn enc_arr_empty() -> str {
     let a: [JsonI64] = [];
     let (s, e) = encodeJson(JsonArr(a));
     if (e != nil) { return enc_err(e); }
-    let doc: str = s;
+    let doc: str = s!;
     return doc;
 }
 
@@ -425,7 +425,7 @@ entry fn enc_arr_three() -> str {
     a[2] = JsonI64(9);
     let (s, e) = encodeJson(JsonArr(a));
     if (e != nil) { return enc_err(e); }
-    let doc: str = s;
+    let doc: str = s!;
     return doc;
 }
 
@@ -468,18 +468,18 @@ fn classify_one(cp: i32) -> str {
     let doc2 = f"{ch}1";
     let (v2, e2) = decodeJson<JsonI64>(doc2);
     if (e2 == nil) {
-        let w2: JsonI64 = v2;
+        let w2: JsonI64 = v2!;
         if (w2.get() == 1) { return "w"; }
     }
     // in-string probe: quote / control / escape / content
     let doc3 = f"\"a{ch}b\"";
     let (v3, e3) = decodeJson<JsonStr>(doc3);
     if (e3 != nil) {
-        let err: DecodeJsonError = e3;
+        let err: DecodeJsonError = e3!;
         if (err.kind == DecodeErrorKind::Unexpected) { return "c"; }
         return "q"; // the early close answers Trailing
     }
-    let sw: JsonStr = v3;
+    let sw: JsonStr = v3!;
     let s: str = sw.get();
     let want = f"a{ch}b";
     if (s == want) { return "."; }
@@ -512,7 +512,7 @@ fn classify_more_one(cp: i32) -> str {
     let doc = f"[1{ch}2]";
     let (v, e) = decodeJson<JsonArr<JsonI64>>(doc);
     if (e == nil) { return ","; }
-    let err: DecodeJsonError = e;
+    let err: DecodeJsonError = e!;
     if (err.kind == DecodeErrorKind::Trailing) { return "]"; }
     return ".";
 }

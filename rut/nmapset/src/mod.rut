@@ -69,7 +69,7 @@ impl<K, V> HashMap<K, V> {
     pub fn get(self, k: K) -> ?V {
         let cell = map_hvget(self.t, opaque(k));
         if (cell == nil) { return nil; }
-        return opaque::downcast<V>(cell);
+        return opaque::downcast<V>(cell!);
     }
 
     pub fn has(self, k: K) -> bool {
@@ -108,7 +108,7 @@ impl<K, V> HashMap<K, V> {
     pub fn get_range(self, parent: str, off: i32, len: i32) -> ?V {
         let cell = map_hvget_sv(self.t, parent, off, len);
         if (cell == nil) { return nil; }
-        return opaque::downcast<V>(cell);
+        return opaque::downcast<V>(cell!);
     }
 
     pub fn has_range(self, parent: str, off: i32, len: i32) -> bool {
@@ -144,7 +144,7 @@ impl<K, V> HashMap<K, V> {
         let cur = map_iter_new(self.t, type_id<K>());
         let cell = map_iter_next(cur);
         while (cell != nil) {
-            if (!emit(opaque::downcast<K>(cell))) { break; }
+            if (!emit(opaque::downcast<K>(cell!)!)) { break; }
             cell = map_iter_next(cur);
         }
     }
@@ -191,7 +191,7 @@ impl<T> HashSet<T> {
         let cur = map_iter_new(self.t, type_id<T>());
         let cell = map_iter_next(cur);
         while (cell != nil) {
-            if (!emit(opaque::downcast<T>(cell))) { break; }
+            if (!emit(opaque::downcast<T>(cell!)!)) { break; }
             cell = map_iter_next(cur);
         }
     }

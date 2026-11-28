@@ -304,14 +304,14 @@ use ink::{ Logger };
 use pouch::{ Vec };
 pub fn pick(xs: Vec<i32>, i: i32) -> (i32, bool) {
     if (i >= 0 && i < xs.len()) {
-        return (xs[i], true);
+        return (xs[i]!, true);
     }
     return (0, false);
 }
 entry fn main() {
     let log = Logger::new("px");
     let xs = Vec<i32>::from([10, 20, 30]);
-    let a = xs[1] + xs.len();            // index + method
+    let a = xs[1]! + xs.len();           // index + method
     let pair = pick(xs, 2);              // the (T, ok) record
     if (pair.1) {
         log.info(f"{a} {pair.0}");

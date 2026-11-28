@@ -246,7 +246,7 @@ entry fn main() -> i32 {
     let s = 0;
     for (let i = 0; i < n; i += 1) {
         let q = p[i];
-        if (q != nil) { s += q; }
+        if (q != nil) { s += q!; }
     }
     p[5] = nil;
     let t = 0;
@@ -348,9 +348,9 @@ entry fn main() -> i32 {
     let v: Vec<i32> = Vec::new();
     v.push(1); v.push(2); v.push(3);
     let w = v.slice(1, 3);
-    let x = w[0] + w[1];
-    w[0] = 40;
-    return x * 1000 + v[1] * 10 + w[1];
+    let x = w![0]! + w![1]!;
+    w![0] = 40;
+    return x * 1000 + v[1]! * 10 + w![1]!;
 }
 ";
     // x = 5, write-through makes v[1] = 40, w[1] = 3 → 5000 + 400 + 3
@@ -365,14 +365,14 @@ entry fn main() -> i32 {
     let v: Vec<i32> = Vec::new();
     v.push(1); v.push(2);
     let w = v.slice(0, 2);
-    return w[5];
+    return w![5]!;
 }
 ";
     let t = run_std_trap(src);
     assert_eq!(t.kind, rut_vm::TrapKind::IndexOutOfBounds);
     assert_eq!(t.msg, "view index 5 out of bounds (len 2)", "{}", t.msg);
 
-    let neg = src.replace("w[5]", "w[0 - 1]");
+    let neg = src.replace("w![5]", "w![0 - 1]");
     let t = run_std_trap(&neg);
     assert_eq!(t.kind, rut_vm::TrapKind::IndexOutOfBounds);
     assert_eq!(t.msg, "view index -1 out of bounds (len 2)", "{}", t.msg);
@@ -392,7 +392,7 @@ entry fn main() -> i32 {
     let marks = Vec<u8>::filled(0, limit + 1);
     let count = 0;
     for (let i = 2; i <= limit; i += 1) {
-        if (marks[i] == 0) {
+        if (marks[i]! == 0u8) {
             count += 1;
             if (i <= limit / i) {
                 let m = i * i;

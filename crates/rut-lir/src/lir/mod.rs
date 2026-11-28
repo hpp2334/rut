@@ -302,57 +302,27 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
         let _ = to;
     }
 
-    /// `p.m(..)` / `p[i]` auto-deref: a nullable used as a
-    /// receiver or indexee loads its payload cell first — at the
-    /// payload's OWN repr (a scalar payload reads its bits, a cell
-    /// payload retains). TRANSITIVE: a `??T` receiver derefs
-    /// twice. Returns the (type, register) to continue from.
-    pub(crate) fn deref_for_use(&mut self, ty: TypeId, reg: u16, sp_lo: u32) -> (TypeId, u16) {
-        let mut ty = ty;
-        let mut cur = reg;
-        while let TyKind::Opt { elem } = self.ctx.types.kind(ty).clone() {
-            let d = self.new_reg(elem);
-            let repr = self.ctx.types.repr_of(elem);
-            self.emit(
-                Op::GetF {
-                    dst: d,
-                    obj: cur,
-                    field: 0,
-                    repr,
-                },
-                sp_lo,
+    /// The explicit-deref law's ONE demand — every position that used
+    /// to peel a nullable implicitly now diagnoses here (ONE message
+    /// family, ONE home beside `deref_one`): `` `?Foo` derefs only
+    /// through `!` — spell the assert (`v!`) ``, the operand's type
+    /// spelled per site. A non-Opt operand passes (the site continues);
+    /// the quiet-audit law: the poison row is never an `Opt`, so it
+    /// passes too — the cause already diagnosed at its own failure.
+    /// This is the only door a `?T → T` peel may demand through: the
+    /// assert (`e!`) is the ONE spelling, `deref_one` its ONE emission.
+    pub(crate) fn demand_assert(&mut self, ty: TypeId, sp: rut_lexer::span::Span) -> TcResult<()> {
+        if let TyKind::Opt { .. } = self.ctx.types.kind(ty) {
+            self.ctx.err(
+                sp,
+                format!(
+                    "`{}` derefs only through `!` — spell the assert (`v!`)",
+                    self.ctx.type_name(ty)
+                ),
             );
-            ty = elem;
-            cur = d;
+            return Err(());
         }
-        (ty, cur)
-    }
-
-    /// Deref a nullable at a value use site: `v: ?T` reads as `T` (RFC
-    /// 0012 §6) — the payload slot at the pointee's own repr, transitively
-    /// for `??T`. Callers decide which positions deref: value-expected
-    /// positions via the compile_expr funnel, arithmetic operands, and
-    /// `==` against the pointee type. `p.f`/`p.m()` deref at their own
-    /// sites and `?T == ?T` compares payloads at the shared cell.
-    pub(crate) fn deref_ptr(&mut self, ty: TypeId, reg: u16, sp_lo: u32) -> (TypeId, u16) {
-        let mut ty = ty;
-        let mut cur = reg;
-        while let TyKind::Opt { elem } = self.ctx.types.kind(ty).clone() {
-            let d = self.new_reg(elem);
-            let repr = self.ctx.types.repr_of(elem);
-            self.emit(
-                Op::GetF {
-                    dst: d,
-                    obj: cur,
-                    field: 0,
-                    repr,
-                },
-                sp_lo,
-            );
-            ty = elem;
-            cur = d;
-        }
-        (ty, cur)
+        Ok(())
     }
 
     /// The assert's ONE-layer peel — the explicit-deref law's `e!`:
@@ -361,8 +331,9 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
     /// op the engine already traps `NilDeref` on, so a nil operand
     /// traps at the `!`'s own site. A non-Opt operand diagnoses (the
     /// type has no `?` to peel) and the poison row stays silent (the
-    /// quiet-audit law). This is the assert's OWN emission site: the
-    /// implicit peels beside it are still legal in this phase.
+    /// quiet-audit law). This is the assert's OWN emission site — the
+    /// ONE `?T → T` lowering in the compiler (the law: every implicit
+    /// peel beside it died; `demand_assert` is their demand door).
     pub(crate) fn deref_one(
         &mut self,
         ty: TypeId,

@@ -22,16 +22,16 @@ fn word_counts(log: Logger) {
     for (let w of ["rut", "runs", "rut", "real", "rut"]) {
         let hit = counts.get(w);            // ?i32 — nil = first sight
         let n = 1;
-        if (hit != nil) { n = hit + 1; }    // a hit auto-unboxes for `+`
+        if (hit != nil) { n = hit! + 1; }  // the hit asserts — the guard made it safe
         counts.put(w, n);
     }
     let rut = "rut";
     let runs = "runs";
-    log.info(f"rut={counts.get(rut)} runs={counts.get(runs)}");
+    log.info(f"rut={counts.get(rut)!} runs={counts.get(runs)!}");
 
     // `put` answers whether the key was NEWLY added (a replace is false)
     let replaced = counts.put(rut, 9);
-    log.info(f"replace={replaced} rut={counts.get(rut)}");
+    log.info(f"replace={replaced} rut={counts.get(rut)!}");
 
     let gone = counts.remove(runs);
     log.info(f"removed={gone} len={counts.len()} has={counts.has(runs)}");
@@ -47,10 +47,10 @@ fn id_lane(log: Logger) {
     let a = "a";
     let b = "b";
     let c = "c";
-    log.info(f"a={scores.get(a)} b={scores.get(b)}");
+    log.info(f"a={scores.get(a)!} b={scores.get(b)!}");
     log.info(f"miss is nil: {scores.get(c) == nil}");
     scores.put("a", 11i64);                  // replace stores over the slot
-    log.info(f"a={scores.get(a)} len={scores.len()}");
+    log.info(f"a={scores.get(a)!} len={scores.len()}");
 }
 
 fn badges(log: Logger) {

@@ -21,7 +21,7 @@ fn churn(n: i32, m: i32) -> i64 {
     // indexed read + write
     let acc: i64 = 0;
     for (let i = 0; i < n; i += 1) {
-        let x: i32 = v[i];
+        let x: i32 = v[i]!;
         v[i] = (x + 1) % m;
         acc += x as i64;
     }
@@ -29,7 +29,7 @@ fn churn(n: i32, m: i32) -> i64 {
     // RFC 0012 §6 + RFC 0044)
     let total: i64 = 0;
     for (let x of v) {
-        total += x as i64;
+        total += x! as i64;
     }
     return acc + total;
 }

@@ -168,7 +168,7 @@ fn churn_col(n: i32) -> i64 {
         let p = m.get(key(i));
         if (p != nil) {
             hits += 1;
-            sum = sum.wrapping_add(p);
+            sum = sum.wrapping_add(p!);
         }
     }
     let misses: i64 = 0;
@@ -215,7 +215,7 @@ fn churn_sidecar(n: i32) -> i64 {
         let p = m.get(key(i));
         if (p != nil) {
             hits += 1;
-            sum = sum.wrapping_add(p);
+            sum = sum.wrapping_add(p!);
         }
     }
     let misses: i64 = 0;
@@ -278,16 +278,16 @@ fn law_col() -> i64 {
     let m: HashMap<i32, i64> = HashMap::new();
     let fails: i64 = 0;
     if (!m.put(1, 10)) { fails += 1; }
-    let p1 = m.get(1);
+    let p1 = m.get(1)!;
     if (p1 != 10i64) { fails += 2; }
     if (m.put(1, 20) != false) { fails += 4; }
     if (p1 != 10i64) { fails += 8; }          // the held copy keeps the old bits
-    if (m.get(1) != 20i64) { fails += 16; }   // a fresh get reads the replacement
+    if (m.get(1)! != 20i64) { fails += 16; }   // a fresh get reads the replacement
     if (m.remove(1) != true) { fails += 32; }
     if (m.get(1) != nil) { fails += 64; }
     if (p1 != 10i64) { fails += 128; }        // the held copy survives the remove
     if (m.put(1, 30) != true) { fails += 256; }
-    if (m.get(1) != 30i64) { fails += 512; }
+    if (m.get(1)! != 30i64) { fails += 512; }
     return fails;
 }
 
@@ -338,7 +338,7 @@ entry fn main() -> i64 {
     for (let i = 0; i < n; i += 1) {
         let p = m.get(i * 37);
         if (p == nil) { fails += 8; }
-        if (p != i as i64 * 7 + 1) { fails += 16; }
+        if (p! != i as i64 * 7 + 1) { fails += 16; }
     }
     if (m.len() != n) { fails += 32; }
     return fails;
@@ -371,9 +371,9 @@ entry fn main() -> i64 {
     if (!m.put(1, big)) { fails += 1; }
     if (!m.put(2, max)) { fails += 2; }
     if (!m.put(3, 18446744073709551601u64)) { fails += 4; }
-    if (m.get(1) != big) { fails += 8; }
-    if (m.get(2) != max) { fails += 16; }
-    if (m.get(3) != 18446744073709551601u64) { fails += 32; }
+    if (m.get(1)! != big) { fails += 8; }
+    if (m.get(2)! != max) { fails += 16; }
+    if (m.get(3)! != 18446744073709551601u64) { fails += 32; }
     // miss + has + len
     if (m.get(99) != nil) { fails += 64; }
     if (!m.has(2) || m.has(99)) { fails += 128; }
@@ -381,12 +381,12 @@ entry fn main() -> i64 {
     // replace at the found slot: no new entry, new bits
     if (m.put(2, 5u64) != false) { fails += 512; }
     if (m.len() != 3) { fails += 1024; }
-    if (m.get(2) != 5u64) { fails += 2048; }
+    if (m.get(2)! != 5u64) { fails += 2048; }
     // remove writes nothing; the re-insert lands the FRESH val
     if (!m.remove(2)) { fails += 4096; }
     if (m.has(2)) { fails += 8192; }
     if (!m.put(2, 77u64)) { fails += 16384; }
-    if (m.get(2) != 77u64) { fails += 32768; }
+    if (m.get(2)! != 77u64) { fails += 32768; }
     return fails;
 }
 "#;
@@ -410,24 +410,24 @@ entry fn main() -> i64 {
     if (!m.put(3, 0.0f64)) { fails += 4; }
     if (!m.put(4, -0.0f64)) { fails += 8; }
     if (!m.put(5, 65536.0f64)) { fails += 16; }
-    if (m.get(1) != 1.5f64) { fails += 32; }
-    if (m.get(2) != -2.25f64) { fails += 64; }
-    if (m.get(5) != 65536.0f64) { fails += 128; }
+    if (m.get(1)! != 1.5f64) { fails += 32; }
+    if (m.get(2)! != -2.25f64) { fails += 64; }
+    if (m.get(5)! != 65536.0f64) { fails += 128; }
     // -0.0 arrived as -0.0: its reciprocal is -inf (0.0's is +inf)
-    let nz: f64 = m.get(4);
+    let nz: f64 = m.get(4)!;
     if (m.get(4) == nil) { fails += 256; }
     let zn: f64 = 1.0f64 / nz;
     if (!(zn < 0.0f64)) { fails += 512; }
-    let z: f64 = m.get(3);
+    let z: f64 = m.get(3)!;
     let zp: f64 = 1.0f64 / z;
     if (!(zp > 0.0f64)) { fails += 1024; }
     // miss + replace + remove/re-add
     if (m.get(99) != nil) { fails += 2048; }
     if (m.put(1, 7.25f64) != false) { fails += 4096; }
-    if (m.get(1) != 7.25f64) { fails += 8192; }
+    if (m.get(1)! != 7.25f64) { fails += 8192; }
     if (!m.remove(1) || m.get(1) != nil) { fails += 16384; }
     if (!m.put(1, -7.25f64)) { fails += 32768; }
-    if (m.get(1) != -7.25f64) { fails += 65536; }
+    if (m.get(1)! != -7.25f64) { fails += 65536; }
     if (m.len() != 5) { fails += 131072; }
     return fails;
 }
@@ -472,10 +472,10 @@ fn primmap_coexists_with_hashmap_and_hashset() {
          \x20   for (let i = 0; i < 24; i += 1) {\n\
          \x20       if (pm.put(f\"k{i}\", i as i64 * 3)) { acc += 1; }\n\
          \x20   }\n\
-         \x20   acc += pm.get(\"k7\");\n\
+         \x20   acc += pm.get(\"k7\")!;\n\
          \x20   let hm: HashMap<i32, str> = HashMap::new();\n\
          \x20   hm.put(1, \"one\");\n\
-         \x20   if (hm.get(1) == \"one\") { acc += 1; }\n\
+         \x20   if (hm.get(1)! == \"one\") { acc += 1; }\n\
          \x20   let hs: HashSet<i64> = HashSet::new();\n\
          \x20   hs.put(5i64);\n\
          \x20   if (hs.has(5i64)) { acc += 1; }\n\

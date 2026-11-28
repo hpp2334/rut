@@ -137,11 +137,11 @@ fn opt_prim_element_ops_lower_to_the_prim_store() {
             a[0] = 5;
             a[1] = 6;
             let s: i64 = 0;
-            s = s.wrapping_add(a[0]);
+            s = s.wrapping_add(a[0]!);
             for (let i = 0; i < 8; i += 1) {
                 let x = a[i];
                 if (x != nil) {
-                    s = s.wrapping_add(x);
+                    s = s.wrapping_add(x!);
                 }
             }
             return s;
@@ -225,7 +225,7 @@ fn i64_nil_round_trip_and_extremes() {
                 let x = a[i];
                 if (x != nil) {
                     live = live + 1;
-                    s = s.wrapping_add(x);
+                    s = s.wrapping_add(x!);
                 }
             }
             // expect = the same fold over the surviving slots, nil excluded:
@@ -266,7 +266,7 @@ fn u64_high_bit_payloads_round_trip() {
             for (let i = 0; i < 4; i += 1) {
                 let x = u[i];
                 if (x != nil) {
-                    a = a.wrapping_add(x);
+                    a = a.wrapping_add(x!);
                 }
             }
             let want: u64 = 18446744073709551614u64;
@@ -295,7 +295,7 @@ fn float_and_narrow_int_payloads_round_trip() {
             for (let i = 0; i < 3; i += 1) {
                 let x = f[i];
                 if (x != nil) {
-                    fs = fs + x;
+                    fs = fs + x!;
                 }
             }
             let n: [?i32] = [nil; 3];
@@ -304,7 +304,7 @@ fn float_and_narrow_int_payloads_round_trip() {
             let ns: i64 = 0;
             for (let i = 0; i < 3; i += 1) {
                 if (n[i] != nil) {
-                    ns = ns.wrapping_add(n[i] as i64);
+                    ns = ns.wrapping_add(n[i]! as i64);
                 }
             }
             let b: [?i16] = [nil; 2];
@@ -313,7 +313,7 @@ fn float_and_narrow_int_payloads_round_trip() {
             let bs: i64 = 0;
             for (let i = 0; i < 2; i += 1) {
                 if (b[i] != nil) {
-                    bs = bs.wrapping_add(b[i] as i64);
+                    bs = bs.wrapping_add(b[i]! as i64);
                 }
             }
             let fok = fs == 3.25;
@@ -348,7 +348,7 @@ fn iteration_order_unchanged() {
                 if (x == nil) {
                     acc = acc.wrapping_mul(31).wrapping_add(7);
                 } else {
-                    acc = acc.wrapping_mul(31).wrapping_add(x as i64);
+                    acc = acc.wrapping_mul(31).wrapping_add(x! as i64);
                 }
             }
             return acc;
@@ -384,7 +384,7 @@ fn vec_backing_rides_the_prim_store() {
             }
             let s: i64 = 0;
             for (let x of v) {
-                s = s.wrapping_add(x);
+                s = s.wrapping_add(x!);
             }
             let want: i64 = 0;
             for (let i = 0; i < 5000; i += 1) {
@@ -422,8 +422,8 @@ fn reads_are_values_not_handles() {
             let y = a[0];
             a[1] = nil;
             let nil1 = a[1] == nil;
-            let ok1 = x == 10;
-            let ok2 = y == 20;
+            let ok1 = x! == 10;
+            let ok2 = y! == 20;
             // an array LITERAL of `?prim` elements rides the same store —
             // and its boxed elements must die with it (release parity)
             let lit: [?i64] = [70, nil, 7];
@@ -431,7 +431,7 @@ fn reads_are_values_not_handles() {
             for (let i = 0; i < 3; i += 1) {
                 let e = lit[i];
                 if (e != nil) {
-                    s = s.wrapping_add(e);
+                    s = s.wrapping_add(e!);
                 }
             }
             if (ok1 && ok2 && nil1 && s == 77) {
@@ -479,7 +479,7 @@ fn nmapset_primitive_values_round_trip_through_the_raw_sidecar() {
                 let p = m.get(i);
                 if (p != nil) {
                     live = live + 1;
-                    s = s.wrapping_add(p);
+                    s = s.wrapping_add(p!);
                 }
             }
             // reference fold: odd i -> i*1000003; i ≡ 2 mod 4 -> -1;
@@ -568,7 +568,7 @@ fn prim_store_release_walk_skips_element_slots() {
             }
             let s: i64 = 0;
             for (let x of v) {
-                s = s.wrapping_add(x);
+                s = s.wrapping_add(x!);
             }
             return s;
         }
@@ -702,7 +702,7 @@ fn version_gate_rejects_stale_artifacts() {
         "the re-export-is-a-surface-row cut owns this VERSION bump"
     );
     let out = rut_driver::compile_module(
-        "entry fn main() -> i64 { let a: [?i64] = [nil; 2]; a[0] = 1; let x = a[0]; return x; }",
+        "entry fn main() -> i64 { let a: [?i64] = [nil; 2]; a[0] = 1; let x = a[0]!; return x; }",
         rut_ast::parser::Mode::Impl,
         "gate",
     );

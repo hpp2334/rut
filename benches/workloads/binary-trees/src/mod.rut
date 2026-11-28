@@ -26,8 +26,8 @@ fn make(depth: i32, v: i32) -> Node {
 
 fn count(n: ?Node) -> i32 {
     let c = 1;
-    if (n.left != nil) { c += count(n.left); }
-    if (n.right != nil) { c += count(n.right); }
+    if (n!.left != nil) { c += count(n!.left); }
+    if (n!.right != nil) { c += count(n!.right); }
     return c;
 }
 

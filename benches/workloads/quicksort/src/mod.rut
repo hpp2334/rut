@@ -11,10 +11,10 @@ fn quicksort(xs: Vec<i32>, lo: i32, hi: i32) -> nil {
     if (lo >= hi) {
         return;
     }
-    let pivot = xs[hi];
+    let pivot = xs[hi]!;
     let i = lo - 1;
     for (let j = lo; j < hi; j += 1) {
-        if (xs[j] <= pivot) {
+        if (xs[j]! <= pivot) {
             i += 1;
             let t = xs[i];
             xs[i] = xs[j];
@@ -40,7 +40,7 @@ entry fn main() -> nil {
     quicksort(xs, 0, n - 1);
     let h: i32 = 0;
     for (let i = 0; i < n; i += 1) {
-        h = (h.wrapping_mul(31)).wrapping_add(xs[i]);
+        h = (h.wrapping_mul(31)).wrapping_add(xs[i]!);
     }
     Logger("app").info(f"CHECKSUM {h}");
 }

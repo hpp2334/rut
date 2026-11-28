@@ -111,7 +111,7 @@ fn gen_doc(rows: i32, vals_n: i32, alpha: Vec<str>) -> str {
         let rev = (((x >> 7) % 9000) as i32) + 1000;
         let ka = ((x >> 3) % 24) as i32;
         let kb = ((x >> 9) % 24) as i32;
-        let row = f"{{\"id\":{id},\"name\":\"mm-{alpha[na]}{alpha[nb]}\",\"active\":{b2s(ok)},\"score\":{si}.{sf},\"vals\":[{v0},{v1},{v2},{v3},{v4},{v5}],\"tags\":[\"{alpha[ta1]}{alpha[tb1]}\",\"{alpha[ta2]}{alpha[tb2]}\",\"{alpha[ta3]}{alpha[tb3]}\"],\"note\":null,\"meta\":{{\"rev\":{rev},\"kind\":\"{alpha[ka]}{alpha[kb]}\"}}}}";
+        let row = f"{{\"id\":{id},\"name\":\"mm-{alpha[na]!}{alpha[nb]!}\",\"active\":{b2s(ok)},\"score\":{si}.{sf},\"vals\":[{v0},{v1},{v2},{v3},{v4},{v5}],\"tags\":[\"{alpha[ta1]!}{alpha[tb1]!}\",\"{alpha[ta2]!}{alpha[tb2]!}\",\"{alpha[ta3]!}{alpha[tb3]!}\"],\"note\":null,\"meta\":{{\"rev\":{rev},\"kind\":\"{alpha[ka]!}{alpha[kb]!}\"}}}}";
         parts.push(row);
     }
     return f"[{string_join(parts.as_array())}]";
@@ -171,11 +171,11 @@ impl DocRow {
         w.write_f64(self.score);
         w.key("vals");
         for (let v of self.vals) {
-            w.write_i64(v);
+            w.write_i64(v!);
         }
         w.key("tags");
         for (let tag of self.tags) {
-            w.write_str(tag);
+            w.write_str(tag!);
         }
         w.key("note");
         // the optional, spelled explicitly (the tree's law: deref then
@@ -185,7 +185,7 @@ impl DocRow {
         if (self.note == nil) {
             w.write_raw("null");
         } else {
-            let nv: i64 = self.note;
+            let nv: i64 = self.note!;
             w.write_i64(nv);
         }
         w.key("meta");
@@ -306,8 +306,8 @@ impl DocRow {
                         let kd: DecodeErrorKind = DecodeErrorKind::WrongType;
                         return (nil, DecodeJsonError { kind: kd, at: r.err_at() as i64, got: "", expected: "rev and kind" });
                     }
-                    let ri: i64 = rev;
-                    let ki: str = kind;
+                    let ri: i64 = rev!;
+                    let ki: str = kind!;
                     meta = DocMeta { rev: ri, kind: ki };
                 },
                 else -> { r.skip_value(); },
@@ -321,13 +321,13 @@ impl DocRow {
             let kd: DecodeErrorKind = DecodeErrorKind::WrongType;
             return (nil, DecodeJsonError { kind: kd, at: r.err_at() as i64, got: "", expected: "every key of the row" });
         }
-        let idi: i64 = id;
-        let ni: str = name;
-        let ai: bool = active;
-        let si: f64 = score;
-        let vi: Vec<i64> = vals;
-        let ti: Vec<str> = tags;
-        let mi: DocMeta = meta;
+        let idi: i64 = id!;
+        let ni: str = name!;
+        let ai: bool = active!;
+        let si: f64 = score!;
+        let vi: Vec<i64> = vals!;
+        let ti: Vec<str> = tags!;
+        let mi: DocMeta = meta!;
         return (DocRow { id: idi, name: ni, active: ai, score: si,
                          vals: vi, tags: ti, note: note, meta: mi }, nil);
     }
@@ -357,16 +357,16 @@ fn row_sum(h: i64, r: DocRow) -> i64 {
     h = fold_f64(h, r.score);
     h = h.wrapping_mul(31 as i64).wrapping_add(r.vals.len() as i64);
     for (let i = 0; i < r.vals.len(); i += 1) {
-        h = h.wrapping_mul(31 as i64).wrapping_add(r.vals[i]);
+        h = h.wrapping_mul(31 as i64).wrapping_add(r.vals[i]!);
     }
     h = h.wrapping_mul(31 as i64).wrapping_add(r.tags.len() as i64);
     for (let i = 0; i < r.tags.len(); i += 1) {
-        h = fold_str(h, r.tags[i]);
+        h = fold_str(h, r.tags[i]!);
     }
     if (r.note == nil) {
         h = h.wrapping_mul(31 as i64);
     } else {
-        let nv: i64 = r.note;
+        let nv: i64 = r.note!;
         h = h.wrapping_mul(31 as i64).wrapping_add(nv);
     }
     h = h.wrapping_mul(31 as i64).wrapping_add(r.meta.rev);
@@ -377,7 +377,7 @@ fn row_sum(h: i64, r: DocRow) -> i64 {
 fn rows_sum(rows: Vec<DocRow>) -> i64 {
     let t: i64 = rows.len() as i64;
     for (let i = 0; i < rows.len(); i += 1) {
-        t = row_sum(t, rows[i]);
+        t = row_sum(t, rows[i]!);
     }
     return t;
 }
@@ -405,12 +405,12 @@ entry fn main() -> nil {
         if (d.1 != nil) {
             panic("json-roundtrip: decode failed");
         }
-        let decoded: Vec<DocRow> = d.0.to_vec();
+        let decoded: Vec<DocRow> = d.0!.to_vec();
         let et = encodeJson(JsonVec(decoded));
         if (et.1 != nil) {
             panic("json-roundtrip: encode failed");
         }
-        let text: str = et.0;
+        let text: str = et.0!;
         // the encode's liveness gate (not the checksum — the pin folds
         // values): the re-encoded doc's length is rep-stable
         if (r == 0) {

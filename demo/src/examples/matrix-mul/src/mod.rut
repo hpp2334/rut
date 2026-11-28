@@ -7,9 +7,10 @@ use ink::{ Logger };
 fn gemm(n: i32, a: Vec<f32>, b: Vec<f32>, out: Vec<f32>) {
     for (let i = 0; i < n; i += 1) {
         for (let k = 0; k < n; k += 1) {
-            let aik = a[i * n + k];
+            let aik = a[i * n + k]!;
             for (let j = 0; j < n; j += 1) {
-                out[i * n + j] += aik * b[k * n + j];
+                let oij = out[i * n + j]!;
+                out[i * n + j] = oij + aik * b[k * n + j]!;
             }
         }
     }
@@ -26,5 +27,5 @@ entry fn main() {
         b[i] = (i % 7) as f32;
     }
     gemm(n, a, b, out);
-    log.info(f"out[0]={out[0]} out[last]={out[n * n - 1]}");
+    log.info(f"out[0]={out[0]!} out[last]={out[n * n - 1]!}");
 }

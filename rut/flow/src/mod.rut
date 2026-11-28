@@ -281,7 +281,7 @@ impl<T> VecFlow<T> {
             Flow::new(
                 fn (emit: fn(T) -> bool) -> nil {
                     for (let x of self.inner) {
-                        if (!emit(x)) {
+                        if (!emit(x!)) {
                             return;
                         }
                     }

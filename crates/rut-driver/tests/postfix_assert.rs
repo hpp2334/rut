@@ -1,20 +1,20 @@
 //! The postfix non-null assert `e!` — the explicit-deref law's driver
-//! pins. The `!` lands ADDITIVE (phase 1): all implicit peels stay
-//! legal, nothing demands the `!` yet. The pins:
+//! pins. PHASE 2: the law FLIPPED — every implicit `?T → T` peel died
+//! demanding the assert (ONE helper, ONE message family), so the pins
+//! here pin BOTH halves:
 //!
-//! - green: `let t = f!; t.x()` on a non-nil `?Foo` runs to 42 — the
-//!   assert peels ONE `?` layer, the plain receiver needs nothing;
-//! - nil: `f!` on nil traps `NilDeref` AT the assert — main's one
-//!   payload peel is the assert's own `GetF { field: 0 }`, emitted at
-//!   the `f!` form's own span;
-//! - `!` on a non-nullable diagnoses (`` `!` asserts non-nil — `i32`
-//!   has no `?` to peel ``);
-//! - `f! = v` is refused by the assign-target validation family (an
-//!   `Assert` node is not an assignable target);
-//! - the exact-nullable receiver dispatch is UNAFFECTED: `f.x()` on a
-//!   non-nil `?Foo` still resolves through the receiver auto-deref
-//!   (`lir/call/method.rs`'s receiver law — phase 1 touches nothing
-//!   beside it).
+//! - the DEMAND half: each killed site errors with the family message
+//!   `` `?Foo` derefs only through `!` — spell the assert (`v!`) `` —
+//!   the receiver (`f.x()`, `f.x = 4`), the field read, the f-string
+//!   hole, the mixed `==`, `is` on an Opt, the value funnel
+//!   (`let a: Foo = f`), arithmetic, the `as` cast, the for-of
+//!   iterable, the index read;
+//! - the FOOTGUN fix: `f! is Foo` probes the payload and answers TRUE
+//!   on a real `Foo`; the un-asserted `f is Foo` is the demand error;
+//! - the KEEP half (the not-peels, must not regress): the `!= nil`
+//!   guard idiom, the `?T == ?T` shared-cell compare, the implicit
+//!   box (`T → ?T` cannot fail), `[?T]` element stores, `for x of
+//!   [?T]` binding `?T` elements, the asserted receiver call.
 
 use std::rc::Rc;
 
@@ -203,12 +203,12 @@ fn an_assert_is_not_an_assign_target() {
     );
 }
 
-/// THE DISPATCH GUARD: the exact-nullable receiver law is UNAFFECTED —
-/// `f.x()` on a non-nil `?Foo` still resolves through the receiver
-/// auto-deref and answers 42 (phase 1 adds the assert beside it; the
-/// implicit receiver peel stays legal until the law flips).
+/// THE FLIPPED DISPATCH PIN (phase 2): the receiver auto-deref is
+/// GONE — `f.x()` on a `?Foo` is the demand error; the honest spelling
+/// `f!.x()` answers 42. Old expectation (phase 1): `f.x()` resolved
+/// through the receiver auto-deref and answered 42.
 #[test]
-fn the_nullable_receiver_dispatch_is_unaffected() {
+fn the_nullable_receiver_dispatch_demands_the_assert() {
     let src = format!(
         "{HEAD}\n\
 entry fn main() -> i32 {{\n\
@@ -216,5 +216,348 @@ entry fn main() -> i32 {{\n\
     return f.x();\n\
 }}\n"
     );
+    let diags = compile_diags(&src);
+    assert!(
+        diags
+            .iter()
+            .any(|d| d.contains("`?Foo` derefs only through `!`")),
+        "{diags:?}"
+    );
+    // the honest spelling runs
+    let ok = format!(
+        "{HEAD}\n\
+entry fn main() -> i32 {{\n\
+    let f: ?Foo = Foo::mk();\n\
+    return f!.x();\n\
+}}\n"
+    );
+    assert_eq!(run_main(&ok), 42);
+}
+
+/// THE GUARD PIN (the keep list's documented idiom, §5 of the plan):
+/// inside the `!= nil` guard the assert cannot trap — the author
+/// spells it, the compiler does not prove it.
+#[test]
+fn the_nil_guard_idiom_runs() {
+    let src = format!(
+        "{HEAD}\n\
+entry fn main() -> i32 {{\n\
+    let f: ?Foo = maybe(1);\n\
+    if (f != nil) {{\n\
+        let t = f!;\n\
+        return t.x();\n\
+    }}\n\
+    return 0;\n\
+}}\n"
+    );
     assert_eq!(run_main(&src), 42);
+}
+
+/// THE MIXED-COMPARE PIN: `f == t` (?Foo vs Foo) is the demand error
+/// at the lhs — the author spells `f! == t`. The `== nil` null-slot
+/// compare stays green beside it (the guard pin above).
+#[test]
+fn the_mixed_compare_demands_the_assert() {
+    let src = format!(
+        "{HEAD}\n\
+entry fn main() -> i32 {{\n\
+    let f: ?Foo = Foo::mk();\n\
+    let t = Foo::mk();\n\
+    if (f == t) {{ return 1; }}\n\
+    return 0;\n\
+}}\n"
+    );
+    let diags = compile_diags(&src);
+    assert!(
+        diags
+            .iter()
+            .any(|d| d.contains("`?Foo` derefs only through `!`")),
+        "{diags:?}"
+    );
+}
+
+/// THE SHARED-CELL PIN (the keep list): `?T == ?T` compares the
+/// optional cells — aliased bindings compare true, no assert asked.
+#[test]
+fn the_nullable_compare_stays_green() {
+    let src = format!(
+        "{HEAD}\n\
+entry fn main() -> i32 {{\n\
+    let f: ?Foo = Foo::mk();\n\
+    let other = f;\n\
+    if (f == other) {{ return 1; }}\n\
+    return 0;\n\
+}}\n"
+    );
+    assert_eq!(run_main(&src), 1);
+}
+
+/// THE F-STRING PIN: the hole never peels — `f"{{f}}"` on a `?i32` is
+/// the demand error (the payload's assert is the author's: `f"{{f!}}"`
+/// formats and a nil traps at the hole's own `!`).
+#[test]
+fn the_fstring_hole_demands_the_assert() {
+    let src = "entry fn main() -> i32 {\n\
+               let f: ?i32 = 7;\n\
+               let s = f\"{f}\";\n\
+               return 0;\n\
+               }\n";
+    let diags = compile_diags(src);
+    assert!(
+        diags
+            .iter()
+            .any(|d| d.contains("`?i32` derefs only through `!`")),
+        "{diags:?}"
+    );
+}
+
+/// THE `is` FOOTGUN PIN: `f! is Foo` probes the payload cell and
+/// answers TRUE on a real `Foo` (the compile-time exact fold — the
+/// static type of `f!` IS `Foo`); the un-asserted `f is Foo` is the
+/// demand error (it used to answer silently FALSE even on non-nil).
+#[test]
+fn the_asserted_is_answers_true_and_the_bare_is_demands() {
+    let src = format!(
+        "{HEAD}\n\
+entry fn main() -> i32 {{\n\
+    let f: ?Foo = Foo::mk();\n\
+    if (f! is Foo) {{ return 1; }}\n\
+    return 0;\n\
+}}\n"
+    );
+    assert_eq!(run_main(&src), 1);
+
+    let bare = format!(
+        "{HEAD}\n\
+entry fn main() -> i32 {{\n\
+    let f: ?Foo = Foo::mk();\n\
+    if (f is Foo) {{ return 1; }}\n\
+    return 0;\n\
+}}\n"
+    );
+    let diags = compile_diags(&bare);
+    assert!(
+        diags
+            .iter()
+            .any(|d| d.contains("`?Foo` derefs only through `!`")),
+        "{diags:?}"
+    );
+}
+
+/// THE VALUE-FUNNEL PIN: `let a: Foo = f` is the demand error — the
+/// payload's assert is the author's (`let a: Foo = f!`); on nil the
+/// trap lands AT the assert, not statements away.
+#[test]
+fn the_value_position_demands_the_assert() {
+    let src = format!(
+        "{HEAD}\n\
+entry fn main() -> i32 {{\n\
+    let f: ?Foo = Foo::mk();\n\
+    let a: Foo = f;\n\
+    return a.x();\n\
+}}\n"
+    );
+    let diags = compile_diags(&src);
+    assert!(
+        diags
+            .iter()
+            .any(|d| d.contains("`?Foo` derefs only through `!`")),
+        "{diags:?}"
+    );
+
+    let ok = format!(
+        "{HEAD}\n\
+entry fn main() -> i32 {{\n\
+    let f: ?Foo = Foo::mk();\n\
+    let a: Foo = f!;\n\
+    return a.x();\n\
+}}\n"
+    );
+    assert_eq!(run_main(&ok), 42);
+
+    // nil: the trap is AT the `!`'s own line (the author's mark)
+    let nil = format!(
+        "{HEAD}\n\
+entry fn main() -> i32 {{\n\
+    let f: ?Foo = maybe(0);\n\
+    let a: Foo = f!;\n\
+    return a.x();\n\
+}}\n"
+    );
+    assert_eq!(run_trap(&nil), Some("NilDeref".into()));
+}
+
+/// THE FIELD-WRITE PIN: `f.x = 4` through a nullable head is the
+/// demand error; `f!.x = 4` writes the shared record.
+#[test]
+fn the_field_write_demands_the_assert() {
+    let src = "class P { pub x: i32; }\n\
+               entry fn main() -> i32 {\n\
+               let f: ?P = P { x: 0 };\n\
+               f.x = 4;\n\
+               return 0;\n\
+               }\n";
+    let diags = compile_diags(src);
+    assert!(
+        diags
+            .iter()
+            .any(|d| d.contains("`?P` derefs only through `!`")),
+        "{diags:?}"
+    );
+
+    let ok = "class P { pub x: i32; }\n\
+             entry fn main() -> i32 {\n\
+             let f: ?P = P { x: 0 };\n\
+             f!.x = 4;\n\
+             return f!.x;\n\
+             }\n";
+    assert_eq!(run_main(ok), 4);
+}
+
+/// THE FIELD-READ PIN: `f.x` through a nullable receiver is the
+/// demand error (`f!.x` reads the payload).
+#[test]
+fn the_field_read_demands_the_assert() {
+    let src = "class P { pub x: i32; }\n\
+               entry fn main() -> i32 {\n\
+               let f: ?P = P { x: 7 };\n\
+               return f.x;\n\
+               }\n";
+    let diags = compile_diags(src);
+    assert!(
+        diags
+            .iter()
+            .any(|d| d.contains("`?P` derefs only through `!`")),
+        "{diags:?}"
+    );
+}
+
+/// THE ARITHMETIC PIN: `m + 1` on `m: ?i32` is the demand error
+/// (`m! + 1` computes at the payload).
+#[test]
+fn arithmetic_demands_the_assert() {
+    let src = "entry fn main() -> i32 {\n\
+               let m: ?i32 = 7;\n\
+               return m + 1;\n\
+               }\n";
+    let diags = compile_diags(src);
+    assert!(
+        diags
+            .iter()
+            .any(|d| d.contains("`?i32` derefs only through `!`")),
+        "{diags:?}"
+    );
+
+    let ok = "entry fn main() -> i32 {\n\
+              let m: ?i32 = 7;\n\
+              return m! + 1;\n\
+              }\n";
+    assert_eq!(run_main(ok), 8);
+}
+
+/// THE CAST PIN: the `as` operand never peels — `m as i64` on
+/// `m: ?i32` is the demand error (`m! as i64` casts the payload).
+#[test]
+fn the_cast_operand_demands_the_assert() {
+    let src = "entry fn main() -> i64 {\n\
+               let m: ?i32 = 7;\n\
+               return m as i64;\n\
+               }\n";
+    let diags = compile_diags(src);
+    assert!(
+        diags
+            .iter()
+            .any(|d| d.contains("`?i32` derefs only through `!`")),
+        "{diags:?}"
+    );
+
+    let ok = "entry fn main() -> i64 {\n\
+              let m: ?i32 = 7;\n\
+              return m! as i64;\n\
+              }\n";
+    let out = compiled("app_main", ok);
+    assert!(out.diags.is_empty(), "{:?}", out.diags);
+}
+
+/// THE FOR-OF PIN: the iterable never peels — `for (let x of f)` on a
+/// `?[i32]` is the demand error; `for (let x of f!)` iterates the
+/// payload. A `[?i32]` array's elements bind `?i32` — the load
+/// yields the optional, no peel (the keep half beside it).
+#[test]
+fn the_for_of_iterable_demands_the_assert() {
+    let src = "entry fn main() -> i32 {\n\
+               let f: ?[i32] = [1, 2, 3];\n\
+               let sum = 0;\n\
+               for (let x of f) { sum += x; }\n\
+               return sum;\n\
+               }\n";
+    let diags = compile_diags(src);
+    assert!(
+        diags
+            .iter()
+            .any(|d| d.contains("derefs only through `!`") && d.contains("?Array<i32>")),
+        "{diags:?}"
+    );
+
+    let ok = "entry fn main() -> i32 {\n\
+              let f: ?[i32] = [1, 2, 3];\n\
+              let sum = 0;\n\
+              for (let x of f!) { sum += x; }\n\
+              return sum;\n\
+              }\n";
+    assert_eq!(run_main(ok), 6);
+
+    // the mirror shape: `[?i32]` elements load as `?i32` — the guard
+    // + assert idiom is the honest read (the keep list's last bullet)
+    let elems = "entry fn main() -> i32 {\n\
+                 let xs: [?i32] = [nil; 3];\n\
+                 xs[0] = 5;\n\
+                 xs[1] = 7;\n\
+                 let sum = 0;\n\
+                 for (let e of xs) {\n\
+                     if (e != nil) { sum += e!; }\n\
+                 }\n\
+                 return sum;\n\
+                 }\n";
+    assert_eq!(run_main(elems), 12);
+}
+
+/// THE INDEX PIN: the indexee never peels — `t[0]` on `?[i32]` is the
+/// demand error; `t![0]` reads the payload (and `t![0] = 9` writes it).
+#[test]
+fn the_indexee_demands_the_assert() {
+    let src = "entry fn main() -> i32 {\n\
+               let t: ?[i32] = [1, 2, 3];\n\
+               return t[0];\n\
+               }\n";
+    let diags = compile_diags(src);
+    assert!(
+        diags
+            .iter()
+            .any(|d| d.contains("derefs only through `!`") && d.contains("?Array<i32>")),
+        "{diags:?}"
+    );
+
+    let ok = "entry fn main() -> i32 {\n\
+              let t: ?[i32] = [1, 2, 3];\n\
+              t![0] = 9;\n\
+              return t![0];\n\
+              }\n";
+    assert_eq!(run_main(ok), 9);
+}
+
+/// THE BOXING PIN (the keep list): `T → ?T` stays implicit — it
+/// cannot fail, no spelling asked, and the nil-slot compare beside it
+/// stays the guard.
+#[test]
+fn boxing_stays_implicit() {
+    let src = format!(
+        "{HEAD}\n\
+entry fn main() -> i32 {{\n\
+    let s: ?Foo = Foo::mk();\n\
+    if (s == nil) {{ return 0; }}\n\
+    return 1;\n\
+}}\n"
+    );
+    assert_eq!(run_main(&src), 1);
 }

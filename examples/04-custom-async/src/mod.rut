@@ -98,11 +98,11 @@ fn staged(steps: u32, log: ?AuditLog) -> Future<nil> {
             // the ledger view: this frame's resume state, read as data
             let at = cx.checkpoint();
             if (log != nil) {
-                log.note_yield(at);
+                log!.note_yield(at);
             }
         }
         if (log != nil) {
-            log.note_finish();
+            log!.note_finish();
         }
     };
 }

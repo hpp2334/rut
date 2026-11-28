@@ -38,7 +38,7 @@ fn erase_and_recover() {
 
     let p = opaque::downcast<Point>(box1);       // ?Point — the nullable
     when (p != nil) {
-        true -> { log.info(f"point {p.x} {p.y}"); },
+        true -> { log.info(f"point {p!.x} {p!.y}"); },
         else  -> { log.info("point: nil"); },
     }
     let wrong = opaque::downcast<i32>(box2);     // wrong type: nil, no trap
@@ -52,10 +52,10 @@ fn alias_law() {
     let b = opaque(pt);                         // the box shares pt's cell
     let p = opaque::downcast<Point>(b);      // the ?T shares it too
     let q = opaque::downcast<Point>(b);      // ...as does a second holder
-    p.x = 9;                                    // write through a recovery...
-    q.y = 7;                                    // ...through the other...
+    p!.x = 9;                                   // write through a recovery...
+    q!.y = 7;                                   // ...through the other...
     pt.y = 5;                                   // ...and back from the source
-    log.info(f"one cell: {pt.x} {pt.y} {p.y} {q.x}");
+    log.info(f"one cell: {pt.x} {pt.y} {p!.y} {q!.x}");
 }
 
 fn share_vs_copy() {
@@ -76,7 +76,7 @@ fn prim_value() {
     n = 9;                        // ...so the source moving stays out
     let v = opaque::downcast<i32>(b);
     when (v != nil) {
-        true -> { log.info(f"value {v}"); },
+        true -> { log.info(f"value {v!}"); },
         else  -> { log.info("value: nil"); },
     }
     let sbox = opaque("s");

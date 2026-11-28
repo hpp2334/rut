@@ -25,7 +25,7 @@ entry fn on_timer(c: opaque, tag: str) -> (?opaque, str) {
     if (t == nil) {
         panic("fixture: the event container is not a Tally — host drift");
     }
-    let tt: ?Tally = t;
+    let tt: ?Tally = t!;
     if (tag == "boom") {
         // the soft failure: data for the host, the container untouched —
         // exactly-one-non-nil (the value channel is empty)
@@ -34,7 +34,7 @@ entry fn on_timer(c: opaque, tag: str) -> (?opaque, str) {
     if (tag == "trap") {
         panic("fixture: the trapped turn — drift, loud as ever");
     }
-    tt.hits += 1;
+    tt!.hits += 1;
     return (opaque(tt), "");
 }
 
@@ -43,5 +43,5 @@ entry fn on_timer(c: opaque, tag: str) -> (?opaque, str) {
 entry fn hits(c: opaque) -> i64 {
     let t = opaque::downcast<?Tally>(c);
     if (t == nil) { return -1; }
-    return t.hits;
+    return t!!.hits;
 }

@@ -1183,7 +1183,7 @@ entry fn main() {
     let log = Logger::new("book");
     let (n, e) = decodeJson<JsonI64>("42");
     if (e == nil) {
-        let v: JsonI64 = n;
+        let v: JsonI64 = n!;
         let shown: i64 = v.get();
         log.info(f"n={shown}");
     }
@@ -1365,7 +1365,7 @@ async fn drain(log: Logger, client: HttpClient, url: str) {
     if (st == 0) {
         let why = resp.transport_error();
         log.info("drain: transport failed");
-        let w: str = why;
+        let w: str = why!;
         log.info(w);
         return;
     }

@@ -101,7 +101,7 @@ fn builtins_resolve_with_no_use_statement() {
              let b2 = opaque(7);\n\
              let n = opaque::downcast<i32>(b2);\n\
              if (n == nil) { panic(\"int downcast failed\"); }\n\
-             return p.x + p.y + n;\n\
+             return p!.x + p!.y + n!;\n\
          }\n",
     );
     assert_eq!(v, 14);
@@ -184,8 +184,8 @@ fn the_gated_names_require_the_import() {
          class Acc { total: i32 = 0; }\n\
          entry fn main() -> i32 {\n\
              let acc: ?Acc = Acc { };\n\
-             for (let v of CountUp::new(4)) { acc.total = acc.total + v; }\n\
-             return acc.total;\n\
+             for (let v of CountUp::new(4)) { acc!.total = acc!.total + v; }\n\
+             return acc!.total;\n\
          }\n",
     );
     assert_eq!(v, 10);
@@ -202,7 +202,7 @@ fn opaque_downcast_member_carries_the_nullable_contract() {
              if (miss != nil) { return 1; }\n\
              let s = opaque::downcast<str>(b);\n\
              if (s == nil) { return 3; }\n\
-             return s.len() as i32;\n\
+             return s!.len() as i32;\n\
          }\n",
     );
     assert_eq!(v, 5);
@@ -232,7 +232,7 @@ fn the_old_spellings_are_gone() {
         "entry fn main() -> i32 {\n\
              let b = opaque(9);\n\
              let n = downcast<i32>(b);\n\
-             return n;\n\
+             return n!;\n\
          }\n",
     );
     assert!(
@@ -254,7 +254,7 @@ fn opaque_type_position_resolves_under_both_spellings() {
              let b2 = keep2(b);\n\
              let n = opaque::downcast<i32>(b2);\n\
              if (n == nil) { return 0; }\n\
-             return n;\n\
+             return n!;\n\
          }\n",
     );
     assert_eq!(v, 4);
