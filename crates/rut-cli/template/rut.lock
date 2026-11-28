@@ -7,7 +7,7 @@
     { "pkg": "calc",     "url": "https://cdn.jsdelivr.net/gh/hpp2334/rut@std-v20/dist/std/calc.zip",     "sha256": "794f823b8af9d1c1bcf4e1c30c51f1c405954b6ffc1be9cbf9b64739faa3fa24" },
     { "pkg": "flow",     "url": "https://cdn.jsdelivr.net/gh/hpp2334/rut@std-v20/dist/std/flow.zip",     "sha256": "4c7e99f5fbec0f787049fb0067e1252ac98a1ae426a7d741ec16adf0ec68f8e7" },
     { "pkg": "futures",  "url": "https://cdn.jsdelivr.net/gh/hpp2334/rut@std-v20/dist/std/futures.zip",  "sha256": "5f74efeac2d81a08e434a580d79e71e468d519b783c3b06c5c722f9e2fd73bc4" },
-    { "pkg": "http",     "url": "https://cdn.jsdelivr.net/gh/hpp2334/rut@std-v20/dist/std/http.zip",     "sha256": "dab590862e8d7bc0fd2e236f501136c17c32730215eaf2f67d7dd01e19a61a82" },
+    { "pkg": "http",     "url": "https://cdn.jsdelivr.net/gh/hpp2334/rut@std-v20/dist/std/http.zip",     "sha256": "adfb6a952c8e7fd75d06f89776f8fe9c236f3f4c2cf2e93c5d306206d6671195" },
     { "pkg": "ink",      "url": "https://cdn.jsdelivr.net/gh/hpp2334/rut@std-v20/dist/std/ink.zip",      "sha256": "359a93a2e32f2ef09ae710b81b57ba0a691b588971dcf7110301b39a9ffba11e" },
     { "pkg": "json",     "url": "https://cdn.jsdelivr.net/gh/hpp2334/rut@std-v20/dist/std/json.zip",     "sha256": "88a798b2ea2dfa355de13fd320321404240130448bfc491b9d3acc4e3e619fc8" },
     { "pkg": "nmapset",  "url": "https://cdn.jsdelivr.net/gh/hpp2334/rut@std-v20/dist/std/nmapset.zip",  "sha256": "b9c7b81e520e7d2f39e60dfd64fe303669ddc870e18dae55609aa635cf373472" },
