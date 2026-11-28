@@ -1264,8 +1264,13 @@ use futures::{ launch_future };
 use ink::{ Logger };
 
 async fn waiter(log: Logger, client: HttpClient) {
-    let resp = await client.get("park:the-completer-stays-pending").build().send();
-    log.info(f"status={resp.status()}");
+    let (resp, err) = await client.get("park:the-completer-stays-pending").build().send();
+    if (err != nil) {
+        let why: str = err!.reason;
+        log.info(why);
+        return;
+    }
+    log.info(f"status={resp!.status()}");
 }
 
 entry fn main() {
@@ -1285,8 +1290,13 @@ use futures::{ launch_future };
 use ink::{ Logger };
 
 async fn waiter(log: Logger, client: HttpClient) {
-    let resp = await client.get("park:the-completer-stays-pending").build().send();
-    log.info(f"status={resp.status()}");
+    let (resp, err) = await client.get("park:the-completer-stays-pending").build().send();
+    if (err != nil) {
+        let why: str = err!.reason;
+        log.info(why);
+        return;
+    }
+    log.info(f"status={resp!.status()}");
 }
 
 entry fn main() {
@@ -1360,17 +1370,15 @@ use futures::{ launch_future };
 use ink::{ Logger };
 
 async fn drain(log: Logger, client: HttpClient, url: str) {
-    let resp = await client.get(url).build().send();
-    let st = resp.status();
-    if (st == 0) {
-        let why = resp.transport_error();
+    let (resp, err) = await client.get(url).build().send();
+    if (err != nil) {
         log.info("drain: transport failed");
-        let w: str = why!;
+        let w: str = err!.reason;
         log.info(w);
         return;
     }
-    let body = await resp.body();
-    log.info(f"drain: status={st} bytes={body.len()}");
+    let body = await resp!.body();
+    log.info(f"drain: status={resp!.status()} bytes={body.len()}");
 }
 
 entry fn main() {

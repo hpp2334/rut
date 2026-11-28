@@ -1715,7 +1715,7 @@ msgstr ""
 #: src/tutorial/values-and-variables.md:308 src/tutorial/control-flow.md:400
 #: src/tutorial/functions.md:242 src/tutorial/types.md:287
 #: src/tutorial/interfaces.md:400 src/tutorial/errors.md:238
-#: src/tutorial/modules.md:300 src/tutorial/async.md:196
+#: src/tutorial/modules.md:300 src/tutorial/async.md:206
 #: src/tutorial/stdlib.md:409
 msgid "Put it together"
 msgstr ""
@@ -4494,76 +4494,94 @@ msgid ""
 "sugar:"
 msgstr ""
 
-#: src/tutorial/async.md:113
+#: src/tutorial/async.md:106
+msgid ""
+"```rut\n"
+"use http::{ HttpClient };\n"
+"\n"
+"let client = HttpClient();\n"
+"let (resp, err) = await client.get(url).build().send();\n"
+"if (err != nil) {\n"
+"    let why: str = err!.reason;   // the transport failure's text\n"
+"    return 1;\n"
+"}\n"
+"```"
+msgstr ""
+
+#: src/tutorial/async.md:117
 msgid "The shape, step by step:"
 msgstr ""
 
-#: src/tutorial/async.md:115
+#: src/tutorial/async.md:119
 msgid ""
 "`client.get(url)` (or `request()`, `post`, `put`, `patch`, `del`) hands back "
 "a `RequestBuilder`; `.method(..)`, `.url(..)`, `.header(k, v)` (repeatable), "
 "`.body(bytes)` chain on it."
 msgstr ""
 
-#: src/tutorial/async.md:118
-msgid "`.build()` freezes a re-sendable `Request`."
-msgstr ""
-
-#: src/tutorial/async.md:119
-msgid ""
-"**`.send()` is the async point.** It resolves at _headers_ — the wire body "
-"is still unread."
-msgstr ""
-
-#: src/tutorial/async.md:121
-msgid "From the `Response`, take one of two readbacks:"
-msgstr ""
-
 #: src/tutorial/async.md:122
-msgid "`await resp.body()` — drain the remaining body in one future;"
+msgid "`.build()` freezes a re-sendable `Request`."
 msgstr ""
 
 #: src/tutorial/async.md:123
 msgid ""
-"`resp.byte_stream()` then `await stream::next()` — one chunk per future, "
-"`nil` at end-of-stream, for bounded-memory downloads."
+"**`.send()` is the async point.** It answers the **answer channel** — "
+"`(resp, err)`, exactly one side nil, always — and resolves at _headers_: the "
+"wire body is still unread."
 msgstr ""
 
 #: src/tutorial/async.md:126
-msgid ""
-"Errors come back as data, not traps: status `0` is reserved for transport "
-"failure (`resp.transport_error()` carries the reason), any real status — 4xx "
-"and 5xx included — is a normal response (`resp.ok()` is the 2xx test), and a "
-"mid-read wire death surfaces as `nil` from `next()` with the reason in "
-"`stream::error()`."
+msgid "From the response side, take one of two readbacks:"
 msgstr ""
 
-#: src/tutorial/async.md:132
+#: src/tutorial/async.md:127
+msgid "`await resp!.body()` — drain the remaining body in one future;"
+msgstr ""
+
+#: src/tutorial/async.md:128
+msgid ""
+"`resp!.byte_stream()` then `await stream::next()` — one chunk per future, "
+"`nil` at end-of-stream, for bounded-memory downloads."
+msgstr ""
+
+#: src/tutorial/async.md:131
+msgid ""
+"Errors come back as data, not traps — on the **answer channel**: success is "
+"`(Response, nil)`, and every status a program observes is real — 4xx and 5xx "
+"included (`resp.ok()` is the 2xx test); a transport failure is `(nil, "
+"SendError)` and `err.reason` carries the text. The channel's invariant (err "
+"nil ⇒ resp real) is the program's knowledge: each use of a nil side spells "
+"the assert — an un-marked use does not compile, and a marked use on nil "
+"traps `NilDeref` at the `!`. A mid-read wire death stays data — `nil` from "
+"`next()` with the reason in `stream.error()`."
+msgstr ""
+
+#: src/tutorial/async.md:141
 msgid ""
 "A complete request handler from the repository's GitHub-viewer example — "
 "send, then drain:"
 msgstr ""
 
-#: src/tutorial/async.md:135
+#: src/tutorial/async.md:144
 msgid ""
 "```rut\n"
 "async fn do_list(client: HttpClient, owner: str, repo: str, rf: str) -> i32 "
 "{\n"
 "    let url = "
 "f\"https://data.jsdelivr.com/v1/packages/gh/{owner}/{repo}@{rf}\";\n"
-"    let resp = await client.get(url).build().send();\n"
-"    if (resp.status() == 0) {\n"
-"        let why: str = resp.transport_error();\n"
+"    let (resp, err) = await client.get(url).build().send();\n"
+"    if (err != nil) {\n"
+"        let why: str = err!.reason;\n"
 "        eprint(f\"rgh: network error: {why}\");\n"
 "        return 1;\n"
 "    }\n"
-"    if (!resp.ok()) {\n"
-"        eprint(f\"rgh: CDN {resp.status()}\");\n"
+"    if (!resp!.ok()) {\n"
+"        eprint(f\"rgh: CDN {resp!.status()}\");\n"
 "        return 1;\n"
 "    }\n"
-"    let (tree, e) = decodeJsonBytes<Root>(await resp.body());\n"
+"    let (tree, e) = decodeJsonBytes<Root>(await resp!.body());\n"
 "    if (e != nil) {\n"
-"        let why: DecodeJsonError = e;\n"
+"        let why: DecodeJsonError = e!;\n"
 "        eprint(f\"rgh: bad tree JSON at {why.at}\");\n"
 "        return 1;\n"
 "    }\n"
@@ -4573,15 +4591,17 @@ msgid ""
 "```"
 msgstr ""
 
-#: src/tutorial/async.md:159
+#: src/tutorial/async.md:168
 msgid "The stream lane walks chunks — send, then loop:"
 msgstr ""
 
-#: src/tutorial/async.md:161
+#: src/tutorial/async.md:170
 msgid ""
 "```rut\n"
-"let resp = await client.get(url).build().send();\n"
-"let stream = resp.byte_stream();\n"
+"let (resp, err) = await client.get(url).build().send();\n"
+"if (err != nil) { return 1; }        // the transport failure — held, "
+"answered\n"
+"let stream = resp!.byte_stream();\n"
 "while (true) {\n"
 "    let c = await stream.next();\n"
 "    if (c == nil) {\n"
@@ -4589,17 +4609,17 @@ msgid ""
 "        if (rerr != nil) { return 1; }   // failed mid-read\n"
 "        break;                            // clean end of stream\n"
 "    }\n"
-"    let chunk: bytes = c;\n"
+"    let chunk: bytes = c!;\n"
 "    total += chunk.len();\n"
 "}\n"
 "```"
 msgstr ""
 
-#: src/tutorial/async.md:176
+#: src/tutorial/async.md:186
 msgid "Racing futures and the join tier"
 msgstr ""
 
-#: src/tutorial/async.md:178
+#: src/tutorial/async.md:188
 msgid ""
 "`select2(a, b)` races two futures and answers the first-ready side as an "
 "`Either2` (`is_a()`/`a_value()` or `is_b()`/`b_value()`); the losers are "
@@ -4612,11 +4632,11 @@ msgid ""
 "the race and completer surfaces."
 msgstr ""
 
-#: src/tutorial/async.md:189
+#: src/tutorial/async.md:199
 msgid "Parallelism"
 msgstr ""
 
-#: src/tutorial/async.md:191
+#: src/tutorial/async.md:201
 msgid ""
 "The language has none: a VM is single-threaded by construction (`!Send`, one "
 "heap — [the VM](../core-concepts/the-vm.md)); async is the whole concurrency "
@@ -4624,7 +4644,7 @@ msgid ""
 "surface for sharing between them."
 msgstr ""
 
-#: src/tutorial/async.md:198
+#: src/tutorial/async.md:208
 msgid ""
 "```rut\n"
 "use futures::{ launch_future, sleep };\n"
@@ -4647,7 +4667,7 @@ msgid ""
 "```"
 msgstr ""
 
-#: src/tutorial/async.md:225
+#: src/tutorial/async.md:235
 msgid "Next: [the standard library](stdlib.md)."
 msgstr ""
 
@@ -8040,7 +8060,7 @@ msgstr ""
 #: src/examples/00-todolist.md:188 src/examples/01-sort.md:208
 #: src/examples/02-digest.md:199 src/examples/03-plugin.md:216
 #: src/examples/04-custom-async.md:127 src/examples/05-todolist-web.md:245
-#: src/examples/06-github-viewer-cli.md:228
+#: src/examples/06-github-viewer-cli.md:233
 #: src/examples/playground-corpus.md:188
 msgid "Takeaways"
 msgstr ""
@@ -9580,36 +9600,43 @@ msgid ""
 "{\n"
 "    let url = "
 "f\"https://data.jsdelivr.com/v1/packages/gh/{owner}/{repo}@{rf}\";\n"
-"    let resp = await client.get(url).build().send();\n"
-"    let err = map_response(resp, \"no such repo or ref\", "
+"    let (resp, err) = await client.get(url).build().send();\n"
+"    if (err != nil) {\n"
+"        let why: str = err!.reason;\n"
+"        eprint(f\"rgh: network error: {why}\");\n"
+"        return 1;\n"
+"    }\n"
+"    let err = map_response(resp!, \"no such repo or ref\", "
 "\"data.jsdelivr.com\");\n"
 "    if (err != nil) {\n"
-"        let why: str = err;\n"
+"        let why: str = err!;\n"
 "        eprint(why);\n"
 "        return 1;\n"
 "    }\n"
-"    let (tree, e) = decode_root_bytes<Root>(await resp.body());\n"
+"    let (tree, e) = decode_root_bytes<Root>(await resp!.body());\n"
 "```"
 msgstr ""
 
-#: src/examples/06-github-viewer-cli.md:107
+#: src/examples/06-github-viewer-cli.md:112
 msgid ""
 "`list` is the **drain** lane: one `body()` await pulls the whole tree, and "
 "the JSON decode goes through the std `json` package's reader through this "
 "file's LOCAL shim `decode_root_bytes` — json's generic-fn bodies are "
 "owner-anchored, so the canonical entries could never be seeded for this "
 "pkg's types (the example's README discloses the gap and the shims) — with "
-"`decode` spelled on `Entry`'s own inherent impl in this file. Status mapping "
-"is one function: `status() == 0` is the reserved transport verdict, 404 "
+"`decode` spelled on `Entry`'s own inherent impl in this file. The send "
+"answers the **answer channel** (`(resp, err)`, exactly one side nil): the "
+"transport case is the err side — `err.reason` carries the text — and never "
+"reaches the status mapping, which is one function over a real status: 404 "
 "names the host that was checked, 403 is the rate-limit note, anything else "
 "non-2xx is the bare status."
 msgstr ""
 
-#: src/examples/06-github-viewer-cli.md:119
+#: src/examples/06-github-viewer-cli.md:125
 msgid "The download: true streaming, chunk by chunk"
 msgstr ""
 
-#: src/examples/06-github-viewer-cli.md:121
+#: src/examples/06-github-viewer-cli.md:127
 msgid ""
 "`download` walks a `ByteStream` — `next()` answers one chunk per await (nil "
 "= EOF-or-failed; the sticky `error()` names which), and each chunk lands "
@@ -9617,7 +9644,7 @@ msgid ""
 "once first, so a stale file never leaks its tail into a fresh download:"
 msgstr ""
 
-#: src/examples/06-github-viewer-cli.md:127
+#: src/examples/06-github-viewer-cli.md:133
 msgid ""
 "```rut\n"
 "    let stream = resp.byte_stream();\n"
@@ -9646,7 +9673,7 @@ msgid ""
 "```"
 msgstr ""
 
-#: src/examples/06-github-viewer-cli.md:153
+#: src/examples/06-github-viewer-cli.md:159
 msgid ""
 "Bounded memory end to end, and every failure on the data path is a message "
 "plus an exit code — never a panic, never a trap. The lane's one-shot law is "
@@ -9655,23 +9682,25 @@ msgid ""
 "trapping."
 msgstr ""
 
-#: src/examples/06-github-viewer-cli.md:159
+#: src/examples/06-github-viewer-cli.md:165
 msgid "The readbacks, on the response handle"
 msgstr ""
 
-#: src/examples/06-github-viewer-cli.md:161
+#: src/examples/06-github-viewer-cli.md:167
 msgid ""
 "The `Response` class wraps the host's opaque handle with sync readbacks — "
-"status, the 2xx test, the transport text, and the sticky mid-read failure "
-"([the std packages](../reference/stdlib.md)):"
+"status, the 2xx test, and the sticky mid-read failure ([the std "
+"packages](../reference/stdlib.md)); the transport failure never gets here — "
+"`send()` answers it on the channel before a response exists:"
 msgstr ""
 
-#: src/examples/06-github-viewer-cli.md:166
+#: src/examples/06-github-viewer-cli.md:173
 msgid ""
 "```rut\n"
 "impl Response {\n"
-"    /// the HTTP status word — 0 means the transport failed (0 is never\n"
-"    /// a real status; any real status, 4xx/5xx included, is not one)\n"
+"    /// the HTTP status word — always a real status here: the channel's\n"
+"    /// resp side never carries a failed mint (0 stays the host\n"
+"    /// protocol's internal reservation, documented on the host side)\n"
 "    pub fn status(self) -> i32 { return http_status(self.r); }\n"
 "\n"
 "    /// the 2xx test\n"
@@ -9680,20 +9709,17 @@ msgid ""
 "        return s >= 200 && s < 300;\n"
 "    }\n"
 "\n"
-"    /// the transport-failure text — nil unless status is 0\n"
-"    pub fn transport_error(self) -> ?str { return http_err(self.r); }\n"
-"\n"
 "    /// the sticky mid-read failure — nil until one fails, then\n"
 "    /// non-nil forever; meaningful after awaiting `body()`/`next()`\n"
 "    pub fn read_error(self) -> ?str { return http_read_err(self.r); }\n"
 "```"
 msgstr ""
 
-#: src/examples/06-github-viewer-cli.md:186
+#: src/examples/06-github-viewer-cli.md:191
 msgid "The embedder's offer list"
 msgstr ""
 
-#: src/examples/06-github-viewer-cli.md:188
+#: src/examples/06-github-viewer-cli.md:193
 msgid ""
 "`src/main.rs` shows the whole program closure in one chain — the walk feeds "
 "the run, the async pair and `calc` offer beside it, and the host bodies "
@@ -9702,26 +9728,26 @@ msgid ""
 "`pkg(hp)` coerces:"
 msgstr ""
 
-#: src/examples/06-github-viewer-cli.md:196
+#: src/examples/06-github-viewer-cli.md:201
 msgid "\"rgh_host\""
 msgstr ""
 
-#: src/examples/06-github-viewer-cli.md:196
+#: src/examples/06-github-viewer-cli.md:201
 msgid "// example-local rows\n"
 msgstr ""
 
-#: src/examples/06-github-viewer-cli.md:200
+#: src/examples/06-github-viewer-cli.md:205
 msgid "\"calc_host\""
 msgstr ""
 
-#: src/examples/06-github-viewer-cli.md:202
+#: src/examples/06-github-viewer-cli.md:207
 msgid ""
 "// the ONE world's body installs (src/world.rs): math, nmap, strbuild\n"
 "// (json's writer rides it), async_host — and the http lane the binary\n"
 "// names itself (the real reqwest side)\n"
 msgstr ""
 
-#: src/examples/06-github-viewer-cli.md:212
+#: src/examples/06-github-viewer-cli.md:217
 msgid ""
 "The walk pulls json's own `deps` along — `strbuild`, `pouch`, `nmapset` — so "
 "the whole serde surface, wrapper families included, is in the closure "
@@ -9736,39 +9762,39 @@ msgid ""
 "under `rut run`, which offers the std http pair by presence."
 msgstr ""
 
-#: src/examples/06-github-viewer-cli.md:230
+#: src/examples/06-github-viewer-cli.md:235
 msgid ""
 "**An async rut program in production shape**: the brain awaits at the fetch "
 "sites only; the embedder launches, rides the engine's driving loop to idle, "
 "and exits with the brain's code."
 msgstr ""
 
-#: src/examples/06-github-viewer-cli.md:233
+#: src/examples/06-github-viewer-cli.md:238
 msgid ""
 "**Headers-first send + one-shot body/stream** is the whole mental model of "
 "the std http lane — drain JSON in one await, stream files chunk by chunk."
 msgstr ""
 
-#: src/examples/06-github-viewer-cli.md:236
+#: src/examples/06-github-viewer-cli.md:241
 msgid ""
 "**Failures are values end to end**: transport errors, 404s, wire deaths, and "
 "io errors all become messages plus exit codes."
 msgstr ""
 
-#: src/examples/06-github-viewer-cli.md:238
+#: src/examples/06-github-viewer-cli.md:243
 msgid ""
 "**The fixture lane is the test gate**: recorded replies keyed on method + "
 "URL, deterministic chunks on a virtual clock, zero network."
 msgstr ""
 
-#: src/examples/06-github-viewer-cli.md:241
+#: src/examples/06-github-viewer-cli.md:246
 msgid ""
 "The closure is load-bearing here: json's `Vec<T>` serde wrappers are json's "
 "own source, compiled where json compiles — the container packages ride along "
 "as json's plain deps."
 msgstr ""
 
-#: src/examples/06-github-viewer-cli.md:245
+#: src/examples/06-github-viewer-cli.md:250
 msgid ""
 "The lane's declarations live in the std tree; for the runner behind `rut "
 "run`, see [the rut CLI](../reference/cli.md)."
@@ -22935,37 +22961,45 @@ msgid ""
 "as a surface tree — `net/` carries the send + the response readbacks, "
 "`stream/` the body lanes ([project structure](project-structure.md)); `http` "
 "wraps them in `HttpClient` / `RequestBuilder` / `Request` / `Response` / "
-"`ByteStream` — async only at the points that really wait, and `HttpClient()` "
-"constructs through the designated `new`:"
+"`ByteStream` (+ the `SendError` details struct beside the response class) — "
+"async only at the points that really wait, and `HttpClient()` constructs "
+"through the designated `new`:"
 msgstr ""
 
-#: src/reference/stdlib.md:448
+#: src/reference/stdlib.md:449
 msgid ""
 "```rut\n"
 "use http::{ HttpClient, ClientQueryMethod };\n"
 "\n"
-"let resp = await HttpClient().request()\n"
+"let (resp, err) = await HttpClient().request()\n"
 "    .method(ClientQueryMethod::Post)\n"
 "    .url(\"https://example.com/api\")\n"
 "    .header(\"Accept\", \"application/json\")\n"
 "    .body(payload)\n"
 "    .build()\n"
 "    .send();\n"
+"if (err != nil) {\n"
+"    let why: str = err!.reason;\n"
+"    return 1;\n"
+"}\n"
 "```"
 msgstr ""
 
-#: src/reference/stdlib.md:460
+#: src/reference/stdlib.md:465
 msgid ""
-"`send` resolves at headers; `body()` drains the remaining wire in one "
-"future; `byte_stream()` mints the reader and `next()` walks it one chunk per "
-"await. Status `0` is reserved for transport failure (`transport_error()` "
-"names it); a mid-read wire death is data — the sticky "
-"`read_error()`/`error()` goes non-nil and stays. The reqwest lane is "
-"native-only; the browser rides `fetch` and any embedder can bind its own "
-"transport ([embedding](embedding.md))."
+"`send` answers the **answer channel** — `(resp, err)`, exactly one side nil, "
+"always (json's law): success `(Response, nil)` — every status a program "
+"observes is real — and a transport failure `(nil, SendError)`, `err.reason` "
+"carrying the text (the host status field's reserved 0 stays the host "
+"protocol's internal encoding, never the face's signal). It resolves at "
+"headers; `body()` drains the remaining wire in one future; `byte_stream()` "
+"mints the reader and `next()` walks it one chunk per await; a mid-read wire "
+"death is data — the sticky `read_error()`/`error()` goes non-nil and stays. "
+"The reqwest lane is native-only; the browser rides `fetch` and any embedder "
+"can bind its own transport ([embedding](embedding.md))."
 msgstr ""
 
-#: src/reference/stdlib.md:468
+#: src/reference/stdlib.md:478
 msgid ""
 "**Body xor stream — the one-shot law.** Each response's body is taken by "
 "exactly one lane: `await resp.body()` (the drain) or `resp.byte_stream()` "
@@ -22974,7 +23008,7 @@ msgid ""
 "immediate EOF — never a trap."
 msgstr ""
 
-#: src/reference/stdlib.md:474
+#: src/reference/stdlib.md:484
 msgid ""
 "**Backpressure is real.** The stream lane is bounded: once ~1 MiB (64 × 16 "
 "KiB pump chunks) sits queued and unread, the producer parks — one chunk may "
@@ -22984,7 +23018,7 @@ msgid ""
 "answer IS the whole body, gating buys nothing."
 msgstr ""
 
-#: src/reference/stdlib.md:482
+#: src/reference/stdlib.md:492
 msgid ""
 "**Cancel is the wire-abort.** Cancelling the frame parked on a row future — "
 "a `select2`/`select_all` loser, or `LaunchedFutureHandle::abort()` "
@@ -22994,27 +23028,27 @@ msgid ""
 "== \"cancelled\"` — never a trap. Disclosed edges:"
 msgstr ""
 
-#: src/reference/stdlib.md:491
+#: src/reference/stdlib.md:501
 msgid ""
 "cancel lands BETWEEN chunks — a blocking read already in flight still "
 "completes, and its bytes arrive as data;"
 msgstr ""
 
-#: src/reference/stdlib.md:493
+#: src/reference/stdlib.md:503
 msgid ""
 "a cancel before the headers (`send` still waiting) is best-effort: the "
 "worker runs to its blocking completion and the late response is simply never "
 "taken;"
 msgstr ""
 
-#: src/reference/stdlib.md:496
+#: src/reference/stdlib.md:506
 msgid ""
 "only the frame parked directly on the row future carries the abort — a user "
 "wrapper cancelled above its `await` clears only its own pending edge; the "
 "row frame (the wire) runs on ([the host futures bridge](host-futures.md));"
 msgstr ""
 
-#: src/reference/stdlib.md:500
+#: src/reference/stdlib.md:510
 msgid ""
 "an abandoned stream — minted, never drained, never cancelled — parks its "
 "pump at the budget plateau: the connection and the ~1 MiB queue stay until "
@@ -23022,11 +23056,11 @@ msgid ""
 "cancel what you stop reading."
 msgstr ""
 
-#: src/reference/stdlib.md:506
+#: src/reference/stdlib.md:516
 msgid "Offering"
 msgstr ""
 
-#: src/reference/stdlib.md:508
+#: src/reference/stdlib.md:518
 msgid ""
 "`core` auto-rides — every run's `.compile()` offers the core prelude unless "
 "a pkg named `core` was offered. `calc` and the async pair are ordinary tree "
@@ -23037,7 +23071,7 @@ msgid ""
 "CLI](cli.md))."
 msgstr ""
 
-#: src/reference/stdlib.md:516
+#: src/reference/stdlib.md:526
 msgid ""
 "The rut packages over host rows (`ink`, `strbuild`, `nmapset`, `futures`, "
 "`http`) pull their decl pkg along (`deps`) — the embedder pairs the mount "
@@ -23047,7 +23081,7 @@ msgid ""
 "pipeline](compiler.md))."
 msgstr ""
 
-#: src/reference/stdlib.md:522
+#: src/reference/stdlib.md:532
 msgid ""
 "Generic exports link on their own: instantiation happens where the body "
 "lives, consumers request it, and `Vec<i64>` is one type program-wide ([the "

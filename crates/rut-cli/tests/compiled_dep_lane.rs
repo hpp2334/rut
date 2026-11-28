@@ -280,9 +280,14 @@ use ink::{ Logger };
 
 async fn probe(log: Logger, url: str) -> nil {
     let client = HttpClient();
-    let resp = await client.get(url).build().send();
-    log.info(f"status={resp.status()}");
-    let b = await resp.body();
+    let (resp, err) = await client.get(url).build().send();
+    if (err != nil) {
+        let why: str = err!.reason;
+        log.info(why);
+        return;
+    }
+    log.info(f"status={resp!.status()}");
+    let b = await resp!.body();
     log.info(f"body={b.len()}");
     log.info(f"text={b.decode()}");
 }

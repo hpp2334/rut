@@ -343,35 +343,38 @@ fn emit_dir(prefix: str, fs: Vec<Entry>) {
 
 // --------------------------------------------------------- the CDN ----
 
-// One response, mapped. Status 0 is the std lane's RESERVED transport
-// verdict (0 is never a real HTTP status) — its text is always present
-// by the lane's own law, so the deref cannot trap. 404 names the host
-// the caller actually checked; 403 is the CDN's rate-limit shape; any
-// other non-2xx is the bare status.
+// One response, mapped — over a REAL status: the transport case crossed
+// on the channel at the send site (the err side answers it before a
+// response ever exists), so what lands here is a live response's
+// status. 404 names the host the caller actually checked; 403 is the
+// CDN's rate-limit shape; any other non-2xx is the bare status.
 fn map_response(resp: Response, notfound: str, host: str) -> ?str {
     let s = resp.status();
-    if (s == 0) {
-        let why: str = resp.transport_error()!;
-        return f"rgh: network error: {why}";
-    }
     if (s == 404) { return f"rgh: {notfound} (checked the CDN: {host})"; }
     if (s == 403) { return "rgh: rate limited by the CDN (HTTP 403) — wait and retry"; }
     if (!resp.ok()) { return f"rgh: CDN {s}"; }
     return nil;
 }
 
-// the list: send resolves at HEADERS; the tree JSON drains in ONE body
-// await (the one-shot lane)
+// the list: send resolves at HEADERS — the ANSWER CHANNEL (`(resp,
+// err)`, exactly one side nil): the transport failure is the err side,
+// handled before any response use; the tree JSON then drains in ONE
+// body await (the one-shot lane)
 async fn do_list(client: HttpClient, owner: str, repo: str, rf: str) -> i32 {
     let url = f"https://data.jsdelivr.com/v1/packages/gh/{owner}/{repo}@{rf}";
-    let resp = await client.get(url).build().send();
-    let err = map_response(resp, "no such repo or ref", "data.jsdelivr.com");
+    let (resp, err) = await client.get(url).build().send();
+    if (err != nil) {
+        let why: str = err!.reason;
+        eprint(f"rgh: network error: {why}");
+        return 1;
+    }
+    let err = map_response(resp!, "no such repo or ref", "data.jsdelivr.com");
     if (err != nil) {
         let why: str = err!;
         eprint(why);
         return 1;
     }
-    let (tree, e) = decode_root_bytes<Root>(await resp.body());
+    let (tree, e) = decode_root_bytes<Root>(await resp!.body());
     if (e != nil) {
         let why: DecodeJsonError = e!;
         eprint(f"rgh: the CDN's tree JSON did not parse at {why.at}: expected {why.expected}");
@@ -387,14 +390,21 @@ async fn do_list(client: HttpClient, owner: str, repo: str, rf: str) -> i32 {
     return 0;
 }
 
-// the download: send resolves at HEADERS; the file walks the byte
-// stream CHUNK BY CHUNK — bounded memory end to end — and every chunk
-// lands through the sync `append_file` row. A mid-read wire death is
-// DATA (the stream's nil + the sticky error), never a trap.
+// the download: send resolves at HEADERS — the ANSWER CHANNEL: the
+// transport failure is the err side, handled before any response use.
+// The file then walks the byte stream CHUNK BY CHUNK — bounded memory
+// end to end — and every chunk lands through the sync `append_file`
+// row. A mid-read wire death is DATA (the stream's nil + the sticky
+// error), never a trap.
 async fn do_download(client: HttpClient, owner: str, repo: str, rf: str, path: str, dest: str) -> i32 {
     let url = f"https://cdn.jsdelivr.net/gh/{owner}/{repo}@{rf}/{path}";
-    let resp = await client.get(url).build().send();
-    let err = map_response(resp, "no such file (or repo/ref)", "cdn.jsdelivr.net");
+    let (resp, err) = await client.get(url).build().send();
+    if (err != nil) {
+        let why: str = err!.reason;
+        eprint(f"rgh: network error: {why}");
+        return 1;
+    }
+    let err = map_response(resp!, "no such file (or repo/ref)", "cdn.jsdelivr.net");
     if (err != nil) {
         let why: str = err!;
         eprint(why);
@@ -408,7 +418,7 @@ async fn do_download(client: HttpClient, owner: str, repo: str, rf: str, path: s
         eprint(f"rgh: {dest}: {why}");
         return 1;
     }
-    let stream = resp.byte_stream();
+    let stream = resp!.byte_stream();
     let total: i32 = 0;
     while (true) {
         let c = await stream.next();

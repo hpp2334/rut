@@ -107,7 +107,11 @@ construction sugar:
 use http::{ HttpClient };
 
 let client = HttpClient();
-let resp = await client.get(url).build().send();
+let (resp, err) = await client.get(url).build().send();
+if (err != nil) {
+    let why: str = err!.reason;   // the transport failure's text
+    return 1;
+}
 ```
 
 The shape, step by step:
@@ -116,18 +120,23 @@ The shape, step by step:
   hands back a `RequestBuilder`; `.method(..)`, `.url(..)`,
   `.header(k, v)` (repeatable), `.body(bytes)` chain on it.
 - `.build()` freezes a re-sendable `Request`.
-- **`.send()` is the async point.** It resolves at *headers* — the
-  wire body is still unread.
-- From the `Response`, take one of two readbacks:
-  - `await resp.body()` — drain the remaining body in one future;
-  - `resp.byte_stream()` then `await stream::next()` — one chunk per
+- **`.send()` is the async point.** It answers the **answer channel**
+  — `(resp, err)`, exactly one side nil, always — and resolves at
+  *headers*: the wire body is still unread.
+- From the response side, take one of two readbacks:
+  - `await resp!.body()` — drain the remaining body in one future;
+  - `resp!.byte_stream()` then `await stream::next()` — one chunk per
     future, `nil` at end-of-stream, for bounded-memory downloads.
 
-Errors come back as data, not traps: status `0` is reserved for
-transport failure (`resp.transport_error()` carries the reason), any
-real status — 4xx and 5xx included — is a normal response
-(`resp.ok()` is the 2xx test), and a mid-read wire death surfaces as
-`nil` from `next()` with the reason in `stream::error()`.
+Errors come back as data, not traps — on the **answer channel**:
+success is `(Response, nil)`, and every status a program observes is
+real — 4xx and 5xx included (`resp.ok()` is the 2xx test); a transport
+failure is `(nil, SendError)` and `err.reason` carries the text. The
+channel's invariant (err nil ⇒ resp real) is the program's knowledge:
+each use of a nil side spells the assert — an un-marked use does not
+compile, and a marked use on nil traps `NilDeref` at the `!`. A
+mid-read wire death stays data — `nil` from `next()` with the reason
+in `stream.error()`.
 
 A complete request handler from the repository's GitHub-viewer example —
 send, then drain:
@@ -135,19 +144,19 @@ send, then drain:
 ```rut
 async fn do_list(client: HttpClient, owner: str, repo: str, rf: str) -> i32 {
     let url = f"https://data.jsdelivr.com/v1/packages/gh/{owner}/{repo}@{rf}";
-    let resp = await client.get(url).build().send();
-    if (resp.status() == 0) {
-        let why: str = resp.transport_error();
+    let (resp, err) = await client.get(url).build().send();
+    if (err != nil) {
+        let why: str = err!.reason;
         eprint(f"rgh: network error: {why}");
         return 1;
     }
-    if (!resp.ok()) {
-        eprint(f"rgh: CDN {resp.status()}");
+    if (!resp!.ok()) {
+        eprint(f"rgh: CDN {resp!.status()}");
         return 1;
     }
-    let (tree, e) = decodeJsonBytes<Root>(await resp.body());
+    let (tree, e) = decodeJsonBytes<Root>(await resp!.body());
     if (e != nil) {
-        let why: DecodeJsonError = e;
+        let why: DecodeJsonError = e!;
         eprint(f"rgh: bad tree JSON at {why.at}");
         return 1;
     }
@@ -159,8 +168,9 @@ async fn do_list(client: HttpClient, owner: str, repo: str, rf: str) -> i32 {
 The stream lane walks chunks — send, then loop:
 
 ```rut
-let resp = await client.get(url).build().send();
-let stream = resp.byte_stream();
+let (resp, err) = await client.get(url).build().send();
+if (err != nil) { return 1; }        // the transport failure — held, answered
+let stream = resp!.byte_stream();
 while (true) {
     let c = await stream.next();
     if (c == nil) {
@@ -168,7 +178,7 @@ while (true) {
         if (rerr != nil) { return 1; }   // failed mid-read
         break;                            // clean end of stream
     }
-    let chunk: bytes = c;
+    let chunk: bytes = c!;
     total += chunk.len();
 }
 ```

@@ -441,27 +441,37 @@ For the common accumulator shape no builder is needed at all:
   readbacks) as a surface tree — `net/` carries the send + the
   response readbacks, `stream/` the body lanes ([project
   structure](project-structure.md)); `http` wraps them in `HttpClient`
-  / `RequestBuilder` / `Request` / `Response` / `ByteStream` — async
+  / `RequestBuilder` / `Request` / `Response` / `ByteStream` (+ the
+  `SendError` details struct beside the response class) — async
   only at the points that really wait, and `HttpClient()` constructs
   through the designated `new`:
 
   ```rut
   use http::{ HttpClient, ClientQueryMethod };
 
-  let resp = await HttpClient().request()
+  let (resp, err) = await HttpClient().request()
       .method(ClientQueryMethod::Post)
       .url("https://example.com/api")
       .header("Accept", "application/json")
       .body(payload)
       .build()
       .send();
+  if (err != nil) {
+      let why: str = err!.reason;
+      return 1;
+  }
   ```
 
-  `send` resolves at headers; `body()` drains the remaining wire in
-  one future; `byte_stream()` mints the reader and `next()` walks it
-  one chunk per await. Status `0` is reserved for transport failure
-  (`transport_error()` names it); a mid-read wire death is data — the
-  sticky `read_error()`/`error()` goes non-nil and stays. The reqwest
+  `send` answers the **answer channel** — `(resp, err)`, exactly one
+  side nil, always (json's law): success `(Response, nil)` — every
+  status a program observes is real — and a transport failure
+  `(nil, SendError)`, `err.reason` carrying the text (the host
+  status field's reserved 0 stays the host protocol's internal
+  encoding, never the face's signal). It resolves at headers;
+  `body()` drains the remaining wire in one future; `byte_stream()`
+  mints the reader and `next()` walks it one chunk per await; a
+  mid-read wire death is data — the sticky
+  `read_error()`/`error()` goes non-nil and stays. The reqwest
   lane is native-only; the browser rides `fetch` and any embedder can
   bind its own transport ([embedding](embedding.md)).
 

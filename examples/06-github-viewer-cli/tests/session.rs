@@ -817,10 +817,15 @@ use rgh_host::{ out };
 
 async fn body_first(url: str) -> nil {
     let client = HttpClient();
-    let resp = await client.get(url).build().send();
-    let b = await resp.body();
+    let (resp, err) = await client.get(url).build().send();
+    if (err != nil) {
+        let why: str = err!.reason;
+        out(why);
+        return;
+    }
+    let b = await resp!.body();
     out(f"body={b.len()}");
-    let s = resp.byte_stream();
+    let s = resp!.byte_stream();
     let c = await s.next();
     if (c == nil) {
         out("late-next=eof");
@@ -831,8 +836,13 @@ async fn body_first(url: str) -> nil {
 
 async fn stream_first(url: str) -> nil {
     let client = HttpClient();
-    let resp = await client.get(url).build().send();
-    let s = resp.byte_stream();
+    let (resp, err) = await client.get(url).build().send();
+    if (err != nil) {
+        let why: str = err!.reason;
+        out(why);
+        return;
+    }
+    let s = resp!.byte_stream();
     let c = await s.next();
     if (c == nil) {
         out("first-next=eof");
@@ -840,7 +850,7 @@ async fn stream_first(url: str) -> nil {
         let v: bytes = c!;
         out(f"first-next={v.len()}");
     }
-    let b = await resp.body();
+    let b = await resp!.body();
     out(f"late-body={b.len()}");
 }
 

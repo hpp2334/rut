@@ -29,46 +29,48 @@ use ink_host::{ create_logger, logger_log };
 
 async fn probe(log: opaque, url: str) -> nil {
     let client = HttpClient::new();
-    let resp = await client.post(url).body("hi".encode()).build().send();
-    logger_log(log, 2, f"status={resp.status()}");
-    // the readbacks are ?str — nil-check, then deref, then log (the
-    // rgh deref pattern; a ?str never interpolates)
-    let terr = resp.transport_error();
-    if (terr == nil) {
-        logger_log(log, 2, "err=nil");
-    } else {
-        let t: str = terr!;
+    let (resp, err) = await client.post(url).body("hi".encode()).build().send();
+    if (err != nil) {
+        let t: str = err!.reason;
         logger_log(log, 2, f"err={t}");
+        return;
     }
-    let rerr = resp.read_error();
+    logger_log(log, 2, f"status={resp!.status()}");
+    logger_log(log, 2, "err=nil");
+    let rerr = resp!.read_error();
     if (rerr == nil) {
         logger_log(log, 2, "read-err=nil");
     } else {
         let t: str = rerr!;
         logger_log(log, 2, f"read-err={t}");
     }
-    let b = await resp.body();
+    let b = await resp!.body();
     logger_log(log, 2, f"body={b.len()}");
 }
 
 async fn streamed(log: opaque, url: str) -> nil {
     let client = HttpClient::new();
-    let resp = await client.get(url).build().send();
-    let s = resp.byte_stream();
-    let total: i32 = 0;
-    let failed = false;
-    while (true) {
-        let c = await s.next();
-        if (c == nil) {
-            let e = s.error();
-            if (e != nil) { failed = true; }
-            break;
+    let (resp, err) = await client.get(url).build().send();
+    if (err != nil) {
+        let t: str = err!.reason;
+        logger_log(log, 2, f"stream-err={t}");
+    } else {
+        let s = resp!.byte_stream();
+        let total: i32 = 0;
+        let failed = false;
+        while (true) {
+            let c = await s.next();
+            if (c == nil) {
+                let e = s.error();
+                if (e != nil) { failed = true; }
+                break;
+            }
+            let chunk: bytes = c!;
+            total += chunk.len();
         }
-        let chunk: bytes = c!;
-        total += chunk.len();
+        logger_log(log, 2, f"stream-total={total}");
+        logger_log(log, 2, f"stream-failed={failed}");
     }
-    logger_log(log, 2, f"stream-total={total}");
-    logger_log(log, 2, f"stream-failed={failed}");
 }
 
 entry fn boot(url: str) -> nil {
@@ -216,19 +218,16 @@ fn the_face_sends_posts_and_drains() {
 }
 
 #[test]
-fn transport_failure_reserves_status_zero_and_degrades() {
+fn transport_failure_answers_on_the_channel() {
     let (mut vm, sink, fx) = boot(|_m, url, _h, _b| Err(format!("boom: {url} failed")));
     vm.call::<_, ()>("boot", ("fixture://bad",)).unwrap();
     run_loop(&mut vm, &fx, 100);
     assert_eq!(
         *sink.borrow(),
-        vec![
-            "status=0",
-            "err=boom: fixture://bad failed",
-            "read-err=nil",
-            "body=0"
-        ],
-        "status 0 + the err text; the body lane degrades to empty"
+        vec!["err=boom: fixture://bad failed"],
+        "the failed mint answers (nil, SendError) on the channel — the \
+         status field's 0 is never read by the face, and no response \
+         exists to degrade"
     );
 }
 
@@ -290,10 +289,15 @@ use ink_host::{ create_logger, logger_log };
 
 async fn probe(log: opaque, url: str) -> nil {
     let client = HttpClient::new();
-    let resp = await client.get(url).build().send();
-    let b = await resp.body();
+    let (resp, err) = await client.get(url).build().send();
+    if (err != nil) {
+        let t: str = err!.reason;
+        logger_log(log, 2, f"send-err={t}");
+        return;
+    }
+    let b = await resp!.body();
     logger_log(log, 2, f"drain={b.len()}");
-    logger_log(log, 2, f"read-err={resp.read_error()!}");
+    logger_log(log, 2, f"read-err={resp!.read_error()!}");
 }
 
 entry fn boot(url: str) -> nil {
@@ -393,12 +397,17 @@ use ink_host::{ create_logger, logger_log };
 
 async fn probe(log: opaque, url: str) -> nil {
     let client = HttpClient::new();
-    let resp = await client.get(url).build().send();
+    let (resp, err) = await client.get(url).build().send();
+    if (err != nil) {
+        let t: str = err!.reason;
+        logger_log(log, 2, f"send-err={t}");
+        return;
+    }
     // body first, THEN a stream mint: the mint degrades to a dead
     // reader — immediate EOF, empty error
-    let b = await resp.body();
+    let b = await resp!.body();
     logger_log(log, 2, f"body={b.len()}");
-    let s = resp.byte_stream();
+    let s = resp!.byte_stream();
     let c = await s.next();
     if (c == nil) {
         logger_log(log, 2, "late-next-nil=true");
@@ -418,8 +427,13 @@ async fn probe(log: opaque, url: str) -> nil {
 // empty
 async fn probe2(log: opaque, url: str) -> nil {
     let client = HttpClient::new();
-    let resp = await client.get(url).build().send();
-    let s = resp.byte_stream();
+    let (resp, err) = await client.get(url).build().send();
+    if (err != nil) {
+        let t: str = err!.reason;
+        logger_log(log, 2, f"send-err={t}");
+        return;
+    }
+    let s = resp!.byte_stream();
     let c = await s.next();
     let n: i32 = -1;
     if (c != nil) {
@@ -427,7 +441,7 @@ async fn probe2(log: opaque, url: str) -> nil {
         n = v.len();
     }
     logger_log(log, 2, f"first-next={n}");
-    let b = await resp.body();
+    let b = await resp!.body();
     logger_log(log, 2, f"late-body={b.len()}");
 }
 
@@ -727,9 +741,14 @@ use ink_host::{ create_logger, logger_log };
 
 async fn streamed(log: opaque, url: str) -> nil {
     let client = HttpClient::new();
-    let resp = await client.get(url).build().send();
-    logger_log(log, 2, f"status={resp.status()}");
-    let s = resp.byte_stream();
+    let (resp, err) = await client.get(url).build().send();
+    if (err != nil) {
+        let t: str = err!.reason;
+        logger_log(log, 2, f"stream-err={t}");
+        return;
+    }
+    logger_log(log, 2, f"status={resp!.status()}");
+    let s = resp!.byte_stream();
     let total: i32 = 0;
     let failed = false;
     while (true) {

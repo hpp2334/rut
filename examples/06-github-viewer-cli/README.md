@@ -57,17 +57,18 @@ same sync code it always was.
 
 `--ref` is REQUIRED always — a tag, branch, or sha; there is no
 versions-endpoint resolution hop. Status mapping (both subcommands):
-transport failure (the std lane's reserved status 0) →
-`rgh: network error: …`; 404 → no such repo or ref (`list`) / no such
-file (`download`), naming the host that was checked; 403 → the CDN's
-rate-limit note; any other non-2xx → `rgh: CDN <n>`.
+transport failure (the send's err side on the answer channel —
+`(nil, SendError)`) → `rgh: network error: …`; 404 → no such repo or
+ref (`list`) / no such file (`download`), naming the host that was
+checked; 403 → the CDN's rate-limit note; any other non-2xx →
+`rgh: CDN <n>`.
 
 ## Division of labor
 
 | piece | where | does |
 |---|---|---|
 | the brain | `mod.rut` | argv carve (hand-rolled — there is no `str.split`; the `scan`/`slice` tokenizer primitives), flag/subcommand parse, URL building, `decodeJsonBytes`-shaped root decode over the tree JSON (`Entry` + `Root` spell json's `JsonDeserialize` members on their own inherent impls — structural satisfaction — over `rut/json`'s reader), depth-first flatten, `human_size`, every message and exit code; the awaits live at the fetch sites |
-| the std HTTP lane | `rut/http_host` + `rut/http` (tree pkgs), bodies in `rut-std` behind its default-off `http` feature | the async-only face: `HttpClient()`, the verbs as build sugars (`get`/`post`/`put`/`patch`/`del`), the builder chain, `build()`, and the async points — `send()` (headers), `body()` (the drain), `byte_stream()` + `next()` (chunk per await); `status()` (0 = transport), `ok()`, `transport_error()`, `read_error()` |
+| the std HTTP lane | `rut/http_host` + `rut/http` (tree pkgs), bodies in `rut-std` behind its default-off `http` feature | the async-only face: `HttpClient()`, the verbs as build sugars (`get`/`post`/`put`/`patch`/`del`), the builder chain, `build()`, and the async points — `send()` (headers, the answer channel `(resp, err)` with `SendError` on the err side), `body()` (the drain), `byte_stream()` + `next()` (chunk per await); `status()`, `ok()`, `read_error()` |
 | the example's host rows | `rgh_host/` + `src/main.rs` | CLI I/O only: `out` (stdout line), `eprint` (stderr line), `write_file` (truncate-or-create), `append_file` (append-or-create — one streamed chunk per call), `exit` (the one-way door) |
 | the embedder | `src/main.rs` | mount std (the manifest walk) + the async pair + `calc_host` (the Math bodies' decl surface) + `rgh_host`, compile `mod.rut` (Impl mode), verify, install the ONE world's body set (`world::host_pkgs` in `src/world.rs` — math + nmap + strbuild + async_host + the real `http::pkg()`), `verify_against` over the same home's expected table, `vm.call("boot", (args,))`, drive `run_until_idle(Wait::Block)` to idle, exit with the carried code |
 
@@ -85,16 +86,17 @@ line is the sum of the arrived chunks.
 - **send resolves at HEADERS** — the wire body stays unread; the
   status and the mapping run before any body byte is pulled.
 - **body xor stream (the one-shot law)** — `list` drains
-  (`resp.body()`, one future), `download` streams
-  (`resp.byte_stream()`, chunk per await). A response never gives
+  (`resp!.body()`, one future), `download` streams
+  (`resp!.byte_stream()`, chunk per await). A response never gives
   both; a late/second taker DEGRADES (an empty drain / a dead reader
   whose next is an immediate EOF) — never a trap.
 - **mid-read failures are data** — a wire death mid-download answers
   nil from `next`, the sticky `stream.error()` names it, rgh prints
   `rgh: <dest>: <why>` and exits 1 with the arrived prefix already
   on disk. Never a panic, never a trap.
-- **transport failure is status 0** — the reserved verdict; its text
-  always rides `transport_error()`.
+- **transport failure is the err side** — the send answers the
+  channel (`(nil, SendError)`); its text rides `err.reason` at the
+  send site, before any response use.
 - **cancellation is best-effort** — rgh never aborts a fetch; the
   general law (a worker thread finishes its blocking read, the late
   result is discarded) is disclosed at the lane.

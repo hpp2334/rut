@@ -521,15 +521,14 @@ use ink::Logger;
 
 async fn fetch(log: Logger, url: str) -> nil {
     let client = HttpClient();
-    let r = await client.get(url).build().send();
-    let e = r.transport_error();
-    if (e != nil) {
-        let why: str = e;
+    let (r, err) = await client.get(url).build().send();
+    if (err != nil) {
+        let why: str = err!.reason;
         log.error(why);
         return;
     }
-    let b = await r.body();
-    log.info(f"status={r.status()} ok={r.ok()} len={b.len()}");
+    let b = await r!.body();
+    log.info(f"status={r!.status()} ok={r!.ok()} len={b.len()}");
 }
 
 entry fn main() {

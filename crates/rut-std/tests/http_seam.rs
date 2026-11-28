@@ -3,7 +3,10 @@
 //! `tests/` (the same shelf the fixture suite lives on, no
 //! `#[cfg(test)]` tree) — drives the seven `http_host` rows through
 //! the rut face: headers-then-chunks pumped from a real worker
-//! thread, the immediate transport failure (status 0), the
+//! thread, the immediate transport failure answering on the channel
+//! (`(nil, SendError)` — the status field's 0 is never the face's
+//! signal), the nil-use misuse pin (the marked use on the nil resp
+//! side traps `NilDeref` at the `!`), the
 //! one-completion law pinned EXACTLY as the `Completer` contract
 //! already behaves (a double complete is LAST-WRITE-WINS — the second
 //! answer overwrites the slot, the first is silently lost; never a
@@ -42,44 +45,49 @@ use ink_host::{ create_logger, logger_log };
 
 async fn probe(log: opaque, url: str) -> nil {
     let client = HttpClient::new();
-    let resp = await client.post(url).body("hi".encode()).build().send();
-    logger_log(log, 2, f"status={resp.status()}");
-    let terr = resp.transport_error();
-    if (terr == nil) {
-        logger_log(log, 2, "err=nil");
-    } else {
-        let t: str = terr!;
+    let (resp, err) = await client.post(url).body("hi".encode()).build().send();
+    if (err != nil) {
+        let t: str = err!.reason;
         logger_log(log, 2, f"err={t}");
-    }
-    let rerr = resp.read_error();
-    if (rerr == nil) {
-        logger_log(log, 2, "read-err=nil");
+        let gone: bool = resp == nil;
+        logger_log(log, 2, f"resp-nil={gone}");
     } else {
-        let t: str = rerr!;
-        logger_log(log, 2, f"read-err={t}");
+        logger_log(log, 2, f"status={resp!.status()}");
+        let rerr = resp!.read_error();
+        if (rerr == nil) {
+            logger_log(log, 2, "read-err=nil");
+        } else {
+            let t: str = rerr!;
+            logger_log(log, 2, f"read-err={t}");
+        }
+        let b = await resp!.body();
+        logger_log(log, 2, f"body={b.len()}");
     }
-    let b = await resp.body();
-    logger_log(log, 2, f"body={b.len()}");
 }
 
 async fn streamed(log: opaque, url: str) -> nil {
     let client = HttpClient::new();
-    let resp = await client.get(url).build().send();
-    let s = resp.byte_stream();
-    let total: i32 = 0;
-    let failed = false;
-    while (true) {
-        let c = await s.next();
-        if (c == nil) {
-            let e = s.error();
-            if (e != nil) { failed = true; }
-            break;
+    let (resp, err) = await client.get(url).build().send();
+    if (err != nil) {
+        let t: str = err!.reason;
+        logger_log(log, 2, f"stream-err={t}");
+    } else {
+        let s = resp!.byte_stream();
+        let total: i32 = 0;
+        let failed = false;
+        while (true) {
+            let c = await s.next();
+            if (c == nil) {
+                let e = s.error();
+                if (e != nil) { failed = true; }
+                break;
+            }
+            let chunk: bytes = c!;
+            total += chunk.len();
         }
-        let chunk: bytes = c!;
-        total += chunk.len();
+        logger_log(log, 2, f"stream-total={total}");
+        logger_log(log, 2, f"stream-failed={failed}");
     }
-    logger_log(log, 2, f"stream-total={total}");
-    logger_log(log, 2, f"stream-failed={failed}");
 }
 
 entry fn boot(url: str) -> nil {
@@ -97,27 +105,37 @@ entry fn boot_stream(url: str) -> nil {
 // fires the sleep after observing the producer's plateau)
 async fn flooded(log: opaque, url: str) -> nil {
     let client = HttpClient::new();
-    let resp = await client.get(url).build().send();
-    await sleep(300);
-    let s = resp.byte_stream();
-    let total: i32 = 0;
-    while (true) {
-        let c = await s.next();
-        if (c == nil) {
-            break;
+    let (resp, err) = await client.get(url).build().send();
+    if (err != nil) {
+        let t: str = err!.reason;
+        logger_log(log, 2, f"stream-err={t}");
+    } else {
+        await sleep(300);
+        let s = resp!.byte_stream();
+        let total: i32 = 0;
+        while (true) {
+            let c = await s.next();
+            if (c == nil) {
+                break;
+            }
+            let chunk: bytes = c!;
+            total += chunk.len();
         }
-        let chunk: bytes = c!;
-        total += chunk.len();
+        logger_log(log, 2, f"stream-total={total}");
     }
-    logger_log(log, 2, f"stream-total={total}");
 }
 
 async fn drained(log: opaque, url: str) -> nil {
     let client = HttpClient::new();
-    let resp = await client.get(url).build().send();
-    await sleep(300);
-    let b = await resp.body();
-    logger_log(log, 2, f"body={b.len()}");
+    let (resp, err) = await client.get(url).build().send();
+    if (err != nil) {
+        let t: str = err!.reason;
+        logger_log(log, 2, f"body-err={t}");
+    } else {
+        await sleep(300);
+        let b = await resp!.body();
+        logger_log(log, 2, f"body={b.len()}");
+    }
 }
 
 entry fn boot_flood(url: str) -> nil {
@@ -254,6 +272,33 @@ entry fn boot_drain_abort(url: str) -> nil {
 entry fn boot_send_loser(url: str) -> nil {
     let log = create_logger("t");
     launch_future(send_loser(log, url));
+}
+"#;
+
+/// the misuse probe: the channel's err side bound and IGNORED, the nil
+/// resp side asserted and USED — the law's loud exits. An UN-marked
+/// `resp.body()` does not COMPILE (the demand diag is the first
+/// loudness); the marked `resp!` on the nil side is the `NilDeref`
+/// trap at the `!`'s own site.
+const TRAP_SRC: &str = r#"
+use http::HttpClient;
+use futures::launch_future;
+use ink_host::{ create_logger, logger_log };
+
+async fn nil_use(log: opaque, url: str) -> nil {
+    let client = HttpClient::new();
+    let (resp, err) = await client.post(url).body("hi".encode()).build().send();
+    if (err != nil) {
+        let t: str = err!.reason;
+        logger_log(log, 2, f"err={t}");
+    }
+    let b = await resp!.body();
+    logger_log(log, 2, f"body={b.len()}");
+}
+
+entry fn boot_nil_use(url: str) -> nil {
+    let log = create_logger("t");
+    launch_future(nil_use(log, url));
 }
 "#;
 
@@ -419,7 +464,10 @@ impl HttpBackend for FakeBackend {
     }
 }
 
-fn boot(script: Script) -> (Vm, Rc<std::cell::RefCell<Vec<String>>>, Arc<FakeBackend>) {
+fn boot_src(
+    src: &str,
+    script: Script,
+) -> (Vm, Rc<std::cell::RefCell<Vec<String>>>, Arc<FakeBackend>) {
     let backend = Arc::new(FakeBackend {
         script,
         seen: Mutex::new(Vec::new()),
@@ -440,7 +488,7 @@ fn boot(script: Script) -> (Vm, Rc<std::cell::RefCell<Vec<String>>>, Arc<FakeBac
         );
     }
     world.push(
-        Mounted::source("app", SRC)
+        Mounted::source("app", src)
             // the app declares the heads it names (the nameability
             // law — mounted-but-undeclared is D5)
             .manifest(rut_driver::Manifest::lib(
@@ -498,6 +546,11 @@ fn boot(script: Script) -> (Vm, Rc<std::cell::RefCell<Vec<String>>>, Arc<FakeBac
         .build()
         .unwrap();
     (vm, sink, backend)
+}
+
+/// the standard probe source (`SRC`) over a script
+fn boot(script: Script) -> (Vm, Rc<std::cell::RefCell<Vec<String>>>, Arc<FakeBackend>) {
+    boot_src(SRC, script)
 }
 
 /// the wall-clock pump (the reqwest lane's shape): the backend's
@@ -703,19 +756,51 @@ fn a_seam_backend_streams_headers_then_chunks_from_a_worker_thread() {
 }
 
 #[test]
-fn a_seam_backends_immediate_failure_lands_as_status_zero() {
+fn a_seam_backends_immediate_failure_answers_on_the_channel() {
     let (mut vm, sink, _backend) = boot(Script::Dead("seam: no route to host".to_string()));
     vm.call::<_, ()>("boot", ("seam://dead",)).unwrap();
     pump(&mut vm);
     assert_eq!(
         *sink.borrow(),
-        vec![
-            "status=0",
-            "err=seam: no route to host",
-            "read-err=nil",
-            "body=0"
-        ],
-        "the failed mint: status 0 + the err text; the body lane degrades to empty"
+        vec!["err=seam: no route to host", "resp-nil=true"],
+        "the failed mint answers on the channel: err carries the scripted \
+         reason text, resp is the nil side — the status field's 0 is \
+         never read by the face"
+    );
+}
+
+#[test]
+fn a_nil_response_used_after_a_failed_send_traps() {
+    // the misuse pin: the pair bound, the err side IGNORED, the nil
+    // resp side asserted and used. The VM answers NilDeref AT the
+    // `!`'s own site (ops.rs:432 — "never a silent read"); an
+    // UN-marked `resp.body()` would not even compile (the demand diag
+    // is the law's first loudness). The CLI's `trap:` + exit-1 lane is
+    // that same fact's program face.
+    let (mut vm, sink, _backend) =
+        boot_src(TRAP_SRC, Script::Dead("seam: no route to host".to_string()));
+    vm.call::<_, ()>("boot_nil_use", ("seam://dead",)).unwrap();
+    let deadline = std::time::Instant::now() + std::time::Duration::from_secs(5);
+    let trap = loop {
+        assert!(
+            std::time::Instant::now() < deadline,
+            "the nil resp use never trapped"
+        );
+        match vm.run_ready() {
+            Ok(_) => std::thread::sleep(std::time::Duration::from_millis(2)),
+            Err(t) => break t,
+        }
+    };
+    assert_eq!(
+        trap.name(),
+        "NilDeref",
+        "the marked use on the nil resp side traps NilDeref at the `!`"
+    );
+    assert_eq!(
+        *sink.borrow(),
+        vec!["err=seam: no route to host"],
+        "the err side crossed on the channel and was ignored — the misuse \
+         the law makes loud"
     );
 }
 
@@ -733,8 +818,9 @@ fn double_complete_is_last_write_wins_the_pinned_contract() {
     pump(&mut vm);
     assert_eq!(
         *sink.borrow(),
-        vec!["status=200", "err=nil", "read-err=nil", "body=2"],
-        "the SECOND answer won (status 200, err nil) — the failed first is gone; \
+        vec!["status=200", "read-err=nil", "body=2"],
+        "the SECOND answer won (status 200, err nil — the guard fell \
+         through) — the failed first is gone; \
          the second answer's writer still drove the body"
     );
 }

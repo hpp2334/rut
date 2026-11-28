@@ -10,15 +10,20 @@
 // a re-sendable `Request`; `send()` is THE async point — the plan's
 // usage chain compiles verbatim:
 //
-//     let resp = await client.request()
+//     let (resp, err) = await client.request()
 //         .method(ClientQueryMethod::Post)
 //         .url("https://example.com/api")
 //         .header("Accept", "application/json")
 //         .body(payload)
 //         .build()
 //         .send();
+//     if (err != nil) {
+//         let why: str = err!.reason;   // the transport failure's text
+//         return 1;                     // or however the handler answers
+//     }
 //
-// and the terse case is `await client.get(u).build().send()`.
+// and the terse case is `await client.get(u).build().send()` — the same
+// pair comes back.
 //
 // The async points are `async { }` blocks (the async primitive): each
 // sync method MINTS the frame inside itself and answers it typed
@@ -26,16 +31,19 @@
 // weave's — injected, never spelled, never passed.
 //
 // THE LAWS (the host side owns them; this face is the thin wrapper):
-// send resolves at HEADERS (the wire body stays unread — true
-// streaming); `body()` drains the remaining wire in one future;
-// `byte_stream()` mints the reader and `next()` walks it chunk by
-// chunk (nil = EOF-or-failed — `error()`/`read_error()` name which);
+// send answers the ANSWER CHANNEL — `(?Response, ?SendError)`, json's
+// law: success `(Response, nil)`, a transport failure `(nil,
+// SendError)`, exactly one side nil, always; the host status field's
+// reserved 0 stays the host protocol's internal encoding, never the
+// face's failure signal. Send resolves at HEADERS (the wire body stays
+// unread — true streaming); `body()` drains the remaining wire in one
+// future; `byte_stream()` mints the reader and `next()` walks it chunk
+// by chunk (nil = EOF-or-failed — `error()`/`read_error()` name which);
 // body xor stream per response — a late/second taker DEGRADES (empty
-// drain / immediate EOF), never traps. Status 0 is RESERVED for
-// transport failure (`transport_error()` answers it); a mid-read wire
-// death is DATA — the sticky `read_error()` goes non-nil and stays.
-// Cancellation is best-effort (a worker thread finishes its blocking
-// read; the late result is discarded — disclosed).
+// drain / immediate EOF), never traps. A mid-read wire death is DATA —
+// the sticky `read_error()` goes non-nil and stays. Cancellation is
+// best-effort (a worker thread finishes its blocking read; the late
+// result is discarded — disclosed).
 use core::{ Future };
 use http_host::net::{ http_send, http_status, http_err, http_read_err, http_resp_stream };
 use http_host::stream::{ http_body, http_stream_next };
@@ -150,8 +158,10 @@ impl Request {
     /// THE async point — resolves at HEADERS. The `async { }` block
     /// mints the frame inside the call; `await` consumes the returned
     /// future. The block's reads (self's fields) capture by value at
-    /// the mint — the capture law.
-    pub fn send(self) -> Future<Response> {
+    /// the mint — the capture law. Answers the ANSWER CHANNEL (json's
+    /// law): success `(Response, nil)`, a transport failure
+    /// `(nil, SendError)` — exactly one side nil, always.
+    pub fn send(self) -> Future<(?Response, ?SendError)> {
         let c = self.c;
         let m = self.m;
         let url = self.url;
@@ -159,9 +169,27 @@ impl Request {
         let body = self.body;
         return async {
             let r: opaque = await http_send(c, m, url, headers, body);
-            return Response { r: r };
+            // the failure's OWN door: http_err answers nil exactly when
+            // the transport did not fail — the face never reads the
+            // status field's reserved 0 (the sentinel stays the host's
+            // internal encoding, never the face's failure signal)
+            let reason: ?str = http_err(r);
+            if (reason != nil) {
+                let why: str = reason!;
+                return (nil, SendError { reason: why });
+            }
+            return (Response { r: r }, nil);
         };
     }
+}
+
+/// the send-time transport failure's reason — the answer channel's
+/// err side, json's `?EncodeJsonError` mirror (the details-struct
+/// half of the error-type law). No kind enum in v1: the host
+/// protocol owns no kind fact — the reason text is everything the
+/// send lane produces.
+pub struct SendError {
+    reason: str;   // the transport failure text (the host's Display)
 }
 
 /// the response handle: the host owns the layout, rut holds the opaque
@@ -170,8 +198,9 @@ pub class Response {
 }
 
 impl Response {
-    /// the HTTP status word — 0 means the transport failed (0 is never
-    /// a real status; any real status, 4xx/5xx included, is not one)
+    /// the HTTP status word — always a real status here: the channel's
+    /// resp side never carries a failed mint (0 stays the host
+    /// protocol's internal reservation, documented on the host side)
     pub fn status(self) -> i32 { return http_status(self.r); }
 
     /// the 2xx test
@@ -180,16 +209,12 @@ impl Response {
         return s >= 200 && s < 300;
     }
 
-    /// the transport-failure text — nil unless status is 0
-    pub fn transport_error(self) -> ?str { return http_err(self.r); }
-
     /// the sticky mid-read failure — nil until one fails, then
     /// non-nil forever; meaningful after awaiting `body()`/`next()`
     pub fn read_error(self) -> ?str { return http_read_err(self.r); }
 
-    /// the drain: the remaining wire in ONE future — empty on a
-    /// transport failure or after the stream lane took over (the
-    /// one-shot law's degrade)
+    /// the drain: the remaining wire in ONE future — empty after the
+    /// stream lane took over (the one-shot law's degrade)
     pub fn body(self) -> Future<bytes> {
         let r = self.r;
         return async {

@@ -94,14 +94,19 @@ headers** — the wire body stays unread
 ```rut
 async fn do_list(client: HttpClient, owner: str, repo: str, rf: str) -> i32 {
     let url = f"https://data.jsdelivr.com/v1/packages/gh/{owner}/{repo}@{rf}";
-    let resp = await client.get(url).build().send();
-    let err = map_response(resp, "no such repo or ref", "data.jsdelivr.com");
+    let (resp, err) = await client.get(url).build().send();
     if (err != nil) {
-        let why: str = err;
+        let why: str = err!.reason;
+        eprint(f"rgh: network error: {why}");
+        return 1;
+    }
+    let err = map_response(resp!, "no such repo or ref", "data.jsdelivr.com");
+    if (err != nil) {
+        let why: str = err!;
         eprint(why);
         return 1;
     }
-    let (tree, e) = decode_root_bytes<Root>(await resp.body());
+    let (tree, e) = decode_root_bytes<Root>(await resp!.body());
 ```
 
 `list` is the **drain** lane: one `body()` await pulls the whole
@@ -111,10 +116,11 @@ generic-fn bodies are owner-anchored, so the canonical entries could
 never be seeded for this pkg's types (the example's README discloses
 the gap and the shims) — with `decode` spelled on `Entry`'s own
 inherent impl in this
-file. Status
-mapping is one function: `status() == 0` is the reserved transport
-verdict, 404 names the host that was checked, 403 is the rate-limit
-note, anything else non-2xx is the bare status.
+file. The send answers the **answer channel** (`(resp, err)`, exactly
+one side nil): the transport case is the err side — `err.reason`
+carries the text — and never reaches the status mapping, which is one
+function over a real status: 404 names the host that was checked, 403
+is the rate-limit note, anything else non-2xx is the bare status.
 
 ### The download: true streaming, chunk by chunk
 
@@ -159,14 +165,16 @@ dead reader) rather than trapping.
 ### The readbacks, on the response handle
 
 The `Response` class wraps the host's opaque handle with sync
-readbacks — status, the 2xx test, the transport text, and the sticky
-mid-read failure ([the std
-packages](../reference/stdlib.md)):
+readbacks — status, the 2xx test, and the sticky mid-read failure
+([the std
+packages](../reference/stdlib.md)); the transport failure never gets
+here — `send()` answers it on the channel before a response exists:
 
 ```rut
 impl Response {
-    /// the HTTP status word — 0 means the transport failed (0 is never
-    /// a real status; any real status, 4xx/5xx included, is not one)
+    /// the HTTP status word — always a real status here: the channel's
+    /// resp side never carries a failed mint (0 stays the host
+    /// protocol's internal reservation, documented on the host side)
     pub fn status(self) -> i32 { return http_status(self.r); }
 
     /// the 2xx test
@@ -174,9 +182,6 @@ impl Response {
         let s = self.status();
         return s >= 200 && s < 300;
     }
-
-    /// the transport-failure text — nil unless status is 0
-    pub fn transport_error(self) -> ?str { return http_err(self.r); }
 
     /// the sticky mid-read failure — nil until one fails, then
     /// non-nil forever; meaningful after awaiting `body()`/`next()`
